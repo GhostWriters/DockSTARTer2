@@ -522,7 +522,17 @@ var registerTagFallbacksOnce sync.Once
 // existing (and future) call site referencing e.g. "TitleWarn" or
 // "IconMaximizeFocused" by name gets the fallback for free with no
 // per-call-site resolution code needed anywhere.
+//
+// Also disables semstyle's automatic theme-to-console fallback tier: with
+// it left on, a theme tag the theme author simply forgot to define would
+// silently render using whatever unrelated console/CLI-log color happens
+// to share that name, rather than looking wrong in an obvious way. Every
+// tag DS2's TUI actually references either has a real per-theme value or
+// an explicit RegisterFallback rule above; none of them rely on the
+// automatic console tier (verified: no console-only AppColors entry is
+// referenced anywhere under internal/tui or internal/displayengine).
 func registerTagFallbacks() {
+	semstyle.SetAutoConsoleFallback(false)
 	for _, tf := range titleFallbackTags {
 		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
@@ -535,6 +545,97 @@ func registerTagFallbacks() {
 	for _, tf := range checkboxFallbackTags() {
 		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
+	for _, tf := range highlightFallbackTags {
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
+	}
+	for _, tf := range statusFallbackTags {
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
+	}
+	for _, tf := range helpFallbackTags {
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
+	}
+}
+
+// helpFallbackTags lists the help-bar tags that fall back to another tag
+// when the active theme doesn't define them. HelpTag falls back to Tag,
+// matching 12 of 13 bundled themes (DockSTARTer itself uses a distinct
+// black-on-red highlight, so it keeps its own explicit definition).
+// HelpItem falls back to Dialog, DockSTARTer's own pattern -- its prior
+// "{{[black]}}" override only set the foreground, which Dialog already
+// provides, so it was removed in favor of the fallback.
+var helpFallbackTags = []struct{ name, fallback string }{
+	{"HelpTag", "Tag"},
+	{"HelpItem", "Dialog"},
+}
+
+// statusFallbackTags lists optional header-bar (Status*) tags that fall
+// back to another tag when the active theme doesn't define them, anchored
+// to DockSTARTer.ds2theme's own pattern as the canonical default -- other
+// bundled themes that deviate (an added :::B/:::R modifier, a different
+// target tag, or a fully custom direct color) keep their own explicit
+// definition as an override, whether or not they happen to coincide with
+// each other. StatusFlagsBrackets is deliberately excluded: DockSTARTer
+// itself uses a fully custom direct color there, not a tag reference, so
+// there's no canonical pattern to anchor a fallback rule to.
+//
+// StatusVersionSpace falls back to a literal reset rather than a named
+// tag: header_render.go's only use of StatusVersionSpace immediately
+// re-establishes "{{|StatusBar|}}" right after it, and it's never rendered
+// anywhere else, so a plain reset there is functionally equivalent to
+// StatusBar in the one context it's ever used -- but using the literal
+// "{{[-]}}" (DockSTARTer's own exact authored value) instead of naming
+// StatusBar keeps that equivalence exact even if StatusBar's own
+// definition ever changes.
+var statusFallbackTags = []struct{ name, fallback string }{
+	{"StatusBarBorder", "StatusBar"},
+	{"StatusVersion", "StatusFields"},
+	{"StatusVersionBrackets", "StatusFields"},
+	{"StatusHostname", "StatusFields"},
+	{"StatusUpdateMarker", "StatusUpdate"},
+	{"StatusBarFocused", "TagFocused"},
+	{"StatusName", "StatusFields"},
+	{"StatusFlags", "Dialog"},
+	{"StatusVersionSpace", "{{[-]}}"},
+	{"StatusFlagsSpace", "StatusVersionSpace"},
+	{"StatusUpdateBrackets", "StatusVersionBrackets"},
+	// Helpline/ConsoleBorder are conceptually part of the same backdrop
+	// grouping as StatusBar/StatusBarBorder, hence living in this list
+	// despite the name. ConsoleBorder = Helpline is identical in all 13
+	// bundled themes; Helpline itself varies (most reference Dialog, some
+	// a fully custom color), but StatusBar and Dialog resolve to the same
+	// value in most of those themes anyway, so StatusBar is the more
+	// direct backdrop-family anchor for a theme that wants to skip
+	// defining Helpline separately.
+	{"Helpline", "StatusBar"},
+	{"ConsoleBorder", "Helpline"},
+}
+
+// highlightFallbackTags lists the inline-text-highlight tags that fall back
+// to the generic Highlight tag when the active theme doesn't define them --
+// every bundled theme but RetroDockSTARTer (which points Version at its own
+// StatusVersion instead) already just aliases each of these directly to
+// Highlight. FailingCommand/Yes/No are deliberately excluded: every bundled
+// theme points them at TitleError/TitleSuccess instead, never at Highlight,
+// so they're a different (unrelated) fallback relationship, not this one.
+// Safe now that automatic console fallback is disabled (registerTagFallbacks'
+// doc comment) -- previously, removing a theme's redundant "= Highlight"
+// line for these exact names surfaced an unrelated console-map default
+// instead of this fallback, since console-map checks took priority over
+// this rule.
+var highlightFallbackTags = []struct{ name, fallback string }{
+	{"ApplicationName", "Highlight"},
+	{"RunningCommand", "Highlight"},
+	{"UserCommand", "Highlight"},
+	{"Branch", "Highlight"},
+	{"Version", "Highlight"},
+	{"MenuPage", "Highlight"},
+	{"File", "Highlight"},
+	{"Folder", "Highlight"},
+	{"App", "Highlight"},
+	{"IPAddress", "Highlight"},
+	{"Var", "Highlight"},
+	{"User", "Highlight"},
+	{"Theme", "Highlight"},
 }
 
 // titleFallbackTags lists optional Title-variant tags that fall back to
@@ -586,6 +687,20 @@ var titleFallbackTags = []struct{ name, fallback string }{
 	{"LargeTitleErrorFocused", "TitleErrorFocused"},
 	{"LargeTitleSuccessFocused", "TitleSuccessFocused"},
 	{"LargeTitleQuestionFocused", "TitleQuestionFocused"},
+	// LargeTitleArea variants -- distinct from the LargeTitle family above
+	// (background-area coloring for the large-titlebar row, not the title
+	// text itself); 12 of 13 bundled themes just alias each of these to the
+	// base LargeTitleArea, DockSTARTer being the one exception with a real
+	// per-state color for each.
+	{"LargeTitleAreaHelp", "LargeTitleArea"},
+	{"LargeTitleAreaNotice", "LargeTitleArea"},
+	{"LargeTitleAreaWarn", "LargeTitleArea"},
+	{"LargeTitleAreaWarning", "LargeTitleArea"},
+	{"LargeTitleAreaError", "LargeTitleArea"},
+	{"LargeTitleAreaSuccess", "LargeTitleArea"},
+	{"LargeTitleAreaQuestion", "LargeTitleArea"},
+	{"LargeTitleFocusIndicator", "TitleFocusIndicator"},
+	{"LargeTitleUnfocusedIndicator", "TitleUnfocusedIndicator"},
 }
 
 // itemListFallbackTags lists optional ItemList-variant tags that fall back
@@ -636,17 +751,40 @@ func iconFallbackTags() []struct{ name, fallback string } {
 			struct{ name, fallback string }{"LargeIcon" + w + "Pressed", "LargeIconPressed"},
 		)
 	}
+	// panel_render.go renders these via RenderThemeText(iconStr, baseStyle)
+	// where baseStyle derives from ConsoleBorder, so a bare reset resolves
+	// equivalently to every bundled theme's explicit ConsoleBorder override.
+	// A literal reset is used rather than the named tag so this stays
+	// correct if these icon tags are ever reused somewhere with a different
+	// base style (e.g. a dialog), where ConsoleBorder specifically wouldn't
+	// apply but a reset to the surrounding context still would.
+	tags = append(tags,
+		struct{ name, fallback string }{"IconResizeUpInactive", "{{[-]}}"},
+		struct{ name, fallback string }{"IconResizeDnInactive", "{{[-]}}"},
+	)
 	return tags
 }
 
-// checkboxFallbackTags returns the Radio*->Checkbox* and Checkbox*Focused/
-// Radio*Focused->TagFocused fallback rules matching checkboxStylePair
-// (internal/displayengine/classic/menu_render.go)'s tag-name construction:
-// Checkbox|Radio + Brackets? + On|Off + Focused?. Every bundled theme
-// already either duplicates or explicitly aliases Radio's tags to
-// Checkbox's, and Checkbox*Focused to the generic TagFocused.
+// checkboxBaseFallbackTags lists the base (unfocused) Checkbox tags'
+// fallback targets, anchored to DockSTARTer's own pattern: CheckboxOff/
+// CheckboxBracketsOff/CheckboxBracketsOn are identical in all 13 bundled
+// themes; CheckboxOn matches in 12 of 13 (ZenFocus customizes it).
+var checkboxBaseFallbackTags = []struct{ name, fallback string }{
+	{"CheckboxOff", "Dialog"},
+	{"CheckboxOn", "TagKey"},
+	{"CheckboxBracketsOff", "Dialog"},
+	{"CheckboxBracketsOn", "Dialog"},
+}
+
+// checkboxFallbackTags returns checkboxBaseFallbackTags plus the generated
+// Radio*->Checkbox* and Checkbox*Focused/Radio*Focused->TagFocused fallback
+// rules matching checkboxStylePair (internal/displayengine/classic/
+// menu_render.go)'s tag-name construction: Checkbox|Radio + Brackets? +
+// On|Off + Focused?. Every bundled theme already either duplicates or
+// explicitly aliases Radio's tags to Checkbox's, and Checkbox*Focused to
+// the generic TagFocused.
 func checkboxFallbackTags() []struct{ name, fallback string } {
-	var tags []struct{ name, fallback string }
+	tags := append([]struct{ name, fallback string }{}, checkboxBaseFallbackTags...)
 	for _, brackets := range []string{"", "Brackets"} {
 		for _, state := range []string{"On", "Off"} {
 			for _, suffix := range []string{"", "Focused"} {

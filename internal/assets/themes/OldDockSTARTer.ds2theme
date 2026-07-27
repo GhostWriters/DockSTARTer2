@@ -13,36 +13,37 @@ direct_suffix   = "]}}"
 accent = "red"
 
 [styles]
-# Backdrop
+## Backdrop
 Screen = "{{[black:white:-]}}"
 StatusBar = "{{|Dialog|}}"
-StatusBarBorder = "{{|StatusBar|}}"
+# StatusBarBorder = "{{|StatusBar|}}"
+# Helpline = "{{|StatusBar|}}"
+# ConsoleBorder = "{{|Helpline|}}"
 
-# Dialogs and panels
+## Dialogs and panels
 Dialog = "{{[black:blue:-]}}"
 Border = "{{[cyan:blue:-]}}"
 Border2 = "{{[black:blue:-]}}"
 Shadow = "{{|Screen:::D|}}"
 ProgramBox = "{{[white:black:-]}}"
-ConsoleBorder = "{{|Helpline|}}"
 
-# Header bar
+## Header bar
 StatusFields = "{{|Screen|}}"
 StatusName = "{{|StatusFields:::B|}}"
-StatusVersion = "{{|StatusFields|}}"
-StatusVersionBrackets = "{{|StatusFields|}}"
+# StatusVersion = "{{|StatusFields|}}"
+# StatusVersionBrackets = "{{|StatusFields|}}"
 StatusVersionSpace = "{{|StatusFields|}}"
 StatusVersionFocused = "{{|StatusVersion:::R|}}"
 StatusFlags = "{{|StatusFields:::RB|}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
 StatusFlagsSpace = "{{|StatusFields|}}"
 StatusUpdate = "{{|StatusVersion:::BU|}}"
-StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
-StatusUpdateMarker = "{{|StatusUpdate|}}"
-StatusHostname = "{{|StatusFields|}}"
-StatusBarFocused = "{{|TagFocused|}}"
+# StatusUpdateBrackets = "{{|StatusVersionBrackets|}}"
+# StatusUpdateMarker = "{{|StatusUpdate|}}"
+# StatusHostname = "{{|StatusFields|}}"
+# StatusBarFocused = "{{|TagFocused|}}"
 
-# Titles
+## Titles
 Title = "{{[black::-U]}}"
 TitleHelp = "{{|Title:red|}}"
 TitleNotice = "{{[white:green:B]}}"
@@ -59,33 +60,33 @@ TitleSubMenuFocused = "{{|Title:::R|}}"
 TitleFocusIndicator = "{{[red::-B]}}"
 TitleUnfocusedIndicator = ""
 
-# Large Titles
+## Large Titles
 LargeTitleArea = "{{[black:cyan:-]}}"
-LargeTitleAreaHelp = "{{|LargeTitleArea|}}"
-LargeTitleAreaNotice = "{{|LargeTitleArea|}}"
-LargeTitleAreaWarn = "{{|LargeTitleArea|}}"
-LargeTitleAreaWarning = "{{|LargeTitleArea|}}"
-LargeTitleAreaError = "{{|LargeTitleArea|}}"
-LargeTitleAreaSuccess = "{{|LargeTitleArea|}}"
-LargeTitleAreaQuestion = "{{|LargeTitleArea|}}"
+# LargeTitleAreaHelp = "{{|LargeTitleArea|}}"
+# LargeTitleAreaNotice = "{{|LargeTitleArea|}}"
+# LargeTitleAreaWarn = "{{|LargeTitleArea|}}"
+# LargeTitleAreaWarning = "{{|LargeTitleArea|}}"
+# LargeTitleAreaError = "{{|LargeTitleArea|}}"
+# LargeTitleAreaSuccess = "{{|LargeTitleArea|}}"
+# LargeTitleAreaQuestion = "{{|LargeTitleArea|}}"
 LargeTitle = "{{|Title|}}"
 LargeTitleHelp = "{{|TitleHelp|}}"
-LargeTitleFocusIndicator = "{{|TitleFocusIndicator|}}"
-LargeTitleUnfocusedIndicator = "{{|TitleUnfocusedIndicator|}}"
+# LargeTitleFocusIndicator = "{{|TitleFocusIndicator|}}"
+# LargeTitleUnfocusedIndicator = "{{|TitleUnfocusedIndicator|}}"
 LargeIconFocused = "{{|IconFocused|}}"
 LargeIconPressed = "{{[red:white:-B]}}"
 
-# Subtitles
+## Subtitles
 Subtitle = "{{[blue:black:-B]}}"
 CommandLine = "{{|Dialog:yellow::-B|}}"
 
-# Headings
+## Headings
 Heading = "{{[-:-:-R]}}"
 HeadingTag = "{{[white:-:-R]}}"
 HeadingValue = "{{[-:-:-RB]}}"
 HeadingAppDescription = "{{[yellow:-:-b]}}"
 
-# Menus
+## Menus
 TagBrackets = "{{|Dialog|}}"
 TagSpinner = ""
 TagKey = "{{[red:blue:-]}}"
@@ -94,10 +95,8 @@ Item = "{{[black:cyan:-]}}"
 TagKeyFocused = "{{[black:red:-]}}"
 TagFocused = "{{[black:red:-]}}"
 ItemFocused = "{{[black:red:-]}}"
-# Optional overrides -- uncomment and set to override that specifically;
-# otherwise it falls back as noted above.
-# ItemListFocused = ""
-# ItemListUserDefinedFocused = ""
+# ItemListFocused = "{{|ItemFocused|}}"
+# ItemListUserDefinedFocused = "{{|ItemFocused|}}"
 ItemList = ""
 ItemListUserDefined = "{{[cyan:black:-B]}}"
 ItemListDeprecated = "{{[red:black:-B]}}"
@@ -105,37 +104,36 @@ ItemListDeprecatedFocused = "{{|ItemFocused|}}"
 OptionValue = "{{[white:green:-B]}}"
 OptionValueFocused = "{{|OptionValue:::-|}}"
 
-# Help
-Helpline = "{{|StatusBar|}}"
-HelpTag = "{{|Tag|}}"
+## Help
+# HelpTag = "{{|Tag|}}"
 HelpItem = "{{|Item|}}"
 
-# Checkboxes
+## Checkboxes
 # Checkbox*Focused optionally falls back to TagFocused if undefined --
 # uncomment and set to override checkbox focus styling specifically.
-# CheckboxOffFocused = ""
-# CheckboxOnFocused = ""
-# CheckboxBracketsOffFocused = ""
-# CheckboxBracketsOnFocused = ""
-CheckboxOff = "{{|Dialog|}}"
-CheckboxOn = "{{|TagKey|}}"
-CheckboxBracketsOff = "{{|Dialog|}}"
-CheckboxBracketsOn = "{{|Dialog|}}"
+# CheckboxOffFocused = "{{|TagFocused|}}"
+# CheckboxOnFocused = "{{|TagFocused|}}"
+# CheckboxBracketsOffFocused = "{{|TagFocused|}}"
+# CheckboxBracketsOnFocused = "{{|TagFocused|}}"
+# CheckboxOff = "{{|Dialog|}}"
+# CheckboxOn = "{{|TagKey|}}"
+# CheckboxBracketsOff = "{{|Dialog|}}"
+# CheckboxBracketsOn = "{{|Dialog|}}"
 
-# Radio buttons
+## Radio buttons
 # Radio* falls back to the matching Checkbox* tag automatically, and any
 # Checkbox*Focused/Radio*Focused tag falls back further to TagFocused --
 # uncomment and set to override radio buttons specifically.
-# RadioOff = ""
-# RadioOn = ""
-# RadioBracketsOff = ""
-# RadioBracketsOn = ""
-# RadioOffFocused = ""
-# RadioOnFocused = ""
-# RadioBracketsOffFocused = ""
-# RadioBracketsOnFocused = ""
+# RadioOff = "{{|CheckboxOff|}}"
+# RadioOn = "{{|CheckboxOn|}}"
+# RadioBracketsOff = "{{|CheckboxBracketsOff|}}"
+# RadioBracketsOn = "{{|CheckboxBracketsOn|}}"
+# RadioOffFocused = "{{|CheckboxOffFocused|}}"
+# RadioOnFocused = "{{|CheckboxOnFocused|}}"
+# RadioBracketsOffFocused = "{{|CheckboxBracketsOffFocused|}}"
+# RadioBracketsOnFocused = "{{|CheckboxBracketsOnFocused|}}"
 
-# Buttons
+## Buttons
 ButtonActive = "{{[white:red:-B]}}"
 ButtonInactive = "{{[black:blue:-]}}"
 ButtonSpinner = ""
@@ -143,7 +141,7 @@ ButtonSpinnerLarge = ""
 ButtonKeyActive = "{{|ButtonActive|}}"
 ButtonKeyInactive = "{{|ButtonInactive:$accent|}}"
 
-# Icons
+## Icons
 # Per-widget icon tags (IconHelpInactive, IconMaximizeFocused, etc.) are
 # optional overrides -- any not defined here fall back to the generic
 # IconInactive/IconFocused/IconPressed below. Large* variants fall back the
@@ -154,65 +152,65 @@ IconFocused = "{{|ButtonActive|}}"
 IconPressed = "{{[red:white:-B]}}"
 IconInactive = ""
 IconExitInactive = "{{[::R]}}"
-IconResizeUpInactive = "{{|ConsoleBorder|}}"
-IconResizeDnInactive = "{{|ConsoleBorder|}}"
-# Optional per-widget overrides -- uncomment and set to override that
-# widget specifically; otherwise it falls back as described above.
-# IconHelpInactive = ""
-# IconHelpFocused = ""
-# IconHelpPressed = ""
-# LargeIconHelpInactive = ""
-# LargeIconHelpFocused = ""
-# LargeIconHelpPressed = ""
-# IconRefreshInactive = ""
-# IconRefreshFocused = ""
-# IconRefreshPressed = ""
-# LargeIconRefreshInactive = ""
-# LargeIconRefreshFocused = ""
-# LargeIconRefreshPressed = ""
-# LargeIconExitInactive = ""
-# IconExitFocused = ""
-# IconExitPressed = ""
-# LargeIconExitFocused = ""
-# LargeIconExitPressed = ""
-# IconMaximizeInactive = ""
-# IconMaximizeFocused = ""
-# IconMaximizePressed = ""
-# LargeIconMaximizeInactive = ""
-# LargeIconMaximizeFocused = ""
-# LargeIconMaximizePressed = ""
-# IconSideBySideInactive = ""
-# IconSideBySideFocused = ""
-# IconSideBySidePressed = ""
-# LargeIconSideBySideInactive = ""
-# LargeIconSideBySideFocused = ""
-# LargeIconSideBySidePressed = ""
-# IconStackedInactive = ""
-# IconStackedFocused = ""
-# IconStackedPressed = ""
-# LargeIconStackedInactive = ""
-# LargeIconStackedFocused = ""
-# LargeIconStackedPressed = ""
+# Optional per-widget overrides -- uncomment to override that widget
+# specifically.
+# IconResizeUpInactive = "{{[-]}}"
+# IconResizeDnInactive = "{{[-]}}"
+# IconHelpInactive = "{{|IconInactive|}}"
+# IconHelpFocused = "{{|IconFocused|}}"
+# IconHelpPressed = "{{|IconPressed|}}"
+# LargeIconHelpInactive = "{{|IconHelpInactive|}}"
+# LargeIconHelpFocused = "{{|LargeIconFocused|}}"
+# LargeIconHelpPressed = "{{|LargeIconPressed|}}"
+# IconRefreshInactive = "{{|IconInactive|}}"
+# IconRefreshFocused = "{{|IconFocused|}}"
+# IconRefreshPressed = "{{|IconPressed|}}"
+# LargeIconRefreshInactive = "{{|IconRefreshInactive|}}"
+# LargeIconRefreshFocused = "{{|LargeIconFocused|}}"
+# LargeIconRefreshPressed = "{{|LargeIconPressed|}}"
+# LargeIconExitInactive = "{{|IconExitInactive|}}"
+# IconExitFocused = "{{|IconFocused|}}"
+# IconExitPressed = "{{|IconPressed|}}"
+# LargeIconExitFocused = "{{|LargeIconFocused|}}"
+# LargeIconExitPressed = "{{|LargeIconPressed|}}"
+# IconMaximizeInactive = "{{|IconInactive|}}"
+# IconMaximizeFocused = "{{|IconFocused|}}"
+# IconMaximizePressed = "{{|IconPressed|}}"
+# LargeIconMaximizeInactive = "{{|IconMaximizeInactive|}}"
+# LargeIconMaximizeFocused = "{{|LargeIconFocused|}}"
+# LargeIconMaximizePressed = "{{|LargeIconPressed|}}"
+# IconSideBySideInactive = "{{|IconInactive|}}"
+# IconSideBySideFocused = "{{|IconFocused|}}"
+# IconSideBySidePressed = "{{|IconPressed|}}"
+# LargeIconSideBySideInactive = "{{|IconSideBySideInactive|}}"
+# LargeIconSideBySideFocused = "{{|LargeIconFocused|}}"
+# LargeIconSideBySidePressed = "{{|LargeIconPressed|}}"
+# IconStackedInactive = "{{|IconInactive|}}"
+# IconStackedFocused = "{{|IconFocused|}}"
+# IconStackedPressed = "{{|IconPressed|}}"
+# LargeIconStackedInactive = "{{|IconStackedInactive|}}"
+# LargeIconStackedFocused = "{{|LargeIconFocused|}}"
+# LargeIconStackedPressed = "{{|LargeIconPressed|}}"
 
-# Env editor variable types
+## Env editor variable types
 EnvBuiltin = "{{[black:cyan]}}"
 EnvInvalid = "{{[red:cyan]}}"
 EnvDuplicate = "{{[magenta:cyan]}}"
 EnvPendingDelete = "{{|Dialog:::DS|}}"
 EnvReadOnly = "{{|Dialog:::D|}}"
 
-# Env editor
+## Env editor
 LineComment = "{{|Dialog:::-RB|}}"
 ModifiedText = "{{[white:black:-]}}"
 
-# Env editor line numbers
+## Env editor line numbers
 LineNumber = "{{|Dialog:::-D|}}"
 LineNumberFocused = "{{|Dialog:white::-B|}}"
 LineNumberModified = "{{|ModifiedText|}}"
 LineNumberModifiedFocused = "{{|ModifiedText:::B|}}"
 LineNumberBrackets = "{{|Dialog:red::-B|}}"
 
-# Markers and cursor
+## Markers and cursor
 Marker = ""
 MarkerAdded = "{{|Marker::green|}}"
 MarkerDeleted = "{{|Marker::red|}}"
@@ -222,34 +220,34 @@ MarkerLocked = "{{|MarkerInvalid|}}"
 MarkerLockedLarge = "{{|MarkerLocked|}}"
 TextCursor = "{{[:white:]}}"
 
-# Scrollbar
+## Scrollbar
 Scrollbar = "{{|Border2|}}"
 ScrollbarThumb = "{{|Border|}}"
 ScrollbarArrows = "{{|Border|}}"
 
-# Keys, progress, and indicators
+## Keys, progress, and indicators
 KeyCap = "{{[::-R]}}"
 ProgressWaiting = "{{[yellow:black:-B]}}"
 ProgressInProgress = "{{[black:white:-]}}"
 ProgressCompleted = "{{[black:white:-B]}}"
 
-# Inline text highlights
+## Inline text highlights
 Highlight = "{{[yellow::-B]}}"
-ApplicationName = "{{|Highlight|}}"
-RunningCommand = "{{|Highlight|}}"
+# ApplicationName = "{{|Highlight|}}"
+# RunningCommand = "{{|Highlight|}}"
 FailingCommand = "{{|TitleError|}}"
-UserCommand = "{{|Highlight|}}"
-Branch = "{{|Highlight|}}"
-Version = "{{|Highlight|}}"
-MenuPage = "{{|Highlight|}}"
-File = "{{|Highlight|}}"
-Folder = "{{|Highlight|}}"
-App = "{{|Highlight|}}"
-IPAddress = "{{|Highlight|}}"
+# UserCommand = "{{|Highlight|}}"
+# Branch = "{{|Highlight|}}"
+# Version = "{{|Highlight|}}"
+# MenuPage = "{{|Highlight|}}"
+# File = "{{|Highlight|}}"
+# Folder = "{{|Highlight|}}"
+# App = "{{|Highlight|}}"
+# IPAddress = "{{|Highlight|}}"
 URL = "{{|Highlight:::U|}}"
-Var = "{{|Highlight|}}"
-User = "{{|Highlight|}}"
-Theme = "{{|Highlight|}}"
+# Var = "{{|Highlight|}}"
+# User = "{{|Highlight|}}"
+# Theme = "{{|Highlight|}}"
 Yes = "{{|TitleSuccess|}}"
 No = "{{|TitleError|}}"
 
