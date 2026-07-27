@@ -453,7 +453,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case key.Matches(msg, displayengine.Keys.EnvAddVar):
 				return m, m.showAddVarDialog()
-			case msg.String() == "f2":
+			case key.Matches(msg, displayengine.Keys.EnvEditValue):
 				return m, m.showSetValueDialog()
 			case key.Matches(msg, displayengine.Keys.EnvReorderU):
 				if len(m.tabs) > 0 {

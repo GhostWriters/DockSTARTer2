@@ -218,8 +218,8 @@ var Keys = KeyMap{
 		key.WithHelp("alt+j", "split line at cursor"),
 	),
 	EnvEditValue: key.NewBinding(
-		key.WithKeys("f2"),
-		key.WithHelp("F2", "edit value"),
+		key.WithKeys("f2", "ctrl+e", "alt+e", "ctrl+alt+e"),
+		key.WithHelp("F2/alt+e", "edit value"),
 	),
 	EnvNextTab: key.NewBinding(
 		key.WithKeys("ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown", "ctrl+alt+right"),
