@@ -242,11 +242,11 @@ type Styles struct {
 	IconFocused          lipgloss.Style
 	IconPressed          lipgloss.Style
 	IconInactive         lipgloss.Style
-	HelpIconInactive     lipgloss.Style
-	RefreshIconInactive  lipgloss.Style
-	ExitIconInactive     lipgloss.Style
-	ResizeUpIconInactive lipgloss.Style
-	ResizeDnIconInactive lipgloss.Style
+	IconHelpInactive     lipgloss.Style
+	IconRefreshInactive  lipgloss.Style
+	IconExitInactive     lipgloss.Style
+	IconResizeUpInactive lipgloss.Style
+	IconResizeDnInactive lipgloss.Style
 	ButtonKeyActive      lipgloss.Style
 	ButtonKeyInactive    lipgloss.Style
 
@@ -295,7 +295,7 @@ type Styles struct {
 	Console       lipgloss.Style
 
 	// Console panel title color
-	ConsoleTitleColor color.Color
+	TitleConsoleColor color.Color
 }
 
 // StyleContext holds a subset of Styles for decoupled rendering
@@ -338,11 +338,11 @@ type StyleContext struct {
 	IconFocused          lipgloss.Style
 	IconPressed          lipgloss.Style
 	IconInactive         lipgloss.Style
-	HelpIconInactive     lipgloss.Style
-	RefreshIconInactive  lipgloss.Style
-	ExitIconInactive     lipgloss.Style
-	ResizeUpIconInactive lipgloss.Style
-	ResizeDnIconInactive lipgloss.Style
+	IconHelpInactive     lipgloss.Style
+	IconRefreshInactive  lipgloss.Style
+	IconExitInactive     lipgloss.Style
+	IconResizeUpInactive lipgloss.Style
+	IconResizeDnInactive lipgloss.Style
 	ButtonKeyActive      lipgloss.Style
 	ButtonKeyInactive    lipgloss.Style
 	ItemNormal           lipgloss.Style
@@ -363,7 +363,7 @@ type StyleContext struct {
 	Console              lipgloss.Style
 	OptionValueFocused   lipgloss.Style
 	StatusBarFocused     lipgloss.Style
-	ConsoleTitleColor    color.Color
+	TitleConsoleColor    color.Color
 	DialogTitleAlign     string
 	SubmenuTitleAlign    string
 	PanelTitleAlign      string
@@ -414,11 +414,11 @@ func GetActiveContext() StyleContext {
 		IconFocused:          CurrentStyles.IconFocused,
 		IconPressed:          CurrentStyles.IconPressed,
 		IconInactive:         CurrentStyles.IconInactive,
-		HelpIconInactive:     CurrentStyles.HelpIconInactive,
-		RefreshIconInactive:  CurrentStyles.RefreshIconInactive,
-		ExitIconInactive:     CurrentStyles.ExitIconInactive,
-		ResizeUpIconInactive: CurrentStyles.ResizeUpIconInactive,
-		ResizeDnIconInactive: CurrentStyles.ResizeDnIconInactive,
+		IconHelpInactive:     CurrentStyles.IconHelpInactive,
+		IconRefreshInactive:  CurrentStyles.IconRefreshInactive,
+		IconExitInactive:     CurrentStyles.IconExitInactive,
+		IconResizeUpInactive: CurrentStyles.IconResizeUpInactive,
+		IconResizeDnInactive: CurrentStyles.IconResizeDnInactive,
 		ButtonKeyActive:      CurrentStyles.ButtonKeyActive,
 		ButtonKeyInactive:    CurrentStyles.ButtonKeyInactive,
 		ItemNormal:           CurrentStyles.ItemNormal,
@@ -439,7 +439,7 @@ func GetActiveContext() StyleContext {
 		Console:              CurrentStyles.Console,
 		OptionValueFocused:   CurrentStyles.OptionValueFocused,
 		StatusBarFocused:     CurrentStyles.StatusBarFocused,
-		ConsoleTitleColor:    CurrentStyles.ConsoleTitleColor,
+		TitleConsoleColor:    CurrentStyles.TitleConsoleColor,
 		DialogTitleAlign:     CurrentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:    CurrentStyles.SubmenuTitleAlign,
 		PanelTitleAlign:      CurrentStyles.PanelTitleAlign,
@@ -651,25 +651,25 @@ func InitStyles(cfg config.AppConfig) {
 	if _, noBG := CurrentStyles.IconInactive.GetBackground().(lipgloss.NoColor); noBG {
 		CurrentStyles.IconInactive = CurrentStyles.IconInactive.Background(CurrentStyles.Dialog.GetBackground())
 	}
-	CurrentStyles.HelpIconInactive = SemanticRawStyle("HelpIconInactive")
-	if _, noBG := CurrentStyles.HelpIconInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.HelpIconInactive = CurrentStyles.HelpIconInactive.Background(CurrentStyles.Dialog.GetBackground())
+	CurrentStyles.IconHelpInactive = SemanticRawStyle("IconHelpInactive")
+	if _, noBG := CurrentStyles.IconHelpInactive.GetBackground().(lipgloss.NoColor); noBG {
+		CurrentStyles.IconHelpInactive = CurrentStyles.IconHelpInactive.Background(CurrentStyles.Dialog.GetBackground())
 	}
-	CurrentStyles.RefreshIconInactive = SemanticRawStyle("RefreshIconInactive")
-	if _, noBG := CurrentStyles.RefreshIconInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.RefreshIconInactive = CurrentStyles.RefreshIconInactive.Background(CurrentStyles.Dialog.GetBackground())
+	CurrentStyles.IconRefreshInactive = SemanticRawStyle("IconRefreshInactive")
+	if _, noBG := CurrentStyles.IconRefreshInactive.GetBackground().(lipgloss.NoColor); noBG {
+		CurrentStyles.IconRefreshInactive = CurrentStyles.IconRefreshInactive.Background(CurrentStyles.Dialog.GetBackground())
 	}
-	CurrentStyles.ExitIconInactive = SemanticRawStyle("ExitIconInactive")
-	if _, noBG := CurrentStyles.ExitIconInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ExitIconInactive = CurrentStyles.ExitIconInactive.Background(CurrentStyles.Dialog.GetBackground())
+	CurrentStyles.IconExitInactive = SemanticRawStyle("IconExitInactive")
+	if _, noBG := CurrentStyles.IconExitInactive.GetBackground().(lipgloss.NoColor); noBG {
+		CurrentStyles.IconExitInactive = CurrentStyles.IconExitInactive.Background(CurrentStyles.Dialog.GetBackground())
 	}
-	CurrentStyles.ResizeUpIconInactive = SemanticRawStyle("ResizeUpIconInactive")
-	if _, noBG := CurrentStyles.ResizeUpIconInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ResizeUpIconInactive = CurrentStyles.ResizeUpIconInactive.Background(CurrentStyles.Dialog.GetBackground())
+	CurrentStyles.IconResizeUpInactive = SemanticRawStyle("IconResizeUpInactive")
+	if _, noBG := CurrentStyles.IconResizeUpInactive.GetBackground().(lipgloss.NoColor); noBG {
+		CurrentStyles.IconResizeUpInactive = CurrentStyles.IconResizeUpInactive.Background(CurrentStyles.Dialog.GetBackground())
 	}
-	CurrentStyles.ResizeDnIconInactive = SemanticRawStyle("ResizeDnIconInactive")
-	if _, noBG := CurrentStyles.ResizeDnIconInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ResizeDnIconInactive = CurrentStyles.ResizeDnIconInactive.Background(CurrentStyles.Dialog.GetBackground())
+	CurrentStyles.IconResizeDnInactive = SemanticRawStyle("IconResizeDnInactive")
+	if _, noBG := CurrentStyles.IconResizeDnInactive.GetBackground().(lipgloss.NoColor); noBG {
+		CurrentStyles.IconResizeDnInactive = CurrentStyles.IconResizeDnInactive.Background(CurrentStyles.Dialog.GetBackground())
 	}
 	CurrentStyles.ButtonKeyActive = SemanticRawStyle("ButtonKeyActive")
 	if _, noBG := CurrentStyles.ButtonKeyActive.GetBackground().(lipgloss.NoColor); noBG {
@@ -776,7 +776,7 @@ func InitStyles(cfg config.AppConfig) {
 	CurrentStyles.StatusWarn = SemanticRawStyle("TitleWarn")
 	CurrentStyles.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
 
-	CurrentStyles.ConsoleTitleColor = SemanticRawStyle("ConsoleTitle").GetForeground()
+	CurrentStyles.TitleConsoleColor = SemanticRawStyle("TitleConsole").GetForeground()
 
 	CurrentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
 	CurrentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign

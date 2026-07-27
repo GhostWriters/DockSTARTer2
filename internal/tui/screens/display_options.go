@@ -128,9 +128,9 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if t.Author != "" {
 			desc += fmt.Sprintf(" [by %s]", t.Author)
 		}
-		descTag := "{{|ListItem|}}"
+		descTag := "{{|ItemList|}}"
 		if t.IsUserTheme {
-			descTag = "{{|ListItemUserDefined|}}"
+			descTag = "{{|ItemListUserDefined|}}"
 		}
 		checked := s.currentTheme == t.ConfigValue
 		if checked {
@@ -158,7 +158,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		displayName := "(missing) " + shortURI
 		themeItems = append([]displayengine.MenuItem{{
 			Tag:           displayName,
-			Desc:          "{{|ListItemUserDefined|}}Source file not found — using cached version",
+			Desc:          "{{|ItemListUserDefined|}}Source file not found — using cached version",
 			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
 			IsRadioButton: true,
 			Selectable:    true,

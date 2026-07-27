@@ -293,22 +293,19 @@ func envLayoutSetAction(mode envLayoutMode) func() tea.Cmd {
 }
 
 // envLayoutWidget builds a title-bar widget that switches to the given
-// layout mode when activated. Shares the Refresh icon's theme tags rather
-// than defining new ones across every theme file.
-func envLayoutWidget(id, label, help, glyph, glyphAscii string, mode envLayoutMode) displayengine.WidgetDef {
+// layout mode when activated. iconName is its own theme tag prefix (e.g.
+// "Maximize"); a theme need not define Maximize/SideBySide/StackedIcon* at
+// all -- WidgetDef falls back to the generic Icon{Inactive,Focused,Pressed}
+// tags when a widget-specific one isn't defined (see IconName's doc comment).
+func envLayoutWidget(id, label, help, glyph, glyphAscii, iconName string, mode envLayoutMode) displayengine.WidgetDef {
 	return displayengine.WidgetDef{
-		ID:                 id,
-		Label:              label,
-		HelpText:           help,
-		Glyph:              glyph,
-		GlyphAscii:         glyphAscii,
-		ThemeInactive:      "{{|RefreshIconInactive|}}",
-		ThemeActive:        "{{|IconFocused|}}",
-		ThemePressed:       "{{|IconPressed|}}",
-		LargeThemeInactive: "{{|LargeRefreshIconInactive|}}",
-		LargeThemeActive:   "{{|LargeIconFocused|}}",
-		LargeThemePressed:  "{{|LargeIconPressed|}}",
-		Action:             envLayoutSetAction(mode),
+		ID:         id,
+		Label:      label,
+		HelpText:   help,
+		Glyph:      glyph,
+		GlyphAscii: glyphAscii,
+		IconName:   iconName,
+		Action:     envLayoutSetAction(mode),
 	}
 }
 
@@ -316,7 +313,7 @@ func envLayoutWidget(id, label, help, glyph, glyphAscii string, mode envLayoutMo
 // to that specific pane's tab. Its ID alone doesn't say which pane; Update
 // recovers that from the "tabbed_vars.paneN." hit-region ID prefix.
 func maximizeWidget() displayengine.WidgetDef {
-	return envLayoutWidget(displayengine.IDTitleWidgetMaximize, "Maximize", "Show only this tab, full size.", "□", "+", envLayoutMaximized)
+	return envLayoutWidget(displayengine.IDTitleWidgetMaximize, "Maximize", "Show only this tab, full size.", "□", "+", "Maximize", envLayoutMaximized)
 }
 
 // paneLayoutWidgets returns the layout-control widgets shown on both panes'
@@ -329,8 +326,8 @@ func (m *TabbedVarsEditorModel) paneLayoutWidgets() []displayengine.WidgetDef {
 	if len(m.tabs) != 2 {
 		return nil
 	}
-	sideBySide := envLayoutWidget(displayengine.IDTitleWidgetSideBySide, "Side by side", "Show both open tabs side by side.", "▥", "|", envLayoutSideBySide)
-	stacked := envLayoutWidget(displayengine.IDTitleWidgetStacked, "Stacked", "Show both open tabs stacked vertically.", "▤", "-", envLayoutStacked)
+	sideBySide := envLayoutWidget(displayengine.IDTitleWidgetSideBySide, "Side by side", "Show both open tabs side by side.", "▥", "|", "SideBySide", envLayoutSideBySide)
+	stacked := envLayoutWidget(displayengine.IDTitleWidgetStacked, "Stacked", "Show both open tabs stacked vertically.", "▤", "-", "Stacked", envLayoutStacked)
 	switch m.layoutMode {
 	case envLayoutMaximized:
 		return []displayengine.WidgetDef{sideBySide, stacked}

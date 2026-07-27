@@ -37,7 +37,7 @@ func expandPreviewGlyph() string {
 	if !ctx.LineCharacters {
 		glyph = glyphs.SubMenuCollapsedAscii
 	}
-	return displayengine.SemanticRawStyle("RefreshIconInactive").Render(glyph)
+	return displayengine.SemanticRawStyle("IconRefreshInactive").Render(glyph)
 }
 
 // appearanceLayoutRow pairs the settings column with the preview section.

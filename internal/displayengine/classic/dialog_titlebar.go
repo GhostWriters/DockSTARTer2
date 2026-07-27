@@ -16,66 +16,53 @@ const widgetPressDuration = 500 * time.Millisecond
 
 // WidgetDef describes a single title bar widget (button).
 type WidgetDef struct {
-	ID                 string         // hit region ID suffix, e.g. IDTitleWidgetClose
-	Label              string         // human label for hit region
-	HelpText           string         // help tooltip
-	Glyph              string         // unicode glyph e.g. "x"
-	GlyphAscii         string         // ASCII fallback e.g. "X"
-	ThemeInactive      string         // small titlebar inactive theme tag
-	ThemeActive        string         // small titlebar active/focused theme tag
-	ThemePressed       string         // small titlebar pressed theme tag
-	LargeThemeInactive string         // large titlebar inactive theme tag
-	LargeThemeActive   string         // large titlebar active theme tag
-	LargeThemePressed  string         // large titlebar pressed theme tag
-	Action             func() tea.Cmd // nil = no action; caller supplies closeCmd for Close widget
+	ID         string // hit region ID suffix, e.g. IDTitleWidgetClose
+	Label      string // human label for hit region
+	HelpText   string // help tooltip
+	Glyph      string // unicode glyph e.g. "x"
+	GlyphAscii string // ASCII fallback e.g. "X"
+	// IconName is this widget's tag-name prefix (e.g. "Help" for
+	// IconHelpInactive/IconHelpFocused/IconHelpPressed and their Large*
+	// counterparts). Fallback to the generic Icon{Inactive,Focused,Pressed}
+	// tag when the theme doesn't define a widget-specific one is handled by
+	// semstyle itself (see theme.iconFallbackTags, registered once per theme
+	// load) -- buildDialogTitleWidgets/buildLargeTitleBarWidgets just
+	// reference "IconHelpInactive" etc. directly and trust it to resolve.
+	IconName string
+	Action   func() tea.Cmd // nil = no action; caller supplies closeCmd for Close widget
 }
 
 // Pre-built widget vars -- replace the old TitleBarWidget enum constants.
 var (
 	WidgetClose = WidgetDef{
-		ID:                 IDTitleWidgetClose,
-		Label:              "Close",
-		HelpText:           "Close this dialog.",
-		Glyph:              closeWidget,
-		GlyphAscii:         closeWidgetAscii,
-		ThemeInactive:      "{{|ExitIconInactive|}}",
-		ThemeActive:        "{{|IconFocused|}}",
-		ThemePressed:       "{{|IconPressed|}}",
-		LargeThemeInactive: "{{|LargeExitIconInactive|}}",
-		LargeThemeActive:   "{{|LargeIconFocused|}}",
-		LargeThemePressed:  "{{|LargeIconPressed|}}",
-		Action:             nil, // caller supplies closeCmd
+		ID:         IDTitleWidgetClose,
+		Label:      "Close",
+		HelpText:   "Close this dialog.",
+		Glyph:      closeWidget,
+		GlyphAscii: closeWidgetAscii,
+		IconName:   "Exit",
+		Action:     nil, // caller supplies closeCmd
 	}
 
 	WidgetHelp = WidgetDef{
-		ID:                 IDTitleWidgetHelp,
-		Label:              "Help",
-		HelpText:           "Open help for this dialog.",
-		Glyph:              helpWidget,
-		GlyphAscii:         helpWidget, // no ASCII fallback in original
-		ThemeInactive:      "{{|HelpIconInactive|}}",
-		ThemeActive:        "{{|IconFocused|}}",
-		ThemePressed:       "{{|IconPressed|}}",
-		LargeThemeInactive: "{{|LargeHelpIconInactive|}}",
-		LargeThemeActive:   "{{|LargeIconFocused|}}",
-		LargeThemePressed:  "{{|LargeIconPressed|}}",
+		ID:         IDTitleWidgetHelp,
+		Label:      "Help",
+		HelpText:   "Open help for this dialog.",
+		Glyph:      helpWidget,
+		GlyphAscii: helpWidget, // no ASCII fallback in original
+		IconName:   "Help",
 		Action: func() tea.Cmd {
 			return func() tea.Msg { return TriggerHelpMsg{ScreenLevelOnly: true} }
 		},
 	}
 
 	WidgetRefresh = WidgetDef{
-		ID:                 IDTitleWidgetRefresh,
-		Label:              "Refresh",
-		HelpText:           "Refresh the current view.",
-		Glyph:              refreshWidget,
-		GlyphAscii:         refreshWidgetAscii,
-		ThemeInactive:      "{{|RefreshIconInactive|}}",
-		ThemeActive:        "{{|IconFocused|}}",
-		ThemePressed:       "{{|IconPressed|}}",
-		LargeThemeInactive: "{{|LargeRefreshIconInactive|}}",
-		LargeThemeActive:   "{{|LargeIconFocused|}}",
-		LargeThemePressed:  "{{|LargeIconPressed|}}",
+		ID:         IDTitleWidgetRefresh,
+		Label:      "Refresh",
+		HelpText:   "Refresh the current view.",
+		Glyph:      refreshWidget,
+		GlyphAscii: refreshWidgetAscii,
+		IconName:   "Refresh",
 		Action: func() tea.Cmd {
 			return func() tea.Msg { return TitleBarRefreshMsg{} }
 		},
@@ -303,11 +290,11 @@ func buildLargeTitleBarWidgets(focused bool, activeWidget, pressedWidget string,
 		if !ctx.LineCharacters && w.GlyphAscii != "" {
 			glyph = w.GlyphAscii
 		}
-		prefix := w.LargeThemeInactive
+		prefix := "{{|LargeIcon" + w.IconName + "Inactive|}}"
 		if isPressed(w.ID) {
-			prefix += w.LargeThemePressed
+			prefix += "{{|LargeIcon" + w.IconName + "Pressed|}}"
 		} else if isActive(w.ID) {
-			prefix += w.LargeThemeActive
+			prefix += "{{|LargeIcon" + w.IconName + "Focused|}}"
 		}
 		parts = append(parts, prefix+"["+glyph+"]{{[-]}}")
 	}
@@ -340,11 +327,11 @@ func buildDialogTitleWidgets(focused bool, activeWidget, pressedWidget string, w
 		if !ctx.LineCharacters && w.GlyphAscii != "" {
 			glyph = w.GlyphAscii
 		}
-		prefix := w.ThemeInactive
+		prefix := "{{|Icon" + w.IconName + "Inactive|}}"
 		if isPressed(w.ID) {
-			prefix += w.ThemePressed
+			prefix += "{{|Icon" + w.IconName + "Pressed|}}"
 		} else if isActive(w.ID) {
-			prefix += w.ThemeActive
+			prefix += "{{|Icon" + w.IconName + "Focused|}}"
 		}
 		parts = append(parts, prefix+"["+glyph+"]{{[-]}}")
 	}
