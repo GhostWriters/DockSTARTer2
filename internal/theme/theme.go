@@ -524,16 +524,16 @@ var registerTagFallbacksOnce sync.Once
 // per-call-site resolution code needed anywhere.
 func registerTagFallbacks() {
 	for _, tf := range titleFallbackTags {
-		semstyle.RegisterFallback(tf.name, tf.fallback)
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
 	for _, tf := range itemListFallbackTags {
-		semstyle.RegisterFallback(tf.name, tf.fallback)
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
 	for _, tf := range iconFallbackTags() {
-		semstyle.RegisterFallback(tf.name, tf.fallback)
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
 	for _, tf := range checkboxFallbackTags() {
-		semstyle.RegisterFallback(tf.name, tf.fallback)
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
 }
 
