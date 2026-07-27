@@ -236,7 +236,7 @@ type Styles struct {
 	ButtonActive       lipgloss.Style
 	ButtonInactive     lipgloss.Style
 	ButtonSpinner      lipgloss.Style // Spinner flanking flat button label when processing
-	ButtonSpinnerLarge lipgloss.Style // Spinner at edges of bordered button when processing
+	LargeButtonSpinner lipgloss.Style // Spinner at edges of bordered button when processing
 
 	// Title bar icon widgets
 	IconFocused          lipgloss.Style
@@ -294,8 +294,8 @@ type Styles struct {
 	StatusWarn    lipgloss.Style
 	Console       lipgloss.Style
 
-	// Console panel title color
-	TitleConsoleColor color.Color
+	// Panel title color
+	PanelTitleColor color.Color
 }
 
 // StyleContext holds a subset of Styles for decoupled rendering
@@ -353,7 +353,7 @@ type StyleContext struct {
 	TagKeyFocused        lipgloss.Style
 	TagSpinner           lipgloss.Style
 	ButtonSpinner        lipgloss.Style
-	ButtonSpinnerLarge   lipgloss.Style
+	LargeButtonSpinner   lipgloss.Style
 	Shadow               lipgloss.Style
 	ShadowColor          color.Color
 	ShadowLevel          int
@@ -363,7 +363,7 @@ type StyleContext struct {
 	Console              lipgloss.Style
 	OptionValueFocused   lipgloss.Style
 	StatusBarFocused     lipgloss.Style
-	TitleConsoleColor    color.Color
+	PanelTitleColor    color.Color
 	DialogTitleAlign     string
 	SubmenuTitleAlign    string
 	PanelTitleAlign      string
@@ -429,7 +429,7 @@ func GetActiveContext() StyleContext {
 		TagKeyFocused:        CurrentStyles.TagKeyFocused,
 		TagSpinner:           CurrentStyles.TagSpinner,
 		ButtonSpinner:        CurrentStyles.ButtonSpinner,
-		ButtonSpinnerLarge:   CurrentStyles.ButtonSpinnerLarge,
+		LargeButtonSpinner:   CurrentStyles.LargeButtonSpinner,
 		Shadow:               CurrentStyles.Shadow,
 		ShadowColor:          CurrentStyles.ShadowColor,
 		ShadowLevel:          currentConfig.UI.ShadowLevel,
@@ -439,7 +439,7 @@ func GetActiveContext() StyleContext {
 		Console:              CurrentStyles.Console,
 		OptionValueFocused:   CurrentStyles.OptionValueFocused,
 		StatusBarFocused:     CurrentStyles.StatusBarFocused,
-		TitleConsoleColor:    CurrentStyles.TitleConsoleColor,
+		PanelTitleColor:    CurrentStyles.PanelTitleColor,
 		DialogTitleAlign:     CurrentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:    CurrentStyles.SubmenuTitleAlign,
 		PanelTitleAlign:      CurrentStyles.PanelTitleAlign,
@@ -733,12 +733,12 @@ func InitStyles(cfg config.AppConfig) {
 		CurrentStyles.ButtonSpinner = CurrentStyles.ButtonSpinner.Foreground(CurrentStyles.ButtonActive.GetForeground())
 	}
 
-	CurrentStyles.ButtonSpinnerLarge = SemanticRawStyle("ButtonSpinnerLarge")
-	if _, noBG := CurrentStyles.ButtonSpinnerLarge.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ButtonSpinnerLarge = CurrentStyles.ButtonSpinnerLarge.Background(CurrentStyles.ButtonActive.GetBackground())
+	CurrentStyles.LargeButtonSpinner = SemanticRawStyle("LargeButtonSpinner")
+	if _, noBG := CurrentStyles.LargeButtonSpinner.GetBackground().(lipgloss.NoColor); noBG {
+		CurrentStyles.LargeButtonSpinner = CurrentStyles.LargeButtonSpinner.Background(CurrentStyles.ButtonActive.GetBackground())
 	}
-	if _, noFG := CurrentStyles.ButtonSpinnerLarge.GetForeground().(lipgloss.NoColor); noFG {
-		CurrentStyles.ButtonSpinnerLarge = CurrentStyles.ButtonSpinnerLarge.Foreground(CurrentStyles.ButtonActive.GetForeground())
+	if _, noFG := CurrentStyles.LargeButtonSpinner.GetForeground().(lipgloss.NoColor); noFG {
+		CurrentStyles.LargeButtonSpinner = CurrentStyles.LargeButtonSpinner.Foreground(CurrentStyles.ButtonActive.GetForeground())
 	}
 
 	// Header / Status Bar
@@ -776,7 +776,7 @@ func InitStyles(cfg config.AppConfig) {
 	CurrentStyles.StatusWarn = SemanticRawStyle("TitleWarn")
 	CurrentStyles.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
 
-	CurrentStyles.TitleConsoleColor = SemanticRawStyle("TitleConsole").GetForeground()
+	CurrentStyles.PanelTitleColor = SemanticRawStyle("PanelTitle").GetForeground()
 
 	CurrentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
 	CurrentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign

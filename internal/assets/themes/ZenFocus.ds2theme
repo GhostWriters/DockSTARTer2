@@ -19,9 +19,9 @@ accent = "$highlight"
 ## Backdrop
 Screen = "{{[$secondary:$primary:B]}}"
 StatusBar = "{{[$primary:$secondary:B]}}"
-Helpline = "{{|Dialog:::B|}}"
 # StatusBarBorder = "{{|StatusBar|}}"
-# ConsoleBorder = "{{|Helpline|}}"
+Helpline = "{{|Dialog:::B|}}"  # = "{{|StatusBar|}}"
+# PanelBorder = "{{|Helpline|}}"
 
 ## Dialogs and panels
 Dialog = "{{[$primary:$secondary]}}"
@@ -35,9 +35,9 @@ StatusFields = "{{[$secondary:$primary:-]}}"
 # StatusName = "{{|StatusFields|}}"
 # StatusVersion = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
-StatusVersionSpace = "{{[-:-:-]}}"
+StatusVersionSpace = "{{[-:-:-]}}"  # = "{{[-]}}"
 StatusVersionFocused = "{{|StatusBar|}}"
-StatusFlags = "{{[-:-:-]}}"
+StatusFlags = "{{[-:-:-]}}"         # = "{{|Dialog|}}"
 StatusFlagsBrackets = "{{[-:-:-R]}}"
 # StatusFlagsSpace = "{{|StatusVersionSpace|}}"
 StatusUpdate = "{{[$highlight:$secondary:B]}}"
@@ -48,18 +48,18 @@ StatusUpdate = "{{[$highlight:$secondary:B]}}"
 
 ## Titles
 Title = "{{|BoxTitle|}}"
-TitleHelp = "{{|Helpline|}}"
-TitleNotice = "{{[white:green:B]}}"
-TitleWarn = "{{[$secondary:$primary:B]}}"
-TitleError = "{{[$primary:$secondary:BU]}}"
-TitleSuccess = "{{[$secondary:$primary]}}"
-TitleWarning = "{{[$secondary:$primary:B]}}"
-TitleQuestion = "{{[$primary:$secondary:B]}}"
-TitleConsole = "{{|ConsoleBorder|}}"
-TitleConsoleChangedIndicator = "{{|TitleNotice|}}"
+TitleHelp = "{{|Helpline|}}"                   # = "{{|Title|}}"
+TitleNotice = "{{[white:green:B]}}"            # = "{{|Title|}}"
+TitleWarn = "{{[$secondary:$primary:B]}}"      # = "{{|Title|}}"
+TitleError = "{{[$primary:$secondary:BU]}}"    # = "{{|Title|}}"
+TitleSuccess = "{{[$secondary:$primary]}}"     # = "{{|Title|}}"
+TitleWarning = "{{[$secondary:$primary:B]}}"   # = "{{|Title|}}"
+TitleQuestion = "{{[$primary:$secondary:B]}}"  # = "{{|Title|}}"
+PanelTitle = "{{|PanelBorder|}}"
+PanelTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
-TitleSubMenuFocused = "{{|Title:::R|}}"
+TitleSubMenuFocused = "{{|Title:::R|}}"        # = "{{|TitleFocused|}}"
 TitleFocusIndicator = "{{[yellow::-B]}}"
 TitleUnfocusedIndicator = ""
 
@@ -101,31 +101,28 @@ ItemFocused = "{{[$accent:$secondary:B]}}"
 # ItemListFocused = "{{|ItemFocused|}}"
 ItemList = ""
 ItemListUserDefined = "{{[$secondary:$primary]}}"
-ItemListUserDefinedFocused = "{{|ItemListUserDefined:::B|}}"
-ItemListDeprecated = "{{[$secondary:$accent]}}"
-ItemListDeprecatedFocused = "{{|ItemListDeprecated:::B|}}"
+ItemListUserDefinedFocused = "{{|ItemListUserDefined:::B|}}"  # = "{{|ItemFocused|}}"
+ItemListDeprecated = "{{[$secondary:$accent]}}"               # = "{{|ItemListUserDefined|}}"
+ItemListDeprecatedFocused = "{{|ItemListDeprecated:::B|}}"    # = "{{|ItemListUserDefinedFocused|}}"
 OptionValue = "{{[$accent:-:-]}}"
 OptionValueFocused = "{{|OptionValue:::RB|}}"
 
 ## Help
 # HelpTag = "{{|Tag|}}"
-HelpItem = "{{|Helpline|}}"
+HelpItem = "{{|Helpline|}}"  # = "{{|Dialog|}}"
 
 ## Checkboxes
 # Checkbox*Focused customized below for this theme.
 # CheckboxOff = "{{|Dialog|}}"
-CheckboxOn = "{{[$accent:$secondary:B]}}"
+CheckboxOn = "{{[$accent:$secondary:B]}}"  # = "{{|TagKey|}}"
 # CheckboxBracketsOff = "{{|Dialog|}}"
 # CheckboxBracketsOn = "{{|Dialog|}}"
-CheckboxOnFocused = "{{[$secondary:$accent:-]}}"
-CheckboxOffFocused = "{{[$secondary:$accent:-]}}"
-CheckboxBracketsOnFocused = "{{[$secondary:$accent:-]}}"
-CheckboxBracketsOffFocused = "{{[$secondary:$accent:-]}}"
+CheckboxOnFocused = "{{[$secondary:$accent:-]}}"           # = "{{|TagFocused|}}"
+CheckboxOffFocused = "{{[$secondary:$accent:-]}}"          # = "{{|TagFocused|}}"
+CheckboxBracketsOnFocused = "{{[$secondary:$accent:-]}}"   # = "{{|TagFocused|}}"
+CheckboxBracketsOffFocused = "{{[$secondary:$accent:-]}}"  # = "{{|TagFocused|}}"
 
 ## Radio buttons
-# Radio* falls back to the matching Checkbox* tag automatically, and any
-# Checkbox*Focused/Radio*Focused tag falls back further to TagFocused --
-# uncomment and set to override radio buttons specifically.
 # RadioOff = "{{|CheckboxOff|}}"
 # RadioOn = "{{|CheckboxOn|}}"
 # RadioBracketsOff = "{{|CheckboxBracketsOff|}}"
@@ -139,23 +136,15 @@ CheckboxBracketsOffFocused = "{{[$secondary:$accent:-]}}"
 ButtonActive = "{{[$secondary:$primary:B]}}"
 ButtonInactive = "{{|Dialog|}}"
 ButtonSpinner = ""
-ButtonSpinnerLarge = ""
+LargeButtonSpinner = ""
 ButtonKeyActive = "{{|ButtonActive|}}"
 ButtonKeyInactive = "{{|ButtonInactive:$accent|}}"
 
 ## Icons
-# Per-widget icon tags (IconHelpInactive, IconMaximizeFocused, etc.) are
-# optional overrides -- any not defined here fall back to the generic
-# IconInactive/IconFocused/IconPressed below. Large* variants fall back the
-# same way to LargeIconFocused/LargeIconPressed; Large*IconInactive falls
-# back to its own small (non-Large) tag instead, since there's no generic
-# LargeIconInactive.
 IconFocused = "{{|ButtonActive|}}"
 IconPressed = "{{[white:black:B]}}"
 IconInactive = ""
-IconExitInactive = "{{[::R]}}"
-# Optional per-widget overrides -- uncomment to override that widget
-# specifically.
+IconExitInactive = "{{[::R]}}"  # = "{{|IconInactive|}}"
 # IconResizeUpInactive = "{{[-]}}"
 # IconResizeDnInactive = "{{[-]}}"
 # IconHelpInactive = "{{|IconInactive|}}"
@@ -219,7 +208,8 @@ MarkerDeleted = "{{|Marker::red|}}"
 MarkerModified = "{{|Marker::$highlight|}}"
 MarkerInvalid = "{{[white:red:B]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
-MarkerLockedLarge = "{{|MarkerLocked|}}"
+# ButtonLockedMarker = "{{|MarkerLocked|}}"
+# LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
 TextCursor = "{{[:$highlight:]}}"
 
 ## Scrollbar

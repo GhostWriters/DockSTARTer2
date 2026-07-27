@@ -13,9 +13,9 @@ direct_suffix   = "]}}"
 ## Backdrop
 Screen = "{{[yellow:blue:B]}}"
 StatusBar = "{{|Dialog|}}"
-Helpline = "{{|Dialog|}}"
 # StatusBarBorder = "{{|StatusBar|}}"
-# ConsoleBorder = "{{|Helpline|}}"
+# Helpline = "{{|StatusBar|}}"
+# PanelBorder = "{{|Helpline|}}"
 
 ## Dialogs and panels
 Dialog = "{{[black:white]}}"
@@ -29,13 +29,13 @@ StatusFields = "{{[black:white]}}"
 # StatusName = "{{|StatusFields|}}"
 # StatusVersion = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
-StatusVersionSpace = "{{[white:black]}}"
+StatusVersionSpace = "{{[white:black]}}"    # = "{{[-]}}"
 StatusVersionFocused = "{{[white:red:B]}}"
-StatusFlags = "{{[white:black]}}"
+StatusFlags = "{{[white:black]}}"           # = "{{|Dialog|}}"
 StatusFlagsBrackets = "{{|StatusFields|}}"
-StatusFlagsSpace = "{{|StatusFields|}}"
+StatusFlagsSpace = "{{|StatusFields|}}"     # = "{{|StatusVersionSpace|}}"
 StatusUpdate = "{{[white:black]}}"
-StatusUpdateBrackets = "{{[white:black]}}"
+StatusUpdateBrackets = "{{[white:black]}}"  # = "{{|StatusVersionBrackets|}}"
 # StatusUpdateMarker = "{{|StatusUpdate|}}"
 # StatusHostname = "{{|StatusFields|}}"
 # StatusBarFocused = "{{|TagFocused|}}"
@@ -43,17 +43,17 @@ StatusUpdateBrackets = "{{[white:black]}}"
 ## Titles
 Title = "{{[white:black:U]}}"
 # TitleHelp = "{{|Title|}}"
-TitleNotice = "{{[white:green:B]}}"
-TitleWarn = "{{[black:white]}}"
-TitleError = "{{[black:white:B]}}"
-TitleSuccess = "{{[black:white]}}"
-TitleWarning = "{{[black:white]}}"
-TitleQuestion = "{{[black:white]}}"
-TitleConsole = "{{|ConsoleBorder|}}"
-TitleConsoleChangedIndicator = "{{|TitleNotice|}}"
+TitleNotice = "{{[white:green:B]}}"      # = "{{|Title|}}"
+TitleWarn = "{{[black:white]}}"          # = "{{|Title|}}"
+TitleError = "{{[black:white:B]}}"       # = "{{|Title|}}"
+TitleSuccess = "{{[black:white]}}"       # = "{{|Title|}}"
+TitleWarning = "{{[black:white]}}"       # = "{{|Title|}}"
+TitleQuestion = "{{[black:white]}}"      # = "{{|Title|}}"
+PanelTitle = "{{|PanelBorder|}}"
+PanelTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
-TitleSubMenuFocused = "{{|Title:::R|}}"
+TitleSubMenuFocused = "{{|Title:::R|}}"  # = "{{|TitleFocused|}}"
 TitleFocusIndicator = "{{[::-B]}}"
 TitleUnfocusedIndicator = ""
 
@@ -106,8 +106,6 @@ OptionValueFocused = "{{|OptionValue:::B|}}"
 # HelpItem = "{{|Dialog|}}"
 
 ## Checkboxes
-# Checkbox*Focused optionally falls back to TagFocused if undefined --
-# uncomment and set to override checkbox focus styling specifically.
 # CheckboxOffFocused = "{{|TagFocused|}}"
 # CheckboxOnFocused = "{{|TagFocused|}}"
 # CheckboxBracketsOffFocused = "{{|TagFocused|}}"
@@ -118,9 +116,6 @@ OptionValueFocused = "{{|OptionValue:::B|}}"
 # CheckboxBracketsOn = "{{|Dialog|}}"
 
 ## Radio buttons
-# Radio* falls back to the matching Checkbox* tag automatically, and any
-# Checkbox*Focused/Radio*Focused tag falls back further to TagFocused --
-# uncomment and set to override radio buttons specifically.
 # RadioOff = "{{|CheckboxOff|}}"
 # RadioOn = "{{|CheckboxOn|}}"
 # RadioBracketsOff = "{{|CheckboxBracketsOff|}}"
@@ -134,23 +129,15 @@ OptionValueFocused = "{{|OptionValue:::B|}}"
 ButtonActive = "{{[white:red:B]}}"
 ButtonInactive = "{{|Dialog|}}"
 ButtonSpinner = ""
-ButtonSpinnerLarge = ""
+LargeButtonSpinner = ""
 ButtonKeyActive = "{{|ButtonActive|}}"
 ButtonKeyInactive = "{{|ButtonInactive:red|}}"
 
 ## Icons
-# Per-widget icon tags (IconHelpInactive, IconMaximizeFocused, etc.) are
-# optional overrides -- any not defined here fall back to the generic
-# IconInactive/IconFocused/IconPressed below. Large* variants fall back the
-# same way to LargeIconFocused/LargeIconPressed; Large*IconInactive falls
-# back to its own small (non-Large) tag instead, since there's no generic
-# LargeIconInactive.
 IconFocused = "{{|ButtonActive|}}"
 IconPressed = "{{[red:white:B]}}"
 IconInactive = ""
-IconExitInactive = "{{[::R]}}"
-# Optional per-widget overrides -- uncomment to override that widget
-# specifically.
+IconExitInactive = "{{[::R]}}"  # = "{{|IconInactive|}}"
 # IconResizeUpInactive = "{{[-]}}"
 # IconResizeDnInactive = "{{[-]}}"
 # IconHelpInactive = "{{|IconInactive|}}"
@@ -214,7 +201,8 @@ MarkerDeleted = "{{|Marker::red|}}"
 MarkerModified = "{{|Marker::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
-MarkerLockedLarge = "{{|MarkerLocked|}}"
+# ButtonLockedMarker = "{{|MarkerLocked|}}"
+# LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
 TextCursor = "{{[:white:]}}"
 
 ## Scrollbar

@@ -19,9 +19,9 @@ accent = "$screen_bg"
 ## Backdrop
 Screen = "{{[$secondary:$accent]}}"
 StatusBar = "{{|Dialog|}}"
-Helpline = "{{|Dialog|}}"
 # StatusBarBorder = "{{|StatusBar|}}"
-# ConsoleBorder = "{{|Helpline|}}"
+# Helpline = "{{|StatusBar|}}"
+# PanelBorder = "{{|Helpline|}}"
 
 ## Dialogs and panels
 Dialog = "{{[$secondary:$primary]}}"
@@ -32,34 +32,34 @@ ProgramBox = "{{[white:black:-]}}"
 
 ## Header bar
 StatusFields = "{{[-]}}"
-StatusName = "{{|Screen:::RB|}}"
+StatusName = "{{|Screen:::RB|}}"  # = "{{|StatusFields|}}"
 # StatusVersion = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace = "{{[-]}}"
 StatusVersionFocused = "{{[white:red:B]}}"
-StatusFlags = "{{|StatusFields|}}"
+StatusFlags = "{{|StatusFields|}}"           # = "{{|Dialog|}}"
 StatusFlagsBrackets = "{{|StatusFields:::R|}}"
-StatusFlagsSpace = "{{[$accent:black]}}"
+StatusFlagsSpace = "{{[$accent:black]}}"     # = "{{|StatusVersionSpace|}}"
 StatusUpdate = "{{|StatusFields:$accent::BU|}}"
-StatusUpdateBrackets = "{{|StatusFields|}}"
+StatusUpdateBrackets = "{{|StatusFields|}}"  # = "{{|StatusVersionBrackets|}}"
 # StatusUpdateMarker = "{{|StatusUpdate|}}"
 # StatusHostname = "{{|StatusFields|}}"
 # StatusBarFocused = "{{|TagFocused|}}"
 
 ## Titles
 Title = "{{[red:white:B]}}"
-TitleHelp = "{{[red:white:B]}}"
-TitleNotice = "{{[white:green:B]}}"
-TitleWarn = "{{[black:yellow]}}"
-TitleError = "{{[black:red]}}"
-TitleSuccess = "{{[black:green]}}"
-TitleWarning = "{{[black:yellow]}}"
-TitleQuestion = "{{[black:yellow]}}"
-TitleConsole = "{{|ConsoleBorder|}}"
-TitleConsoleChangedIndicator = "{{|TitleNotice|}}"
+TitleHelp = "{{[red:white:B]}}"          # = "{{|Title|}}"
+TitleNotice = "{{[white:green:B]}}"      # = "{{|Title|}}"
+TitleWarn = "{{[black:yellow]}}"         # = "{{|Title|}}"
+TitleError = "{{[black:red]}}"           # = "{{|Title|}}"
+TitleSuccess = "{{[black:green]}}"       # = "{{|Title|}}"
+TitleWarning = "{{[black:yellow]}}"      # = "{{|Title|}}"
+TitleQuestion = "{{[black:yellow]}}"     # = "{{|Title|}}"
+PanelTitle = "{{|PanelBorder|}}"
+PanelTitleChangedIndicator = "{{|TitleNotice|}}"
 TitleCheckbox = ""
 TitleCheckboxFocused = "{{|TitleSubMenuFocused|}}"
-TitleSubMenuFocused = "{{|Title:::R|}}"
+TitleSubMenuFocused = "{{|Title:::R|}}"  # = "{{|TitleFocused|}}"
 TitleFocusIndicator = "{{[$accent:-B]}}"
 TitleUnfocusedIndicator = ""
 
@@ -102,18 +102,16 @@ ItemFocused = "{{[white:red:B]}}"
 # ItemListUserDefinedFocused = "{{|ItemFocused|}}"
 ItemList = ""
 ItemListUserDefined = "{{[magenta:black:B]}}"
-ItemListDeprecated = "{{[red:black:B]}}"
-ItemListDeprecatedFocused = "{{|ItemFocused|}}"
+ItemListDeprecated = "{{[red:black:B]}}"         # = "{{|ItemListUserDefined|}}"
+ItemListDeprecatedFocused = "{{|ItemFocused|}}"  # = "{{|ItemListUserDefinedFocused|}}"
 OptionValue = "{{[white:$accent:B]}}"
 OptionValueFocused = "{{|OptionValue:::R|}}"
 
 ## Help
 # HelpTag = "{{|Tag|}}"
-HelpItem = "{{|Item|}}"
+HelpItem = "{{|Item|}}"  # = "{{|Dialog|}}"
 
 ## Checkboxes
-# Checkbox*Focused optionally falls back to TagFocused if undefined --
-# uncomment and set to override checkbox focus styling specifically.
 # CheckboxOffFocused = "{{|TagFocused|}}"
 # CheckboxOnFocused = "{{|TagFocused|}}"
 # CheckboxBracketsOffFocused = "{{|TagFocused|}}"
@@ -124,9 +122,6 @@ HelpItem = "{{|Item|}}"
 # CheckboxBracketsOn = "{{|Dialog|}}"
 
 ## Radio buttons
-# Radio* falls back to the matching Checkbox* tag automatically, and any
-# Checkbox*Focused/Radio*Focused tag falls back further to TagFocused --
-# uncomment and set to override radio buttons specifically.
 # RadioOff = "{{|CheckboxOff|}}"
 # RadioOn = "{{|CheckboxOn|}}"
 # RadioBracketsOff = "{{|CheckboxBracketsOff|}}"
@@ -140,23 +135,15 @@ HelpItem = "{{|Item|}}"
 ButtonActive = "{{[white:red:B]}}"
 ButtonInactive = "{{|Dialog|}}"
 ButtonSpinner = ""
-ButtonSpinnerLarge = ""
+LargeButtonSpinner = ""
 ButtonKeyActive = "{{|ButtonActive|}}"
 ButtonKeyInactive = "{{|ButtonInactive:red|}}"
 
 ## Icons
-# Per-widget icon tags (IconHelpInactive, IconMaximizeFocused, etc.) are
-# optional overrides -- any not defined here fall back to the generic
-# IconInactive/IconFocused/IconPressed below. Large* variants fall back the
-# same way to LargeIconFocused/LargeIconPressed; Large*IconInactive falls
-# back to its own small (non-Large) tag instead, since there's no generic
-# LargeIconInactive.
 IconFocused = "{{|ButtonActive|}}"
 IconPressed = "{{[red:white:B]}}"
 IconInactive = ""
-IconExitInactive = "{{[::R]}}"
-# Optional per-widget overrides -- uncomment to override that widget
-# specifically.
+IconExitInactive = "{{[::R]}}"  # = "{{|IconInactive|}}"
 # IconResizeUpInactive = "{{[-]}}"
 # IconResizeDnInactive = "{{[-]}}"
 # IconHelpInactive = "{{|IconInactive|}}"
@@ -220,7 +207,8 @@ MarkerDeleted = "{{|Marker::red|}}"
 MarkerModified = "{{|Marker::yellow|}}"
 MarkerInvalid = "{{[white:red:B]}}"
 MarkerLocked = "{{|MarkerInvalid|}}"
-MarkerLockedLarge = "{{|MarkerLocked|}}"
+# ButtonLockedMarker = "{{|MarkerLocked|}}"
+# LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
 TextCursor = "{{[magenta:yellow:B]}}"
 
 ## Scrollbar
@@ -241,7 +229,7 @@ Highlight = "{{[$primary:$secondary:B]}}"
 FailingCommand = "{{|TitleError|}}"
 # UserCommand = "{{|Highlight|}}"
 # Branch = "{{|Highlight|}}"
-Version = "{{|StatusVersion|}}"
+Version = "{{|StatusVersion|}}"  # = "{{|Highlight|}}"
 # MenuPage = "{{|Highlight|}}"
 # File = "{{|Highlight|}}"
 # Folder = "{{|Highlight|}}"

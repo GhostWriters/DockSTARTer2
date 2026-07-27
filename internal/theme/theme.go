@@ -554,6 +554,21 @@ func registerTagFallbacks() {
 	for _, tf := range helpFallbackTags {
 		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
+	for _, tf := range markerFallbackTags {
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
+	}
+}
+
+// markerFallbackTags lists the button lock-marker tags that fall back to
+// another tag when the active theme doesn't define them. ButtonLockedMarker
+// falls back to the generic MarkerLocked (also used for the session-active
+// input prompt and menu lock markers); LargeButtonLockedMarker falls back
+// to ButtonLockedMarker, so a theme need only override MarkerLocked to
+// affect every locked marker at once, or override ButtonLockedMarker/
+// LargeButtonLockedMarker individually for button-specific styling.
+var markerFallbackTags = []struct{ name, fallback string }{
+	{"ButtonLockedMarker", "MarkerLocked"},
+	{"LargeButtonLockedMarker", "ButtonLockedMarker"},
 }
 
 // helpFallbackTags lists the help-bar tags that fall back to another tag
@@ -598,16 +613,16 @@ var statusFallbackTags = []struct{ name, fallback string }{
 	{"StatusVersionSpace", "{{[-]}}"},
 	{"StatusFlagsSpace", "StatusVersionSpace"},
 	{"StatusUpdateBrackets", "StatusVersionBrackets"},
-	// Helpline/ConsoleBorder are conceptually part of the same backdrop
+	// Helpline/PanelBorder are conceptually part of the same backdrop
 	// grouping as StatusBar/StatusBarBorder, hence living in this list
-	// despite the name. ConsoleBorder = Helpline is identical in all 13
+	// despite the name. PanelBorder = Helpline is identical in all 13
 	// bundled themes; Helpline itself varies (most reference Dialog, some
 	// a fully custom color), but StatusBar and Dialog resolve to the same
 	// value in most of those themes anyway, so StatusBar is the more
 	// direct backdrop-family anchor for a theme that wants to skip
 	// defining Helpline separately.
 	{"Helpline", "StatusBar"},
-	{"ConsoleBorder", "Helpline"},
+	{"PanelBorder", "Helpline"},
 }
 
 // highlightFallbackTags lists the inline-text-highlight tags that fall back
@@ -752,11 +767,11 @@ func iconFallbackTags() []struct{ name, fallback string } {
 		)
 	}
 	// panel_render.go renders these via RenderThemeText(iconStr, baseStyle)
-	// where baseStyle derives from ConsoleBorder, so a bare reset resolves
-	// equivalently to every bundled theme's explicit ConsoleBorder override.
+	// where baseStyle derives from PanelBorder, so a bare reset resolves
+	// equivalently to every bundled theme's explicit PanelBorder override.
 	// A literal reset is used rather than the named tag so this stays
 	// correct if these icon tags are ever reused somewhere with a different
-	// base style (e.g. a dialog), where ConsoleBorder specifically wouldn't
+	// base style (e.g. a dialog), where PanelBorder specifically wouldn't
 	// apply but a reset to the surrounding context still would.
 	tags = append(tags,
 		struct{ name, fallback string }{"IconResizeUpInactive", "{{[-]}}"},

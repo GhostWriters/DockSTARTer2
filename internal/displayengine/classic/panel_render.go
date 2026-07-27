@@ -21,8 +21,8 @@ func (m PanelModel) ViewString() string {
 	if !ctx.LineCharacters {
 		upGlyph, dnGlyph = resizeUpWidgetAscii, resizeDnWidgetAscii
 	}
-	consoleBorderStyle := SemanticRawStyle("ConsoleBorder")
-	baseStyle := ctx.BorderFlags.Apply(consoleBorderStyle)
+	panelBorderStyle := SemanticRawStyle("PanelBorder")
+	baseStyle := ctx.BorderFlags.Apply(panelBorderStyle)
 
 	// Input box occupies 3 rows (top border + 1 content + bottom border).
 	hasInput := m.HasInputBox()
@@ -102,7 +102,7 @@ func (m PanelModel) ViewString() string {
 		combined += "\n" + inputBox
 	}
 
-	consoleTitleStyle := SemanticRawStyle("TitleConsole")
+	panelTitleStyle := SemanticRawStyle("PanelTitle")
 
 	// Sep between resize widgets uses the console border color, not the dialog border color.
 	lineChar := "─"
@@ -138,7 +138,7 @@ func (m PanelModel) ViewString() string {
 	if isChanged {
 		changedFlag = "1"
 	}
-	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.Focused || m.TitleBarFocused(), consoleTitleStyle, consoleBorderStyle, ctx, spinIndL, changedFlag, spinIndR)
+	return RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, combined, m.width, m.Focused || m.TitleBarFocused(), panelTitleStyle, panelBorderStyle, ctx, spinIndL, changedFlag, spinIndR)
 }
 
 // Layers returns a single layer with the panel content for visual compositing.
