@@ -25,7 +25,12 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 		m.value[i] = []rune(raw)
 		trimmed := strings.TrimSpace(raw)
 
-		l := Line{Text: raw, InitialLine: raw}
+		hadPrevLine := i > 0
+		prevLine := ""
+		if hadPrevLine {
+			prevLine = rawLines[i-1]
+		}
+		l := Line{Text: raw, InitialLine: raw, InitialPrevLine: prevLine, HadPrevLine: hadPrevLine}
 
 		// 1. Comments & special markers are read-only.
 		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
@@ -96,7 +101,7 @@ func (m *Model) ParseEnv(content string, defaultFunc func(string) string, readOn
 // ReclassifyEnv re-runs the section/variable classification pass on the current
 // editor content without reloading from disk or resetting diff-tracking state.
 // Pending-delete lines are skipped for section-tracking purposes but kept as-is.
-// InitialLine, IsNewLine, and PendingDelete are preserved on every line.
+// InitialLine, InitialPrevLine, DirectlyMoved, IsNewLine, and PendingDelete are preserved on every line.
 func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []string) {
 	if len(m.value) != len(m.lineMeta) {
 		return
@@ -120,8 +125,11 @@ func (m *Model) ReclassifyEnv(defaultFunc func(string) string, readOnlyVars []st
 
 		l := Line{
 			// Preserve diff-tracking fields
-			InitialLine: existing.InitialLine,
-			IsNewLine:   existing.IsNewLine,
+			InitialLine:     existing.InitialLine,
+			IsNewLine:       existing.IsNewLine,
+			InitialPrevLine: existing.InitialPrevLine,
+			HadPrevLine:     existing.HadPrevLine,
+			DirectlyMoved:   existing.DirectlyMoved,
 		}
 
 		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "***") {
@@ -323,9 +331,12 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 	// the formatter. For auto-refresh, pending-delete lines are included so their
 	// state can be restored afterward.
 	type diffSnap struct {
-		InitialLine   string
-		IsNewLine     bool
-		PendingDelete bool
+		InitialLine     string
+		IsNewLine       bool
+		PendingDelete   bool
+		InitialPrevLine string
+		HadPrevLine     bool
+		DirectlyMoved   bool
 	}
 	snapshot := make(map[string]diffSnap)
 
@@ -353,9 +364,12 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 					// re-introduces a deleted built-in var it restores as modified (~)
 					// rather than new (+).
 					snapshot[key] = diffSnap{
-						InitialLine:   meta.InitialLine,
-						IsNewLine:     meta.IsNewLine,
-						PendingDelete: meta.PendingDelete,
+						InitialLine:     meta.InitialLine,
+						IsNewLine:       meta.IsNewLine,
+						PendingDelete:   meta.PendingDelete,
+						InitialPrevLine: meta.InitialPrevLine,
+						HadPrevLine:     meta.HadPrevLine,
+						DirectlyMoved:   meta.DirectlyMoved,
 					}
 				}
 				if meta.PendingDelete && !preservePendingDeletes {
@@ -403,10 +417,16 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 				m.lineMeta[i].InitialLine = snap.InitialLine
 				m.lineMeta[i].IsNewLine = false
 				m.lineMeta[i].PendingDelete = false
+				m.lineMeta[i].InitialPrevLine = snap.InitialPrevLine
+				m.lineMeta[i].HadPrevLine = snap.HadPrevLine
+				m.lineMeta[i].DirectlyMoved = snap.DirectlyMoved
 			} else {
 				m.lineMeta[i].InitialLine = snap.InitialLine
 				m.lineMeta[i].IsNewLine = snap.IsNewLine
 				m.lineMeta[i].PendingDelete = snap.PendingDelete
+				m.lineMeta[i].InitialPrevLine = snap.InitialPrevLine
+				m.lineMeta[i].HadPrevLine = snap.HadPrevLine
+				m.lineMeta[i].DirectlyMoved = snap.DirectlyMoved
 				if snap.PendingDelete {
 					m.lineMeta[i].ReadOnly = true
 				}
@@ -477,6 +497,7 @@ func (m *Model) ReformatEnv(defaultFunc func(string) string, readOnlyVars []stri
 
 // AfterSave updates the editor's baseline to match the current saved state:
 // - InitialLine is set to the current line content (clears ~ modified markers)
+// - InitialPrevLine/DirectlyMoved are reset to the current neighbor/false (clears M moved markers)
 // - IsNewLine is cleared (clears + added markers)
 // - Pending-delete lines are removed from value and lineMeta (clears - markers)
 // Call this immediately after a successful save so gutter markers reflect the
@@ -491,6 +512,13 @@ func (m *Model) AfterSave() {
 		raw := string(m.value[i])
 		meta.InitialLine = raw
 		meta.IsNewLine = false
+		meta.DirectlyMoved = false
+		meta.HadPrevLine = len(newMeta) > 0
+		if meta.HadPrevLine {
+			meta.InitialPrevLine = newMeta[len(newMeta)-1].InitialLine
+		} else {
+			meta.InitialPrevLine = ""
+		}
 		newValue = append(newValue, m.value[i])
 		newMeta = append(newMeta, meta)
 	}

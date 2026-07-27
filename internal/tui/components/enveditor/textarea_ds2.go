@@ -34,10 +34,35 @@ type Line struct {
 	EditableStartCol int
 	DefaultValue     string
 	PendingDelete    bool   // marked for deletion on next save; shown with strikethrough
-	InitialLine      string // full line text at load time, used for changed (C) gutter marker
+	InitialLine      string // full line text at load time, used for changed (~) gutter marker
 	IsNewLine        bool   // added by the user after load; shows + in gutter
 	IsInvalid        bool   // in user-defined section but key is in readOnlyVars; shows ! in gutter
 	IsComment        bool   // line is a comment (# or ***)
+	// InitialPrevLine/HadPrevLine capture whichever line sat directly above
+	// this one at load time: HadPrevLine is false only when this was the
+	// very first line, and InitialPrevLine is that neighbor's InitialLine
+	// otherwise. Kept as two fields rather than using "" as an implicit
+	// "no line above" sentinel -- a genuinely blank original line also has
+	// InitialLine == "", so an empty-string sentinel could collide with a
+	// real blank-line neighbor and wrongly read as "no line above".
+	//
+	// Compared against the *current* line immediately above this one --
+	// but only when DirectlyMoved is also set -- to decide the M gutter
+	// marker for a reorder. Gating on DirectlyMoved means only the line the
+	// user actually invoked Move-Up/Down on gets marked, not every line it
+	// happened to pass over along the way (those never get DirectlyMoved
+	// set, so their own shifted neighbor is irrelevant). Using the
+	// immediately-preceding line as the reference point, rather than an
+	// absolute row index, keeps this correct even if the user inserts or
+	// deletes lines elsewhere in the file -- an absolute index would drift
+	// out of sync with every line below the insertion/deletion point, none
+	// of which actually moved. Comparing live (not a set-only flag) means a
+	// line moved and then moved back stops showing M again once it's back
+	// where it started, the same way editing a value back to its original
+	// text does for InitialLine, instead of staying stuck "moved" forever.
+	InitialPrevLine string
+	HadPrevLine     bool
+	DirectlyMoved   bool
 }
 
 // IsOverwrite returns true when the textarea is in overwrite (replace) mode.
@@ -116,6 +141,46 @@ func (m *Model) GetContent() string {
 		sb.WriteString("\n")
 	}
 	return sb.String()
+}
+
+// currentPrevInitialLine returns (hasPrev, InitialLine) for whichever line
+// currently sits directly above row i -- InitialLine rather than that
+// neighbor's live Text, so editing the neighbor's value doesn't by itself
+// make row i look like it moved. hasPrev is false only when i is first,
+// mirroring Line.HadPrevLine so "no line above" is never confused with a
+// real neighbor whose InitialLine happens to be "" (e.g. a blank line).
+func (m *Model) currentPrevInitialLine(i int) (hasPrev bool, line string) {
+	if i <= 0 || i-1 >= len(m.lineMeta) {
+		return false, ""
+	}
+	return true, m.lineMeta[i-1].InitialLine
+}
+
+// isDirectlyMoved reports whether row i was directly relocated by
+// MoveVariableUp/Down and is still sitting somewhere other than where it
+// started, per InitialPrevLine/HadPrevLine (see Line's doc comment).
+func (m *Model) isDirectlyMoved(i int) bool {
+	meta := m.lineMeta[i]
+	if !meta.DirectlyMoved {
+		return false
+	}
+	hasPrev, line := m.currentPrevInitialLine(i)
+	return hasPrev != meta.HadPrevLine || line != meta.InitialPrevLine
+}
+
+// HasMovedLines reports whether any line the user directly relocated via
+// MoveVariableUp/Down is still sitting somewhere other than where it
+// started -- the M gutter marker's own signal, exposed here for callers
+// like hasChanges() that need to know a reorder happened even when every
+// line's own content is unchanged (a value-keyed map diff can't see
+// position by itself).
+func (m *Model) HasMovedLines() bool {
+	for i := range m.lineMeta {
+		if m.isDirectlyMoved(i) {
+			return true
+		}
+	}
+	return false
 }
 
 // ActiveLines returns the buffer as a []string with PendingDelete lines excluded.
@@ -223,6 +288,16 @@ func (m *Model) MoveVariableUp() {
 	m.value[m.row], m.value[m.row-1] = m.value[m.row-1], m.value[m.row]
 	// Swap meta
 	m.lineMeta[m.row], m.lineMeta[m.row-1] = m.lineMeta[m.row-1], m.lineMeta[m.row]
+	// Only the line the user is actively relocating (cur, now at m.row-1)
+	// gets flagged -- not the one it displaced (prev, now at m.row) -- so a
+	// multi-step move only ever marks the one line the user actually moved.
+	m.lineMeta[m.row-1].DirectlyMoved = true
+	// diffCache is keyed by row index, not by line identity -- without
+	// this, the row the swap displaced (m.row) keeps serving the OTHER
+	// line's stale cached mask under its old row number, making that
+	// untouched line appear modified too.
+	m.invalidateDiffCache(m.row)
+	m.invalidateDiffCache(m.row - 1)
 
 	m.row--
 	m.repositionView()
@@ -247,6 +322,16 @@ func (m *Model) MoveVariableDown() {
 	m.value[m.row], m.value[m.row+1] = m.value[m.row+1], m.value[m.row]
 	// Swap meta
 	m.lineMeta[m.row], m.lineMeta[m.row+1] = m.lineMeta[m.row+1], m.lineMeta[m.row]
+	// Only the line the user is actively relocating (cur, now at m.row+1)
+	// gets flagged -- not the one it displaced (next, now at m.row) -- so a
+	// multi-step move only ever marks the one line the user actually moved.
+	m.lineMeta[m.row+1].DirectlyMoved = true
+	// diffCache is keyed by row index, not by line identity -- without
+	// this, the row the swap displaced (m.row) keeps serving the OTHER
+	// line's stale cached mask under its old row number, making that
+	// untouched line appear modified too.
+	m.invalidateDiffCache(m.row)
+	m.invalidateDiffCache(m.row + 1)
 
 	m.row++
 	m.repositionView()
@@ -1253,7 +1338,8 @@ func (m Model) gutterStyleFor(dataLine int) (style lipgloss.Style, hasMarker boo
 		if meta.IsNewLine || meta.InitialLine == "" {
 			return styles.GutterAdded, true
 		}
-		if !meta.ReadOnly && meta.InitialLine != "" && lineContent != meta.InitialLine {
+		if !meta.ReadOnly && meta.InitialLine != "" &&
+			(lineContent != meta.InitialLine || m.isDirectlyMoved(dataLine)) {
 			return styles.GutterModified, true
 		}
 	}

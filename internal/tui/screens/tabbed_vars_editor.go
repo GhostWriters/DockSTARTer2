@@ -637,6 +637,12 @@ func (m *TabbedVarsEditorModel) IsScrollbarDragging() bool {
 
 func (m *TabbedVarsEditorModel) hasChanges() bool {
 	for _, tab := range m.tabs {
+		// Value-keyed map comparison below can't see position -- a swapped
+		// pair of vars produces the identical map -- so a pure reorder needs
+		// its own check.
+		if tab.editor.HasMovedLines() {
+			return true
+		}
 		currentVars, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
 		if len(currentVars) != len(tab.initialVars) {
 			return true

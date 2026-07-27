@@ -90,17 +90,18 @@ type KeyMap struct {
 // upon the textarea.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		CharacterForward:        key.NewBinding(key.WithKeys("right"), key.WithHelp("right", "character forward")),
-		CharacterBackward:       key.NewBinding(key.WithKeys("left"), key.WithHelp("left", "character backward")),
-		LineNext:                key.NewBinding(key.WithKeys("down"), key.WithHelp("down", "next line")),
-		LinePrevious:            key.NewBinding(key.WithKeys("up"), key.WithHelp("up", "previous line")),
-		DeleteWordBackward:      key.NewBinding(key.WithKeys("ctrl+backspace", "alt+backspace", "ctrl+alt+backspace"), key.WithHelp("alt+bksp", "delete word backward")),
-		DeleteWordForward:       key.NewBinding(key.WithKeys("ctrl+delete", "alt+delete", "ctrl+alt+delete"), key.WithHelp("alt+del", "delete word forward")),
-		DeleteAfterCursor:       key.NewBinding(key.WithKeys("ctrl+k", "alt+k", "ctrl+alt+k"), key.WithHelp("alt+k", "delete after cursor")),
-		DeleteBeforeCursor:      key.NewBinding(key.WithKeys("ctrl+u", "alt+u", "ctrl+alt+u"), key.WithHelp("alt+u", "delete before cursor")),
-		InsertNewline:           key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "insert newline")),
-		SplitLine:               key.NewBinding(key.WithKeys("ctrl+j", "alt+j", "ctrl+alt+j"), key.WithHelp("alt+j", "split line at cursor")),
-		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("bksp", "delete character backward")),
+		CharacterForward:   key.NewBinding(key.WithKeys("right"), key.WithHelp("right", "character forward")),
+		CharacterBackward:  key.NewBinding(key.WithKeys("left"), key.WithHelp("left", "character backward")),
+		LineNext:           key.NewBinding(key.WithKeys("down"), key.WithHelp("down", "next line")),
+		LinePrevious:       key.NewBinding(key.WithKeys("up"), key.WithHelp("up", "previous line")),
+		DeleteWordBackward: key.NewBinding(key.WithKeys("ctrl+backspace", "alt+backspace", "ctrl+alt+backspace"), key.WithHelp("alt+bksp", "delete word backward")),
+		DeleteWordForward:  key.NewBinding(key.WithKeys("ctrl+delete", "alt+delete", "ctrl+alt+delete"), key.WithHelp("alt+del", "delete word forward")),
+		DeleteAfterCursor:  key.NewBinding(key.WithKeys("ctrl+k", "alt+k", "ctrl+alt+k"), key.WithHelp("alt+k", "delete after cursor")),
+		DeleteBeforeCursor: key.NewBinding(key.WithKeys("ctrl+u", "alt+u", "ctrl+alt+u"), key.WithHelp("alt+u", "delete before cursor")),
+		InsertNewline:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "insert newline")),
+		SplitLine:          key.NewBinding(key.WithKeys("ctrl+j", "alt+j", "ctrl+alt+j"), key.WithHelp("alt+j", "split line at cursor")),
+		// ctrl+h: some clients send raw BS (0x08) for Backspace instead of DEL.
+		DeleteCharacterBackward: key.NewBinding(key.WithKeys("backspace", "ctrl+h"), key.WithHelp("bksp", "delete character backward")),
 		DeleteCharacterForward:  key.NewBinding(key.WithKeys("delete"), key.WithHelp("del", "delete character forward")),
 		LineStart:               key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "line start")),
 		LineEnd:                 key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "line end")),
@@ -222,15 +223,14 @@ type StyleState struct {
 	InvalidText               lipgloss.Style
 	DuplicateText             lipgloss.Style
 	BuiltinText               lipgloss.Style
-	// UserDefinedText removed — user-defined var keys now use ModifiedText
-	PendingDeleteText lipgloss.Style
-	GutterAdded       lipgloss.Style // + marker for new lines
-	GutterDeleted     lipgloss.Style // - marker for pending-delete lines
-	GutterModified    lipgloss.Style // ~ marker for changed lines
-	GutterInvalid     lipgloss.Style // ! marker for protected vars entered in user-defined section
-	ScrollbarTrack    lipgloss.Style
-	ScrollbarThumb    lipgloss.Style
-	SelectionText     lipgloss.Style
+	PendingDeleteText         lipgloss.Style
+	GutterAdded               lipgloss.Style // + marker for new lines
+	GutterDeleted             lipgloss.Style // - marker for pending-delete lines
+	GutterModified            lipgloss.Style // ~ marker for changed lines
+	GutterInvalid             lipgloss.Style // ! marker for protected vars entered in user-defined section
+	ScrollbarTrack            lipgloss.Style
+	ScrollbarThumb            lipgloss.Style
+	SelectionText             lipgloss.Style
 }
 
 func (s StyleState) computedCursorLine() lipgloss.Style {
@@ -2069,8 +2069,12 @@ func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 				char = glyphs.InvalidMarker
 			case meta.IsNewLine || meta.InitialLine == "":
 				char = "+"
-			default:
+			case string(m.value[dataLine]) != meta.InitialLine:
 				char = "~"
+			default:
+				// Content matches InitialLine exactly -- the only other
+				// reason gutterStyleFor flagged this line is isDirectlyMoved.
+				char = "M"
 			}
 			return gutterStyle.Render(char)
 		}
@@ -2132,9 +2136,11 @@ func (m Model) lineNumberView(n int, isCursorLine bool, dataLine int) (str strin
 		meta := &m.lineMeta[dataLine]
 		isModified := false
 
-		// Check if the entire line differs from the one initially loaded from file.
-		// This captures key changes, which getDiffMask (focused on values) skips.
-		if meta.InitialLine != "" && string(m.value[dataLine]) != meta.InitialLine {
+		// Check if the entire line differs from the one initially loaded from file,
+		// or if it was directly reordered via MoveVariableUp/Down and hasn't
+		// returned to its original neighbor. This captures key changes, which
+		// getDiffMask (focused on values) skips.
+		if meta.InitialLine != "" && (string(m.value[dataLine]) != meta.InitialLine || m.isDirectlyMoved(dataLine)) {
 			isModified = true
 		}
 
