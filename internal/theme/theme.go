@@ -626,13 +626,21 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	// blank/hard-reset style instead of no-op'ing and leaving the
 	// surrounding Dialog's background showing through).
 	{"ProgramBox", "{{[~]}}"},
-	{"Shadow", "{{[-:-:D]}}"},
+	// A name reference with a flags-only modifier: every theme authors
+	// Shadow as Screen dimmed (Screen:::D), so anchor to that instead of an
+	// approximating literal. Requires semstyle v0.2.11+ (RegisterFallback
+	// candidate modifier syntax).
+	{"Shadow", "{{|Screen:::D|}}"},
 	{"OptionValue", "Dialog"},
 	{"OptionValueFocused", "TagFocused"},
 	{"LargeTitle", "Title"},
 	{"LargeTitleArea", "StatusBar"},
-	{"StatusFields", "StatusBar"},
-	{"StatusFlagsBrackets", "StatusBar"},
+	// Literal resets, not name references: StatusFields/StatusFlagsBrackets
+	// render within the header bar, where the ambient background is always
+	// StatusBar already -- same reasoning as StatusVersionSpace's literal
+	// fallback (see statusFallbackTags below).
+	{"StatusFields", "{{[-]}}"},
+	{"StatusFlagsBrackets", "{{[-]}}"},
 	{"StatusUpdate", "Highlight"},
 	{"StatusVersionFocused", "TagFocused"},
 	{"Heading", "Title"},
@@ -736,7 +744,10 @@ var statusFallbackTags = []struct{ name, fallback string }{
 	{"StatusUpdateMarker", "StatusUpdate"},
 	{"StatusBarFocused", "TagFocused"},
 	{"StatusName", "StatusFields"},
-	{"StatusFlags", "Dialog"},
+	// A literal reset, not "Dialog": StatusFlags renders within the header
+	// bar too, where the ambient background is always StatusBar already --
+	// same reasoning as StatusVersionSpace immediately below.
+	{"StatusFlags", "{{[-]}}"},
 	{"StatusVersionSpace", "{{[-]}}"},
 	{"StatusFlagsSpace", "StatusVersionSpace"},
 	{"StatusUpdateBrackets", "StatusVersionBrackets"},

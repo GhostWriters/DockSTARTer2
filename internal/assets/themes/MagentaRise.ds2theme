@@ -15,28 +15,28 @@ secondary = "black"
 
 [styles]
 ## Backdrop
-  Screen          = "{{[$primary:$secondary]}}"  # = "{{[-:-:-]}}"
   StatusBar       = "{{[$secondary:$primary]}}"  # = "{{[-:-:R]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
-  Helpline        = "{{[$secondary:$primary]}}"  # = "{{|StatusBar|}}"
+  Screen          = "{{[$primary:$secondary]}}"  # = "{{[-:-:-]}}"
+# Helpline        = "{{|StatusBar|}}"
 # PanelBorder     = "{{|Helpline|}}"
 
 ## Dialogs and panels
   Dialog     = "{{|Screen|}}"      # = "{{[-:-:R]}}"
   Border     = "{{|Dialog|}}"
   Border2    = "{{|Border:::D|}}"  # = "{{|Border|}}"
-  Shadow     = "{{|Screen:::D|}}"  # = "{{[-:-:D]}}"
+# Shadow     = "{{|Screen:::D|}}"
 # ProgramBox = "{{[~]}}"
 
 ## Header bar
-  StatusFields          = "{{|Screen|}}"                 # = "{{|StatusBar|}}"
+  StatusFields          = "{{|Screen|}}"                 # = "{{[-]}}"
   StatusName            = "{{|StatusFields:::B|}}"       # = "{{|StatusFields|}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
-  StatusVersionSpace    = "{{|StatusFields|}}"           # = "{{[-]}}"
+# StatusVersionSpace    = "{{[-]}}"
   StatusVersionFocused  = "{{|StatusVersion:::R|}}"      # = "{{|TagFocused|}}"
-  StatusFlags           = "{{|StatusFields:::RB|}}"      # = "{{|Dialog|}}"
-  StatusFlagsBrackets   = "{{|StatusFields|}}"           # = "{{|StatusBar|}}"
+  StatusFlags           = "{{|StatusFields:::RB|}}"      # = "{{[-]}}"
+  StatusFlagsBrackets   = "{{|StatusFields|}}"           # = "{{[-]}}"
   StatusFlagsSpace      = "{{|StatusFields|}}"           # = "{{|StatusVersionSpace|}}"
   StatusUpdate          = "{{|StatusVersion:::BU|}}"     # = "{{|Highlight|}}"
 # StatusUpdateBrackets  = "{{|StatusVersionBrackets|}}"
