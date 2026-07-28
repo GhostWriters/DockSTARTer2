@@ -17,9 +17,9 @@ accent    = "red"
 
 [styles]
 ## Backdrop
-  Screen          = "{{[$fg:$screen_bg:-]}}"  # = "{{[-:-:-]}}"
   StatusBar       = "{{|Dialog|}}"            # = "{{[-:-:R]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
+  Screen          = "{{[$fg:$screen_bg:-]}}"  # = "{{[-:-:-]}}"
 # Helpline        = "{{|StatusBar|}}"
 # PanelBorder     = "{{|Helpline|}}"
 

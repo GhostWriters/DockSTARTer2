@@ -17,10 +17,10 @@ accent    = "$highlight"
 
 [styles]
 ## Backdrop
-  Screen          = "{{[$secondary:$primary]}}"  # = "{{[-:-:-]}}"
   StatusBar       = "{{[$primary:$secondary]}}"  # = "{{[-:-:R]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
-  Helpline        = "{{|StatusBar:::B|}}"        # = "{{|StatusBar|}}"
+  Screen          = "{{[$secondary:$primary]}}"  # = "{{[-:-:-]}}"
+# Helpline        = "{{|StatusBar|}}"
 # PanelBorder     = "{{|Helpline|}}"
 
 ## Dialogs and panels

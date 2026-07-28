@@ -15,9 +15,9 @@ bg = "black"
 
 [styles]
 ## Backdrop
-  Screen          = "{{[$bg:$fg]}}"    # = "{{[-:-:-]}}"
   StatusBar       = "{{[$fg:$bg]}}"    # = "{{[-:-:R]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
+  Screen          = "{{[$bg:$fg]}}"    # = "{{[-:-:-]}}"
 # Helpline        = "{{|StatusBar|}}"
 # PanelBorder     = "{{|Helpline|}}"
 

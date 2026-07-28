@@ -11,9 +11,9 @@ direct_suffix   = "]}}"
 
 [styles]
 ## Backdrop
-  Screen          = "{{[cyan:blue:B]}}"  # = "{{[-:-:-]}}"
   StatusBar       = "{{|Dialog|}}"       # = "{{[-:-:R]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
+  Screen          = "{{[cyan:blue:B]}}"  # = "{{[-:-:-]}}"
 # Helpline        = "{{|StatusBar|}}"
 # PanelBorder     = "{{|Helpline|}}"
 

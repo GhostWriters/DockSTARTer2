@@ -15,10 +15,10 @@ secondary = "black"
 
 [styles]
 ## Backdrop
-  Screen          = "{{[$primary:$secondary]}}"  # = "{{[-:-:-]}}"
   StatusBar       = "{{[$secondary:$primary]}}"  # = "{{[-:-:R]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
-  Helpline        = "{{[$secondary:$primary]}}"  # = "{{|StatusBar|}}"
+  Screen          = "{{[$primary:$secondary]}}"  # = "{{[-:-:-]}}"
+# Helpline        = "{{|StatusBar|}}"
 # PanelBorder     = "{{|Helpline|}}"
 
 ## Dialogs and panels
