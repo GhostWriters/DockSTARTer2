@@ -416,6 +416,20 @@ func WidthOfTitleSegment(rawTitle string, showIndicators bool, ctx StyleContext)
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
 func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, tbs ...TitleBarState) string {
+	return renderBorderedBoxCtxImpl(rawTitle, content, contentWidth, targetHeight, focused, showIndicators, rounded, titleAlign, titleTag, ctx, nil, tbs...)
+}
+
+// renderBorderedBoxCtxImpl is RenderBorderedBoxCtx's shared implementation,
+// with an added lineBackgrounds parameter: an optional 0-based line-index ->
+// background override, consulted instead of ctx.ContentBackground for the
+// per-line MaintainBackground pass below. Lets a caller that joined content
+// from multiple sections (viewWithSections) preserve a specific section's
+// own background (e.g. ProgramBox's console viewport, styled differently
+// from the surrounding dialog) through this function's line-by-line
+// reprocessing, without every one of RenderBorderedBoxCtx's ~12 call sites
+// needing to know about it -- nil (via the public wrapper above) means "use
+// ctx.ContentBackground for every line," unchanged from before this existed.
+func renderBorderedBoxCtxImpl(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, lineBackgrounds map[int]lipgloss.Style, tbs ...TitleBarState) string {
 	var border lipgloss.Border
 	if !ctx.DrawBorders {
 		border = lipgloss.HiddenBorder()
@@ -602,18 +616,24 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 		// Use WidthWithoutZones to get accurate visual width (zone markers are invisible)
 		textWidth := WidthWithoutZones(line)
 
-		contentBG := ctx.ContentBackground.GetBackground()
+		lineStyle := ctx.ContentBackground
+		if lineBackgrounds != nil {
+			if override, ok := lineBackgrounds[i]; ok {
+				lineStyle = override
+			}
+		}
+		contentBG := lineStyle.GetBackground()
 		var fullLine string
 		if textWidth > actualWidth {
 			// Truncate lines that are too wide to prevent bleeding
 			truncated := TruncateRight(line, actualWidth)
-			fullLine = MaintainBackground(truncated, ctx.ContentBackground)
+			fullLine = MaintainBackground(truncated, lineStyle)
 		} else if textWidth < actualWidth {
 			// Pad lines that are too narrow
 			padding := lipgloss.NewStyle().Background(contentBG).Render(strutil.Repeat(" ", actualWidth-textWidth))
-			fullLine = MaintainBackground(line+padding, ctx.ContentBackground)
+			fullLine = MaintainBackground(line+padding, lineStyle)
 		} else {
-			fullLine = MaintainBackground(line, ctx.ContentBackground)
+			fullLine = MaintainBackground(line, lineStyle)
 		}
 
 		result.WriteString(fullLine)

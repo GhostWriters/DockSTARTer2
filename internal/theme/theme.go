@@ -562,6 +562,128 @@ func registerTagFallbacks() {
 	for _, tf := range markerFallbackTags {
 		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
+	for _, tf := range baseAnchorFallbackTags {
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
+	}
+	for _, tf := range derivedFallbackTags {
+		semstyle.RegisterFallback(tf.name, true, tf.fallback)
+	}
+}
+
+// baseAnchorFallbackTags gives every foundational tag that no other fallback
+// rule already anchors to (the tags every other chain in this file ultimately
+// bottoms out at) a literal default, so a theme that defines nothing at all
+// in [styles] still renders usably instead of leaving these -- and therefore
+// everything that chains to them -- unstyled. Each value uses only "-"
+// (terminal-default) colors plus B/U/R/D modifiers, deliberately never a
+// named color, since there's no theme palette to draw a color choice from.
+// Base/inactive states are plain; focused/active/pressed states use reverse
+// video (R) so the two remain visually distinguishable even with no color
+// support at all. These are judgment calls, not derived from anything --
+// review before relying on them beyond the Empty theme this exists to prove
+// out.
+var baseAnchorFallbackTags = []struct{ name, fallback string }{
+	{"Screen", "{{[-:-:-]}}"},
+	{"Dialog", "{{[-:-:R]}}"},
+	{"StatusBar", "{{[-:-:R]}}"},
+	{"Tag", "{{[-:-:-]}}"},
+	{"Item", "{{[-:-:-]}}"},
+	{"Title", "{{[-:-:UB]}}"},
+	{"ButtonInactive", "{{[-:-:-]}}"},
+	{"ButtonActive", "{{[-:-:R]}}"},
+	{"IconInactive", ""},
+	{"IconFocused", "{{[-:-:R]}}"},
+	{"IconPressed", "{{[-:-:RB]}}"},
+	{"Highlight", "{{[-:-:B]}}"},
+	{"MarkerInvalid", "{{[-:-:R]}}"},
+}
+
+// derivedFallbackTags covers the remaining tags with no fallback rule today
+// by anchoring each to the closest baseAnchorFallbackTags entry (or another
+// derived tag), the same "name relationship, not a hardcoded value" approach
+// as every other fallback table in this file -- only a handful of these
+// (marked below) get their own literal because no existing anchor fits.
+var derivedFallbackTags = []struct{ name, fallback string }{
+	{"ItemFocused", "{{[-:-:R]}}"},
+	{"TagFocused", "{{[-:-:R]}}"},
+	{"TagKey", "{{[-:-:B]}}"},
+	{"TagKeyFocused", "TagFocused"},
+	{"TagBrackets", "Dialog"},
+	{"TagSpinner", "Tag"},
+	{"ItemList", "Item"},
+	{"ItemListUserDefined", "Item"},
+	{"ButtonKeyActive", "ButtonActive"},
+	{"ButtonKeyInactive", "ButtonInactive"},
+	{"ButtonSpinner", "ButtonActive"},
+	{"LargeButtonSpinner", "ButtonSpinner"},
+	{"CommandLine", "Dialog"},
+	{"Subtitle", "Dialog"},
+	// A literal hard reset, not a name reference: ProgramBox is the actual
+	// console/log output area, so it should mimic a real terminal by
+	// deferring entirely to the user's own terminal colors rather than
+	// guessing a convention (even a plausible one like white-on-black).
+	// Requires semstyle v0.2.9+ (MaintainBackground actively resets for a
+	// blank/hard-reset style instead of no-op'ing and leaving the
+	// surrounding Dialog's background showing through).
+	{"ProgramBox", "{{[~]}}"},
+	{"Shadow", "{{[-:-:D]}}"},
+	{"OptionValue", "Dialog"},
+	{"OptionValueFocused", "TagFocused"},
+	{"LargeTitle", "Title"},
+	{"LargeTitleArea", "StatusBar"},
+	{"StatusFields", "StatusBar"},
+	{"StatusFlagsBrackets", "StatusBar"},
+	{"StatusUpdate", "Highlight"},
+	{"StatusVersionFocused", "TagFocused"},
+	{"Heading", "Title"},
+	{"HeadingTag", "Heading"},
+	{"HeadingValue", "Heading"},
+	{"HeadingAppDescription", "Heading"},
+	{"MarkerLocked", "MarkerInvalid"},
+	{"MarkerAdded", "Highlight"},
+	{"MarkerDeleted", "MarkerInvalid"},
+	{"MarkerModified", "Highlight"},
+	{"ModifiedText", "Highlight"},
+	{"EnvInvalid", "MarkerInvalid"},
+	{"EnvDuplicate", "Highlight"},
+	{"EnvBuiltin", "{{[-:-:D]}}"},
+	{"EnvReadOnly", "{{[-:-:D]}}"},
+	{"EnvPendingDelete", "{{[-:-:DS]}}"},
+	{"FailingCommand", "MarkerInvalid"},
+	{"Yes", "Highlight"},
+	{"URL", "{{[-:-:U]}}"},
+	{"LineComment", "{{[-:-:D]}}"},
+	{"LineNumber", "{{[-:-:D]}}"},
+	{"LineNumberBrackets", "LineNumber"},
+	{"LineNumberFocused", "TagFocused"},
+	{"LineNumberModified", "Highlight"},
+	{"LineNumberModifiedFocused", "LineNumberModified"},
+	{"Scrollbar", "{{[-:-:D]}}"},
+	{"ScrollbarThumb", "Scrollbar"},
+	{"ScrollbarArrows", "Scrollbar"},
+	{"KeyCap", "{{[-:-:R]}}"},
+	{"ProgressWaiting", "{{[-:-:D]}}"},
+	{"ProgressInProgress", "Highlight"},
+	{"ProgressCompleted", "Highlight"},
+	{"TextCursor", "{{[-:-:R]}}"},
+	{"TitleCheckbox", ""},
+	{"TitleCheckboxFocused", "TitleFocused"},
+	{"TitleFocusIndicator", "Highlight"},
+	{"TitleUnfocusedIndicator", ""},
+	{"PanelTitle", "PanelBorder"},
+	{"PanelTitleChangedIndicator", "Highlight"},
+	{"LargeIconFocused", "IconFocused"},
+	{"LargeIconPressed", "IconPressed"},
+	// Border/Border2 aren't referenced via a literal "{{|Border|}}" tag or a
+	// literal SemanticRawStyle("Border") call anywhere -- ResolveThemeOverrides
+	// (theme_helper.go) looks them up through a variable tag name, which is
+	// how this pair went unnoticed by the rest of this file's fallback
+	// coverage until an Empty-theme render showed a broken top border:
+	// Border/Border2's raw code also feeds semstyle.CodeToFlags for the
+	// border-drawing flags, not just color, so leaving them unresolved
+	// corrupts more than just the border's color.
+	{"Border", "Dialog"},
+	{"Border2", "Border"},
 }
 
 // markerFallbackTags lists the button lock-marker tags that fall back to

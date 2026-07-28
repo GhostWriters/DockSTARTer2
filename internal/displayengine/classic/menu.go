@@ -132,6 +132,23 @@ type MenuModel struct {
 	maximized   bool // Whether to maximize the dialog to fill available space
 	showButtons bool // Whether to show any buttons (default true)
 
+	// sectionLineBackgrounds is set by viewWithSections (0-based line index
+	// within the joined content -> that section's own background) for any
+	// content section implementing SectionBackgrounder, and consumed by the
+	// very next renderBorderWithTitle call, which passes it to
+	// renderBorderedBoxCtxImpl so a section styled against a different
+	// background than the dialog (e.g. ProgramBox's console viewport) keeps
+	// it through RenderBorderedBoxCtx's per-line reprocessing instead of
+	// every line uniformly getting ctx.ContentBackground. nil otherwise
+	// (the overwhelmingly common case), leaving that per-line behavior
+	// unchanged.
+	sectionLineBackgrounds map[int]lipgloss.Style
+
+	// ownBackground, when set (via SetSectionOwnBackground), makes this
+	// MenuModel report itself as a SectionBackgrounder when used as a
+	// content section -- see sectionLineBackgrounds above.
+	ownBackground *lipgloss.Style
+
 	// suppressChildProcessingMark disables updateSection's "mark my own
 	// first button processing when a content section's item starts an
 	// in-flight action" mirroring (see updateSection's doc comment). Default
@@ -954,6 +971,21 @@ func (m *MenuModel) SetFocused(f bool) {
 func (m *MenuModel) SetMaximized(maximized bool) {
 	m.maximized = maximized
 	m.calculateLayout()
+}
+
+// SetSectionOwnBackground marks this MenuModel, when used as a content
+// section (see AddContentSection), as rendering itself against style rather
+// than the parent dialog's own background -- see SectionBackgrounder.
+func (m *MenuModel) SetSectionOwnBackground(style lipgloss.Style) {
+	m.ownBackground = &style
+}
+
+// SectionBackground implements SectionBackgrounder.
+func (m *MenuModel) SectionBackground() (lipgloss.Style, bool) {
+	if m.ownBackground == nil {
+		return lipgloss.Style{}, false
+	}
+	return *m.ownBackground, true
 }
 
 // SetCommandLocked locks or unlocks all relevant items for a running panel command:
