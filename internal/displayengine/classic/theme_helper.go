@@ -49,6 +49,16 @@ func SemanticRawStyle(name string) lipgloss.Style {
 	return theme.ThemeSemanticRawStyle(name)
 }
 
+// SemanticRawStyleWithPrefix is SemanticRawStyle scoped to a namespace
+// prefix (e.g. "Preview_" for the Appearance Settings mockup): an optional
+// tag left undefined under that prefix resolves via its fallback rule
+// evaluated within the prefix's own namespace, instead of the tag's literal
+// prefixed name returning a blank style just because no theme explicitly
+// defined it there.
+func SemanticRawStyleWithPrefix(name, prefix string) lipgloss.Style {
+	return theme.ThemeSemanticRawStyleWithPrefix(name, prefix)
+}
+
 // TextCursorColor returns the foreground color defined by the TextCursor theme entry.
 // Used to set the cursor color on textinput and enveditor models.
 func TextCursorColor() color.Color {
