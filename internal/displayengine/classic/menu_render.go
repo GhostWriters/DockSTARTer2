@@ -410,7 +410,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	} else if m.loadingText != "" {
 		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinner.Indicators()
 	}
-	rendered := RenderBorderedBoxCtx(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, tbs)
+	lineBackgrounds := m.sectionLineBackgrounds
+	m.sectionLineBackgrounds = nil
+	rendered := renderBorderedBoxCtxImpl(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, lineBackgrounds, tbs)
 	if m.bottomBorderLabel != "" {
 		lines := strings.Split(rendered, "\n")
 		if n := len(lines); n > 0 {
@@ -604,6 +606,17 @@ type RightMarginSuppressor interface {
 	SuppressRightMargin() bool
 }
 
+// SectionBackgrounder is implemented by a content section that renders
+// itself against a background different from the dialog's own (e.g.
+// ProgramBox's console viewport section) -- viewWithSections uses this to
+// keep that section's own background through the outer dialog's per-line
+// reprocessing (see MenuModel.sectionLineBackgrounds) instead of every line
+// uniformly getting ctx.ContentBackground regardless of what the section
+// itself already rendered.
+type SectionBackgrounder interface {
+	SectionBackground() (lipgloss.Style, bool)
+}
+
 // viewWithSections renders an outer dialog that stacks content sections (sub-menus)
 // vertically inside its border, followed by a standard button row.
 // This path is taken when m.contentSections is non-empty and m.subMenuMode is false.
@@ -626,6 +639,8 @@ func (m *MenuModel) viewWithSections() string {
 	sectionWidth := contentWidth - layout.ContentMarginWidth()
 
 	var parts []string
+	var lineBackgrounds map[int]lipgloss.Style
+	lineOffset := 0
 
 	// Stack sections with margin — each section already renders its own bordered panel.
 	for _, sec := range m.contentSections {
@@ -634,12 +649,36 @@ func (m *MenuModel) viewWithSections() string {
 		if v == "" {
 			continue
 		}
-		if rms, ok := sec.(RightMarginSuppressor); ok && rms.SuppressRightMargin() {
-			parts = append(parts, noRightMarginStyle.Render(v))
-		} else {
-			parts = append(parts, marginStyle.Render(v))
+		active, activeNoRight := marginStyle, noRightMarginStyle
+		var sectionBG lipgloss.Style
+		hasSectionBG := false
+		if sb, ok := sec.(SectionBackgrounder); ok {
+			if bg, has := sb.SectionBackground(); has {
+				sectionBG, hasSectionBG = bg, true
+				active = active.Background(bg.GetBackground())
+				activeNoRight = activeNoRight.Background(bg.GetBackground())
+			}
 		}
+		var wrapped string
+		if rms, ok := sec.(RightMarginSuppressor); ok && rms.SuppressRightMargin() {
+			wrapped = activeNoRight.Render(v)
+		} else {
+			wrapped = active.Render(v)
+		}
+		parts = append(parts, wrapped)
+
+		numLines := strings.Count(wrapped, "\n") + 1
+		if hasSectionBG {
+			if lineBackgrounds == nil {
+				lineBackgrounds = make(map[int]lipgloss.Style)
+			}
+			for i := 0; i < numLines; i++ {
+				lineBackgrounds[lineOffset+i] = sectionBG
+			}
+		}
+		lineOffset += numLines
 	}
+	m.sectionLineBackgrounds = lineBackgrounds
 
 	// Button row also inset by the same margin -- omitted entirely when
 	// buttons are hidden (m.showButtons false), so no empty reserved row

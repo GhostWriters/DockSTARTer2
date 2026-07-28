@@ -32,6 +32,9 @@ func newStreamOutputSection(id string, box *ProgramBoxModel) *displayengine.Menu
 	m.SetBorderless(true)
 	m.SetNonFocusable(true)
 	m.SetWantsAllMessages(true)
+	// This section renders its own console-styled viewport, not the
+	// dialog's usual background -- see SectionBackgrounder.
+	m.SetSectionOwnBackground(displayengine.GetStyles().Console)
 
 	// Always maximized in practice (see newProgramBox), so calculateSectionLayout's
 	// Pass 1 natural-height query (menu_sections.go's expandableNaturalTotal, used
