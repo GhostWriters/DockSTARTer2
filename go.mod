@@ -32,7 +32,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.27
 	github.com/mattn/go-sixel v0.0.12
-	github.com/moby/moby/client v0.5.0
+	github.com/moby/moby/client v0.5.1
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32
