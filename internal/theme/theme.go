@@ -664,13 +664,14 @@ var highlightFallbackTags = []struct{ name, fallback string }{
 // Large* variants fall back to their own small tag (LargeTitleWarn ->
 // TitleWarn), not to the generic LargeTitle -- matching what every bundled
 // theme already does explicitly for these (LargeTitleWarn =
-// "{{|TitleWarn|}}", not "{{|LargeTitle|}}"). LargeTitleHelp is the one
-// exception left out here: most bundled themes point it at the generic
-// LargeTitle instead of TitleHelp, and the two don't necessarily resolve to
-// the same color, so it keeps requiring an explicit per-theme definition
-// rather than getting an assumed fallback.
+// "{{|TitleWarn|}}", not "{{|LargeTitle|}}"). LargeTitleHelp is the
+// exception: 11 of 13 bundled themes point it at the generic LargeTitle
+// instead of TitleHelp, so that's the anchor pattern here; OldDockSTARTer
+// and Summertime deliberately diverge to TitleHelp and keep their own
+// explicit definition as an override.
 var titleFallbackTags = []struct{ name, fallback string }{
 	{"TitleHelp", "Title"},
+	{"LargeTitleHelp", "LargeTitle"},
 	{"TitleNotice", "Title"},
 	{"TitleWarn", "Title"},
 	{"TitleWarning", "Title"},
