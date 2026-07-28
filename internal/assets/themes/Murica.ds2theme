@@ -1,7 +1,7 @@
 [metadata]
-name = "Murica"
+name        = "Murica"
 description = "DockSTARTer2 Murica Heck Yea! theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -240,10 +240,10 @@ accent = "blue"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
+menu_brackets        = true
 line_number_brackets = true

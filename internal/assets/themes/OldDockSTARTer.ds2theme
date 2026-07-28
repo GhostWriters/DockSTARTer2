@@ -1,7 +1,7 @@
 [metadata]
-name = "Old DockSTARTer"
+name        = "Old DockSTARTer"
 description = "The old DockSTARTer2 theme"
-author = "CLHatch"
+author      = "CLHatch"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -243,9 +243,9 @@ accent = "red"
 PositionIndicator = "{{[red]}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
 line_number_brackets = true

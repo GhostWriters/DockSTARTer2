@@ -1,7 +1,7 @@
 [metadata]
-name = "Debian"
+name        = "Debian"
 description = "Debian colors"
-author = "CLHatch"
+author      = "CLHatch"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -237,10 +237,10 @@ direct_suffix   = "]}}"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
+menu_brackets        = true
 line_number_brackets = true

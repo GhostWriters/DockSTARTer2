@@ -1,7 +1,7 @@
 [metadata]
-name = "Firehouse"
+name        = "Firehouse"
 description = "DockSTARTer2 Firehouse theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -10,9 +10,9 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary = "red"
+primary   = "red"
 secondary = "black"
-accent = "white"
+accent    = "white"
 
 [styles]
 ## Backdrop
@@ -243,10 +243,10 @@ accent = "white"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
+menu_brackets        = true
 line_number_brackets = true

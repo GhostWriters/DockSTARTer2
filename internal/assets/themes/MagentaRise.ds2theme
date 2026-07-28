@@ -1,7 +1,7 @@
 [metadata]
-name = "Magenta Rise"
+name        = "Magenta Rise"
 description = "DockSTARTer2 Magenta Rise theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -10,7 +10,7 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary = "magenta"
+primary   = "magenta"
 secondary = "black"
 
 [styles]
@@ -246,10 +246,10 @@ TagKeyFocusedDisabled = "{{|TagKeyFocused|}}"
 TagFocusedDisabled = "{{|TagFocused|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
+menu_brackets        = true
 line_number_brackets = true

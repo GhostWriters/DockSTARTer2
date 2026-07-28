@@ -1,7 +1,7 @@
 [metadata]
-name = "ZenFocus"
+name        = "ZenFocus"
 description = "DockSTARTer2 Zen Focus theme"
-author = "Gemini AI"
+author      = "Gemini AI"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -10,10 +10,10 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary = "white"
+primary   = "white"
 secondary = "black"
 highlight = "yellow"
-accent = "$highlight"
+accent    = "$highlight"
 
 [styles]
 ## Backdrop
@@ -246,10 +246,10 @@ accent = "$highlight"
 BoxTitle = "{{[$primary:$secondary]}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = false
-border_color = 1
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = false
+border_color         = 1
+menu_brackets        = true
 line_number_brackets = true

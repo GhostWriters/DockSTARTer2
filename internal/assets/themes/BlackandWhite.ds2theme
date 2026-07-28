@@ -1,7 +1,7 @@
 [metadata]
-name = "BlackandWhite"
+name        = "BlackandWhite"
 description = "The pure Black and White theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -10,7 +10,7 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary = "white"
+primary   = "white"
 secondary = "black"
 
 [styles]
@@ -241,9 +241,9 @@ secondary = "black"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
 line_number_brackets = true
