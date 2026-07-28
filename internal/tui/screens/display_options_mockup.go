@@ -55,8 +55,8 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	// theme registry.
 	borderOverrides := displayengine.ResolveThemeOverrides(s.config.UI.BorderColor, "Preview_")
 
-	bgStyle := displayengine.SemanticRawStyle("Preview_Screen")
-	dContent := displayengine.SemanticRawStyle("Preview_Dialog")
+	bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
+	dContent := displayengine.SemanticRawStyleWithPrefix("Dialog", "Preview_")
 	dBorder1 := borderOverrides["Border"].Style
 	dBorder2 := borderOverrides["Border2"].Style
 
@@ -78,39 +78,39 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 		DrawBorders:         s.config.UI.Borders,
 		LargeButtons:        s.config.UI.LargeButtons,
 		LargeTitleBars:      s.config.UI.LargeTitleBars,
-		LargeTitleArea:      displayengine.SemanticRawStyle("Preview_LargeTitleArea"),
+		LargeTitleArea:      displayengine.SemanticRawStyleWithPrefix("LargeTitleArea", "Preview_"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
 		ContentBackground:   dContent,
-		DialogTitle:         displayengine.SemanticRawStyle("Preview_Title"),
-		DialogTitleHelp:     displayengine.SemanticRawStyle("Preview_TitleHelp"),
-		SubmenuTitle:        displayengine.SemanticRawStyle("Preview_TitleSubMenu"),
-		SubmenuTitleFocused: displayengine.SemanticRawStyle("Preview_TitleSubMenuFocused"),
+		DialogTitle:         displayengine.SemanticRawStyleWithPrefix("Title", "Preview_"),
+		DialogTitleHelp:     displayengine.SemanticRawStyleWithPrefix("TitleHelp", "Preview_"),
+		SubmenuTitle:        displayengine.SemanticRawStyleWithPrefix("TitleSubMenu", "Preview_"),
+		SubmenuTitleFocused: displayengine.SemanticRawStyleWithPrefix("TitleSubMenuFocused", "Preview_"),
 		Border:              b,
 		BorderColor:         dBorder1.GetForeground(),
 		Border2Color:        dBorder2.GetForeground(),
-		ButtonActive:        displayengine.SemanticRawStyle("Preview_ButtonActive"),
-		ButtonInactive:      displayengine.SemanticRawStyle("Preview_ButtonInactive"),
-		ButtonKeyActive:     displayengine.SemanticRawStyle("Preview_ButtonKeyActive"),
-		ButtonKeyInactive:   displayengine.SemanticRawStyle("Preview_ButtonKeyInactive"),
-		IconFocused:         displayengine.SemanticRawStyle("Preview_IconFocused"),
-		IconPressed:         displayengine.SemanticRawStyle("Preview_IconPressed"),
-		IconInactive:        displayengine.SemanticRawStyle("Preview_IconInactive"),
-		IconHelpInactive:    displayengine.SemanticRawStyle("Preview_IconHelpInactive"),
-		IconRefreshInactive: displayengine.SemanticRawStyle("Preview_IconRefreshInactive"),
-		IconExitInactive:    displayengine.SemanticRawStyle("Preview_IconExitInactive"),
-		ItemNormal:          displayengine.SemanticRawStyle("Preview_Item"),
-		ItemFocused:         displayengine.SemanticRawStyle("Preview_ItemFocused"),
-		TagNormal:           displayengine.SemanticRawStyle("Preview_Tag"),
-		TagFocused:          displayengine.SemanticRawStyle("Preview_TagFocused"),
-		TagKey:              displayengine.SemanticRawStyle("Preview_TagKey"),
-		TagKeyFocused:       displayengine.SemanticRawStyle("Preview_TagKeyFocused"),
-		Shadow:              displayengine.SemanticRawStyle("Preview_Shadow"),
+		ButtonActive:        displayengine.SemanticRawStyleWithPrefix("ButtonActive", "Preview_"),
+		ButtonInactive:      displayengine.SemanticRawStyleWithPrefix("ButtonInactive", "Preview_"),
+		ButtonKeyActive:     displayengine.SemanticRawStyleWithPrefix("ButtonKeyActive", "Preview_"),
+		ButtonKeyInactive:   displayengine.SemanticRawStyleWithPrefix("ButtonKeyInactive", "Preview_"),
+		IconFocused:         displayengine.SemanticRawStyleWithPrefix("IconFocused", "Preview_"),
+		IconPressed:         displayengine.SemanticRawStyleWithPrefix("IconPressed", "Preview_"),
+		IconInactive:        displayengine.SemanticRawStyleWithPrefix("IconInactive", "Preview_"),
+		IconHelpInactive:    displayengine.SemanticRawStyleWithPrefix("IconHelpInactive", "Preview_"),
+		IconRefreshInactive: displayengine.SemanticRawStyleWithPrefix("IconRefreshInactive", "Preview_"),
+		IconExitInactive:    displayengine.SemanticRawStyleWithPrefix("IconExitInactive", "Preview_"),
+		ItemNormal:          displayengine.SemanticRawStyleWithPrefix("Item", "Preview_"),
+		ItemFocused:         displayengine.SemanticRawStyleWithPrefix("ItemFocused", "Preview_"),
+		TagNormal:           displayengine.SemanticRawStyleWithPrefix("Tag", "Preview_"),
+		TagFocused:          displayengine.SemanticRawStyleWithPrefix("TagFocused", "Preview_"),
+		TagKey:              displayengine.SemanticRawStyleWithPrefix("TagKey", "Preview_"),
+		TagKeyFocused:       displayengine.SemanticRawStyleWithPrefix("TagKeyFocused", "Preview_"),
+		Shadow:              displayengine.SemanticRawStyleWithPrefix("Shadow", "Preview_"),
 		ShadowColor:         getPreviewShadowColor(),
 		ShadowLevel:         s.config.UI.ShadowLevel,
-		HelpLine:            displayengine.SemanticRawStyle("Preview_Helpline"),
-		StatusSuccess:       displayengine.SemanticRawStyle("Preview_TitleNotice"),
-		StatusWarn:          displayengine.SemanticRawStyle("Preview_TitleWarn"),
+		HelpLine:            displayengine.SemanticRawStyleWithPrefix("Helpline", "Preview_"),
+		StatusSuccess:       displayengine.SemanticRawStyleWithPrefix("TitleNotice", "Preview_"),
+		StatusWarn:          displayengine.SemanticRawStyleWithPrefix("TitleWarn", "Preview_"),
 		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
 		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
 		PanelTitleAlign:     s.config.UI.PanelTitleAlign,
@@ -135,7 +135,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	}
 
 	// --- 1. Header (Status Bar) ---
-	hStyle := displayengine.SemanticRawStyle("Preview_StatusBar")
+	hStyle := displayengine.SemanticRawStyleWithPrefix("StatusBar", "Preview_")
 	headerCtx := previewCtx
 	headerCtx.Dialog = hStyle // Ensure snapping back to StatusBar background
 
@@ -147,7 +147,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	// Background is ALWAYS forced to hStyle so the │ chars blend with the status bar
 	// (StatusBarBorder in the theme uses Screen/white bg for the real header's bottom
 	// corners, which would create a visible seam here).
-	bStyle := displayengine.SemanticRawStyle("Preview_StatusBarBorder")
+	bStyle := displayengine.SemanticRawStyleWithPrefix("StatusBarBorder", "Preview_")
 	if _, noFG := bStyle.GetForeground().(lipgloss.NoColor); noFG {
 		bStyle = bStyle.Foreground(hStyle.GetForeground())
 	}
@@ -285,7 +285,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	}
 
 	// --- 3. Help Line ---
-	helpStyle := displayengine.SemanticRawStyle("Preview_Helpline")
+	helpStyle := displayengine.SemanticRawStyleWithPrefix("Helpline", "Preview_")
 	helpCtx := previewCtx
 	helpCtx.Dialog = helpStyle // Ensure snapping back to Helpline background
 
@@ -294,8 +294,8 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 
 	// --- 4. Console Toggle Strip ---
 	// Both strip and label: PanelTitle fg on ConsoleBox bg.
-	panelTitleStyle := displayengine.SemanticRawStyle("Preview_PanelTitle")
-	panelBorderStyle := displayengine.SemanticRawStyle("Preview_PanelBorder")
+	panelTitleStyle := displayengine.SemanticRawStyleWithPrefix("PanelTitle", "Preview_")
+	panelBorderStyle := displayengine.SemanticRawStyleWithPrefix("PanelBorder", "Preview_")
 
 	marker := "^"
 	titleText := "Console"
@@ -454,7 +454,7 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 		// where the remaining slice of content is shorter than h even
 		// though the total content isn't.
 		if short := h - lipgloss.Height(viewportOutput); short > 0 {
-			bgStyle := displayengine.SemanticRawStyle("Preview_Screen")
+			bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
 			filler := bgStyle.Render(strutil.Repeat(" ", previewContentWidth))
 			fillLines := make([]string, short)
 			for i := range fillLines {
@@ -558,7 +558,7 @@ func previewNaturalHeight(mockupMenu *displayengine.MenuModel) int {
 // getPreviewShadowColor extracts the shadow color from the preview theme
 // Prefers foreground (for shade chars), falls back to background
 func getPreviewShadowColor() color.Color {
-	shadowStyle := displayengine.SemanticRawStyle("Preview_Shadow")
+	shadowStyle := displayengine.SemanticRawStyleWithPrefix("Shadow", "Preview_")
 	if fg := shadowStyle.GetForeground(); fg != nil {
 		return fg
 	}

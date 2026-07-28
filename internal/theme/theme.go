@@ -1031,7 +1031,16 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 	}
 	cacheMu.RUnlock()
 
-	s := semstyle.ToStyle(semstyle.Default, semstyle.WrapSemantic(name), lipgloss.NewStyle(), lipgloss.NewStyle())
+	var s lipgloss.Style
+	if prefix != "" && !useConsole {
+		// Prefix-scoped lookup (e.g. "Preview_"): resolves name's fallback
+		// rule (if it has no explicit value under this prefix) within the
+		// prefix's own namespace instead of the bare/global one.
+		raw := semstyle.GetRawTagCodeWithPrefix(name, prefix)
+		s = semstyle.CodeToStyle(raw, lipgloss.NewStyle(), lipgloss.NewStyle())
+	} else {
+		s = semstyle.ToStyle(semstyle.Default, semstyle.WrapSemantic(name), lipgloss.NewStyle(), lipgloss.NewStyle())
+	}
 
 	cacheMu.Lock()
 	semanticStyleCache[cacheKey] = s

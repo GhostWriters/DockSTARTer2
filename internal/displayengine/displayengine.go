@@ -332,6 +332,7 @@ var (
 	HyperlinkText                  = classic.HyperlinkText
 	ScrollbarHitRegions            = classic.ScrollbarHitRegions
 	SemanticRawStyle               = classic.SemanticRawStyle
+	SemanticRawStyleWithPrefix     = classic.SemanticRawStyleWithPrefix
 	SemanticStyle                  = classic.SemanticStyle
 	SetActiveContentStartY         = classic.SetActiveContentStartY
 	SetActiveDialogOffset          = classic.SetActiveDialogOffset
