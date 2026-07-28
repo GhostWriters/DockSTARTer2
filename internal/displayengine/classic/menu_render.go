@@ -649,23 +649,27 @@ func (m *MenuModel) viewWithSections() string {
 		if v == "" {
 			continue
 		}
-		active, activeNoRight := marginStyle, noRightMarginStyle
+		// marginStyle/noRightMarginStyle always use Dialog's background here,
+		// even for a SectionBackgrounder section -- that margin gutter sits
+		// outside the section's own border and should keep matching the
+		// rest of the dialog's chrome. Only the line-index entries below
+		// (consumed by the outer per-line pass in renderBorderedBoxCtxImpl)
+		// get the section's own background, since v's content already
+		// carries its own correct styling and just needs protecting from
+		// that pass's reprocessing -- the margin itself was never at risk.
+		var wrapped string
+		if rms, ok := sec.(RightMarginSuppressor); ok && rms.SuppressRightMargin() {
+			wrapped = noRightMarginStyle.Render(v)
+		} else {
+			wrapped = marginStyle.Render(v)
+		}
+		parts = append(parts, wrapped)
+
 		var sectionBG lipgloss.Style
 		hasSectionBG := false
 		if sb, ok := sec.(SectionBackgrounder); ok {
-			if bg, has := sb.SectionBackground(); has {
-				sectionBG, hasSectionBG = bg, true
-				active = active.Background(bg.GetBackground())
-				activeNoRight = activeNoRight.Background(bg.GetBackground())
-			}
+			sectionBG, hasSectionBG = sb.SectionBackground()
 		}
-		var wrapped string
-		if rms, ok := sec.(RightMarginSuppressor); ok && rms.SuppressRightMargin() {
-			wrapped = activeNoRight.Render(v)
-		} else {
-			wrapped = active.Render(v)
-		}
-		parts = append(parts, wrapped)
 
 		numLines := strings.Count(wrapped, "\n") + 1
 		if hasSectionBG {
