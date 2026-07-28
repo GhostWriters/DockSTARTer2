@@ -1,7 +1,7 @@
 [metadata]
-name = "DockSTARTer"
+name        = "DockSTARTer"
 description = "The default DockSTARTer2 theme"
-author = "CLHatch"
+author      = "CLHatch"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -10,11 +10,11 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary = "black"
+primary   = "black"
 secondary = "white"
 screen_fg = "$primary"
 screen_bg = "$secondary"
-accent = "cyan"
+accent    = "cyan"
 
 [styles]
 ## Backdrop
@@ -244,9 +244,9 @@ accent = "cyan"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
 line_number_brackets = true

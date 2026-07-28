@@ -1,7 +1,7 @@
 [metadata]
-name = "Whiptail Ripoff"
+name        = "Whiptail Ripoff"
 description = "DockSTARTer2 Whiptail ripoff theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -242,8 +242,8 @@ TagKeyFocusedDisabled = "{{|TagKeyFocused|}}"
 TagFocusedDisabled = "{{|TagFocused|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+menu_brackets        = true
 line_number_brackets = true

@@ -1,7 +1,7 @@
 [metadata]
-name = "Marigold"
+name        = "Marigold"
 description = "DockSTARTer2 Marigold theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -242,9 +242,9 @@ bg = "black"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-shadow = true
-border_color = 3
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+shadow               = true
+border_color         = 3
 line_number_brackets = true

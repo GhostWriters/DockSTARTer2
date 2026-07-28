@@ -1,7 +1,7 @@
 [metadata]
-name = "Summertime"
+name        = "Summertime"
 description = "DockSTARTer2 Summertime theme"
-author = "Westlin"
+author      = "Westlin"
 
 [syntax]
 semantic_prefix = "{{|"
@@ -10,10 +10,10 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-fg = "yellow"
-bg = "blue"
+fg        = "yellow"
+bg        = "blue"
 screen_bg = "cyan"
-accent = "red"
+accent    = "red"
 
 [styles]
 ## Backdrop
@@ -244,8 +244,8 @@ accent = "red"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align = "center"
-submenu_title_align = "left"
-panel_title_align = "center"
-menu_brackets = true
+dialog_title_align   = "center"
+submenu_title_align  = "left"
+panel_title_align    = "center"
+menu_brackets        = true
 line_number_brackets = true
