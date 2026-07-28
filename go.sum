@@ -22,6 +22,8 @@ github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679 h1:qNT7
 github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679/go.mod h1:blbwPQh4DTlCZEfk1BLU4oMIhLda2U+A840Uag9DsZw=
 github.com/GhostWriters/semstyle v0.2.10 h1:nKRHr4UIFYLGOjh9t/6Wo3izPVuQfhzYqzma/O8LNqc=
 github.com/GhostWriters/semstyle v0.2.10/go.mod h1:iUYhdTiPvHsTuGdK8UYebtgjGmkkgLLK4tbMB75wke0=
+github.com/GhostWriters/semstyle v0.2.11 h1:ZPyL/WqTtMh7eYo8twSfahoOMPUHuPJtNteJ4CpKYrE=
+github.com/GhostWriters/semstyle v0.2.11/go.mod h1:iUYhdTiPvHsTuGdK8UYebtgjGmkkgLLK4tbMB75wke0=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
