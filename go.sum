@@ -28,6 +28,8 @@ github.com/GhostWriters/semstyle v0.2.12 h1:9pMCadzp85pEznc6PWjl5c/LfmJtwaNysso3
 github.com/GhostWriters/semstyle v0.2.12/go.mod h1:iUYhdTiPvHsTuGdK8UYebtgjGmkkgLLK4tbMB75wke0=
 github.com/GhostWriters/semstyle v0.2.13 h1:57QyHk/RRLJZMpF8CEZnfVUE31HIq5CK+Xcp6Bho8Ww=
 github.com/GhostWriters/semstyle v0.2.13/go.mod h1:iUYhdTiPvHsTuGdK8UYebtgjGmkkgLLK4tbMB75wke0=
+github.com/GhostWriters/semstyle v0.2.14 h1:eMh4cXhV8aiPEu8uLZi11mqKEDHuRKtgNe1A6be5fOU=
+github.com/GhostWriters/semstyle v0.2.14/go.mod h1:iUYhdTiPvHsTuGdK8UYebtgjGmkkgLLK4tbMB75wke0=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
