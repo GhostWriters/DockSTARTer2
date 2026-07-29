@@ -477,8 +477,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 				// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
 				// "{{|ItemList|}}..."), which overrides dStyle entirely -- strip
 				// tags here so dStyle (itemStyleSel) actually takes effect, same
-				// as the plain isSelected case already did.
-				descStr = dStyle.Render(GetPlainText(item.Desc))
+				// as the plain isSelected case already did. Routed through
+				// RenderThemeText rather than dStyle.Render directly so a
+				// dStyle resolving to a hard reset ("~") still gets an active
+				// ANSI reset injected (MaintainBackground's job) instead of
+				// silently emitting nothing.
+				descStr = RenderThemeText(GetPlainText(item.Desc), dStyle)
 			}
 		} else {
 			descStr = RenderThemeText(item.Desc, dStyle)
