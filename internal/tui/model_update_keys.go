@@ -106,7 +106,8 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return m, tea.Quit, true
 	}
 
-	// Cycle: Screen -> panel viewport -> Input bar -> Header(Flags) -> Header(App) -> Header(Tmpl) -> Screen
+	// Cycle: Screen -> panel viewport -> Input bar -> Header (one stop; Left/Right
+	// navigate its internal Flags/App/Tmpl elements once focused) -> Screen
 	if key.Matches(msg, displayengine.Keys.Tab) {
 		if m.panelFocused {
 			// If panel is expanded and input not yet focused, Tab → input bar.
@@ -123,18 +124,16 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		} else if m.dialog != nil {
 			// Dialog open: pass Tab through to the dialog (not handled here).
 			return m, nil, false
-		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusFlags {
-			m.setHeaderFocus(displayengine.HeaderFocusApp)
-			return m, nil, true
-		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusApp {
-			m.setHeaderFocus(displayengine.HeaderFocusTmpl)
-			return m, nil, true
-		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusTmpl {
+		} else if m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
 			m.setHeaderFocus(displayengine.HeaderFocusNone)
 			return m, nil, true
-		} else {
+		} else if m.panel.PanelMode != "none" {
 			// From screen to panel viewport
 			m.setPanelFocus(true)
+			return m, nil, true
+		} else {
+			// Panel disabled: skip straight to the header.
+			m.setHeaderFocus(displayengine.HeaderFocusFlags)
 			return m, nil, true
 		}
 	}
@@ -143,22 +142,21 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if m.panelFocused {
 			m.setPanelFocus(false)
 			return m, nil, true
-		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusFlags {
-			m.setPanelFocus(true)
-			return m, nil, true
-		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusApp {
-			m.setHeaderFocus(displayengine.HeaderFocusFlags)
-			return m, nil, true
-		} else if m.backdrop.Header.GetFocus() == displayengine.HeaderFocusTmpl {
-			m.setHeaderFocus(displayengine.HeaderFocusApp)
+		} else if m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
+			if m.panel.PanelMode != "none" {
+				m.setPanelFocus(true)
+			} else {
+				// Panel disabled: skip straight back to the screen.
+				m.setHeaderFocus(displayengine.HeaderFocusNone)
+			}
 			return m, nil, true
 		} else {
-			// From screen to header (tmpl)
+			// From screen to header -- same entry point as Tab (Flags).
 			if m.dialog != nil {
 				// Dialog open: pass ShiftTab through to the dialog (not handled here).
 				return m, nil, false
 			}
-			m.setHeaderFocus(displayengine.HeaderFocusTmpl)
+			m.setHeaderFocus(displayengine.HeaderFocusFlags)
 			return m, nil, true
 		}
 	}
