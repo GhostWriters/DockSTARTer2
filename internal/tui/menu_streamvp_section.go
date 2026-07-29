@@ -33,7 +33,9 @@ func newStreamOutputSection(id string, box *ProgramBoxModel) *displayengine.Menu
 	m.SetNonFocusable(true)
 	m.SetWantsAllMessages(true)
 	// This section renders its own console-styled viewport, not the
-	// dialog's usual background -- see SectionBackgrounder.
+	// dialog's usual background -- see SectionBackgrounder. Still needed
+	// for the viewport's blank padding rows (plain, unstyled content with
+	// no ANSI of their own).
 	m.SetSectionOwnBackground(displayengine.GetStyles().Console)
 
 	// Always maximized in practice (see newProgramBox), so calculateSectionLayout's
