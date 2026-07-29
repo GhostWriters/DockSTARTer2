@@ -110,6 +110,32 @@ func isDS2Prefix(tok string) bool {
 	return lower == cmdName || lower == "ds2" || lower == "ds"
 }
 
+// verifySudo invalidates any cached sudo credential (sudo -k) so a stale
+// timestamp can't silently satisfy this check, then prompts for and
+// verifies a fresh sudo password (sudo -S -v). Returns console.ErrUserAborted
+// if the user cancels the prompt, or another error if authentication fails.
+func (m *PanelModel) verifySudo(reason string) error {
+	_ = exec.Command("sudo", "-k").Run()
+
+	var pass string
+	var err error
+	if prompt := m.PromptFunc(); prompt != nil {
+		pass, err = prompt("Sudo Password", reason, true)
+	} else {
+		pass, err = PromptTextHook("Sudo Password", reason, true)
+	}
+	if err != nil {
+		return err
+	}
+
+	primeCmd := exec.Command("sudo", "-S", "-v")
+	primeCmd.Stdin = strings.NewReader(pass + "\n")
+	if err := primeCmd.Run(); err != nil {
+		return fmt.Errorf("sudo: authentication failed")
+	}
+	return nil
+}
+
 // submitConsoleCommand parses and runs cmdStr.
 // ds2 commands (starting with - or prefixed with "ds2") are executed internally
 // via commands.Parse + commands.Execute; output flows through the logger subscription.
@@ -125,6 +151,13 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		args = tokens[1:]
 	}
 
+	return m.dispatchConsoleCommand(cmdStr, tokens, isDS2, args)
+}
+
+// dispatchConsoleCommand validates and routes cmdStr to either the ds2-native
+// path (runDS2Groups) or the shell path (runShellConsoleCommand), each of
+// which applies its own sudo gating for remote sessions where needed.
+func (m *PanelModel) dispatchConsoleCommand(cmdStr string, tokens []string, isDS2 bool, args []string) tea.Cmd {
 	// In restricted console mode, only ds2 commands are allowed — shell is blocked.
 	if m.PanelMode == "console" && !isDS2 && (len(args) == 0 || !strings.HasPrefix(args[0], "-")) {
 		logger.Error(context.Background(), "Only ds2 commands are allowed in Console mode. Switch to 'System Console' for full shell access.")
@@ -158,57 +191,140 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 			return func() tea.Msg { return ConsoleDoneMsg{} }
 		}
 
-		// The edit-lock check happens per-group inside commands.Execute (matching
-		// CLI behavior exactly), not here -- a pre-check across all groups
-		// upfront would abort the entire command line at the first locked group,
-		// silently skipping (and never logging) any earlier group that could
-		// have run successfully, e.g. "ds2 --list-enabled -yp" should still run
-		// --list-enabled even if -p is currently locked.
-		configChanged := commands.GroupsNeedConfigReload(groups)
-		appsChanged := commands.GroupsNeedAppsRefresh(groups)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		m.ConsoleCancel = cancel
-		m.replaceHeaderCount = -1
-		pr, pw := io.Pipe()
-		cmdCtx := console.WithPanelWriter(ctx, pw)
-		if fn := m.ConfirmFunc(); fn != nil {
-			cmdCtx = console.WithConfirmFunc(cmdCtx, fn)
-		}
-		if fn := m.PromptFunc(); fn != nil {
-			cmdCtx = console.WithPromptFunc(cmdCtx, fn)
-		}
-		if fn := m.SendFunc(); fn != nil {
-			cmdCtx = console.WithSendFunc(cmdCtx, fn)
-		}
-
-		go func() {
-			// Log the command header into the pipe first
-			if m.PanelMode == "system" {
-				logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
-			} else {
-				logger.Notice(cmdCtx, "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+		// Blocked in EVERY console mode, System Console included, regardless
+		// of sudo -- see Def.ConsoleBlocked's doc comment.
+		requiresSudo := false
+		for _, g := range groups {
+			if commands.IsConsoleBlocked(g.Command) {
+				logger.Error(context.Background(),
+					"Command '{{|UserCommand|}}%s{{[-]}}' cannot be run from the console.", g.Command)
+				return func() tea.Msg { return ConsoleDoneMsg{} }
 			}
+			if commands.IsRequiresSudo(g.Command) {
+				requiresSudo = true
+			}
+		}
 
-			commands.Execute(cmdCtx, groups, m.clientIP, m.connType, m.sessionKey)
-			pw.Close()
-		}()
+		// A handful of ConsoleSafe commands (e.g. --config-folder) still need
+		// a fresh sudo re-verification when remote -- ConsoleSafe permits
+		// them in the restricted Console mode too, not just System Console,
+		// so this check isn't limited to m.PanelMode == "system" the way the
+		// shell-command gate below is.
+		if requiresSudo && m.connType != "local" {
+			run := func() tea.Cmd { return m.runDS2Groups(cmdStr, groups) }
+			return func() tea.Msg {
+				if err := m.verifySudo("Confirm sudo access to run: '" + cmdStr + "'"); err != nil {
+					if err == console.ErrUserAborted {
+						return ConsoleDoneMsg{}
+					}
+					return ConsoleDoneMsg{Err: err}
+				}
+				cmd := run()
+				if cmd == nil {
+					return nil
+				}
+				return cmd()
+			}
+		}
 
-		sc := bufio.NewScanner(pr)
-		m.consoleScanner = sc
-		m.consoleConfigChanged = configChanged
-		m.consoleAppsChanged = appsChanged
-		m.titleSpinner.Start()
-		lockCmd := m.lockSession("console.command", true)
-		return tea.Batch(lockCmd, readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
+		return m.runDS2Groups(cmdStr, groups)
 	}
 
-	// Shell command
+	return m.runShellConsoleCommand(cmdStr, tokens)
+}
+
+// runDS2Groups executes already-parsed, already sudo/block-checked ds2
+// command groups, streaming output through the panel writer/scanner path.
+func (m *PanelModel) runDS2Groups(cmdStr string, groups []commands.CommandGroup) tea.Cmd {
+	// The edit-lock check happens per-group inside commands.Execute (matching
+	// CLI behavior exactly), not here -- a pre-check across all groups
+	// upfront would abort the entire command line at the first locked group,
+	// silently skipping (and never logging) any earlier group that could
+	// have run successfully, e.g. "ds2 --list-enabled -yp" should still run
+	// --list-enabled even if -p is currently locked.
+	configChanged := commands.GroupsNeedConfigReload(groups)
+	appsChanged := commands.GroupsNeedAppsRefresh(groups)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.ConsoleCancel = cancel
+	m.replaceHeaderCount = -1
+	pr, pw := io.Pipe()
+	cmdCtx := console.WithPanelWriter(ctx, pw)
+	if fn := m.ConfirmFunc(); fn != nil {
+		cmdCtx = console.WithConfirmFunc(cmdCtx, fn)
+	}
+	if fn := m.PromptFunc(); fn != nil {
+		cmdCtx = console.WithPromptFunc(cmdCtx, fn)
+	}
+	if fn := m.SendFunc(); fn != nil {
+		cmdCtx = console.WithSendFunc(cmdCtx, fn)
+	}
+
+	go func() {
+		// Log the command header into the pipe first
+		if m.PanelMode == "system" {
+			logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+		} else {
+			logger.Notice(cmdCtx, "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+		}
+
+		commands.Execute(cmdCtx, groups, m.clientIP, m.connType, m.sessionKey)
+		pw.Close()
+	}()
+
+	sc := bufio.NewScanner(pr)
+	m.consoleScanner = sc
+	m.consoleConfigChanged = configChanged
+	m.consoleAppsChanged = appsChanged
+	m.titleSpinner.Start()
+	lockCmd := m.lockSession("console.command", true)
+	return tea.Batch(lockCmd, readConsoleBatchWithFlag(sc, cancel, configChanged, appsChanged))
+}
+
+// runShellConsoleCommand handles the non-ds2 shell-command path (sudo
+// gating for remote System Console, then dispatch).
+func (m *PanelModel) runShellConsoleCommand(cmdStr string, tokens []string) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.ConsoleCancel = cancel
 	m.titleSpinner.Start()
 
+	// Remote System Console: every SHELL command requires a fresh sudo
+	// re-verification first, not just ones that happen to contain "sudo"
+	// themselves (see verifySudo) -- a second DS2 user (different
+	// pubkey/password) could otherwise ride an earlier remote session's
+	// already-enabled System Console toggle without ever proving they have
+	// sudo rights on this machine. ds2-native commands (handled above, before
+	// this "Shell command" section) are never gated this way -- only real
+	// shell access needs it. Local sessions are exempt: DS2's own connType
+	// can't be spoofed to "local" over the network (see stripDS2TrustEnv),
+	// so this only ever gates real remote access.
+	if m.PanelMode == "system" && m.connType != "local" {
+		return func() tea.Msg {
+			if err := m.verifySudo("Confirm sudo access to run: '" + cmdStr + "'"); err != nil {
+				if err == console.ErrUserAborted {
+					return ConsoleDoneMsg{}
+				}
+				return ConsoleDoneMsg{Err: err}
+			}
+
+			pr, pw := io.Pipe()
+			cmdCtx := console.WithPanelWriter(ctx, pw)
+			go func() {
+				logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
+				err := runShellCmd(ctx, cmdStr, pw, "")
+				pw.CloseWithError(err)
+			}()
+
+			sc := bufio.NewScanner(pr)
+			m.consoleScanner = sc
+			return readConsoleBatch(sc, cancel)
+		}
+	}
+
 	// If the command contains sudo, intercept it and prime the sudo credential cache.
+	// Local only: keeps its original lenient behavior (no sudo -k) -- it
+	// doesn't force a fresh password if the user's own sudo timestamp is
+	// still valid.
 	var containsSudo bool
 	for _, t := range tokens {
 		if t == "sudo" {
@@ -217,7 +333,7 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 		}
 	}
 
-	if containsSudo && m.PanelMode == "system" {
+	if containsSudo && m.PanelMode == "system" && m.connType == "local" {
 		return tea.Batch(func() tea.Msg {
 			var pass string
 			var err error
@@ -233,16 +349,16 @@ func (m *PanelModel) submitConsoleCommand(cmdStr string) tea.Cmd {
 				return ConsoleDoneMsg{Err: err}
 			}
 
-			// 1. Prime the sudo cache by running sudo -S -v with the password.
-			// This updates the sudo timestamp so subsequent sudo calls in the user's
-			// command can run without a prompt.
+			// Prime the sudo cache by running sudo -S -v with the password.
+			// This updates the sudo timestamp so subsequent sudo calls in the
+			// user's command can run without a prompt.
 			primeCmd := exec.Command("sudo", "-S", "-v")
 			primeCmd.Stdin = strings.NewReader(pass + "\n")
 			if err := primeCmd.Run(); err != nil {
 				return ConsoleDoneMsg{Err: fmt.Errorf("sudo: authentication failed")}
 			}
 
-			// 2. Run the user's original command line exactly as typed.
+			// Run the user's original command line exactly as typed.
 			pr, pw := io.Pipe()
 			cmdCtx := console.WithPanelWriter(ctx, pw)
 			go func() {

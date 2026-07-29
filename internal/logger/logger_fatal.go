@@ -294,7 +294,7 @@ func writeFatalLog(msg any, args ...any) {
 	fatalLogPath := filepath.Join(logDir, appName+".fatal.log")
 
 	// Explicitly truncate the file to ensure we only have the latest fatal error
-	f, err := os.OpenFile(fatalLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	f, err := os.OpenFile(fatalLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create fatal log file: %v\n", err)
 		return
@@ -348,7 +348,7 @@ func truncateLogFile(path string, limit int) {
 	output := strings.Join(keptLines, "\n")
 
 	// Rewrite file
-	if err := os.WriteFile(path, []byte(output), 0666); err != nil {
+	if err := os.WriteFile(path, []byte(output), 0600); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to rotate log file: %v\n", err)
 	}
 }

@@ -104,6 +104,16 @@ func GetLogFilePath() string {
 	return logFilePath
 }
 
+// GetFatalLogFilePath returns the path to the fatal-crash log file (empty if
+// not yet initialised), mirroring the construction in logFatal.
+func GetFatalLogFilePath() string {
+	if logDir == "" {
+		return ""
+	}
+	appName := strings.ToLower(version.ApplicationName)
+	return filepath.Join(logDir, appName+".fatal.log")
+}
+
 // Helper to resolve message from any type to string
 func resolveMsg(msg any) string {
 	switch v := msg.(type) {
@@ -327,7 +337,7 @@ func NewLogger() *slog.Logger {
 	logFilePath = filepath.Join(logDir, appName+".log")
 
 	// Open file in Append mode
-	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 	}

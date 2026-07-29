@@ -4,13 +4,32 @@ package commands
 
 // Def holds metadata for a single CLI command flag.
 // SessionLocked: blocks the command when a TUI session is active.
-// ConsoleSafe: the command can be run from the console panel input bar.
+// ConsoleSafe: the command can be run from the restricted console panel
+// input bar (unenforced in System Console, which allows any ds2 command).
+// ConsoleBlocked: the command can never be run from EITHER console panel
+// mode, System Console included, regardless of sudo -- for commands that
+// would disrupt or restart the very process serving the console session
+// (re-exec, launching another daemon, etc.), not just ones that need
+// elevated trust. Currently these have no commands.Execute dispatch case at
+// all (they're handled elsewhere, e.g. cmd/executor.go's startup-flag path),
+// so this is a deliberate guard against a future case being added there
+// without anyone reconsidering console-safety.
+// RequiresSudo: the command requires a fresh sudo re-verification when run
+// from a remote System Console session (local sessions and the restricted
+// Console mode are unaffected -- ConsoleSafe already gates the latter). For
+// ConsoleSafe commands whose action isn't already reachable unrestricted
+// through the normal TUI menus for any authenticated remote user -- e.g. one
+// that redirects a trusted path (config/compose folder) to somewhere an
+// attacker controls, rather than a routine app/config operation the menus
+// already permit freely.
 // ConfigChanging: after running, the TUI should reload config/styles (ConfigChangedMsg).
 // AppsChanging: after running, the TUI should refresh the app list (RefreshAppsListMsg).
 type Def struct {
 	Title          string
 	SessionLocked  bool
 	ConsoleSafe    bool
+	ConsoleBlocked bool
+	RequiresSudo   bool
 	ConfigChanging bool
 	AppsChanging   bool
 }
@@ -53,9 +72,9 @@ var Registry = map[string]Def{
 	"--theme-table":             {Title: "List Themes", ConsoleSafe: true},
 	"--theme-extract":           {Title: "Extract Theme", ConsoleSafe: true},
 	"--theme-extract-all":       {Title: "Extract All Themes", ConsoleSafe: true},
-	"--server":                  {Title: "Server Management"}, // needs serve package — not console-safe
-	"--server-daemon":           {Title: "Server Daemon"},     // launches daemon — not console-safe
-	"--disconnect":              {Title: "Disconnect Session"},
+	"--server":                  {Title: "Server Management", ConsoleBlocked: true},
+	"--server-daemon":           {Title: "Server Daemon", ConsoleBlocked: true},
+	"--disconnect":              {Title: "Disconnect Session", ConsoleBlocked: true},
 
 	// ── Session-locked (modifies env files / shared state) ────────────────────
 	"-a":                         {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
@@ -92,17 +111,17 @@ var Registry = map[string]Def{
 	"--start-edit-global":        {Title: "Edit Global Variables", ConsoleSafe: true}, // launches TUI; edit lock handles conflicts
 	"--edit-app":                 {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
 	"--start-edit-app":           {Title: "Edit App Variables", ConsoleSafe: true},    // launches TUI; edit lock handles conflicts
-	"--setcap":                   {Title: "Grant File Capabilities"},                  // may re-exec the process — not console-safe
-	"--config-setcap":            {Title: "Enable File Capabilities"},                 // may re-exec the process — not console-safe
-	"--config-no-setcap":         {Title: "Disable File Capabilities"},
+	"--setcap":                   {Title: "Grant File Capabilities", ConsoleBlocked: true},
+	"--config-setcap":            {Title: "Enable File Capabilities", ConsoleBlocked: true},
+	"--config-no-setcap":         {Title: "Disable File Capabilities", ConsoleBlocked: true},
 	"--config-pm":                {Title: "Select Package Manager", ConsoleSafe: true},
 	"--config-pm-auto":           {Title: "Select Package Manager", ConsoleSafe: true},
 	"--config-pm-list":           {Title: "List Known Package Managers", ConsoleSafe: true},
 	"--config-pm-table":          {Title: "List Known Package Managers", ConsoleSafe: true},
 	"--config-pm-existing-list":  {Title: "List Existing Package Managers", ConsoleSafe: true},
 	"--config-pm-existing-table": {Title: "List Existing Package Managers", ConsoleSafe: true},
-	"--config-folder":            {Title: "Set Config Folder", SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
-	"--config-compose-folder":    {Title: "Set Compose Folder", SessionLocked: true, ConsoleSafe: true, ConfigChanging: true},
+	"--config-folder":            {Title: "Set Config Folder", SessionLocked: true, ConsoleSafe: true, ConfigChanging: true, RequiresSudo: true},
+	"--config-compose-folder":    {Title: "Set Compose Folder", SessionLocked: true, ConsoleSafe: true, ConfigChanging: true, RequiresSudo: true},
 	"-T":                         {Title: "Set Theme", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme":                    {Title: "Set Theme", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-shadows":            {Title: "Turning on shadows.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
@@ -143,12 +162,26 @@ var Registry = map[string]Def{
 	"--theme-no-show-preview":    {Title: "Hiding the Appearance Settings preview panel by default.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-menu-brackets":   {Title: "Turning off menu brackets.", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-tab-layout":         {Title: "Set Tab Layout", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
-	"--config-panel":             {Title: "Set Panel Mode", ConfigChanging: true},
+	"--config-panel":             {Title: "Set Panel Mode", ConfigChanging: true, ConsoleBlocked: true},
 }
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.
 func IsConsoleSafe(flag string) bool {
 	return Registry[flag].ConsoleSafe
+}
+
+// IsRequiresSudo reports whether a command flag needs a fresh sudo
+// re-verification when run from a remote System Console session -- see
+// Def's RequiresSudo doc comment.
+func IsRequiresSudo(flag string) bool {
+	return Registry[flag].RequiresSudo
+}
+
+// IsConsoleBlocked reports whether a command flag can never be run from
+// either console panel mode (restricted Console or System Console),
+// regardless of sudo verification -- see Def's ConsoleBlocked doc comment.
+func IsConsoleBlocked(flag string) bool {
+	return Registry[flag].ConsoleBlocked
 }
 
 // IsSessionLocked reports whether a command flag requires an inactive TUI session.
