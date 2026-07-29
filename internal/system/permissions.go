@@ -175,6 +175,31 @@ func TakeOwnership(ctx context.Context, path string) {
 	}
 }
 
+// HardenOwnPath chmods a single file or directory DS2 itself owns (config,
+// state, logs, host key) to mode, unconditionally, every startup, so it
+// stays correct regardless of what created or last touched it. Unlike
+// SetPermissions/TakeOwnership, this never touches ownership -- these paths
+// are always owned by whoever is running DS2, never a docker app's
+// puid:pgid -- and isn't about matching bash's set_permissions.sh convention.
+func HardenOwnPath(ctx context.Context, path string, mode os.FileMode) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if path == "" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if info.Mode().Perm() == mode.Perm() {
+		return
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		logger.Warn(ctx, "Could not restrict permissions of '"+console.FormatFolderPath(path)+"': %v", err)
+	}
+}
+
 // GetIDs returns the PUID and PGID detected from environment variables (SUDO_UID/SUDO_GID) or os package.
 // Mirrors Bash: DETECTED_PUID=${SUDO_UID:-$UID} and DETECTED_PGID=$(id -g "${DETECTED_PUID}")
 func GetIDs() (int, int) {

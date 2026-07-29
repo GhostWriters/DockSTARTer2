@@ -398,7 +398,7 @@ func LoadAppConfig() AppConfig {
 		}
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := os.MkdirAll(dir, 0700); err != nil {
 				logger.FatalWithStack(context.Background(), []string{
 					"Failed to create config folder.",
 					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
@@ -410,13 +410,13 @@ func LoadAppConfig() AppConfig {
 		_ = toml.Unmarshal(defaultConfigBytes(), &baseline)
 		if reflect.DeepEqual(migrated, baseline) {
 			// Unchanged from pristine defaults -- keep the file's comments.
-			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
+			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
 			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
 		} else if merged, err := toml.Marshal(migrated); err == nil {
-			_ = os.WriteFile(cfgPath, merged, 0644)
+			_ = os.WriteFile(cfgPath, merged, 0600)
 			logNotice(context.Background(), "Writing migrated configuration to '"+console.FormatFilePath(cfgPath)+"'.")
 		} else {
-			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0644)
+			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
 			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
 		}
 
@@ -453,7 +453,7 @@ func LoadAppConfig() AppConfig {
 	// Existing config file could not be parsed even robustly (corrupt file).
 	// Fall back to the embedded defaults, preserving comments, without going
 	// through the migration/theme-overlay flow (there's nothing to migrate).
-	_ = os.WriteFile(path, defaultConfigBytes(), 0644)
+	_ = os.WriteFile(path, defaultConfigBytes(), 0600)
 	logNotice(context.Background(), "Config file at '"+console.FormatFilePath(path)+"' could not be parsed; reset to embedded defaults.")
 	sanitizeConfig(context.Background(), &conf)
 	conf.RawPaths = conf.Paths
@@ -509,7 +509,7 @@ func SaveAppConfig(conf AppConfig) error {
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
 			logger.FatalWithStack(context.Background(), []string{
 				"Failed to create config folder.",
 				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
@@ -537,7 +537,7 @@ func SaveAppConfig(conf AppConfig) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // UnmarshalRobust unmarshals TOML data into a struct using mapstructure

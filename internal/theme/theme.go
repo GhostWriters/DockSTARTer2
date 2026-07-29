@@ -147,7 +147,7 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 		}
 		if _, err := os.Stat(paths.GetStateDir()); os.IsNotExist(err) {
 			logger.Info(context.Background(), "Creating folder '"+console.FormatFolderPath(paths.GetStateDir())+"'.")
-			if err := os.MkdirAll(paths.GetStateDir(), 0755); err != nil {
+			if err := os.MkdirAll(paths.GetStateDir(), 0700); err != nil {
 				logger.FatalWithStack(context.Background(), []string{
 					"Failed to create folder.",
 					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",

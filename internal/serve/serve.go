@@ -124,6 +124,13 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 		return fmt.Errorf("creating SSH server: %w", err)
 	}
 
+	// wish.WithHostKeyPath generates the key file itself (on first run) but
+	// doesn't guarantee restrictive permissions on it -- pin them explicitly
+	// rather than relying on the library's default or the OS umask.
+	if err := os.Chmod(hostKeyPath, 0600); err != nil {
+		logger.Warn(ctx, "Could not restrict host key file permissions: %v", err)
+	}
+
 	logger.Notice(ctx, "SSH server started on port %d", cfg.SSH.Port)
 
 	webPort := 0

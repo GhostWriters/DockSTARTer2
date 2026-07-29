@@ -139,12 +139,27 @@ func run() (exitCode int) {
 	theme.EmbeddedThemeReader = assets.GetTheme
 
 	// Apply spinner/line-char config early so spinner works during startup log messages.
+	var earlyConf config.AppConfig
 	{
-		earlyConf := config.LoadAppConfig()
+		earlyConf = config.LoadAppConfig()
 		console.LineCharacters = earlyConf.UI.LineCharacters
 		console.SpinnerEnabled = earlyConf.UI.Spinner
 		console.SpinnerSpeed = earlyConf.UI.SpinnerSpeed
 	}
+
+	// Re-tighten permissions on DS2's own config/state/log files every
+	// startup, not just at creation time, so they stay correct regardless
+	// of what created or last touched them.
+	hostKeyPath := earlyConf.Server.HostKey
+	if hostKeyPath == "" {
+		hostKeyPath = filepath.Join(paths.GetStateDir(), "server_host_key")
+	}
+	system.HardenOwnPath(context.Background(), paths.GetStateDir(), 0700)
+	system.HardenOwnPath(context.Background(), paths.GetConfigDir(), 0700)
+	system.HardenOwnPath(context.Background(), paths.GetConfigFilePath(), 0600)
+	system.HardenOwnPath(context.Background(), logger.GetLogFilePath(), 0600)
+	system.HardenOwnPath(context.Background(), logger.GetFatalLogFilePath(), 0600)
+	system.HardenOwnPath(context.Background(), hostKeyPath, 0600)
 
 	// Start the CLI viewport — a fixed-height scrolling region that all console
 	// output flows through. Only active in TTY CLI mode (not TUI, not piped).
@@ -201,7 +216,7 @@ func run() (exitCode int) {
 	themesDir := paths.GetThemesDir()
 	if _, err := os.Stat(themesDir); os.IsNotExist(err) {
 		logger.Info(ctx, "Creating folder '"+console.FormatFolderPath(themesDir)+"'.")
-		if err := os.MkdirAll(themesDir, 0755); err != nil {
+		if err := os.MkdirAll(themesDir, 0700); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
 				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
@@ -214,9 +229,9 @@ func run() (exitCode int) {
 	procsDir := filepath.Join(paths.GetLocksDir(), "procs")
 	versionsDir := filepath.Join(paths.GetLocksDir(), "versions")
 	sessionsDir := filepath.Join(paths.GetLocksDir(), "sessions")
-	_ = os.MkdirAll(procsDir, 0755)
-	_ = os.MkdirAll(versionsDir, 0755)
-	_ = os.MkdirAll(sessionsDir, 0755)
+	_ = os.MkdirAll(procsDir, 0700)
+	_ = os.MkdirAll(versionsDir, 0700)
+	_ = os.MkdirAll(sessionsDir, 0700)
 
 	// Register this process so other instances can see it in startup warnings.
 	exePath := sessionlocks.ResolvedExePath()

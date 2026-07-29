@@ -17,6 +17,37 @@ import (
 	"github.com/charmbracelet/ssh"
 )
 
+// ds2TrustEnvPrefixes are the env vars DS2 itself sets to convey trusted
+// facts about a session (connection type, client IP, session/token
+// identity) -- never values a client should be able to supply itself via
+// SSH env forwarding.
+var ds2TrustEnvPrefixes = []string{
+	"DS2_CONN_TYPE=",
+	"DS2_CLIENT_IP=",
+	"DS2_SESSION_ID=",
+	"DS2_WEB_TOKEN=",
+}
+
+// stripDS2TrustEnv drops any entries matching ds2TrustEnvPrefixes from a
+// client-supplied environment, so the real values DS2 appends afterward
+// can't be shadowed or duplicated by something the client requested.
+func stripDS2TrustEnv(environ []string) []string {
+	filtered := make([]string, 0, len(environ))
+	for _, env := range environ {
+		trusted := false
+		for _, prefix := range ds2TrustEnvPrefixes {
+			if strings.HasPrefix(env, prefix) {
+				trusted = true
+				break
+			}
+		}
+		if !trusted {
+			filtered = append(filtered, env)
+		}
+	}
+	return filtered
+}
+
 // tuiMiddleware returns a wish middleware that runs the DS2 TUI for each
 // incoming SSH session.
 func tuiMiddleware(startMenu string) wish.Middleware {
@@ -24,19 +55,28 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 		return func(s ssh.Session) {
 			ctx := s.Context()
 
+			// DS2_CLIENT_IP and DS2_WEB_TOKEN are trust markers DS2's own
+			// internal web-proxy connection sets (see web_handler.go's
+			// Setenv calls) -- only honor them from that connection
+			// (s.User() == "web"). A plain SSH client injecting its own
+			// DS2_WEB_TOKEN could otherwise hook into another session's
+			// live web-proxy channel (webmsg.Get(webToken) below), and a
+			// forged DS2_CLIENT_IP could poison session logs/registry with
+			// a fake address.
+			isWebProxy := s.User() == "web"
 			clientIP := formatIP(s.RemoteAddr().String())
 			userAgent := ""
 			termProgram := ""
 			webToken := ""
 			for _, env := range s.Environ() {
 				switch {
-				case strings.HasPrefix(env, "DS2_CLIENT_IP="):
+				case isWebProxy && strings.HasPrefix(env, "DS2_CLIENT_IP="):
 					clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
 				case strings.HasPrefix(env, "DS2_USER_AGENT="):
 					userAgent = strings.TrimPrefix(env, "DS2_USER_AGENT=")
 				case strings.HasPrefix(env, "TERM_PROGRAM="):
 					termProgram = strings.TrimPrefix(env, "TERM_PROGRAM=")
-				case strings.HasPrefix(env, "DS2_WEB_TOKEN="):
+				case isWebProxy && strings.HasPrefix(env, "DS2_WEB_TOKEN="):
 					webToken = strings.TrimPrefix(env, "DS2_WEB_TOKEN=")
 				}
 			}
@@ -68,7 +108,7 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			// same as DS2_CLIENT_IP below.
 			connType := "SSH"
 			var terminal string
-			if s.User() == "web" {
+			if isWebProxy {
 				connType = "Web"
 				terminal = simplifyUserAgent(userAgent)
 			} else {
@@ -82,11 +122,19 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType, terminal)
 			defer sessionlocks.Sessions.UnregisterSession(sessionID)
 
-			envs := s.Environ()
+			// DS2's own trust markers (connection type/identity, consumed by
+			// parseClientInfo to decide local vs. remote and gate
+			// remote-only features like System Console) must never be
+			// satisfiable by whatever the client itself requested via SSH
+			// env forwarding -- discard any client-supplied copies before
+			// appending the real ones below, rather than relying solely on
+			// DS2's own entries coming last (append order happens to make
+			// this safe today, but that's incidental, not guaranteed).
+			envs := stripDS2TrustEnv(s.Environ())
 			envs = append(envs, "TERM="+ptyReq.Term)
 			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
 			envs = append(envs, "DS2_SESSION_ID="+sessionID)
-			if s.User() != "web" {
+			if !isWebProxy {
 				envs = append(envs, "DS2_CONN_TYPE=ssh-server")
 			}
 			opts := tui.ProgramOptions{
