@@ -570,6 +570,38 @@ func CurrentConfig() config.AppConfig {
 	return currentConfig
 }
 
+// hasHardResetField reports whether tagName's raw fg:bg:flags code has an
+// explicit "~" in the given field index (0 = fg, 1 = bg) -- semstyle's
+// "defer entirely to the real terminal" marker. A lipgloss.NoColor{} alone
+// can't distinguish that deliberate choice from a theme simply never
+// specifying a color there (both resolve to the same zero value), so
+// styleWithFallback consults the raw code directly instead.
+func hasHardResetField(tagName string, field int) bool {
+	parts := strings.Split(semstyle.GetRawTagCode(tagName), ":")
+	return field < len(parts) && parts[field] == "~"
+}
+
+// styleWithFallback resolves tagName the same way SemanticRawStyle does,
+// filling in fallback's foreground and/or background on whichever channel
+// tagName leaves unset -- unless the theme explicitly authored a hard reset
+// ("~") on that channel, which must stay truly unset rather than silently
+// inheriting a color the author opted out of. Every interior dialog element
+// this is used for (buttons, icons, tags, items) always sits against a
+// themed background, so an unset foreground has no plausible reason to fall
+// through to the raw terminal default instead of matching fallback's own
+// foreground -- unlike ProgramBox's "~" fallback, which deliberately wants
+// the real terminal's own colors.
+func styleWithFallback(tagName string, fallback lipgloss.Style) lipgloss.Style {
+	style := SemanticRawStyle(tagName)
+	if _, noBG := style.GetBackground().(lipgloss.NoColor); noBG && !hasHardResetField(tagName, 1) {
+		style = style.Background(fallback.GetBackground())
+	}
+	if _, noFG := style.GetForeground().(lipgloss.NoColor); noFG && !hasHardResetField(tagName, 0) {
+		style = style.Foreground(fallback.GetForeground())
+	}
+	return style
+}
+
 // InitStyles initializes lipgloss styles from the current theme
 func InitStyles(cfg config.AppConfig) {
 	// Clear the semantic style cache to ensure real-time visual updates on theme swap
@@ -627,119 +659,36 @@ func InitStyles(cfg config.AppConfig) {
 
 	// Buttons (spacing handled at layout level)
 	// lipgloss v2 GetBackground() returns NoColor{} (never nil) for unset colors.
-	// Use type assertion to detect truly unset backgrounds and fall back to DialogBG.
-	CurrentStyles.ButtonActive = SemanticRawStyle("ButtonActive")
-	if _, noBG := CurrentStyles.ButtonActive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ButtonActive = CurrentStyles.ButtonActive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-
-	CurrentStyles.ButtonInactive = SemanticRawStyle("ButtonInactive")
-	if _, noBG := CurrentStyles.ButtonInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ButtonInactive = CurrentStyles.ButtonInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
+	// Use type assertion to detect truly unset colors and fall back to Dialog's.
+	CurrentStyles.ButtonActive = styleWithFallback("ButtonActive", CurrentStyles.Dialog)
+	CurrentStyles.ButtonInactive = styleWithFallback("ButtonInactive", CurrentStyles.Dialog)
 
 	// Title bar icon widgets
-	CurrentStyles.IconFocused = SemanticRawStyle("IconFocused")
-	if _, noBG := CurrentStyles.IconFocused.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconFocused = CurrentStyles.IconFocused.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconPressed = SemanticRawStyle("IconPressed")
-	if _, noBG := CurrentStyles.IconPressed.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconPressed = CurrentStyles.IconPressed.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconInactive = SemanticRawStyle("IconInactive")
-	if _, noBG := CurrentStyles.IconInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconInactive = CurrentStyles.IconInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconHelpInactive = SemanticRawStyle("IconHelpInactive")
-	if _, noBG := CurrentStyles.IconHelpInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconHelpInactive = CurrentStyles.IconHelpInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconRefreshInactive = SemanticRawStyle("IconRefreshInactive")
-	if _, noBG := CurrentStyles.IconRefreshInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconRefreshInactive = CurrentStyles.IconRefreshInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconExitInactive = SemanticRawStyle("IconExitInactive")
-	if _, noBG := CurrentStyles.IconExitInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconExitInactive = CurrentStyles.IconExitInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconResizeUpInactive = SemanticRawStyle("IconResizeUpInactive")
-	if _, noBG := CurrentStyles.IconResizeUpInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconResizeUpInactive = CurrentStyles.IconResizeUpInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.IconResizeDnInactive = SemanticRawStyle("IconResizeDnInactive")
-	if _, noBG := CurrentStyles.IconResizeDnInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.IconResizeDnInactive = CurrentStyles.IconResizeDnInactive.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	CurrentStyles.ButtonKeyActive = SemanticRawStyle("ButtonKeyActive")
-	if _, noBG := CurrentStyles.ButtonKeyActive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ButtonKeyActive = CurrentStyles.ButtonKeyActive.Background(CurrentStyles.ButtonActive.GetBackground())
-	}
-	CurrentStyles.ButtonKeyInactive = SemanticRawStyle("ButtonKeyInactive")
-	if _, noBG := CurrentStyles.ButtonKeyInactive.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ButtonKeyInactive = CurrentStyles.ButtonKeyInactive.Background(CurrentStyles.ButtonInactive.GetBackground())
-	}
+	CurrentStyles.IconFocused = styleWithFallback("IconFocused", CurrentStyles.Dialog)
+	CurrentStyles.IconPressed = styleWithFallback("IconPressed", CurrentStyles.Dialog)
+	CurrentStyles.IconInactive = styleWithFallback("IconInactive", CurrentStyles.Dialog)
+	CurrentStyles.IconHelpInactive = styleWithFallback("IconHelpInactive", CurrentStyles.Dialog)
+	CurrentStyles.IconRefreshInactive = styleWithFallback("IconRefreshInactive", CurrentStyles.Dialog)
+	CurrentStyles.IconExitInactive = styleWithFallback("IconExitInactive", CurrentStyles.Dialog)
+	CurrentStyles.IconResizeUpInactive = styleWithFallback("IconResizeUpInactive", CurrentStyles.Dialog)
+	CurrentStyles.IconResizeDnInactive = styleWithFallback("IconResizeDnInactive", CurrentStyles.Dialog)
+	CurrentStyles.ButtonKeyActive = styleWithFallback("ButtonKeyActive", CurrentStyles.ButtonActive)
+	CurrentStyles.ButtonKeyInactive = styleWithFallback("ButtonKeyInactive", CurrentStyles.ButtonInactive)
 
 	// List items
-	CurrentStyles.ItemNormal = SemanticRawStyle("Item")
-	if _, noBG := CurrentStyles.ItemNormal.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ItemNormal = CurrentStyles.ItemNormal.Background(CurrentStyles.Dialog.GetBackground())
-	}
-
-	CurrentStyles.ItemFocused = SemanticRawStyle("ItemFocused")
-	if _, noBG := CurrentStyles.ItemFocused.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ItemFocused = CurrentStyles.ItemFocused.Background(CurrentStyles.Dialog.GetBackground())
-	}
-
-	CurrentStyles.OptionValueFocused = SemanticRawStyle("OptionValueFocused")
-	if _, noBG := CurrentStyles.OptionValueFocused.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.OptionValueFocused = CurrentStyles.OptionValueFocused.Background(CurrentStyles.Dialog.GetBackground())
-	}
+	CurrentStyles.ItemNormal = styleWithFallback("Item", CurrentStyles.Dialog)
+	CurrentStyles.ItemFocused = styleWithFallback("ItemFocused", CurrentStyles.Dialog)
+	CurrentStyles.OptionValueFocused = styleWithFallback("OptionValueFocused", CurrentStyles.Dialog)
 
 	// Tags
-	CurrentStyles.TagNormal = SemanticRawStyle("Tag")
-	if _, noBG := CurrentStyles.TagNormal.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.TagNormal = CurrentStyles.TagNormal.Background(CurrentStyles.Dialog.GetBackground())
-	}
+	CurrentStyles.TagNormal = styleWithFallback("Tag", CurrentStyles.Dialog)
+	CurrentStyles.TagFocused = styleWithFallback("TagFocused", CurrentStyles.Dialog)
+	CurrentStyles.TagKey = styleWithFallback("TagKey", CurrentStyles.Dialog)
+	CurrentStyles.TagKeyFocused = styleWithFallback("TagKeyFocused", CurrentStyles.Dialog)
+	CurrentStyles.TagSpinner = styleWithFallback("TagSpinner", CurrentStyles.Dialog)
 
-	CurrentStyles.TagFocused = SemanticRawStyle("TagFocused")
-	if _, noBG := CurrentStyles.TagFocused.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.TagFocused = CurrentStyles.TagFocused.Background(CurrentStyles.Dialog.GetBackground())
-	}
-
-	CurrentStyles.TagKey = SemanticRawStyle("TagKey")
-	if _, noBG := CurrentStyles.TagKey.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.TagKey = CurrentStyles.TagKey.Background(CurrentStyles.Dialog.GetBackground())
-	}
-
-	CurrentStyles.TagKeyFocused = SemanticRawStyle("TagKeyFocused")
-	if _, noBG := CurrentStyles.TagKeyFocused.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.TagKeyFocused = CurrentStyles.TagKeyFocused.Background(CurrentStyles.Dialog.GetBackground())
-	}
-
-	CurrentStyles.TagSpinner = SemanticRawStyle("TagSpinner")
-	if _, noBG := CurrentStyles.TagSpinner.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.TagSpinner = CurrentStyles.TagSpinner.Background(CurrentStyles.Dialog.GetBackground())
-	}
-	if _, noFG := CurrentStyles.TagSpinner.GetForeground().(lipgloss.NoColor); noFG {
-		CurrentStyles.TagSpinner = CurrentStyles.TagSpinner.Foreground(CurrentStyles.Dialog.GetForeground())
-	}
-
-	CurrentStyles.ButtonSpinner = SemanticRawStyle("ButtonSpinner")
-	if _, noBG := CurrentStyles.ButtonSpinner.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.ButtonSpinner = CurrentStyles.ButtonSpinner.Background(CurrentStyles.ButtonActive.GetBackground())
-	}
-	if _, noFG := CurrentStyles.ButtonSpinner.GetForeground().(lipgloss.NoColor); noFG {
-		CurrentStyles.ButtonSpinner = CurrentStyles.ButtonSpinner.Foreground(CurrentStyles.ButtonActive.GetForeground())
-	}
-
-	CurrentStyles.LargeButtonSpinner = SemanticRawStyle("LargeButtonSpinner")
-	if _, noBG := CurrentStyles.LargeButtonSpinner.GetBackground().(lipgloss.NoColor); noBG {
-		CurrentStyles.LargeButtonSpinner = CurrentStyles.LargeButtonSpinner.Background(CurrentStyles.ButtonActive.GetBackground())
-	}
-	if _, noFG := CurrentStyles.LargeButtonSpinner.GetForeground().(lipgloss.NoColor); noFG {
-		CurrentStyles.LargeButtonSpinner = CurrentStyles.LargeButtonSpinner.Foreground(CurrentStyles.ButtonActive.GetForeground())
-	}
+	CurrentStyles.ButtonSpinner = styleWithFallback("ButtonSpinner", CurrentStyles.ButtonActive)
+	CurrentStyles.LargeButtonSpinner = styleWithFallback("LargeButtonSpinner", CurrentStyles.ButtonActive)
 
 	// Header / Status Bar
 	CurrentStyles.StatusBar = SemanticRawStyle("StatusBar")

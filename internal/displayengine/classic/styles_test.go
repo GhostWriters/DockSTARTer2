@@ -3,6 +3,10 @@ package classic
 import (
 	"strings"
 	"testing"
+
+	semstyle "github.com/GhostWriters/semstyle/lg"
+
+	"charm.land/lipgloss/v2"
 )
 
 func TestStripHyperlinks(t *testing.T) {
@@ -124,4 +128,33 @@ func TestHyperlinkPathMultiSegment(t *testing.T) {
 	if strings.Count(joined, "\x1b]8;;") != 6 { // 1 open + 1 close per segment, 3 segments
 		t.Errorf("expected three independent hyperlink spans, got: %q", joined)
 	}
+}
+
+func TestStyleWithFallbackHonorsHardReset(t *testing.T) {
+	semstyle.RegisterThemeTagRaw("dialog", "black:cyan:")
+	fallback := SemanticRawStyle("Dialog")
+
+	t.Run("unset channel inherits fallback", func(t *testing.T) {
+		ClearSemanticCache()
+		semstyle.RegisterThemeTagRaw("item", "white::")
+		got := styleWithFallback("Item", fallback)
+		if _, noBG := got.GetBackground().(lipgloss.NoColor); noBG {
+			t.Error("expected an unset background to inherit fallback's, got NoColor")
+		}
+		if got.GetBackground() != fallback.GetBackground() {
+			t.Errorf("background = %v, want fallback's %v", got.GetBackground(), fallback.GetBackground())
+		}
+	})
+
+	t.Run("explicit hard reset stays unset", func(t *testing.T) {
+		ClearSemanticCache()
+		semstyle.RegisterThemeTagRaw("item", "~:~:")
+		got := styleWithFallback("Item", fallback)
+		if _, noBG := got.GetBackground().(lipgloss.NoColor); !noBG {
+			t.Errorf("expected an explicit ~ background to stay unset, got %v (fallback's own)", got.GetBackground())
+		}
+		if _, noFG := got.GetForeground().(lipgloss.NoColor); !noFG {
+			t.Errorf("expected an explicit ~ foreground to stay unset, got %v (fallback's own)", got.GetForeground())
+		}
+	})
 }
