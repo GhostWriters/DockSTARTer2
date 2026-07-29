@@ -13,8 +13,9 @@ import (
 // dialog resorts to squeezing it -- e.g. one whose own children have a
 // cheaper internal degradation path (a child that scrolls, or its own
 // floor) that should be exhausted first. See calculateSectionLayout's
-// buttonThreshold, which flattens the button row -- a purely cosmetic loss
-// -- before squeezing such a section below what it reports here.
+// expandableComfortThreshold, which drops the large title bar and flattens
+// the button row -- both purely cosmetic losses -- before squeezing such a
+// section below what it reports here.
 type ComfortableMinHeight interface {
 	ComfortableMinHeight() int
 }
@@ -462,13 +463,36 @@ func (m *MenuModel) SetMaxFlowRows(n int) {
 	m.MaxFlowRows = n
 }
 
-// largeTitleBarMinRemaining is the minimum rows that must remain in a
-// section-layout budget (after subtracting LargeTitleBarOverhead) for
-// calculateSectionLayout's DecideLargeTitleBar call to choose large. Kept as
-// a named constant, referenced by both calculateSectionLayout and
-// LargeTitleBarBudget, so the two can never drift out of sync the way the
-// web-display dialog's hand-rolled height budget once did.
-const largeTitleBarMinRemaining = 3
+// minExpandable is the default floor for expandableComfortThreshold when no
+// content section defines a larger ComfortableMinHeight.
+const minExpandable = 4
+
+// expandableComfortThreshold is the minimum rows an expandable content
+// section wants left over before either the title bar or the button row is
+// allowed to keep its own overhead -- calculateSectionLayout's shared floor
+// for both decisions, and LargeTitleBarBudget's, so the two can never drift
+// out of sync the way the web-display dialog's hand-rolled height budget
+// once did. Defaults to minExpandable, raised by any section's own
+// ComfortableMinHeight (e.g. a scrollable list that wants more breathing
+// room than the generic default). With no expandable sections there's
+// nothing to protect, so this relaxes to 0.
+func (m *MenuModel) expandableComfortThreshold(expandableCount int) int {
+	if expandableCount == 0 {
+		return 0
+	}
+	threshold := minExpandable
+	for _, sec := range m.contentSections {
+		if !sec.IsVariableHeight() {
+			continue
+		}
+		if ch, ok := sec.(ComfortableMinHeight); ok {
+			if want := ch.ComfortableMinHeight(); want > threshold {
+				threshold = want
+			}
+		}
+	}
+	return threshold
+}
 
 // LargeTitleBarBudget returns the extra height (beyond whatever this menu's
 // content sections and buttons already need) a caller must add when sizing
@@ -476,18 +500,16 @@ const largeTitleBarMinRemaining = 3
 // DecideLargeTitleBar check will choose a large title bar. Use this instead
 // of hand-adding LargeTitleBarOverhead when pre-computing a height to pass
 // into SetSize -- LargeTitleBarOverhead alone pays for the title bar's own
-// rows. When this menu has at least one expandable (variableHeight) content
-// section, DecideLargeTitleBar also requires largeTitleBarMinRemaining rows
-// of slack beyond that to protect that section's breathing room; with no
-// expandable sections there's nothing to protect, so calculateSectionLayout
-// relaxes that requirement to 0 and this mirrors it -- see calculateSectionLayout.
+// rows; DecideLargeTitleBar also requires expandableComfortThreshold rows of
+// slack beyond that, so this must add the same to match.
 func (m *MenuModel) LargeTitleBarBudget() int {
+	expandableCount := 0
 	for _, sec := range m.contentSections {
 		if sec.IsVariableHeight() {
-			return LargeTitleBarOverhead + largeTitleBarMinRemaining
+			expandableCount++
 		}
 	}
-	return LargeTitleBarOverhead
+	return LargeTitleBarOverhead + m.expandableComfortThreshold(expandableCount)
 }
 
 // SectionHeight returns how many rows this MenuModel would occupy as a
@@ -719,7 +741,7 @@ func (m *MenuModel) calculateSectionLayout() {
 		// expandable section, expandableNaturalTotal is its full unscrolled
 		// size, which is routinely bigger than the terminal by design (it's
 		// meant to scroll) -- naturalHeight > m.height there is normal and
-		// must not force flat buttons. The later remaining < buttonThreshold
+		// must not force flat buttons. The later remaining < comfortThreshold
 		// check (based on actual available space, not full natural size)
 		// still handles that case correctly.
 		if expandableCount == 0 && naturalHeight > m.height && m.showButtons && buttonHeight == DialogButtonHeight {
@@ -740,48 +762,25 @@ func (m *MenuModel) calculateSectionLayout() {
 
 	// Remaining height for expandable sections.
 	// Allocate every single remaining row to avoid gaps.
-	const minExpandable = 4
+	comfortThreshold := m.expandableComfortThreshold(expandableCount)
 
-	// Large titlebar: drop before buttons if space is tight. minRemaining
-	// protects an expandable section's breathing room; with no expandable
-	// sections there's nothing to protect, so only the title bar's own
-	// overhead needs to fit (same relaxation buttonThreshold applies above).
-	titleBarMinRemaining := largeTitleBarMinRemaining
-	if expandableCount == 0 {
-		titleBarMinRemaining = 0
-	}
+	// Large titlebar: drop before buttons if space is tight, using the same
+	// comfort floor buttons check below -- otherwise the title bar could
+	// keep its overhead using a much smaller, unrelated threshold while an
+	// expandable section (e.g. a scrollable list) still ends up squeezed
+	// well below what it actually needs.
 	enabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
-	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, titleBarMinRemaining)
+	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, comfortThreshold)
 	if useLargeTitleBar {
 		innerHeight -= LargeTitleBarOverhead
 	}
 
 	remaining := innerHeight - fixedTotal - buttonBudget
 
-	// Height-based button border fallback for maximized dialogs, or
-	// non-maximized dialogs with an expandable section: drop to flat only
-	// when expandable sections would have no room at all. An expandable
-	// section can raise this threshold via ComfortableMinHeight when it has
-	// its own cheaper internal degradation (e.g. a child that scrolls) it
-	// would rather use before being squeezed further -- flattening the
-	// button row first is a purely cosmetic loss, unlike clipping/over-
-	// scrolling that section's own content.
-	buttonThreshold := minExpandable
-	if expandableCount == 0 {
-		buttonThreshold = 0
-	} else {
-		for _, sec := range m.contentSections {
-			if !sec.IsVariableHeight() {
-				continue
-			}
-			if ch, ok := sec.(ComfortableMinHeight); ok {
-				if want := ch.ComfortableMinHeight(); want > buttonThreshold {
-					buttonThreshold = want
-				}
-			}
-		}
-	}
-	if m.showButtons && buttonHeight == DialogButtonHeight && remaining < buttonThreshold {
+	// Height-based button border fallback: drop to flat only when expandable
+	// sections would have no room at all (or less than their own comfort
+	// floor, per comfortThreshold above).
+	if m.showButtons && buttonHeight == DialogButtonHeight && remaining < comfortThreshold {
 		buttonHeight = 1
 		buttonBudget = 1
 		remaining = innerHeight - fixedTotal - buttonBudget
