@@ -1002,6 +1002,14 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		var sb strings.Builder
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
 		logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
+	} else if w := console.GetTUIWriter(ctx); w != nil {
+		// Route through the caller's writer (e.g. the console panel's pipe)
+		// instead of stdout -- fmt.Println would write straight to the real
+		// terminal, bypassing the TUI's own screen compositing entirely.
+		fmt.Fprintln(w, semstyle.ToANSI(title))
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
+		fmt.Fprintln(w, semstyle.ToANSI(sb.String()))
 	} else {
 		fmt.Println(semstyle.ToANSI(title))
 		var sb strings.Builder
