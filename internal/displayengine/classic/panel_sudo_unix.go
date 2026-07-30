@@ -8,21 +8,20 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// sudoWordRe matches the first standalone "sudo" word in a command string,
-// word-bounded so it doesn't match inside an unrelated word like "pseudo".
-var sudoWordRe = regexp.MustCompile(`\bsudo\b`)
-
-// runSudoWithPassword runs cmdStr with -S injected right after its own
-// leading "sudo", feeding the password to that single process via stdin, in
-// a new session (Setsid) with no controlling terminal (so it can't reach
-// for the TUI's own /dev/tty, which some sudo implementations -- notably
-// sudo-rs, now default on newer Ubuntu -- will still do despite -S).
+// runSudoWithPassword runs cmd under sudo, feeding the password to that
+// single process via stdin, in a new session (Setsid) with no controlling
+// terminal (so it can't reach for the TUI's own /dev/tty, which some sudo
+// implementations -- notably sudo-rs, now default on newer Ubuntu -- will
+// still do despite -S). DS2 always owns the sudo invocation now (cmd is a
+// raw shell command with no "sudo" of its own -- dispatchShellCommand's
+// blacklist guarantees that), so there's no need to find-and-inject -S into
+// a user-typed sudo; -p '' also suppresses sudo's own redundant password
+// prompt banner, since DS2 already showed its own password dialog.
 //
 // Stdout/Stderr are wired through a raw *os.File pipe we manage ourselves,
 // not a plain io.Writer. When Cmd.Stdout/Stderr are a plain io.Writer, Go
@@ -38,26 +37,18 @@ var sudoWordRe = regexp.MustCompile(`\bsudo\b`)
 // Using our own *os.File pipe decouples process-reaping (Wait, driven by
 // wait4() on the specific pid) from output-draining entirely, so a stray
 // pipe-holder can only leak our copy goroutine, not hang the command.
-func runSudoWithPassword(ctx context.Context, cmdStr, pass string, w io.Writer) error {
+func runSudoWithPassword(ctx context.Context, cmd, pass string, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	loc := sudoWordRe.FindStringIndex(cmdStr)
-	if loc == nil {
-		return fmt.Errorf("sudo: %q does not contain a standalone \"sudo\"", cmdStr)
-	}
-	// -p '' overrides sudo's own "[sudo] password for user:"-style prompt
-	// with an empty one -- DS2 already showed its own password dialog, so
-	// sudo's redundant prompt banner would otherwise still appear in the
-	// console panel's output.
-	withDashS := cmdStr[:loc[1]] + " -S -p ''" + cmdStr[loc[1]:]
+	withSudo := "sudo -S -p '' " + cmd
 
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return fmt.Errorf("sudo: failed to create output pipe: %w", err)
 	}
 
-	sudoCmd := exec.CommandContext(ctx, "sh", "-c", withDashS)
+	sudoCmd := exec.CommandContext(ctx, "sh", "-c", withSudo)
 	sudoCmd.Stdout = pw
 	sudoCmd.Stderr = pw
 	sudoCmd.Stdin = strings.NewReader(pass + "\n")

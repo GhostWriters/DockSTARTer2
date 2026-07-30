@@ -648,6 +648,12 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	{"HeadingValue", "Heading"},
 	{"HeadingAppDescription", "Heading"},
 	{"MarkerLocked", "MarkerInvalid"},
+	// PromptShell/PromptSudo style the console panel's input prompt while
+	// the user is typing a "!"/"!!" command (crush-style live feedback,
+	// see panel_render.go) -- Highlight for a plain shell command, the more
+	// alarming MarkerInvalid for one that will run under sudo.
+	{"PromptShell", "Highlight"},
+	{"PromptSudo", "MarkerInvalid"},
 	{"MarkerAdded", "Highlight"},
 	{"MarkerDeleted", "MarkerInvalid"},
 	{"MarkerModified", "Highlight"},
