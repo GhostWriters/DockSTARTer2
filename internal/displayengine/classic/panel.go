@@ -29,6 +29,20 @@ type TogglePanelMsg struct{}
 // ConsoleLinesMsg carries a batch of lines from a running console command.
 type ConsoleLinesMsg struct{ Lines []string }
 
+// ConsoleScannerReadyMsg hands a newly created scanner back to Update so it
+// can assign m.consoleScanner synchronously within an actual Update call.
+// PanelModel.Update has a value receiver, so a command that instead mutates
+// m.consoleScanner directly from inside a deferred closure (e.g. one that
+// blocks on a password prompt before setting up the pipe/scanner) mutates
+// an orphaned copy: Update already returned its own unmutated copy long
+// before the closure runs, and that's what got persisted back into
+// AppModel.panel. Confirmed live via trace logging -- the console panel
+// never repolls for more output because m.consoleScanner reads back nil.
+type ConsoleScannerReadyMsg struct {
+	Scanner *bufio.Scanner
+	Cancel  context.CancelFunc
+}
+
 // ConsoleLockMsg is sent by any long-running operation to lock or unlock the
 // console input bar. ID must be a unique identifier for the operation (e.g. a
 // UUID or stable name). Send Locked:true when starting, Locked:false when done.

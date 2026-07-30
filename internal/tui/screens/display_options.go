@@ -835,7 +835,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		isInteractive := strings.ToLower(currentMode) == "system" || strings.ToLower(currentMode) == "console"
 		confirmChange := func(mode string) tea.Cmd {
 			return func() tea.Msg {
-				if s.connType == "local" || !isInteractive {
+				if !console.RequiresRemoteSudoGate() || !isInteractive {
 					return applyChange(mode)()
 				}
 				title := "Disable Interactive Panel?"
@@ -890,7 +890,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 		// Always show in the dropdown, but require sudo auth if remote.
 		systemAction := func() tea.Msg {
 			// Warn and require sudo when enabling System Console for remote sessions.
-			if !isLocalSetting && s.connType != "local" {
+			if !isLocalSetting && console.RequiresRemoteSudoGate() {
 				title := "Enable Remote System Console?"
 				msg := "System Console grants full interactive shell access to all authenticated SSH and web users. Any command, including destructive ones, can be run.\n\nAre you sure you want to proceed?"
 				onConfirm := func() tea.Msg {

@@ -198,6 +198,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
+	case displayengine.ConsoleScannerReadyMsg:
+		updated, cmd := m.panel.Update(msg)
+		m.panel = updated.(displayengine.PanelModel)
+		return m, logger.BatchRecoverTUI(m.ctx, cmd)
+
 	case displayengine.ConsoleDoneMsg:
 		updated, cmd := m.panel.Update(msg)
 		m.panel = updated.(displayengine.PanelModel)
