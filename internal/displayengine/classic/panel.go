@@ -35,9 +35,8 @@ type ConsoleLinesMsg struct{ Lines []string }
 // m.consoleScanner directly from inside a deferred closure (e.g. one that
 // blocks on a password prompt before setting up the pipe/scanner) mutates
 // an orphaned copy: Update already returned its own unmutated copy long
-// before the closure runs, and that's what got persisted back into
-// AppModel.panel. Confirmed live via trace logging -- the console panel
-// never repolls for more output because m.consoleScanner reads back nil.
+// before the closure runs, and that copy -- not the mutated one -- is what
+// gets persisted back into AppModel.panel.
 type ConsoleScannerReadyMsg struct {
 	Scanner *bufio.Scanner
 	Cancel  context.CancelFunc

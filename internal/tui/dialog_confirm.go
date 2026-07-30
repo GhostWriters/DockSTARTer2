@@ -113,9 +113,14 @@ func (m *confirmDialogModel) IsMaximized() bool {
 	return m.outer.IsMaximized()
 }
 
-// SetFocused propagates focus state
+// SetFocused propagates focus state. ApplySectionFocus must be called after
+// SetFocused (see its doc comment) for the same reason dialog_prompt.go
+// does -- a no-op today since confirm dialogs have no focusable content
+// section, but keeps this in sync with the pattern other MenuModel-backed
+// dialogs use.
 func (m *confirmDialogModel) SetFocused(f bool) {
 	m.outer.SetFocused(f)
+	m.outer.ApplySectionFocus()
 }
 
 // Layers implements LayeredView for compositing

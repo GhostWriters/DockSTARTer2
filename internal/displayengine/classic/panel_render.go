@@ -10,6 +10,31 @@ import (
 
 // ─── View ─────────────────────────────────────────────────────────────────────
 
+// SyncInputPrompt recomputes and persists the console input's Prompt string
+// (see the switch in ViewString, which this duplicates -- same
+// hit-region/render duplication tradeoff already accepted elsewhere in this
+// package). Needs a pointer receiver: ViewString/GetInputCursor are both
+// value-receiver methods, so a mutation made inside either only affects its
+// own throwaway copy, never AppModel.panel itself -- GetInputCursor's cursor
+// math then reads a stale Prompt that doesn't match what's actually
+// rendered. Call this (via a real *PanelModel, i.e. &AppModel.panel) once
+// per frame before either of those run.
+func (m *PanelModel) SyncInputPrompt() {
+	if m.SessionActive() {
+		return
+	}
+	ctx := GetActiveContext()
+	typed := strings.TrimSpace(m.Input.Value())
+	switch {
+	case m.PanelMode == "system" && strings.HasPrefix(typed, "!!"):
+		m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!!>{{[-]}}", ctx.Dialog)
+	case m.PanelMode == "system" && strings.HasPrefix(typed, "!"):
+		m.Input.Prompt = RenderThemeText("{{|PromptShell|}} !>{{[-]}}", ctx.Dialog)
+	default:
+		m.Input.Prompt = RenderThemeText("{{|Prompt|}}  >{{[-]}}", ctx.Dialog)
+	}
+}
+
 func (m PanelModel) ViewString() string {
 	if m.Height() <= 0 {
 		return ""
@@ -63,18 +88,9 @@ func (m PanelModel) ViewString() string {
 		st.Focused.Placeholder = lipgloss.NewStyle()
 		st.Blurred.Placeholder = lipgloss.NewStyle()
 		m.Input.SetStyles(st)
-		// Live crush-style feedback for the "!"/"!!" shell/sudo prefixes
-		// (see submitConsoleCommand) -- only meaningful in System Console,
-		// where they're actually honored rather than rejected on submit.
-		typed := strings.TrimSpace(m.Input.Value())
-		switch {
-		case m.PanelMode == "system" && strings.HasPrefix(typed, "!!"):
-			m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!! {{[-]}}", ctx.Dialog)
-		case m.PanelMode == "system" && strings.HasPrefix(typed, "!"):
-			m.Input.Prompt = RenderThemeText("{{|PromptShell|}}! {{[-]}}", ctx.Dialog)
-		default:
-			m.Input.Prompt = "> "
-		}
+		// Prompt is already set by SyncInputPrompt, called once per frame
+		// before ViewString (see its doc comment for why it can't be set
+		// here instead).
 	}
 	inputTitleTag := "TitleSubMenu"
 	if m.InputFocused {

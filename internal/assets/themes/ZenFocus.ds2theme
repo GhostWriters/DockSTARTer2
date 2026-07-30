@@ -243,6 +243,9 @@ accent    = "$highlight"
   MarkerLocked            = "{{|MarkerInvalid|}}"
 # ButtonLockedMarker      = "{{|MarkerLocked|}}"
 # LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
+# Prompt                  = ""
+# PromptShell             = "{{|Highlight|}}"
+# PromptSudo              = "{{|MarkerInvalid|}}"
   TextCursor              = "{{[:$highlight:]}}"        # = "{{[-:-:R]}}"
 
 ## Scrollbar

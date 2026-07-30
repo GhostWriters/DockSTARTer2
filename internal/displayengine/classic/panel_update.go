@@ -391,25 +391,22 @@ func (m *PanelModel) runShellConsoleCommand(cmdStr, rawCmd string) tea.Cmd {
 
 // runSudoShellCommand runs rawCmd (already validated by
 // dispatchShellCommand: System Console only, no sudo/ds/ds2 words) under
-// sudo. Always prompts for the password rather than trying a "sudo -n true"
-// cache-check shortcut first: that check can return success (no password
-// needed) even when the real "-S" run moments later still requires one --
-// confirmed live, producing a fast "exit status 1" with no prompt ever
-// shown, rather than the hang it was meant to avoid. Re-entering an
-// already-valid password via -S is harmless, so always asking is simpler
-// and reliably correct.
+// sudo. Always prompts for the password rather than trusting a "sudo -n
+// true" cache-check: that check can succeed (no password needed) even when
+// the real "-S" run moments later still requires one, since sudo's cache
+// can go stale between the two checks. Re-entering an already-valid
+// password via -S is harmless, so always asking is simpler and reliably
+// correct.
 func (m *PanelModel) runSudoShellCommand(cmdStr, rawCmd string) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.ConsoleCancel = cancel
 	m.titleSpinner.Start()
 
-	// Not wrapped in tea.Batch -- confirmed live via goroutine dump that
-	// doing so leaves the console panel's read side never re-polling after
-	// the first line (the panel's own writer goroutine sits forever blocked
-	// on its second write, with no reader ever coming back for it): every
-	// other working path here either returns a bare closure or batches two
-	// genuinely distinct commands, never a single closure wrapped in Batch
-	// by itself.
+	// Returned as a bare closure, not wrapped in tea.Batch: every other
+	// working path here either returns a bare closure or batches two
+	// genuinely distinct commands. Wrapping a single closure in tea.Batch
+	// leaves the console panel's read side never re-polling after the
+	// first line, stalling the command permanently.
 	return func() tea.Msg {
 		var pass string
 		var err error
@@ -688,8 +685,9 @@ func (m PanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.Input.Blur()
 		m.InputFocused = false
 
-		// Show the submitted command in the scrollback.
-		m.Sv.AppendLines([]string{"> " + cmdStr}, panelRenderFn())
+		// Show the submitted command in the scrollback, matching the input
+		// prompt's own "text starts immediately after >" spacing.
+		m.Sv.AppendLines([]string{">" + cmdStr}, panelRenderFn())
 
 		return m, m.submitConsoleCommand(cmdStr)
 	}

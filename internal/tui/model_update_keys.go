@@ -14,6 +14,12 @@ import (
 )
 
 func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	// A modal dialog (anything but a non-blocking ProgramBox) owns all
+	// keyboard input while open -- mirrors updateComponentFocus's own
+	// panelBlockedByDialog distinction.
+	_, dialogIsProgramBox := m.dialog.(*ProgramBoxModel)
+	panelBlockedByDialog := m.dialog != nil && !dialogIsProgramBox
+
 	// Specialized Help Blockade
 	// If help is open, ANY key closes it and we return immediately to prevent leaks.
 	if m.dialog != nil {
@@ -209,7 +215,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Panel Title Bar Focus: keyboard resize actions.
-	if m.panelTitleFocused {
+	if m.panelTitleFocused && !panelBlockedByDialog {
 		if key.Matches(msg, displayengine.Keys.Esc) {
 			m.setPanelTitleFocus(false)
 			return m, nil, true
@@ -271,7 +277,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Focused Log Panel Actions
 	// When log panel is focused, it gets all scroll/navigation keys exclusively.
 	// We handle this AFTER global cycling (Tab/ShiftTab) so we don't trap those keys.
-	if m.panelFocused {
+	if m.panelFocused && !panelBlockedByDialog {
 		if m.panel.InputFocused {
 			// Physical Tab/Shift+Tab only (not "."/","): cycle back to viewport.
 			if kp, ok := msg.(tea.KeyPressMsg); ok && (kp.String() == "tab" || kp.String() == "shift+tab") {
