@@ -63,7 +63,18 @@ func (m PanelModel) ViewString() string {
 		st.Focused.Placeholder = lipgloss.NewStyle()
 		st.Blurred.Placeholder = lipgloss.NewStyle()
 		m.Input.SetStyles(st)
-		m.Input.Prompt = "> "
+		// Live crush-style feedback for the "!"/"!!" shell/sudo prefixes
+		// (see submitConsoleCommand) -- only meaningful in System Console,
+		// where they're actually honored rather than rejected on submit.
+		typed := strings.TrimSpace(m.Input.Value())
+		switch {
+		case m.PanelMode == "system" && strings.HasPrefix(typed, "!!"):
+			m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!! {{[-]}}", ctx.Dialog)
+		case m.PanelMode == "system" && strings.HasPrefix(typed, "!"):
+			m.Input.Prompt = RenderThemeText("{{|PromptShell|}}! {{[-]}}", ctx.Dialog)
+		default:
+			m.Input.Prompt = "> "
+		}
 	}
 	inputTitleTag := "TitleSubMenu"
 	if m.InputFocused {
