@@ -93,7 +93,16 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 		// No displayengine.TitleBarFocusable target found — ignore.
 	}
-	if key.Matches(msg, displayengine.Keys.Help) || msg.String() == "?" {
+	// "?" is Help's only printable-character binding (every other global
+	// shortcut here is a function key or ctrl/alt combo, never something a
+	// user would type as literal text) -- so it's the one case in this
+	// "always works" block that must defer to a focused text input instead
+	// of hijacking the keystroke. F1 has no such conflict and always opens
+	// help.
+	if msg.String() == "f1" {
+		return m, m.showHelpCmd(m.focusedPanelHelpContext(), false), true
+	}
+	if key.Matches(msg, displayengine.Keys.Help) && !m.isTextInputActive() {
 		return m, m.showHelpCmd(m.focusedPanelHelpContext(), false), true
 	}
 	if key.Matches(msg, displayengine.Keys.ContextMenu) {
@@ -367,6 +376,36 @@ func shouldForwardResult(result any) bool {
 		return false
 	}
 	return true
+}
+
+// isTextInputActive reports whether a focused text cursor is currently
+// showing anywhere -- the dialog, the active screen (e.g. the env editor),
+// or the console panel's own input, checked in the same priority order
+// View() uses to place the hardware cursor (see model_view.go). Reuses
+// InputCursorProvider rather than a separate "is this a text widget"
+// check, since GetInputCursor's show return value already means exactly
+// that: a text field is focused and accepting keystrokes right now.
+func (m *AppModel) isTextInputActive() bool {
+	if m.dialog != nil {
+		if cp, ok := m.dialog.(InputCursorProvider); ok {
+			if _, _, _, show := cp.GetInputCursor(); show {
+				return true
+			}
+		}
+	}
+	if m.activeScreen != nil {
+		if cp, ok := m.activeScreen.(InputCursorProvider); ok {
+			if _, _, _, show := cp.GetInputCursor(); show {
+				return true
+			}
+		}
+	}
+	if cp, ok := interface{}(m.panel).(InputCursorProvider); ok {
+		if _, _, _, show := cp.GetInputCursor(); show {
+			return true
+		}
+	}
+	return false
 }
 
 // focusedPanelHelpContext returns the displayengine.HelpContext for a focused non-screen panel

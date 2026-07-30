@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -66,13 +67,35 @@ func waitForPanelLine(ch <-chan string) tea.Cmd {
 
 // runShellCmd runs cmdStr as a shell command, streaming output to w.
 // If stdinContent is provided, it is piped to the command's stdin.
+//
+// On Unix, cmdStr is parsed and expanded ourselves (see parseShellArgs) and
+// exec'd directly -- never handed to sh -c, so there's no shell expansion
+// step left for a blocked word to hide behind. Windows keeps the simpler
+// cmd /c form (Windows is test-only for this project, not a hardening
+// priority).
 func runShellCmd(ctx context.Context, cmdStr string, w io.Writer, stdinContent string) error {
-	var shellCmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		shellCmd = exec.CommandContext(ctx, "cmd", "/c", cmdStr)
-	} else {
-		shellCmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)
+		shellCmd := exec.CommandContext(ctx, "cmd", "/c", cmdStr)
+		shellCmd.Stdout = w
+		shellCmd.Stderr = w
+		if stdinContent != "" {
+			shellCmd.Stdin = strings.NewReader(stdinContent + "\n")
+		}
+		return shellCmd.Run()
 	}
+
+	argv, err := parseShellArgs(cmdStr)
+	if err != nil {
+		return err
+	}
+	if bad := findBlockedArgvWord(argv); bad != "" {
+		return fmt.Errorf("'%s' is not on the console's allowed command list", bad)
+	}
+	if bad := findSensitivePathArg(argv); bad != "" {
+		return fmt.Errorf("'%s' refers to a file the console won't touch", styleBlockedPathArg(bad))
+	}
+
+	shellCmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	shellCmd.Stdout = w
 	shellCmd.Stderr = w
 	if stdinContent != "" {
@@ -114,28 +137,98 @@ func isDS2Prefix(tok string) bool {
 	return lower == cmdName || lower == "ds2" || lower == "ds"
 }
 
-// blockedShellWords are standalone words "!"/"!!" shell commands may never
-// contain: "sudo" (the only sanctioned escalation path is the "!!" prefix
-// itself, not a user-typed sudo) and any ds2 command-name spelling (running
-// a ds2 command as a shell subprocess should go through the ds2-native path
-// -- dispatchDS2Command -- instead).
-func blockedShellWords() []string {
-	return []string{"sudo", "ds", "ds2", strings.ToLower(version.CommandName)}
+// allowedShellWords are the only basenames "!"/"!!" shell commands may
+// execute as argv[0]. This is default-deny by design: an unlisted binary --
+// a shell we didn't think to name, a future interpreter, a renamed/symlinked
+// executable -- is rejected automatically instead of requiring a blacklist
+// entry to catch it after the fact. Deliberately excluded despite being
+// common utilities, because their own flags can hand off to arbitrary
+// further commands: find (-exec), tar (--checkpoint-action/--to-command),
+// rsync (-e), xargs, env, nice, timeout, watch, general-purpose interpreters
+// (awk/perl/python/ruby/lua/tclsh), pagers/editors that can shell out
+// (less/more/man/vi/vim/nano), remote/arbitrary-command channels
+// (ssh/telnet/ftp/socat/nc), git (-c core.pager=/-c diff.external= run an
+// arbitrary shell command via CLI config override), docker/docker-compose
+// (docker run/exec with a host bind mount is root-equivalent code execution
+// regardless of sudo -- ds2's own docker-management commands cover this
+// panel's actual docker needs instead), ip (netns exec runs an arbitrary
+// command in a network namespace), and systemctl (combined with the
+// file-write commands below, lets a unit file with an arbitrary ExecStart=
+// be planted and started -- the ExecStart command is never checked against
+// this whitelist either). "sudo" and any ds2 command-name spelling are
+// handled separately in findBlockedShellWord/findBlockedArgvWord with their
+// own guidance messages, not via this list.
+func allowedShellWords() map[string]struct{} {
+	words := []string{
+		"ls", "cat", "head", "tail", "grep", "wc", "du", "df", "ps", "free",
+		"uptime", "uname", "hostname", "whoami", "id", "date", "stat", "file",
+		"which", "pwd", "top",
+		"ping", "curl", "wget", "ss", "dig", "nslookup", "traceroute",
+		"cp", "mv", "mkdir", "rmdir", "rm", "touch", "chmod", "chown", "ln",
+		"echo",
+	}
+	m := make(map[string]struct{}, len(words))
+	for _, w := range words {
+		m[w] = struct{}{}
+	}
+	return m
 }
 
-// findBlockedShellWord returns the first word in cmd that matches
-// blockedShellWords, checked as a whitespace-split token anywhere in the
-// line (not just the first word) so shell chaining like "true && sudo ls"
-// can't smuggle one past the check. Returns "" if none found.
+// firstField returns cmd's first whitespace-split token, or ok=false if
+// cmd has none.
+func firstField(cmd string) (tok string, ok bool) {
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return "", false
+	}
+	return fields[0], true
+}
+
+// findBlockedShellWord reports whether cmd's first word is disallowed as a
+// "!"/"!!" shell command, returning that word or "" if it's fine. "sudo"
+// and any ds2 command-name spelling are always rejected (with their own
+// guidance messages at the call site); anything else must be in
+// allowedShellWords or it's rejected too. Only the first word matters:
+// parseShellArgs rejects chaining/pipes outright, so there's no way for a
+// second command to reach position 0 by any other route, and a disallowed
+// word appearing later is just a harmless argument (e.g. "grep sudo
+// /var/log/auth.log" never executes sudo).
+//
+// This is a cheap early rejection on the raw, pre-expansion text only --
+// findBlockedArgvWord (run on parseShellArgs's expanded output) is the
+// authoritative check, since raw text alone can't see what a glob or
+// variable expands to.
 func findBlockedShellWord(cmd string) string {
-	blocked := blockedShellWords()
-	for _, tok := range strings.Fields(cmd) {
-		lower := strings.ToLower(tok)
-		for _, b := range blocked {
-			if lower == b {
-				return tok
-			}
-		}
+	tok, ok := firstField(cmd)
+	if !ok {
+		return ""
+	}
+	lower := strings.ToLower(tok)
+	if lower == "sudo" || isDS2Prefix(tok) {
+		return tok
+	}
+	if _, allowed := allowedShellWords()[lower]; !allowed {
+		return tok
+	}
+	return ""
+}
+
+// findBlockedArgvWord is findBlockedShellWord's counterpart for an already
+// parsed and expanded argv (see parseShellArgs): checks only argv[0] --
+// the one word that's actually executed -- via filepath.Base, so a
+// wildcard that expands to e.g. "/usr/bin/sudo" is still caught, not just
+// a bare literal word.
+func findBlockedArgvWord(argv []string) string {
+	if len(argv) == 0 {
+		return ""
+	}
+	base := filepath.Base(argv[0])
+	lower := strings.ToLower(base)
+	if lower == "sudo" || isDS2Prefix(base) {
+		return argv[0]
+	}
+	if _, allowed := allowedShellWords()[lower]; !allowed {
+		return argv[0]
 	}
 	return ""
 }
@@ -274,10 +367,13 @@ func (m *PanelModel) dispatchShellCommand(cmdStr, rawCmd string, sudo bool) tea.
 		return nil
 	}
 	if bad := findBlockedShellWord(rawCmd); bad != "" {
-		if strings.EqualFold(bad, "sudo") {
+		switch {
+		case strings.EqualFold(bad, "sudo"):
 			logger.Error(context.Background(), "'{{|UserCommand|}}sudo{{[-]}}' isn't allowed in '!' commands — use '!!' to run a command with sudo.")
-		} else {
+		case isDS2Prefix(bad):
 			logger.Error(context.Background(), "'{{|UserCommand|}}%s{{[-]}}' isn't allowed in '!'/'!!' commands — ds2 commands don't need a shell prefix.", bad)
+		default:
+			logger.Error(context.Background(), "'{{|UserCommand|}}%s{{[-]}}' is not on the console's allowed command list.", bad)
 		}
 		return func() tea.Msg { return ConsoleDoneMsg{} }
 	}
@@ -687,7 +783,7 @@ func (m PanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 
 		// Show the submitted command in the scrollback, matching the input
 		// prompt's own "text starts immediately after >" spacing.
-		m.Sv.AppendLines([]string{">" + cmdStr}, panelRenderFn())
+		m.Sv.AppendLines([]string{">{{|RunningCommand|}}" + cmdStr + "{{[-]}}"}, panelRenderFn())
 
 		return m, m.submitConsoleCommand(cmdStr)
 	}
