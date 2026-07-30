@@ -5,7 +5,7 @@ import (
 
 	"DockSTARTer2/internal/tui"
 
-	"github.com/charmbracelet/ssh"
+	"charm.land/ssh"
 )
 
 // makeWindowSizeChan converts wish's window-change channel into a
