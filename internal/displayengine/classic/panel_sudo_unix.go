@@ -17,11 +17,12 @@ import (
 // single process via stdin, in a new session (Setsid) with no controlling
 // terminal (so it can't reach for the TUI's own /dev/tty, which some sudo
 // implementations -- notably sudo-rs, now default on newer Ubuntu -- will
-// still do despite -S). DS2 always owns the sudo invocation now (cmd is a
-// raw shell command with no "sudo" of its own -- dispatchShellCommand's
-// blacklist guarantees that), so there's no need to find-and-inject -S into
-// a user-typed sudo; -p '' also suppresses sudo's own redundant password
-// prompt banner, since DS2 already showed its own password dialog.
+// still do despite -S). cmd is parsed and expanded ourselves (see
+// parseShellArgs) and passed to sudo as separate argv elements, never as a
+// string handed to a shell -- so there's no shell expansion step left for
+// cmd to reconstruct "sudo" or anything else behind dispatchShellCommand's
+// blacklist. -p '' suppresses sudo's own redundant password prompt banner,
+// since DS2 already showed its own password dialog.
 //
 // Stdout/Stderr are wired through a raw *os.File pipe we manage ourselves,
 // not a plain io.Writer. When Cmd.Stdout/Stderr are a plain io.Writer, Go
@@ -37,14 +38,24 @@ func runSudoWithPassword(ctx context.Context, cmd, pass string, w io.Writer) err
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	withSudo := "sudo -S -p '' " + cmd
+	argv, err := parseShellArgs(cmd)
+	if err != nil {
+		return err
+	}
+	if bad := findBlockedArgvWord(argv); bad != "" {
+		return fmt.Errorf("'%s' is not on the console's allowed command list", bad)
+	}
+	if bad := findSensitivePathArg(argv); bad != "" {
+		return fmt.Errorf("'%s' refers to a file the console won't touch", styleBlockedPathArg(bad))
+	}
+	sudoArgv := append([]string{"-S", "-p", ""}, argv...)
 
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return fmt.Errorf("sudo: failed to create output pipe: %w", err)
 	}
 
-	sudoCmd := exec.CommandContext(ctx, "sh", "-c", withSudo)
+	sudoCmd := exec.CommandContext(ctx, "sudo", sudoArgv...)
 	sudoCmd.Stdout = pw
 	sudoCmd.Stderr = pw
 	sudoCmd.Stdin = strings.NewReader(pass + "\n")
