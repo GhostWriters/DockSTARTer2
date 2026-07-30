@@ -14,7 +14,7 @@ import (
 	"DockSTARTer2/internal/webmsg"
 
 	"charm.land/wish/v2"
-	"github.com/charmbracelet/ssh"
+	"charm.land/ssh"
 )
 
 // ds2TrustEnvPrefixes are the env vars DS2 itself sets to convey trusted

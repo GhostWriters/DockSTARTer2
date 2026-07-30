@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/charmbracelet/ssh"
+	"charm.land/ssh"
 	"golang.org/x/crypto/bcrypt"
 )
 
