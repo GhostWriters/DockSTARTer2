@@ -143,9 +143,13 @@ func (m *promptDialogModel) IsMaximized() bool {
 	return m.outer.IsMaximized()
 }
 
-// SetFocused propagates focus state
+// SetFocused propagates focus state. ApplySectionFocus must be called after
+// SetFocused (see its doc comment) -- without it, the input section never
+// receives sub-focus (SetSubFocused), so it doesn't accept keystrokes even
+// though the dialog itself is focused.
 func (m *promptDialogModel) SetFocused(f bool) {
 	m.outer.SetFocused(f)
+	m.outer.ApplySectionFocus()
 }
 
 // Layers implements LayeredView for compositing

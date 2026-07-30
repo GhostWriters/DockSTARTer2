@@ -97,6 +97,10 @@ func (m *AppModel) View() (v tea.View) {
 		return m.cachedView
 	}
 
+	// Must run before ViewString/GetInputCursor below -- see SyncInputPrompt's
+	// doc comment for why.
+	m.panel.SyncInputPrompt()
+
 	// Use displayengine.Layout helpers for consistent positioning
 	layout := displayengine.GetLayout()
 	// Query the backdrop for the actual rendered chrome height (header + bottom border).

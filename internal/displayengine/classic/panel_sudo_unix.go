@@ -27,16 +27,12 @@ import (
 // not a plain io.Writer. When Cmd.Stdout/Stderr are a plain io.Writer, Go
 // creates its own internal pipe and a background copy goroutine, and
 // Cmd.Wait() blocks until *that* goroutine sees EOF -- not just until the
-// process exits. Confirmed live (repeated, connection-independent process
-// watches spanning the exact moment Start() reported success): the sudo
-// process itself was never observable on the host at all, yet Wait() still
-// blocked for the full timeout regardless -- consistent with something
-// (e.g. a short-lived internal helper sudo forks, gone before any polling
-// could catch it) holding that pipe's write end open just long enough to
-// starve Go's copy goroutine, even after the tracked process is long gone.
-// Using our own *os.File pipe decouples process-reaping (Wait, driven by
-// wait4() on the specific pid) from output-draining entirely, so a stray
-// pipe-holder can only leak our copy goroutine, not hang the command.
+// process exits. A short-lived helper sudo itself forks can hold that
+// pipe's write end open after the tracked process has already exited,
+// starving Go's copy goroutine and hanging Wait() indefinitely. Using our
+// own *os.File pipe decouples process-reaping (Wait, driven by wait4() on
+// the specific pid) from output-draining entirely, so a stray pipe-holder
+// can only leak our copy goroutine, not hang the command.
 func runSudoWithPassword(ctx context.Context, cmd, pass string, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
@@ -74,13 +70,10 @@ func runSudoWithPassword(ctx context.Context, cmd, pass string, w io.Writer) err
 	// Wait for the copy to finish naturally (EOF once every write end is
 	// closed -- our own was already closed above, and the child's closes as
 	// part of process exit) *before* closing pr ourselves. Closing pr
-	// immediately after Wait() raced the still-draining copy goroutine when
-	// the command finished very fast (e.g. an already-cached sudo
-	// credential completing near-instantly): confirmed live, the second of
-	// two consecutive sudo commands in the same session -- cache still
-	// warm from the first -- produced no output at all even though
-	// runSudoWithPassword returned a nil error, meaning Wait() outraced the
-	// pipe still holding buffered output that pr.Close() then discarded.
+	// immediately after Wait() would race the still-draining copy goroutine
+	// when the command finishes very fast (e.g. an already-cached sudo
+	// credential completing near-instantly), discarding buffered output
+	// that hadn't been copied out yet.
 	<-copyDone
 	pr.Close()
 

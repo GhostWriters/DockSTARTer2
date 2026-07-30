@@ -648,10 +648,14 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	{"HeadingValue", "Heading"},
 	{"HeadingAppDescription", "Heading"},
 	{"MarkerLocked", "MarkerInvalid"},
-	// PromptShell/PromptSudo style the console panel's input prompt while
-	// the user is typing a "!"/"!!" command (crush-style live feedback,
-	// see panel_render.go) -- Highlight for a plain shell command, the more
-	// alarming MarkerInvalid for one that will run under sudo.
+	// Prompt/PromptShell/PromptSudo style a command-line-style input's own
+	// leading prompt glyph -- currently the console panel's input (see
+	// panel_render.go's live "!"/"!!" feedback, crush-style), generic enough
+	// to reuse for a future dialog's own prompt. Plain input keeps the
+	// ambient text color (no fallback needed); a shell command gets
+	// Highlight; one that will run under sudo gets the more alarming
+	// MarkerInvalid.
+	{"Prompt", ""},
 	{"PromptShell", "Highlight"},
 	{"PromptSudo", "MarkerInvalid"},
 	{"MarkerAdded", "Highlight"},

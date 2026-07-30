@@ -241,6 +241,9 @@ secondary = "black"
   MarkerLocked            = "{{|MarkerInvalid|}}"
 # ButtonLockedMarker      = "{{|MarkerLocked|}}"
 # LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
+# Prompt                  = ""
+# PromptShell             = "{{|Highlight|}}"
+# PromptSudo              = "{{|MarkerInvalid|}}"
   TextCursor              = "{{[:white:]}}"                # = "{{[-:-:R]}}"
 
 ## Scrollbar
