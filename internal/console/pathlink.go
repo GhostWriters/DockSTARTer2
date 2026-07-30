@@ -35,6 +35,20 @@ func SetViaOwnServer(v bool) {
 	viaOwnServer.Store(v)
 }
 
+// RequiresRemoteSudoGate reports whether the active session should be
+// treated as "remote" for System Console's per-command/enable-time sudo
+// re-verification. Use this (not any general connType check) for that
+// decision: the gate exists because DS2's own SSH/web server lets multiple
+// DS2-authenticated users (distinct pubkeys/passwords, independent of OS
+// accounts) share one daemon, so a session's DS2 auth doesn't prove OS sudo
+// rights. A real external SSH shell running the CLI/TUI directly never went
+// through that multi-tenant auth layer -- the user already needed real OS
+// credentials to get that shell -- so it's exempt, the same as a local
+// session, even though connType reports "ssh" for it (see parseClientInfo).
+func RequiresRemoteSudoGate() bool {
+	return viaOwnServer.Load()
+}
+
 // blocksHyperlink reports whether the active session should suppress
 // file:// hyperlinks: true only when connected through DS2's own SSH or web
 // server AND the client doesn't appear to be the same machine DS2 is

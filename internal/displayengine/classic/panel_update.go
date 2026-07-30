@@ -210,7 +210,7 @@ func (m *PanelModel) dispatchConsoleCommand(cmdStr string, tokens []string, isDS
 		// them in the restricted Console mode too, not just System Console,
 		// so this check isn't limited to m.PanelMode == "system" the way the
 		// shell-command gate below is.
-		if requiresSudo && m.connType != "local" {
+		if requiresSudo && console.RequiresRemoteSudoGate() {
 			run := func() tea.Cmd { return m.runDS2Groups(cmdStr, groups) }
 			return func() tea.Msg {
 				if err := m.verifySudo("Confirm sudo access to run: '" + cmdStr + "'"); err != nil {
@@ -298,7 +298,7 @@ func (m *PanelModel) runShellConsoleCommand(cmdStr string, tokens []string) tea.
 	// shell access needs it. Local sessions are exempt: DS2's own connType
 	// can't be spoofed to "local" over the network (see stripDS2TrustEnv),
 	// so this only ever gates real remote access.
-	if m.PanelMode == "system" && m.connType != "local" {
+	if m.PanelMode == "system" && console.RequiresRemoteSudoGate() {
 		return func() tea.Msg {
 			if err := m.verifySudo("Confirm sudo access to run: '" + cmdStr + "'"); err != nil {
 				if err == console.ErrUserAborted {
@@ -317,14 +317,15 @@ func (m *PanelModel) runShellConsoleCommand(cmdStr string, tokens []string) tea.
 
 			sc := bufio.NewScanner(pr)
 			m.consoleScanner = sc
-			return readConsoleBatch(sc, cancel)
+			return readConsoleBatch(sc, cancel)()
 		}
 	}
 
-	// If the command contains sudo, intercept it and prime the sudo credential cache.
-	// Local only: keeps its original lenient behavior (no sudo -k) -- it
-	// doesn't force a fresh password if the user's own sudo timestamp is
-	// still valid.
+	// If the command contains sudo, make sure it can actually get a password
+	// without blocking. Exempt from the strict remote gate above (see
+	// RequiresRemoteSudoGate): keeps its original lenient behavior (no
+	// sudo -k) -- it doesn't force a fresh password if the user's own sudo
+	// timestamp is still valid.
 	var containsSudo bool
 	for _, t := range tokens {
 		if t == "sudo" {
@@ -333,8 +334,23 @@ func (m *PanelModel) runShellConsoleCommand(cmdStr string, tokens []string) tea.
 		}
 	}
 
-	if containsSudo && m.PanelMode == "system" && m.connType == "local" {
-		return tea.Batch(func() tea.Msg {
+	if containsSudo && m.PanelMode == "system" && !console.RequiresRemoteSudoGate() {
+		// Always prompt for the password rather than trying a "sudo -n true"
+		// cache-check shortcut first: that check can return success (no
+		// password needed) even when the real "-S" run moments later still
+		// requires one -- confirmed live, producing a fast "exit status 1"
+		// with no prompt ever shown, rather than the hang it was meant to
+		// avoid. Re-entering an already-valid password via -S is harmless,
+		// so always asking is simpler and reliably correct.
+		//
+		// Not wrapped in tea.Batch -- confirmed live via goroutine dump that
+		// doing so leaves the console panel's read side never re-polling
+		// after the first line (the panel's own writer goroutine sits
+		// forever blocked on its second write, with no reader ever coming
+		// back for it): every other working path here either returns a bare
+		// closure or batches two genuinely distinct commands, never a
+		// single closure wrapped in Batch by itself.
+		return func() tea.Msg {
 			var pass string
 			var err error
 			if prompt := m.PromptFunc(); prompt != nil {
@@ -349,29 +365,21 @@ func (m *PanelModel) runShellConsoleCommand(cmdStr string, tokens []string) tea.
 				return ConsoleDoneMsg{Err: err}
 			}
 
-			// Prime the sudo cache by running sudo -S -v with the password.
-			// This updates the sudo timestamp so subsequent sudo calls in the
-			// user's command can run without a prompt.
-			primeCmd := exec.Command("sudo", "-S", "-v")
-			primeCmd.Stdin = strings.NewReader(pass + "\n")
-			if err := primeCmd.Run(); err != nil {
-				return ConsoleDoneMsg{Err: fmt.Errorf("sudo: authentication failed")}
-			}
-
-			// Run the user's original command line exactly as typed.
 			pr, pw := io.Pipe()
 			cmdCtx := console.WithPanelWriter(ctx, pw)
 			go func() {
 				// Log the command header into the pipe first
 				logger.Notice(cmdCtx, "System Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
-				err := runShellCmd(ctx, cmdStr, pw, "")
+				// sudo prints its own "Sorry, try again"/exit reason as
+				// part of its output on a bad password, so no
+				// special-case error relabeling is needed here.
+				err := runSudoWithPassword(ctx, cmdStr, pass, pw)
 				pw.CloseWithError(err)
 			}()
 
 			sc := bufio.NewScanner(pr)
-			m.consoleScanner = sc
-			return readConsoleBatch(sc, cancel)
-		})
+			return ConsoleScannerReadyMsg{Scanner: sc, Cancel: cancel}
+		}
 	}
 
 	pr, pw := io.Pipe()
@@ -427,6 +435,11 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Sv.AppendLines(strings.Split(string(msg), "\n"), panelRenderFn())
 		return m, waitForPanelLine(m.logSub)
 
+	case ConsoleScannerReadyMsg:
+		m.consoleScanner = msg.Scanner
+		m.ConsoleCancel = msg.Cancel
+		return m, readConsoleBatch(msg.Scanner, msg.Cancel)
+
 	case ConsoleLinesMsg:
 		m.lastLineTime = time.Now()
 		if !m.Expanded {
@@ -458,6 +471,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.replaceHeaderCount = -1
 		m.Sv.CommandRunning = false
 		m.Sv.ClearSpinner()
+		if msg.Err != nil {
+			logger.Error(context.Background(), "%s", msg.Err.Error())
+		}
 		unlockCmd := m.lockSession("console.command", false)
 		if !m.SessionActive() {
 			m.InputFocused = true

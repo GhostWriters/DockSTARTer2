@@ -187,6 +187,7 @@ type (
 	PanelLineMsg               = classic.PanelLineMsg
 	ConsoleLinesMsg            = classic.ConsoleLinesMsg
 	ConsoleDoneMsg             = classic.ConsoleDoneMsg
+	ConsoleScannerReadyMsg     = classic.ConsoleScannerReadyMsg
 )
 
 // Vars
