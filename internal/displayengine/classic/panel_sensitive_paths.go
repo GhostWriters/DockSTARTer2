@@ -10,12 +10,18 @@ import (
 	"DockSTARTer2/internal/paths"
 )
 
-// sensitivePaths returns the absolute paths of files DS2 itself manages
-// that must never be readable/writable through a "!"/"!!" shell command,
-// regardless of the argv[0] whitelist: the SSH server's host private key
+// sensitivePaths returns the absolute paths of files that must never be
+// readable/writable through a "!"/"!!" shell command, regardless of the
+// argv[0] whitelist. DS2's own: the SSH server's host private key
 // (impersonation risk), the configured authorized_keys file (remote-access
 // grant risk), and dockstarter2.toml itself (stores the auth password as a
-// bcrypt hash -- an offline-cracking risk if leaked). The locks directory
+// bcrypt hash -- an offline-cracking risk if leaked). The OS's own:
+// /etc/shadow and /etc/gshadow, which hold every system account's password
+// hash -- since "!!" runs as root, these would otherwise be readable
+// regardless of normal file permissions, exposing every user's credentials
+// for offline cracking, not just DS2's own. (/etc/passwd itself is left
+// off: it's world-readable by design, no secrets, and the same info is
+// already exposed via whitelisted id/whoami/ls.) The locks directory
 // (edit.lock, server.pid, per-session/process tracking -- see underDir's
 // caller) and the disconnect/stop request files (see
 // isControlRequestFile's caller) are handled separately since they're
@@ -31,7 +37,12 @@ func sensitivePaths() []string {
 		hostKeyPath = filepath.Join(paths.GetStateDir(), "server_host_key")
 	}
 
-	sensitive := []string{hostKeyPath, paths.GetConfigFilePath()}
+	sensitive := []string{
+		hostKeyPath,
+		paths.GetConfigFilePath(),
+		"/etc/shadow",
+		"/etc/gshadow",
+	}
 	if cfg.Server.Auth.AuthKeysFile != "" {
 		sensitive = append(sensitive, cfg.Server.Auth.AuthKeysFile)
 	}
