@@ -187,12 +187,19 @@ func firstField(cmd string) (tok string, ok bool) {
 // findBlockedShellWord reports whether cmd's first word is disallowed as a
 // "!"/"!!" shell command, returning that word or "" if it's fine. "sudo"
 // and any ds2 command-name spelling are always rejected (with their own
-// guidance messages at the call site); anything else must be in
-// allowedShellWords or it's rejected too. Only the first word matters:
-// parseShellArgs rejects chaining/pipes outright, so there's no way for a
-// second command to reach position 0 by any other route, and a disallowed
-// word appearing later is just a harmless argument (e.g. "grep sudo
-// /var/log/auth.log" never executes sudo).
+// guidance messages at the call site) regardless of session trust -- that's
+// about routing through the right mechanism ("!!" for sudo, dispatchDS2Command
+// for ds2 commands), not privilege. The allowedShellWords whitelist itself
+// only applies when console.RequiresRemoteSudoGate() is true: it exists to
+// limit what's reachable through DS2's own multi-tenant SSH/web server,
+// where a session's DS2 auth doesn't prove real OS access. A local session
+// or a real external SSH shell running the TUI directly already has an
+// unrestricted shell available outside DS2, so the whitelist adds no
+// security value there -- only friction -- and is skipped. Only the first
+// word matters: parseShellArgs rejects chaining/pipes outright, so there's
+// no way for a second command to reach position 0 by any other route, and a
+// disallowed word appearing later is just a harmless argument (e.g. "grep
+// sudo /var/log/auth.log" never executes sudo).
 //
 // This is a cheap early rejection on the raw, pre-expansion text only --
 // findBlockedArgvWord (run on parseShellArgs's expanded output) is the
@@ -206,6 +213,9 @@ func findBlockedShellWord(cmd string) string {
 	lower := strings.ToLower(tok)
 	if lower == "sudo" || isDS2Prefix(tok) {
 		return tok
+	}
+	if !console.RequiresRemoteSudoGate() {
+		return ""
 	}
 	if _, allowed := allowedShellWords()[lower]; !allowed {
 		return tok
@@ -226,6 +236,9 @@ func findBlockedArgvWord(argv []string) string {
 	lower := strings.ToLower(base)
 	if lower == "sudo" || isDS2Prefix(base) {
 		return argv[0]
+	}
+	if !console.RequiresRemoteSudoGate() {
+		return ""
 	}
 	if _, allowed := allowedShellWords()[lower]; !allowed {
 		return argv[0]

@@ -200,6 +200,10 @@
                 setTextInputActive(!!msg.active);
                 return;
               }
+              if (msg.type === 'hostname' && msg.hostname) {
+                document.title = 'DockSTARTer2 (' + msg.hostname + ')';
+                return;
+              }
               if (msg.type === 'display-settings') {
                 console.log('display-settings received:', msg);
                 var s = {
