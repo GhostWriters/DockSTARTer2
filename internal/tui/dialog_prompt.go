@@ -15,12 +15,13 @@ import (
 // as a plain-text section and the input as a sinput section, matching the
 // pattern used by Main Menu/Config Menu/.../Global Flags/Confirm dialog.
 type promptDialogModel struct {
-	outer        *displayengine.MenuModel
-	inputSection *displayengine.MenuModel
-	input        *sinput.Model
-	result       string
-	confirmed    bool
-	onResult     func(string, bool) tea.Msg
+	outer           *displayengine.MenuModel
+	questionSection *displayengine.MenuModel
+	inputSection    *displayengine.MenuModel
+	input           *sinput.Model
+	result          string
+	confirmed       bool
+	onResult        func(string, bool) tea.Msg
 }
 
 type promptResultMsg struct {
@@ -39,7 +40,7 @@ func newPromptDialogModel(title, question string, sensitive bool, onResult func(
 	var inputSection *displayengine.MenuModel
 	var inp *sinput.Model
 	if sensitive {
-		inputSection, inp = displayengine.NewPasswordSinputSection("prompt_dialog_input", "", initial)
+		inputSection, inp = displayengine.NewPasswordSinputSection("prompt_dialog_input", "Password", initial)
 	} else {
 		inputSection, inp = displayengine.NewSinputSection("prompt_dialog_input", "", initial)
 	}
@@ -84,6 +85,7 @@ func newPromptDialogModel(title, question string, sensitive bool, onResult func(
 	questionSection := displayengine.NewPlainTextSection("prompt_dialog_question", question)
 	questionSection.SetPlainTextStyle("", 1)
 	outer.AddContentSection(questionSection)
+	m.questionSection = questionSection
 	outer.AddContentSection(inputSection)
 	if sensitive {
 		disclaimer := displayengine.NewPlainTextSection("prompt_dialog_disclaimer", "(password will not be logged)")
@@ -129,13 +131,35 @@ func (m *promptDialogModel) ViewString() string {
 // SetSize implements sizing. The sinput section has no narrower natural
 // width than whatever it's given (SectionNaturalWidth always returns
 // maxWidth for it), so unlike plain-text-only dialogs this one needs an
-// explicit cap -- matching the fixed-width convention used by other small
-// non-maximized dialogs (e.g. FlagsToggleDialog, WebDisplayDialog).
+// explicit floor -- matching the fixed-width convention used by other small
+// non-maximized dialogs (e.g. FlagsToggleDialog, WebDisplayDialog). The
+// question section can still grow the dialog past that floor (up to
+// whatever room is actually available) when its content -- e.g. a shell
+// command on the sudo-password prompt -- needs more room than 60 columns to
+// avoid an awkward word-wrap; the input box grows to match automatically
+// since SetSize hands every section the same content width.
 func (m *promptDialogModel) SetSize(width, height int) {
-	if width > 60 {
-		width = 60
+	dialogWidth := 60
+	if m.questionSection != nil {
+		layout := displayengine.GetLayout()
+		maxAvailable := width - layout.BorderWidth() - layout.ContentMarginWidth()
+		if maxAvailable < 1 {
+			maxAvailable = 1
+		}
+		// SectionNaturalWidth measures in content-width scale (excluding
+		// border/margin); convert back to outer-width scale to compare
+		// against dialogWidth, matching calculateSectionLayout's own
+		// natural-width-to-outer-width conversion.
+		natural := m.questionSection.SectionNaturalWidth(maxAvailable)
+		outerNatural := natural + layout.BorderWidth() + layout.ContentMarginWidth()
+		if outerNatural > dialogWidth {
+			dialogWidth = outerNatural
+		}
 	}
-	m.outer.SetSize(width, height)
+	if dialogWidth > width {
+		dialogWidth = width
+	}
+	m.outer.SetSize(dialogWidth, height)
 }
 
 // IsMaximized lets the AppModel know its size state

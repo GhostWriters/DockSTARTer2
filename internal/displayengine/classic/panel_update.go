@@ -346,7 +346,7 @@ func (m *PanelModel) dispatchDS2Command(cmdStr, trimmed string) tea.Cmd {
 	if requiresSudo && console.RequiresRemoteSudoGate() {
 		run := func() tea.Cmd { return m.runDS2Groups(cmdStr, groups) }
 		return func() tea.Msg {
-			if err := m.verifySudo("Confirm sudo access to run: '" + cmdStr + "'"); err != nil {
+			if err := m.verifySudo("Confirm sudo access to run:\n  {{|UserCommand|}}" + cmdStr + "{{[-]}}"); err != nil {
 				if err == console.ErrUserAborted {
 					return ConsoleDoneMsg{}
 				}
@@ -464,7 +464,7 @@ func (m *PanelModel) runShellConsoleCommand(cmdStr, rawCmd string) tea.Cmd {
 	// access.
 	if console.RequiresRemoteSudoGate() {
 		return func() tea.Msg {
-			if err := m.verifySudo("Confirm sudo access to run: '" + cmdStr + "'"); err != nil {
+			if err := m.verifySudo("Confirm sudo access to run:\n  {{|UserCommand|}}" + rawCmd + "{{[-]}}"); err != nil {
 				if err == console.ErrUserAborted {
 					return ConsoleDoneMsg{}
 				}
@@ -517,12 +517,13 @@ func (m *PanelModel) runSudoShellCommand(cmdStr, rawCmd string) tea.Cmd {
 	// leaves the console panel's read side never re-polling after the
 	// first line, stalling the command permanently.
 	return func() tea.Msg {
+		question := "Password required to run:\n  {{|UserCommand|}}sudo " + rawCmd + "{{[-]}}"
 		var pass string
 		var err error
 		if prompt := m.PromptFunc(); prompt != nil {
-			pass, err = prompt("Sudo Password", "Password for '"+cmdStr+"':", true)
+			pass, err = prompt("Sudo Password", question, true)
 		} else {
-			pass, err = PromptTextHook("Sudo Password", "Password for '"+cmdStr+"':", true)
+			pass, err = PromptTextHook("Sudo Password", question, true)
 		}
 		if err != nil {
 			if err == console.ErrUserAborted {
