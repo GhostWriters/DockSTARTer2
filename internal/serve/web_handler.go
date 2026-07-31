@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -28,6 +29,20 @@ type resizeMsg struct {
 // tea.WindowSizeMsg messages via the normal SSH path.
 func handleWebSocket(ctx context.Context, conn *websocket.Conn, clientAddr, userAgent string, cfg config.ServerConfig, signer gossh.Signer) {
 	defer func() { _ = conn.CloseNow() }()
+
+	// Tell the browser the server's own OS hostname so it can show which
+	// machine a tab is connected to in its title -- location.hostname alone
+	// would show a reverse proxy's public name instead of the real machine
+	// when one's in front of DS2, which defeats the point when several
+	// instances share one proxy domain.
+	if hostname, err := os.Hostname(); err == nil {
+		if data, err := json.Marshal(struct {
+			Type     string `json:"type"`
+			Hostname string `json:"hostname"`
+		}{Type: "hostname", Hostname: hostname}); err == nil {
+			_ = conn.Write(ctx, websocket.MessageText, data)
+		}
+	}
 
 	// Wait for the browser's initial resize AND display-settings-init,
 	// sent back-to-back in ws.onopen (web_static/index.html), so the
