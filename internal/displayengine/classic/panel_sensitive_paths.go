@@ -15,9 +15,14 @@ import (
 // regardless of the argv[0] whitelist: the SSH server's host private key
 // (impersonation risk), the configured authorized_keys file (remote-access
 // grant risk), and dockstarter2.toml itself (stores the auth password as a
-// bcrypt hash -- an offline-cracking risk if leaked). Mirrors the same
-// default-resolution logic serve.go uses for the host key, rather than
-// reimplementing it independently.
+// bcrypt hash -- an offline-cracking risk if leaked). The locks directory
+// (edit.lock, server.pid, per-session/process tracking -- see underDir's
+// caller) and the disconnect/stop request files (see
+// isControlRequestFile's caller) are handled separately since they're
+// either a whole directory tree or have a dynamic PID-suffixed filename,
+// not a fixed list of paths. Mirrors the same default-resolution logic
+// serve.go uses for the host key, rather than reimplementing it
+// independently.
 func sensitivePaths() []string {
 	cfg := config.LoadAppConfig()
 
@@ -46,8 +51,31 @@ func sensitivePaths() []string {
 // executed command would resolve it the same way, and falls back to
 // os.SameFile when both sides stat successfully so a symlink or
 // differently-spelled-but-identical path can't dodge a string comparison.
+//
+// Only applies when console.RequiresRemoteSudoGate() is true, same as the
+// argv[0] whitelist (findBlockedArgvWord): a local session or a real
+// external SSH shell already has unrestricted access to these files outside
+// DS2, so blocking them here would add no security, only friction.
+//
+// sensitivePaths entries are matched exactly, not by ancestor directory:
+// "rm -r" on a *containing* folder (~/.config, ~/.local, ~) isn't caught,
+// deliberately. Chasing ancestors has no natural stopping point short of
+// blocking the whole filesystem, since every sensitive file is transitively
+// "under" the home directory and "/" too -- that would block unrelated
+// operations on shared folders just because DS2's own file happens to live
+// somewhere underneath. A directory-level delete/replace taking DS2's files
+// down as collateral damage is the same accepted residual risk as giving
+// rm/cp/mv to a gated session at all, not something specific to these
+// paths. locksDir and .ssh are the exception: DS2 owns locksDir exclusively
+// and .ssh is always credential-only, so blocking those whole trees has a
+// natural, narrow boundary that doesn't generalize into "block everything."
 func findSensitivePathArg(argv []string) string {
+	if !console.RequiresRemoteSudoGate() {
+		return ""
+	}
 	sensitive := sensitivePaths()
+	locksDir := filepath.Clean(paths.GetLocksDir())
+	stateDir := filepath.Clean(paths.GetStateDir())
 
 	for _, arg := range argv {
 		abs, err := filepath.Abs(arg)
@@ -56,7 +84,7 @@ func findSensitivePathArg(argv []string) string {
 		}
 		abs = filepath.Clean(abs)
 
-		if inSSHDir(abs) {
+		if inSSHDir(abs) || underDir(abs, locksDir) || isControlRequestFile(abs, stateDir) {
 			return arg
 		}
 
@@ -86,6 +114,32 @@ func styleBlockedPathArg(arg string) string {
 		return console.FormatFolderName(arg, "")
 	}
 	return console.FormatFileName(arg, "")
+}
+
+// underDir reports whether path (already Clean and absolute) is dir itself
+// or a descendant of it (also already Clean and absolute).
+func underDir(path, dir string) bool {
+	return path == dir || strings.HasPrefix(path, dir+string(filepath.Separator))
+}
+
+// isControlRequestFile reports whether abs is one of the state directory's
+// file-based control signals: disconnect.request (force-disconnects every
+// SSH/web session -- sessionlocks.IsDisconnectRequested) or stop.request /
+// stop.<pid>.request (shuts down the whole DS2 server daemon, the same
+// mechanism as "ds2 --server stop" -- sessionlocks.IsStopRequested). Their
+// mere existence triggers the action, so a whitelisted "touch" would be a
+// denial-of-service against every other connected user or the server
+// itself. stop's PID-specific variant has a dynamic filename, so this
+// matches by pattern (name in stateDir directly) rather than a fixed path.
+func isControlRequestFile(abs, stateDir string) bool {
+	if filepath.Dir(abs) != stateDir {
+		return false
+	}
+	base := filepath.Base(abs)
+	if base == "disconnect.request" || base == "stop.request" {
+		return true
+	}
+	return strings.HasPrefix(base, "stop.") && strings.HasSuffix(base, ".request")
 }
 
 // inSSHDir reports whether abs (an already-Clean, absolute path) has ".ssh"

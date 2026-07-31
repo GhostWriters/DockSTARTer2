@@ -81,9 +81,9 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 				}
 			}
 
-			// We no longer block connections at the SSH level.
-			// Multiple sessions (local and remote) can coexist.
-			// We only use the remote lock to signal activity to the local TUI.
+			// Multiple sessions (local and remote) can coexist; this lock
+			// only signals activity to the local TUI, it doesn't block
+			// connections at the SSH level.
 			rlock, _ := lockfile.AcquireShared(paths.GetRemoteLockPath())
 			if rlock != nil {
 				defer rlock.Release()

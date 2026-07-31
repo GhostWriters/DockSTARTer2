@@ -383,29 +383,21 @@ func (s *DisplayOptionsScreen) initMenus() {
 		},
 	}
 
-	if s.connType != "web" {
-		optionItems = append(optionItems, displayengine.MenuItem{
-			Tag:           "Local Panel Mode",
-			Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal)),
-			Help:          "Choose the panel mode for local terminal sessions (Console allowed).",
-			Action:        s.showPanelDropdown(true),
-			IsDestructive: true,
-		})
-	}
+	optionItems = append(optionItems, displayengine.MenuItem{
+		Tag:           "Local Panel Mode",
+		Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal)),
+		Help:          "Choose the panel mode for local terminal sessions (Console allowed).",
+		Action:        s.showPanelDropdown(true),
+		IsDestructive: true,
+	})
 
-	if s.connType != "web" {
-		label := "Remote Panel Mode"
-		if s.connType == "local" {
-			label = "Remote Panel Mode"
-		}
-		optionItems = append(optionItems, displayengine.MenuItem{
-			Tag:           label,
-			Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote)),
-			Help:          "Choose the panel mode for SSH and Web sessions (Console restricted).",
-			Action:        s.showPanelDropdown(false),
-			IsDestructive: true,
-		})
-	}
+	optionItems = append(optionItems, displayengine.MenuItem{
+		Tag:           "Remote Panel Mode",
+		Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote)),
+		Help:          "Choose the panel mode for SSH and Web sessions (Console restricted).",
+		Action:        s.showPanelDropdown(false),
+		IsDestructive: true,
+	})
 
 	optionsMenu := displayengine.NewMenuModel(displayengine.IDOptionsPanel, "Options", "", optionItems)
 	s.optionsMenu = optionsMenu
@@ -830,24 +822,6 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			}
 		}
 
-		// confirmChange: only warn for remote sessions currently in system/console
-		// mode switching to log/none (would lose interactive access).
-		isInteractive := strings.ToLower(currentMode) == "system" || strings.ToLower(currentMode) == "console"
-		confirmChange := func(mode string) tea.Cmd {
-			return func() tea.Msg {
-				if !console.RequiresRemoteSudoGate() || !isInteractive {
-					return applyChange(mode)()
-				}
-				title := "Disable Interactive Panel?"
-				msg := "You are removing the interactive panel. You will only be able to re-enable it from a local terminal session.\n\nAre you sure you want to proceed?"
-				onConfirm := func() tea.Msg {
-					return tea.Batch(applyChange(mode), tui.CloseDialog())()
-				}
-				confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
-				return displayengine.ShowDialogMsg{Dialog: confirm}
-			}
-		}
-
 		currentLower := strings.ToLower(currentMode)
 		var items []displayengine.MenuItem
 		var applyFuncs []tea.Cmd
@@ -861,7 +835,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			Selectable:    true,
 			Checked:       currentLower == "none",
 		})
-		applyFuncs = append(applyFuncs, func() tea.Msg { return confirmChange("none")() })
+		applyFuncs = append(applyFuncs, func() tea.Msg { return applyChange("none")() })
 
 		// Log option: always available
 		items = append(items, displayengine.MenuItem{
@@ -872,7 +846,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 			Selectable:    true,
 			Checked:       currentLower == "log",
 		})
-		applyFuncs = append(applyFuncs, func() tea.Msg { return confirmChange("log")() })
+		applyFuncs = append(applyFuncs, func() tea.Msg { return applyChange("log")() })
 
 		// Console (ds2-only): always available for both local and remote —
 		// it only accepts ds2 subcommands so it is safe in all session types.
