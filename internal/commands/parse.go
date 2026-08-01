@@ -67,7 +67,7 @@ func (e *ParseError) Error() string {
 	out := fmt.Sprintf("Error in command line:\n\n%s%s\n%s\n\n%s%s\n", indent, cmdLineStr, pointerLine, indent, formattedMsg)
 
 	if e.FailingCommand != "" {
-		out += fmt.Sprintf("\n%sUsage is:\n", indent)
+		out += "\nUsage is:\n"
 		usageStr := GetUsage(e.FailingCommand, true)
 		lines := strings.Split(usageStr, "\n")
 		for _, line := range lines {
@@ -215,7 +215,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 					"generate": true, "merge": true,
 				}
 				if !validSubs[sub] {
-					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid option %o"}
+					return nil, &ParseError{Args: expandedArgs, Index: i, FailingCommand: cmd, Message: "Invalid compose option %o"}
 				}
 				currentGroup.Args = append(currentGroup.Args, sub)
 				i++

@@ -328,11 +328,11 @@ func run() (exitCode int) {
 	groups, err := cmd.Parse(os.Args[1:])
 	if err != nil {
 		logger.Error(ctx, err.Error())
-		return 1
+		exitCode = 1
+	} else {
+		// Hand off execution to the cmd package
+		exitCode = cmd.Execute(ctx, groups)
 	}
-
-	// Hand off execution to the cmd package
-	exitCode = cmd.Execute(ctx, groups)
 
 	if exitCode != 0 {
 		logger.Display(ctx, "{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)
