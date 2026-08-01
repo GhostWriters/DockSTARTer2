@@ -42,8 +42,8 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		}
 
 		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs row.
-		// Inner box content width = m.contentWidth - BorderWidth (accounts for inner box borders).
-		innerContentW := m.contentWidth - layout.BorderWidth()
+		// Inner box content width = paneContentWidth - BorderWidth (accounts for inner box borders).
+		innerContentW := m.paneContentWidth[m.activeTab] - layout.BorderWidth()
 		if innerContentW < 1 {
 			innerContentW = 1
 		}
@@ -86,8 +86,8 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		ID:     "tabbed_vars.editor",
 		X:      m.lastOffsetX + layout.NestedLeftOffset(),
 		Y:      m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
-		Width:  m.contentWidth - layout.BorderWidth(), // inner box content width
-		Height: m.editorHeight,
+		Width:  m.paneContentWidth[m.activeTab] - layout.BorderWidth(), // inner box content width
+		Height: m.paneEditorHeight[m.activeTab],
 		ZOrder: displayengine.ZDialog + 5,
 		Label:  "Variables Editor",
 		Help: &displayengine.HelpContext{
@@ -100,7 +100,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	// INS/OVR hit region — bottom-left of the inner editor box border.
 	// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
 	// (NestedTopOffset already accounts for outer border + inner top border/tab row)
-	insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.editorHeight
+	insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[m.activeTab]
 	regions = append(regions, displayengine.HitRegion{
 		ID:     "tabbed_vars." + displayengine.IDInsOvr,
 		X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
@@ -114,19 +114,24 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 
 	// Click-to-focus background for the inactive pane, when split -- a click
 	// anywhere in it switches which tab is active (see Update's
-	// "tabbed_vars.pane-" case).
+	// "tabbed_vars.pane-" case). X/Y match every other pane-box formula in
+	// this file (boxX/boxTop below, paneBoxAt in tabbed_vars_editor.go):
+	// outer border + margin for X, outer border + large-title rows + shared
+	// subtitle for Y, before the pane's own box begins.
 	if m.splitMode {
 		inactive := 1 - m.activeTab
 		inactiveOffX, inactiveOffY := 0, 0
 		if inactive == 1 {
 			inactiveOffX, inactiveOffY = m.pane1OffsetX, m.pane1OffsetY
 		}
-		paneHeight := m.editorHeight + layout.BorderHeight()
+		paneLeft := offsetX + 1 + layout.ContentSideMargin
+		paneTop := offsetY + 1 + m.largeTitleOverhead + m.subtitleHeight
+		paneHeight := m.paneEditorHeight[inactive] + layout.BorderHeight()
 		regions = append(regions, displayengine.HitRegion{
 			ID:     "tabbed_vars.pane-" + strconv.Itoa(inactive),
-			X:      offsetX + inactiveOffX,
-			Y:      offsetY + inactiveOffY,
-			Width:  m.contentWidth,
+			X:      paneLeft + inactiveOffX,
+			Y:      paneTop + inactiveOffY,
+			Width:  m.paneContentWidth[inactive],
 			Height: paneHeight,
 			ZOrder: displayengine.ZDialog - 1,
 			Label:  m.tabs[inactive].spec.Title,
@@ -136,6 +141,56 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 				ItemText:   "Click to switch editing focus to this file.",
 			},
 		})
+	}
+
+	// Gutter hit region -- the 1-col/1-row blank strip between the two
+	// panes, draggable to resize the split. boxTop/boxHeight match
+	// paneBoxAt's own formula (tabbed_vars_editor.go) for where a pane's
+	// outer box begins/how tall it is, since the gutter sits flush against
+	// pane 0's box on one side.
+	if m.splitMode {
+		// paneLeft/boxTop match every other pane-box formula in this file
+		// (see the click-to-focus region above): outer border + margin for
+		// X, outer border + large-title rows + shared subtitle for Y.
+		paneLeft := offsetX + 1 + layout.ContentSideMargin
+		boxTop := offsetY + 1 + m.largeTitleOverhead + m.subtitleHeight
+		// Side-by-side shares height across both panes (only stacked splits
+		// height), so pane 0's height is pane 1's too here -- safe to use
+		// unconditionally for both the side-by-side gutter's own height and
+		// the stacked gutter's Y position (bottom of pane 0's box).
+		boxHeight := m.paneEditorHeight[0] + layout.BorderHeight()
+		gutterHelp := &displayengine.HelpContext{
+			ScreenName: m.title,
+			PageTitle:  "Resize Split",
+			PageText:   "Drag to resize the two panes, or press Ctrl+S (Alt+S) then use arrow keys. Space resets to 50/50.",
+		}
+		// Exactly the 1-col/1-row visual gutter -- no padding into the
+		// neighboring panes, since their own border is its own click
+		// target (selects that pane) and must not be stolen by the resize
+		// handle.
+		if m.layoutMode == envLayoutSideBySide {
+			regions = append(regions, displayengine.HitRegion{
+				ID:     "tabbed_vars.gutter",
+				X:      paneLeft + m.paneContentWidth[0],
+				Y:      boxTop,
+				Width:  splitGutter,
+				Height: boxHeight,
+				ZOrder: displayengine.ZDialog + 6,
+				Label:  "Resize split",
+				Help:   gutterHelp,
+			})
+		} else {
+			regions = append(regions, displayengine.HitRegion{
+				ID:     "tabbed_vars.gutter",
+				X:      paneLeft,
+				Y:      boxTop + boxHeight,
+				Width:  m.fullContentWidth,
+				Height: splitGutter,
+				ZOrder: displayengine.ZDialog + 6,
+				Label:  "Resize split",
+				Help:   gutterHelp,
+			})
+		}
 	}
 
 	// Per-pane layout widgets, from the same widget set renderPane draws so
@@ -158,7 +213,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		boxX := offsetX + paneOffX + 1 + layout.ContentSideMargin
 		boxY := offsetY + paneOffY + 1 + m.largeTitleOverhead + m.subtitleHeight
 		regions = append(regions, displayengine.TitleBarHitRegionsFor(
-			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.contentWidth, false,
+			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.paneContentWidth[idx], false,
 			widgets, displayengine.ZDialog,
 		)...)
 	}

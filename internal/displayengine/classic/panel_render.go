@@ -96,12 +96,16 @@ func (m PanelModel) ViewString() string {
 	if m.InputFocused {
 		inputTitleTag = "TitleSubMenuFocused"
 	}
+	inputTitle := "Command"
+	if m.PanelMode == "system" {
+		inputTitle = "Command (! = System command, !! = Elevated system command)"
+	}
 	inputContent := lipgloss.NewStyle().
 		Width(inputBoxWidth - 2).
 		Background(ctx.Dialog.GetBackground()).
 		Render(m.Input.View())
 	inputBox := RenderBorderedBoxCtx(
-		"{{|"+inputTitleTag+"|}}Command{{[-]}}",
+		"{{|"+inputTitleTag+"|}}"+inputTitle+"{{[-]}}",
 		inputContent,
 		inputBoxWidth-2,
 		3,
