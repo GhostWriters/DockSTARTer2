@@ -274,10 +274,20 @@ direct_suffix   = "]}}"
   No              = "{{|TitleError|}}"
 
 [defaults]
-dialog_title_align   = "center"
-submenu_title_align  = "left"
-panel_title_align    = "center"
-shadow               = true
-border_color         = 3
-menu_brackets        = true
-line_number_brackets = true
+# borders              = true
+# large_buttons        = true
+# large_title_bars     = true
+# line_characters      = true
+  shadow               = true          # = true
+# shadow_level         = 2
+# scrollbar            = true
+# spinner              = true
+  menu_brackets        = true          # = true
+# checkbox_brackets    = "always"
+# radio_brackets       = "always"
+  border_color         = 3             # = 3
+  dialog_title_align   = "center"      # = "center"
+  submenu_title_align  = "left"        # = "left"
+  panel_title_align    = "center"      # = "center"
+# tab_layout           = "sidebyside"
+  line_number_brackets = true          # = true
