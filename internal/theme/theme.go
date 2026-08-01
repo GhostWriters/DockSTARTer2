@@ -5,11 +5,11 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-	semstyle "github.com/GhostWriters/semstyle/lg"
-	semtheme "github.com/GhostWriters/semstyle/theme"
 	"bytes"
 	"context"
 	"fmt"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+	semtheme "github.com/GhostWriters/semstyle/theme"
 	"os"
 	"path/filepath"
 	"strings"
@@ -275,21 +275,23 @@ type ThemeFile = semtheme.ThemeFile
 // [defaults] table. semtheme keeps that table opaque (app-defined); this struct is how DS2
 // interprets it. Pointers distinguish "unset" from a zero value.
 type ThemeDefaults struct {
-	Borders           *bool   `mapstructure:"borders"`
-	LargeButtons      *bool   `mapstructure:"large_buttons"`
-	LargeTitleBars    *bool   `mapstructure:"large_title_bars"`
-	LineCharacters    *bool   `mapstructure:"line_characters"`
-	Shadow            *bool   `mapstructure:"shadow"`
-	ShadowLevel       *int    `mapstructure:"shadow_level"`
-	Scrollbar         *bool   `mapstructure:"scrollbar"`
-	Spinner           *bool   `mapstructure:"spinner"`
-	MenuBrackets      *bool   `mapstructure:"menu_brackets"`
-	BorderColor       *int    `mapstructure:"border_color"`
-	DialogTitleAlign  *string `mapstructure:"dialog_title_align"`
-	SubmenuTitleAlign *string `mapstructure:"submenu_title_align"`
-	PanelTitleAlign   *string `mapstructure:"panel_title_align"`
-	PanelLocal        *string `mapstructure:"panel_local"`
-	PanelRemote       *string `mapstructure:"panel_remote"`
+	Borders            *bool   `mapstructure:"borders"`
+	LargeButtons       *bool   `mapstructure:"large_buttons"`
+	LargeTitleBars     *bool   `mapstructure:"large_title_bars"`
+	LineCharacters     *bool   `mapstructure:"line_characters"`
+	Shadow             *bool   `mapstructure:"shadow"`
+	ShadowLevel        *int    `mapstructure:"shadow_level"`
+	Scrollbar          *bool   `mapstructure:"scrollbar"`
+	Spinner            *bool   `mapstructure:"spinner"`
+	MenuBrackets       *bool   `mapstructure:"menu_brackets"`
+	LineNumberBrackets *bool   `mapstructure:"line_number_brackets"`
+	CheckboxBrackets   *string `mapstructure:"checkbox_brackets"`
+	RadioBrackets      *string `mapstructure:"radio_brackets"`
+	BorderColor        *int    `mapstructure:"border_color"`
+	DialogTitleAlign   *string `mapstructure:"dialog_title_align"`
+	SubmenuTitleAlign  *string `mapstructure:"submenu_title_align"`
+	PanelTitleAlign    *string `mapstructure:"panel_title_align"`
+	TabLayout          *string `mapstructure:"tab_layout"`
 }
 
 // decodeThemeDefaults converts the opaque [defaults] table from a parsed theme into DS2's
@@ -373,6 +375,18 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 		conf.UI.MenuBrackets = *defaults.MenuBrackets
 		applied["Menu Brackets"] = fmt.Sprintf("%v", conf.UI.MenuBrackets)
 	}
+	if defaults.LineNumberBrackets != nil {
+		conf.UI.LineNumberBrackets = *defaults.LineNumberBrackets
+		applied["Line Number Brackets"] = fmt.Sprintf("%v", conf.UI.LineNumberBrackets)
+	}
+	if defaults.CheckboxBrackets != nil {
+		conf.UI.CheckboxBrackets = *defaults.CheckboxBrackets
+		applied["Checkbox Brackets"] = conf.UI.CheckboxBrackets
+	}
+	if defaults.RadioBrackets != nil {
+		conf.UI.RadioBrackets = *defaults.RadioBrackets
+		applied["Radio Brackets"] = conf.UI.RadioBrackets
+	}
 	if defaults.BorderColor != nil {
 		conf.UI.BorderColor = *defaults.BorderColor
 		applied["Border Color"] = fmt.Sprintf("%d", conf.UI.BorderColor)
@@ -389,20 +403,9 @@ func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[stri
 		conf.UI.PanelTitleAlign = *defaults.PanelTitleAlign
 		applied["Panel Title Align"] = conf.UI.PanelTitleAlign
 	}
-	// PanelLocal: no restrictions — local sessions may use any mode.
-	if defaults.PanelLocal != nil {
-		conf.UI.PanelLocal = *defaults.PanelLocal
-		applied["Panel Local"] = conf.UI.PanelLocal
-	}
-	// PanelRemote: clamp "system" → "log" — themes must never grant full shell access to remote users.
-	// "console" (ds2-only, ConsoleSafe-enforced) is permitted remotely.
-	if defaults.PanelRemote != nil {
-		v := *defaults.PanelRemote
-		if strings.ToLower(v) == "system" {
-			v = "log"
-		}
-		conf.UI.PanelRemote = v
-		applied["Panel Remote"] = conf.UI.PanelRemote
+	if defaults.TabLayout != nil {
+		conf.UI.TabLayout = *defaults.TabLayout
+		applied["Tab Layout"] = conf.UI.TabLayout
 	}
 	return applied
 }
@@ -454,6 +457,15 @@ func applyMigrationThemeDefaults(conf *config.AppConfig, legacyPresent map[strin
 	if legacyPresent["MenuBrackets"] {
 		filtered.MenuBrackets = nil
 	}
+	if legacyPresent["LineNumberBrackets"] {
+		filtered.LineNumberBrackets = nil
+	}
+	if legacyPresent["CheckboxBrackets"] {
+		filtered.CheckboxBrackets = nil
+	}
+	if legacyPresent["RadioBrackets"] {
+		filtered.RadioBrackets = nil
+	}
 	if legacyPresent["BorderColor"] {
 		filtered.BorderColor = nil
 	}
@@ -466,11 +478,8 @@ func applyMigrationThemeDefaults(conf *config.AppConfig, legacyPresent map[strin
 	if legacyPresent["PanelTitleAlign"] {
 		filtered.PanelTitleAlign = nil
 	}
-	if legacyPresent["PanelLocal"] {
-		filtered.PanelLocal = nil
-	}
-	if legacyPresent["PanelRemote"] {
-		filtered.PanelRemote = nil
+	if legacyPresent["TabLayout"] {
+		filtered.TabLayout = nil
 	}
 	ApplyThemeDefaults(conf, filtered)
 }

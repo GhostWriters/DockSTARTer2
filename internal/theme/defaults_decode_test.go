@@ -19,7 +19,7 @@ spinner = false
 shadow_level = 3
 border_color = 5
 dialog_title_align = "center"
-panel_remote = "log"
+tab_layout = "sidebyside"
 [styles]
 Foo = "{{[red]}}"
 `)
@@ -49,8 +49,8 @@ Foo = "{{[red]}}"
 	if d.DialogTitleAlign == nil || *d.DialogTitleAlign != "center" {
 		t.Errorf("DialogTitleAlign = %v, want center", d.DialogTitleAlign)
 	}
-	if d.PanelRemote == nil || *d.PanelRemote != "log" {
-		t.Errorf("PanelRemote = %v, want log", d.PanelRemote)
+	if d.TabLayout == nil || *d.TabLayout != "sidebyside" {
+		t.Errorf("TabLayout = %v, want sidebyside", d.TabLayout)
 	}
 	// Fields not present must stay nil (unset).
 	if d.LargeButtons != nil {
