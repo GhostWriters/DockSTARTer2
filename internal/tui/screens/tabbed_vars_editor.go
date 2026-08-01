@@ -39,6 +39,31 @@ const (
 	minPaneEditorHeight = 4
 )
 
+// GutterDragState tracks a mouse drag on the split gutter between the two
+// panes. Modeled on displayengine/classic's ScrollbarDragState, but without
+// its PendingDragY/LastDragY/DragPending throttle fields -- that gate is a
+// known bug class (see project_scrollbar_drag_cmd_throttle in memory:
+// already caused a step-through-playback bug once for list scrollbars) and
+// a fresh drag implementation shouldn't reintroduce it. Every motion event
+// applies its resulting ratio directly.
+type GutterDragState struct {
+	Dragging   bool
+	StartMouse int     // absolute mouse X (side-by-side) or Y (stacked) when drag started
+	StartRatio float64 // splitRatio when drag started
+}
+
+// StartDrag records the starting mouse position and ratio for a new drag.
+func (g *GutterDragState) StartDrag(mouse int, ratio float64) {
+	g.Dragging = true
+	g.StartMouse = mouse
+	g.StartRatio = ratio
+}
+
+// StopDrag ends the drag.
+func (g *GutterDragState) StopDrag() {
+	g.Dragging = false
+}
+
 // envSetLayoutMsg is dispatched by the Maximize/Side-by-side/Stacked title
 // bar widgets to change layoutMode.
 type envSetLayoutMsg struct {
@@ -102,10 +127,18 @@ type TabbedVarsEditorModel struct {
 	buttonHeight       int
 	subtitleHeight     int
 	largeTitleOverhead int
-	editorHeight       int
-	contentWidth       int // per-pane editor box width -- see SetSize
-	fullContentWidth   int // full dialog content width, spans both panes when split -- used by buttons/outer border
-	focused            bool
+	// paneEditorHeight/paneContentWidth are indexed by pane (0 or 1, same
+	// index as m.tabs when split). Side-by-side splits width but shares
+	// height across both panes; stacked splits height but shares width --
+	// see SetSize. Before splitRatio existed both panes were always exactly
+	// equal, so a single shared field was correct; an adjustable ratio
+	// means each pane can now be a different size, so both dimensions must
+	// be tracked per pane even though only one axis actually varies at a
+	// time for a given layoutMode.
+	paneEditorHeight [2]int
+	paneContentWidth [2]int
+	fullContentWidth int // full dialog content width, spans both panes when split -- used by buttons/outer border
+	focused          bool
 
 	// layoutMode is the user's chosen view (Maximize/Side-by-side/Stacked);
 	// splitMode is SetSize's actual per-render decision, which falls back to
@@ -113,6 +146,24 @@ type TabbedVarsEditorModel struct {
 	// collapse-and-spring-back as the Appearance Settings preview panel.
 	layoutMode envLayoutMode
 	splitMode  bool
+
+	// sideBySideRatio/stackedRatio are pane 0's share (0.0-1.0) of the split
+	// budget -- width for side-by-side, height for stacked -- tracked
+	// separately per layout so resizing one doesn't bleed into the other's
+	// proportions when EnvCycleLayout switches between them. Not persisted
+	// -- both reset to 0.5 each time the editor opens. SetSize clamps
+	// whichever is active to a range that keeps both panes at/above their
+	// minPaneContentWidth/minPaneEditorHeight floor before using it, so a
+	// drag or keyboard nudge can never push a pane below its floor.
+	sideBySideRatio float64
+	stackedRatio    float64
+
+	// resizingGutter is keyboard resize mode (Ctrl+S/Alt+S toggles it);
+	// gutterDrag is the mouse-drag equivalent. Both feed splitRatio and
+	// both are read by ViewString to show the arrow-tipped resize line
+	// instead of the normal blank gutter.
+	resizingGutter bool
+	gutterDrag     GutterDragState
 
 	// pane1OffsetX/Y is where tabs[1]'s pane starts, relative to tabs[0]'s.
 	// activePaneOffsetX/Y is that offset when tab 1 is active, else (0,0) --
@@ -247,14 +298,16 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	}
 
 	m := &TabbedVarsEditorModel{
-		tabs:      tabs,
-		activeTab: 0,
-		title:     title,
-		buttons:   buttons,
-		btnIdx:    0,
-		focus:     envFocusEditor,
-		onClose:   onClose,
-		connType:  connType,
+		tabs:            tabs,
+		activeTab:       0,
+		title:           title,
+		buttons:         buttons,
+		btnIdx:          0,
+		focus:           envFocusEditor,
+		onClose:         onClose,
+		connType:        connType,
+		sideBySideRatio: 0.5,
+		stackedRatio:    0.5,
 	}
 	zoneByName := map[string]string{
 		"Save": displayengine.IDSaveButton,
@@ -347,6 +400,18 @@ func (m *TabbedVarsEditorModel) paneOffsetFor(idx int) (x, y int) {
 	return 0, 0
 }
 
+// activeSplitRatio returns a pointer to whichever of
+// sideBySideRatio/stackedRatio applies to m.layoutMode, so callers can
+// read or write "the current layout's ratio" without duplicating the
+// switch at every call site. Defaults to sideBySideRatio when maximized
+// (there's no split to ratio in that mode, so the choice is arbitrary).
+func (m *TabbedVarsEditorModel) activeSplitRatio() *float64 {
+	if m.layoutMode == envLayoutStacked {
+		return &m.stackedRatio
+	}
+	return &m.sideBySideRatio
+}
+
 // paneBoxAt returns which pane's box contains the given absolute screen
 // coordinates -- for raw mouse events with coordinates but no hit-region ID
 // (scrollbar drag clicks, raw tea.MouseWheelMsg). Always m.activeTab when
@@ -357,11 +422,11 @@ func (m *TabbedVarsEditorModel) paneBoxAt(x, y int) (idx int, ok bool) {
 	}
 	layout := displayengine.GetLayout()
 	boxTop := m.dialogOffsetY + 1 + m.largeTitleOverhead + m.subtitleHeight
-	boxHeight := m.editorHeight + layout.BorderHeight()
 	for i := 0; i < 2; i++ {
 		offX, offY := m.paneOffsetFor(i)
 		bx, by := m.dialogOffsetX+offX, boxTop+offY
-		if x >= bx && x < bx+m.contentWidth && y >= by && y < by+boxHeight {
+		boxHeight := m.paneEditorHeight[i] + layout.BorderHeight()
+		if x >= bx && x < bx+m.paneContentWidth[i] && y >= by && y < by+boxHeight {
 			return i, true
 		}
 	}
@@ -624,8 +689,16 @@ func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.Curs
 	return relX, relY, shape, true
 }
 
-// IsScrollbarDragging returns true if the current editor is dragging a line or a scrollbar.
+// IsScrollbarDragging returns true if the current editor is dragging a line
+// or a scrollbar, or the split gutter is being dragged. AppModel's mouse
+// router (model_mouse.go) only forwards MouseMotionMsg/MouseReleaseMsg to
+// the active screen while this is true -- without gutterDrag included here,
+// a gutter drag would start on click but never receive another motion
+// event, since those get dropped before reaching Update at all.
 func (m *TabbedVarsEditorModel) IsScrollbarDragging() bool {
+	if m.gutterDrag.Dragging {
+		return true
+	}
 	if len(m.tabs) > 0 {
 		return m.tabs[m.activeTab].editor.IsDragging()
 	}

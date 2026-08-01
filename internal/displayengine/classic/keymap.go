@@ -65,6 +65,7 @@ type KeyMap struct {
 	EnvNextTab     key.Binding
 	EnvPrevTab     key.Binding
 	EnvCycleLayout key.Binding
+	EnvResizeSplit key.Binding
 
 	// Program-wide context menu (keyboard equiv of right-click)
 	ContextMenu key.Binding
@@ -232,6 +233,14 @@ var Keys = KeyMap{
 	EnvCycleLayout: key.NewBinding(
 		key.WithKeys("f6", "ctrl+w", "alt+w", "ctrl+alt+w"),
 		key.WithHelp("F6/alt+w", "cycle layout"),
+	),
+	// alt+s is the primary fallback for ctrl+s specifically (not just the
+	// usual redundancy) -- ctrl+s is traditionally XOFF (terminal software
+	// flow control), which may not reach the app in every terminal/SSH
+	// client/web-frontend combination even under raw mode.
+	EnvResizeSplit: key.NewBinding(
+		key.WithKeys("f8", "ctrl+s", "alt+s", "ctrl+alt+s"),
+		key.WithHelp("F8/alt+s", "resize split"),
 	),
 	ContextMenu: key.NewBinding(
 		key.WithKeys("f3", "ctrl+space", "alt+space", "ctrl+alt+space", "shift+F10", "alt+enter", "ctrl+enter", "ctrl+alt+enter", "menu"),

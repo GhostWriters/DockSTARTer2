@@ -667,6 +667,11 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	{"Prompt", ""},
 	{"PromptShell", "Highlight"},
 	{"PromptSudo", "MarkerInvalid"},
+	// ResizeLine styles the tabbed env editor's split-gutter line while
+	// actively being dragged/keyboard-resized -- a solid reverse-video
+	// block reads as a stronger "actively grabbed" affordance than plain
+	// emphasized text.
+	{"ResizeLine", "ItemFocused"},
 	{"MarkerAdded", "Highlight"},
 	{"MarkerDeleted", "MarkerInvalid"},
 	{"MarkerModified", "Highlight"},
@@ -789,11 +794,10 @@ var statusFallbackTags = []struct{ name, fallback string }{
 // Highlight. FailingCommand/Yes/No are deliberately excluded: every bundled
 // theme points them at TitleError/TitleSuccess instead, never at Highlight,
 // so they're a different (unrelated) fallback relationship, not this one.
-// Safe now that automatic console fallback is disabled (registerTagFallbacks'
-// doc comment) -- previously, removing a theme's redundant "= Highlight"
-// line for these exact names surfaced an unrelated console-map default
-// instead of this fallback, since console-map checks took priority over
-// this rule.
+// Automatic console fallback is disabled (see registerTagFallbacks' doc
+// comment), so removing a theme's redundant "= Highlight" line for these
+// exact names resolves to this fallback, not an unrelated console-map
+// default.
 var highlightFallbackTags = []struct{ name, fallback string }{
 	{"ApplicationName", "Highlight"},
 	{"RunningCommand", "Highlight"},

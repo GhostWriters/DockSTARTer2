@@ -29,12 +29,11 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	if m.splitMode {
 		pane0 := m.renderPane(0, m.activeTab == 0)
 		pane1 := m.renderPane(1, m.activeTab == 1)
-		bgStyle := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground())
 		if m.layoutMode == envLayoutSideBySide {
-			gutter := bgStyle.Width(1).Height(lipgloss.Height(pane0)).Render("")
+			gutter := m.gutterFill(ctx, true, lipgloss.Height(pane0))
 			body = lipgloss.JoinHorizontal(lipgloss.Top, pane0, gutter, pane1)
 		} else {
-			gutter := bgStyle.Width(m.fullContentWidth).Height(1).Render("")
+			gutter := m.gutterFill(ctx, false, m.fullContentWidth)
 			body = lipgloss.JoinVertical(lipgloss.Left, pane0, gutter, pane1)
 		}
 	} else {
@@ -82,9 +81,81 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	)
 }
 
+// gutterFill renders the split gutter's content: the normal blank strip, or
+// (while an active drag or keyboard resize mode is in progress) a line with
+// an arrow at each end, styled with the ResizeLine tag (falls back to
+// ItemFocused's reverse-video block in themes that don't set it), so
+// "actively resizing" reads differently from the idle divider. Unicode
+// double-arrows
+// (↔/↕) were considered and dropped: both are East-Asian-Width "Ambiguous",
+// so a terminal can legitimately render them as 1 or 2 columns, which would
+// misalign the gutter's exact column math. Instead this reuses the small-
+// triangle glyphs (▸/◂/▾, Geometric Shapes block -- unambiguous width)
+// already used elsewhere for expand/focus indicators (dialog_border_box.go,
+// dialog_render.go), gated behind ctx.LineCharacters like every other
+// Unicode/ASCII glyph pair in this codebase, with a plain-ASCII fallback.
+// vertical is true for the side-by-side layout's column gutter (length =
+// its height in rows -- only 1 column wide, so the line runs top-to-bottom
+// with a ▴/▲ or ▾/▼-style cap at each end); false for the stacked layout's
+// row gutter (length = its width in columns, line runs left-to-right with
+// ◂/▸ caps).
+func (m *TabbedVarsEditorModel) gutterFill(ctx displayengine.StyleContext, vertical bool, length int) string {
+	if !m.gutterDrag.Dragging && !m.resizingGutter {
+		bgStyle := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground())
+		if vertical {
+			return bgStyle.Width(1).Height(length).Render("")
+		}
+		return bgStyle.Width(length).Height(1).Render("")
+	}
+	var start, end, fill string
+	if vertical {
+		if ctx.LineCharacters {
+			start, end, fill = "▴", "▾", "│"
+		} else {
+			start, end, fill = "^", "v", "|"
+		}
+		// Styled per row, then joined by "\n": the ANSI codes RenderThemeText
+		// emits only open/close once per call, but lipgloss.JoinHorizontal
+		// (ViewString) splits multi-line content by "\n" before rejoining it
+		// with the panes -- a single style wrapped around the whole block
+		// would leave every row but the first with no active SGR code.
+		rows := endCappedLine(length, start, end, fill)
+		for i, r := range rows {
+			rows[i] = displayengine.RenderThemeText("{{|ResizeLine|}}"+r+"{{[-]}}", ctx.Dialog)
+		}
+		return strings.Join(rows, "\n")
+	}
+	if ctx.LineCharacters {
+		start, end, fill = "◂", "▸", "─"
+	} else {
+		start, end, fill = "<", ">", "-"
+	}
+	content := strings.Join(endCappedLine(length, start, end, fill), "")
+	return displayengine.RenderThemeText("{{|ResizeLine|}}"+content+"{{[-]}}", ctx.Dialog)
+}
+
+// endCappedLine returns length characters: start at the first, end at the
+// last, fill in between. Falls back to a single repeated fill character
+// when length is too short to fit both end caps.
+func endCappedLine(length int, start, end, fill string) []string {
+	if length <= 0 {
+		return nil
+	}
+	if length == 1 {
+		return []string{fill}
+	}
+	line := make([]string, length)
+	line[0] = start
+	line[length-1] = end
+	for i := 1; i < length-1; i++ {
+		line[i] = fill
+	}
+	return line
+}
+
 // renderPane renders one tab's tab-row/title + bordered editor box +
-// INS/OVR bottom label, at m.contentWidth x m.editorHeight -- both panes
-// share these dimensions when split (see SetSize). The shared subtitle
+// INS/OVR bottom label, at pane idx's own paneContentWidth x
+// paneEditorHeight (see SetSize). The shared subtitle
 // heading is rendered in ViewString, not here. In split mode there's no
 // multi-tab strip within a pane -- just this pane's own title segment;
 // clicking the OTHER pane's background switches which tab is active.
@@ -119,8 +190,8 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	innerBox := displayengine.RenderBorderedBoxCtx(
 		tabRow,
 		editorView,
-		m.contentWidth-2,
-		m.editorHeight+2,
+		m.paneContentWidth[idx]-2,
+		m.paneEditorHeight[idx]+2,
 		focused,
 		false, // No focus indicators here
 		true,  // Rounded corners to match submenu style
@@ -141,7 +212,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {
-		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.contentWidth, modeLabel, scrollLabel, focused, ctx)
+		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[idx], modeLabel, scrollLabel, focused, ctx)
 		innerBox = strings.Join(lines, "\n")
 	}
 
@@ -241,6 +312,9 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 	}
 	if len(m.tabs) == 2 {
 		editorActions = append(editorActions, displayengine.Keys.EnvCycleLayout)
+		if m.splitMode {
+			editorActions = append(editorActions, displayengine.Keys.EnvResizeSplit)
+		}
 	}
 
 	return [][]key.Binding{
@@ -310,17 +384,29 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 
 	wantSplit := len(m.tabs) == 2 && m.layoutMode != envLayoutMaximized
 	m.splitMode = false
-	m.contentWidth = m.fullContentWidth
+	m.paneContentWidth[0] = m.fullContentWidth
+	m.paneContentWidth[1] = m.fullContentWidth
 	m.pane1OffsetX, m.pane1OffsetY = 0, 0
 
 	// Stacked's height fit is checked later, once subtitleHeight/buttonHeight/
 	// largeTitleOverhead are known. Auto-collapses to maximized rendering
 	// without touching m.layoutMode, so it springs back once there's room.
 	if wantSplit && m.layoutMode == envLayoutSideBySide {
-		paneW := (m.fullContentWidth - splitGutter) / 2
-		if paneW >= minPaneContentWidth {
+		budget := m.fullContentWidth - splitGutter
+		if budget >= 2*minPaneContentWidth {
+			paneW := int(float64(budget) * m.sideBySideRatio)
+			// Clamp so the ratio can never push either pane below its own
+			// floor -- an off-center ratio means pane 2's width
+			// (budget-paneW) isn't automatically >= pane 1's, so both
+			// directions need an explicit check.
+			if paneW < minPaneContentWidth {
+				paneW = minPaneContentWidth
+			} else if paneW > budget-minPaneContentWidth {
+				paneW = budget - minPaneContentWidth
+			}
 			m.splitMode = true
-			m.contentWidth = paneW
+			m.paneContentWidth[0] = paneW
+			m.paneContentWidth[1] = budget - paneW
 			m.pane1OffsetX = paneW + splitGutter
 		}
 	}
@@ -347,46 +433,126 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	paneBudget := m.height - layout.BorderHeight() - largeTitleOverhead - m.buttonHeight - m.subtitleHeight
 
 	if wantSplit && m.layoutMode == envLayoutStacked {
-		perPane := (paneBudget - splitGutter) / 2
-		editorH := perPane - layout.BorderHeight()
-		if editorH >= minPaneEditorHeight {
+		budget := paneBudget - splitGutter
+		minPerPane := minPaneEditorHeight + layout.BorderHeight()
+		if budget >= 2*minPerPane {
+			perPane := int(float64(budget) * m.stackedRatio)
+			if perPane < minPerPane {
+				perPane = minPerPane
+			} else if perPane > budget-minPerPane {
+				perPane = budget - minPerPane
+			}
 			m.splitMode = true
-			m.editorHeight = editorH
+			m.paneEditorHeight[0] = perPane - layout.BorderHeight()
+			m.paneEditorHeight[1] = (budget - perPane) - layout.BorderHeight()
 			m.pane1OffsetY = perPane + splitGutter
 		}
 	}
 	if !m.splitMode || m.layoutMode != envLayoutStacked {
 		// Maximized or side-by-side: one pane's worth of height, using the
 		// full budget (side-by-side shares height across both panes).
-		m.editorHeight = paneBudget - layout.BorderHeight()
+		m.paneEditorHeight[0] = paneBudget - layout.BorderHeight()
+		m.paneEditorHeight[1] = m.paneEditorHeight[0]
 	}
-	if m.editorHeight < 1 {
-		m.editorHeight = 1
+	for i := range m.paneEditorHeight {
+		if m.paneEditorHeight[i] < 1 {
+			m.paneEditorHeight[i] = 1
+		}
 	}
-	if m.editorHeight < 3 && m.buttonHeight == 3 && !m.splitMode {
+	if m.paneEditorHeight[m.activeTab] < 3 && m.buttonHeight == 3 && !m.splitMode {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
 		overhead := layout.BorderHeight() + largeTitleOverhead + 1 + m.subtitleHeight + layout.BorderHeight()
-		m.editorHeight = m.height - overhead
-		if m.editorHeight < 1 {
-			m.editorHeight = 1
+		h := m.height - overhead
+		if h < 1 {
+			h = 1
 		}
+		m.paneEditorHeight[0] = h
+		m.paneEditorHeight[1] = h
 	}
 
 	m.activePaneOffsetX, m.activePaneOffsetY = 0, 0
 	if m.splitMode && m.activeTab == 1 {
 		m.activePaneOffsetX, m.activePaneOffsetY = m.pane1OffsetX, m.pane1OffsetY
 	}
-
-	editorWidth := m.contentWidth - layout.BorderWidth() // Editor content width accounts for inner box borders
-	if editorWidth < 10 {
-		editorWidth = 10
+	if !m.splitMode {
+		// No gutter to resize once collapsed (window shrunk below the
+		// split floor) -- exit both resize states so they don't get stuck
+		// active with nothing visible to act on.
+		m.resizingGutter = false
+		m.gutterDrag.StopDrag()
 	}
 
 	for i := range m.tabs {
+		// Editor content width accounts for inner box borders.
+		editorWidth := m.paneContentWidth[i] - layout.BorderWidth()
+		if editorWidth < 10 {
+			editorWidth = 10
+		}
 		m.tabs[i].editor.SetWidth(editorWidth)
-		m.tabs[i].editor.SetHeight(m.editorHeight)
+		m.tabs[i].editor.SetHeight(m.paneEditorHeight[i])
 	}
+}
+
+// splitBudgetAndFloor returns the total space available to split between
+// the two panes (width side-by-side, height stacked) and the minimum
+// either pane may shrink to, in that same unit. Shared by applyGutterDrag
+// and nudgeSplitRatio so both convert mouse/key deltas into a split-ratio
+// clamp identically to SetSize's own collapse-threshold math.
+func (m *TabbedVarsEditorModel) splitBudgetAndFloor() (budget, minPane int) {
+	layout := displayengine.GetLayout()
+	if m.layoutMode == envLayoutSideBySide {
+		return m.fullContentWidth - splitGutter, minPaneContentWidth
+	}
+	paneBudget := m.height - layout.BorderHeight() - m.largeTitleOverhead - m.buttonHeight - m.subtitleHeight
+	return paneBudget - splitGutter, minPaneEditorHeight + layout.BorderHeight()
+}
+
+// clampSplitRatio clamps ratio so neither pane can go below minPane out of
+// budget.
+func clampSplitRatio(ratio float64, budget, minPane int) float64 {
+	minRatio := float64(minPane) / float64(budget)
+	maxRatio := 1 - minRatio
+	if ratio < minRatio {
+		return minRatio
+	}
+	if ratio > maxRatio {
+		return maxRatio
+	}
+	return ratio
+}
+
+// applyGutterDrag updates the active layout's split ratio from the current
+// absolute mouse position during an active gutter drag (mouse is msg.X for
+// side-by-side,
+// msg.Y for stacked), clamped to the same per-pane floor SetSize enforces,
+// then re-lays-out via SetSize.
+func (m *TabbedVarsEditorModel) applyGutterDrag(mouse int) {
+	budget, minPane := m.splitBudgetAndFloor()
+	if budget < 1 {
+		return
+	}
+
+	delta := mouse - m.gutterDrag.StartMouse
+	ratio := clampSplitRatio(m.gutterDrag.StartRatio+float64(delta)/float64(budget), budget, minPane)
+
+	*m.activeSplitRatio() = ratio
+	m.SetSize(m.width, m.height)
+}
+
+// nudgeSplitRatio adjusts the active layout's split ratio by a fixed step (2
+// columns/rows worth) in the given direction (-1 or +1), clamped to the
+// same per-pane floor SetSize enforces, then re-lays-out via SetSize. Used
+// by the keyboard resize mode (EnvResizeSplit + arrow keys).
+func (m *TabbedVarsEditorModel) nudgeSplitRatio(dir int) {
+	const stepUnits = 2
+	budget, minPane := m.splitBudgetAndFloor()
+	if budget < 1 {
+		return
+	}
+	ratioPtr := m.activeSplitRatio()
+	*ratioPtr = clampSplitRatio(*ratioPtr+float64(dir*stepUnits)/float64(budget), budget, minPane)
+	m.SetSize(m.width, m.height)
 }
 
 // calcSubtitleHeightForTab returns the number of subtitle lines for one tab

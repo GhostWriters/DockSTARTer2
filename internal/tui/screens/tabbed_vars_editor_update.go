@@ -29,6 +29,15 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case displayengine.LayerHitMsg:
+		// Keyboard resize mode owns input exclusively until Esc/EnvResizeSplit
+		// exits it -- a stray click on either editor pane switching focus/
+		// active-tab mid-resize would be surprising and fight the keyboard
+		// nudges. The gutter itself doesn't need a click while already in
+		// this mode (arrow keys drive it directly), so blocking everything
+		// here is safe.
+		if m.resizingGutter {
+			return m, nil
+		}
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
 			// On right-click, do nothing (allows through hit-testing to global context menu)
 			if msg.Button == tea.MouseRight {
@@ -54,6 +63,18 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
+		}
+
+		if msg.ID == "tabbed_vars.gutter" {
+			if msg.Button != tea.MouseLeft {
+				return m, nil
+			}
+			if m.layoutMode == envLayoutSideBySide {
+				m.gutterDrag.StartDrag(msg.X, *m.activeSplitRatio())
+			} else {
+				m.gutterDrag.StartDrag(msg.Y, *m.activeSplitRatio())
+			}
+			return m, nil
 		}
 
 		if msg.ID == "tabbed_vars.editor" {
@@ -226,8 +247,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			layout := displayengine.GetLayout()
 			relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-			editorW := m.contentWidth - layout.BorderWidth()
-			if relX >= 0 && relY >= 0 && relY < m.editorHeight && relX < editorW {
+			editorW := m.paneContentWidth[idx] - layout.BorderWidth()
+			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[idx] && relX < editorW {
 				var cmd tea.Cmd
 				m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 					X:      relX,
@@ -278,6 +299,52 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// Keyboard split-resize mode: EnvResizeSplit toggles it (only
+		// meaningful once actually split -- see splitMode). While active,
+		// arrow keys nudge the split instead of navigating; Esc or the
+		// same key again exits back to normal editing.
+		if m.resizingGutter {
+			switch msg.String() {
+			case "esc":
+				m.resizingGutter = false
+				return m, nil
+			case "left":
+				if m.layoutMode == envLayoutSideBySide {
+					m.nudgeSplitRatio(-1)
+				}
+				return m, nil
+			case "right":
+				if m.layoutMode == envLayoutSideBySide {
+					m.nudgeSplitRatio(1)
+				}
+				return m, nil
+			case "up":
+				if m.layoutMode == envLayoutStacked {
+					m.nudgeSplitRatio(-1)
+				}
+				return m, nil
+			case "down":
+				if m.layoutMode == envLayoutStacked {
+					m.nudgeSplitRatio(1)
+				}
+				return m, nil
+			case "space":
+				*m.activeSplitRatio() = 0.5
+				m.SetSize(m.width, m.height)
+				return m, nil
+			}
+			if key.Matches(msg, displayengine.Keys.EnvResizeSplit) {
+				m.resizingGutter = false
+			}
+			return m, nil
+		}
+		if key.Matches(msg, displayengine.Keys.EnvResizeSplit) {
+			if m.splitMode {
+				m.resizingGutter = true
+			}
+			return m, nil
+		}
+
 		// When the active pane's own border widgets have focus (a level
 		// below the dialog's own title bar -- see CyclePaneTitleFocus),
 		// handle navigation between them.
@@ -468,6 +535,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.MouseMotionMsg:
+		if m.gutterDrag.Dragging {
+			if m.layoutMode == envLayoutSideBySide {
+				m.applyGutterDrag(msg.X)
+			} else {
+				m.applyGutterDrag(msg.Y)
+			}
+			return m, nil
+		}
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			editor := m.tabs[m.activeTab].editor
 			if editor.IsDragging() {
@@ -484,6 +559,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.MouseReleaseMsg:
+		if m.gutterDrag.Dragging {
+			m.gutterDrag.StopDrag()
+			return m, nil
+		}
 		if m.focus == envFocusEditor && len(m.tabs) > 0 {
 			layout := displayengine.GetLayout()
 			relX := msg.X - (m.lastOffsetX + layout.NestedLeftOffset())
