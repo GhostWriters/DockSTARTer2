@@ -96,6 +96,18 @@ func run() (exitCode int) {
 		return system.RunInternalFixPermissions(os.Args[2:])
 	}
 
+	// Hidden flag, must be given first: skip anything at startup that might
+	// prompt for input (e.g. the one-time setcap offer, which can shell out
+	// to sudo). Used by the systemd unit's ExecStart/ExecStop
+	// (--server-daemon, --server stop) -- both run unattended with no
+	// controlling terminal to answer a prompt. Deliberately left in
+	// os.Args rather than stripped in place: anything downstream that
+	// wants to know "how was this process actually launched" (e.g.
+	// RegisterProc's "other instances running" listing, or a self-update
+	// re-exec preserving the original daemon's args) should still see it.
+	// Only cmd.Parse below needs it hidden, via its own local args slice.
+	nonInteractive := len(os.Args) >= 2 && os.Args[1] == "--non-interactive"
+
 	// Handle internal tool commands immediately before any startup work.
 	// These are invoked by ds2 itself (e.g. restart watcher) and must be fast and silent.
 	if len(os.Args) == 2 {
@@ -235,7 +247,7 @@ func run() (exitCode int) {
 
 	// Register this process so other instances can see it in startup warnings.
 	exePath := sessionlocks.ResolvedExePath()
-	sessionlocks.Sessions.RegisterProc(exePath, version.Version)
+	sessionlocks.Sessions.RegisterProc(exePath, version.Version, os.Args[1:])
 	defer sessionlocks.Sessions.UnregisterProc()
 
 	// Seed the installed-version file so the restart watcher always has a
@@ -268,14 +280,7 @@ func run() (exitCode int) {
 	setcapCmdPresent := slices.ContainsFunc(os.Args[1:], func(a string) bool {
 		return a == "--setcap" || a == "--config-setcap" || a == "--config-no-setcap"
 	})
-	// --server-daemon runs unattended (systemd/launchd, no controlling
-	// terminal) -- never treat it as interactive here, regardless of what
-	// the TTY checks below report. A daemon's stdio can be redirected in
-	// ways that pass those checks yet still have no one able to answer a
-	// prompt (e.g. after a self-update re-exec preserves --server-daemon in
-	// argv), and asking would leave the offer hanging with no response.
-	serverDaemon := slices.Contains(os.Args[1:], "--server-daemon")
-	interactive := !serverDaemon && console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
+	interactive := !nonInteractive && console.IsTTY() && console.IsStdoutTTY() && console.IsStdinTTY()
 
 	// Offer/maintain the optional CAP_CHOWN/CAP_FOWNER grant on the binary
 	// (lets permission fixes run without sudo; Linux + interactive startups
@@ -324,8 +329,14 @@ func run() (exitCode int) {
 		}
 	}
 
-	// Parse command line arguments
-	groups, err := cmd.Parse(os.Args[1:])
+	// Parse command line arguments. --non-interactive (if present) is
+	// dropped only for this call -- os.Args itself keeps it, see the
+	// nonInteractive comment above.
+	parseArgs := os.Args[1:]
+	if nonInteractive {
+		parseArgs = parseArgs[1:]
+	}
+	groups, err := cmd.Parse(parseArgs)
 	if err != nil {
 		logger.Error(ctx, err.Error())
 		exitCode = 1

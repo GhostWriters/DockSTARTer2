@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 
 	"DockSTARTer2/internal/config"
@@ -168,6 +169,7 @@ func fmtWebPort(webPort int) string {
 func handleServeDaemon(ctx context.Context, group *CommandGroup, conf *config.AppConfig) error {
 	console.IsDaemon = true
 	console.DaemonArgs = os.Args[1:]
+	console.NonInteractive = slices.Contains(console.DaemonArgs, "--non-interactive")
 	startMenu := extractNavArg(group.Args)
 	sshPort, webPort := parsePortArgs(group.Args)
 	if sshPort > 0 {

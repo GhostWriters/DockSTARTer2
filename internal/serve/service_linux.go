@@ -32,7 +32,9 @@ WorkingDirectory={{.HomeDir}}
 {{- range .Env}}
 Environment={{.}}
 {{- end}}
-ExecStart={{.ExecPath}} --server-daemon{{.PortArgs}}
+ExecStart={{.ExecPath}} --non-interactive --server-daemon{{.PortArgs}}
+ExecStop={{.ExecPath}} --non-interactive --server stop{{.PortArgs}}
+TimeoutStopSec=15
 Restart=on-failure
 RestartSec=5
 
