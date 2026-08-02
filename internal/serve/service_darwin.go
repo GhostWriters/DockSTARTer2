@@ -42,6 +42,7 @@ var launchDaemonTemplate = template.Must(template.New("plist").Parse(`<?xml vers
 	<key>ProgramArguments</key>
 	<array>
 		<string>{{.ExecPath}}</string>
+		<string>--non-interactive</string>
 		<string>--server-daemon</string>
 		{{- range .PortArgs}}
 		<string>{{.}}</string>

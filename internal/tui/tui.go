@@ -1193,6 +1193,9 @@ func TriggerAppUpdate() tea.Cmd {
 			// When running inside a daemon, re-exec must restart as a daemon.
 			var reExecArgs []string
 			if console.IsDaemon {
+				if console.NonInteractive {
+					reExecArgs = append(reExecArgs, "--non-interactive")
+				}
 				reExecArgs = append(reExecArgs, "--server-daemon")
 			} else {
 				reExecArgs = append(reExecArgs, console.CurrentFlags...)
@@ -1284,6 +1287,9 @@ func TriggerUpdate() tea.Cmd {
 			// Re-exec args restore the active screen after update.
 			var reExecArgs []string
 			if console.IsDaemon {
+				if console.NonInteractive {
+					reExecArgs = append(reExecArgs, "--non-interactive")
+				}
 				reExecArgs = append(reExecArgs, "--server-daemon")
 			} else {
 				reExecArgs = append(reExecArgs, console.CurrentFlags...)

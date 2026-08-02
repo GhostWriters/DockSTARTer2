@@ -11,9 +11,11 @@ import (
 // SpawnDaemon re-execs the current binary with --server-daemon, detached from
 // the console via DETACHED_PROCESS so it continues running after the parent
 // exits. Stdout and stderr inherit the parent's so startup log lines are
-// visible.
+// visible. --non-interactive is always prepended: the daemon has no
+// controlling console to answer a prompt (e.g. the one-time setcap offer)
+// regardless of what spawned it or what its stdio looks like.
 func SpawnDaemon(execPath string, extraArgs []string) (*os.Process, error) {
-	args := append([]string{"--server-daemon"}, extraArgs...)
+	args := append([]string{"--non-interactive", "--server-daemon"}, extraArgs...)
 	cmd := exec.Command(execPath, args...)
 	const detachedProcess = 0x00000008
 	cmd.SysProcAttr = &syscall.SysProcAttr{

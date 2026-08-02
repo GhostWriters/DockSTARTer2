@@ -396,10 +396,15 @@ func readProcRecord(path string) (procRecord, bool) {
 	return r, true
 }
 
-// RegisterProc writes a TOML registration file for the current process under procs/.
-func (m *SessionManager) RegisterProc(exePath, currentVersion string) {
+// RegisterProc writes a TOML registration file for the current process under
+// procs/. rawArgs is the true, full invocation (main.go's originalArgs,
+// captured before any hidden-flag stripping) rather than the live os.Args --
+// a hidden flag like --non-interactive is stripped from os.Args at startup
+// so cmd.Parse never sees it, which would otherwise make this "how was this
+// process launched" record misleadingly incomplete.
+func (m *SessionManager) RegisterProc(exePath, currentVersion string, rawArgs []string) {
 	_ = os.MkdirAll(m.procsDir, 0755)
-	args := strings.Join(os.Args[1:], " ")
+	args := strings.Join(rawArgs, " ")
 	sshClient := ""
 	if sshConn := os.Getenv("SSH_CONNECTION"); sshConn != "" {
 		if parts := strings.Fields(sshConn); len(parts) >= 2 {

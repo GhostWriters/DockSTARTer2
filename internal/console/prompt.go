@@ -54,6 +54,14 @@ var IsDaemon bool
 // shared config file (see cmd/executor_serve.go's parsePortArgs).
 var DaemonArgs []string
 
+// NonInteractive is true when this --server-daemon process was launched
+// with the hidden --non-interactive flag (derived from DaemonArgs, so it's
+// only meaningful when IsDaemon is true). Consulted by the update/restart
+// path's re-exec sites that hardcode a bare --server-daemon instead of
+// reusing DaemonArgs wholesale, so a self-update re-exec doesn't silently
+// drop it and start prompting for input again.
+var NonInteractive bool
+
 // GlobalYes is set to true when the -y/--yes flag is passed to the application.
 // QuestionPrompt prompts the user with a Yes/No question.
 // It returns true if the user answers Yes, false otherwise.

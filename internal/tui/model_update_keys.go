@@ -112,7 +112,11 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		if console.IsDaemon {
 			// In server mode Ctrl-\ restarts the TUI rather than killing the daemon.
 			return m, func() tea.Msg {
-				reExecArgs := []string{"--server-daemon"}
+				var reExecArgs []string
+				if console.NonInteractive {
+					reExecArgs = append(reExecArgs, "--non-interactive")
+				}
+				reExecArgs = append(reExecArgs, "--server-daemon")
 				_ = update.ReExec(m.ctx, registeredExePath, reExecArgs)
 				return nil
 			}, true
