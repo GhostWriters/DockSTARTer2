@@ -34,7 +34,7 @@ import (
 const MinAPIVersion = "1.41"
 
 // SetupURL is where users are pointed for Docker installation instructions.
-const SetupURL = "https://dockstarter.com"
+const SetupURL = "https://dockstarter.com/docker"
 
 // Status is the outcome of one daemon probe.
 type Status struct {
