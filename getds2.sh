@@ -109,7 +109,13 @@ else
     set --
     [ -n "$EXISTING" ] && set -- "$EXISTING"
     OLD_IFS="$IFS"; IFS=":"
-    for d in $TARGET_LIST; do set -- "$@" "$d/$FILE_NAME"; done
+    for d in $TARGET_LIST; do
+        # Only consider dirs actually on PATH -- installing to somewhere
+        # else would leave the command unrunnable without extra setup.
+        case ":$PATH:" in
+            *":$d:"*) set -- "$@" "$d/$FILE_NAME" ;;
+        esac
+    done
     IFS="$OLD_IFS"
 fi
 
