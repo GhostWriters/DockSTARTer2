@@ -808,6 +808,7 @@ var highlightFallbackTags = []struct{ name, fallback string }{
 	{"File", "Highlight"},
 	{"Folder", "Highlight"},
 	{"App", "Highlight"},
+	{"UserApp", "Highlight"},
 	{"IPAddress", "Highlight"},
 	{"Var", "Highlight"},
 	{"User", "Highlight"},

@@ -115,14 +115,25 @@ func InstanceDisplayName(baseNiceName, appName string) string {
 	return baseNiceName + "__" + CapitalizeFirstLetter(suffix)
 }
 
+// AppStyleTag returns "UserApp" for a user-defined app and "App" for a
+// built-in one, so callers can pick the right style without each
+// duplicating the IsAppBuiltIn check.
+func AppStyleTag(appName string) string {
+	if IsAppBuiltIn(appName) {
+		return "App"
+	}
+	return "UserApp"
+}
+
 // StyledAppName returns appName's nice name in the app's standard {{|App|}}
-// style, hyperlinked to its docs page (AppURL) when one exists, ready to
-// drop into any themed message. appName may be instance-qualified (e.g.
-// "radarr__4k") -- both the nice name and the docs link are always resolved
-// against the base app, since instances don't have their own.
+// (or {{|UserApp|}} for a user-defined app) style, hyperlinked to its docs
+// page (AppURL) when one exists, ready to drop into any themed message.
+// appName may be instance-qualified (e.g. "radarr__4k") -- both the nice
+// name and the docs link are always resolved against the base app, since
+// instances don't have their own.
 func StyledAppName(ctx context.Context, appName string) string {
 	base := AppNameToBaseAppName(appName)
-	return console.FormatLink("App", GetNiceName(ctx, base), AppURL(base))
+	return console.FormatLink(AppStyleTag(base), GetNiceName(ctx, base), AppURL(base))
 }
 
 // StyledInstanceName is StyledAppName but the visible label keeps the
@@ -133,7 +144,7 @@ func StyledAppName(ctx context.Context, appName string) string {
 func StyledInstanceName(ctx context.Context, appName string) string {
 	base := AppNameToBaseAppName(appName)
 	label := InstanceDisplayName(GetNiceName(ctx, base), appName)
-	return console.FormatLink("App", label, AppURL(base))
+	return console.FormatLink(AppStyleTag(base), label, AppURL(base))
 }
 
 // GetNiceName returns a nicely formatted app name.
@@ -169,7 +180,7 @@ func GetNiceName(ctx context.Context, appName string) string {
 func GetDescription(ctx context.Context, appName string, envFile string) string {
 	// Check if user defined (not built-in OR missing ENABLED var)
 	if IsAppUserDefined(ctx, appName, envFile) {
-		return "{{|App|}}" + GetNiceName(ctx, appName) + "{{[-]}} is a user defined application"
+		return "{{|UserApp|}}" + GetNiceName(ctx, appName) + "{{[-]}} is a user defined application"
 	}
 
 	// Prefer description from .meta.toml (supports style tags) over labels.yml
@@ -206,7 +217,7 @@ func GetDescription(ctx context.Context, appName string, envFile string) string 
 // user-defined status, instead of reading from disk.
 func GetDescriptionFromLines(ctx context.Context, appName string, lines []string) string {
 	if IsAppUserDefinedFromLines(ctx, appName, lines) {
-		return "{{|App|}}" + GetNiceName(ctx, appName) + "{{[-]}} is a user defined application"
+		return "{{|UserApp|}}" + GetNiceName(ctx, appName) + "{{[-]}} is a user defined application"
 	}
 	// Fall through to the same metadata/labels lookup as GetDescription.
 	if appMeta, err := LoadAppMeta(ctx, appName); err == nil && appMeta != nil && appMeta.App.Description != "" {
@@ -236,7 +247,7 @@ func GetDescriptionFromLines(ctx context.Context, appName string, lines []string
 func GetDescriptionFromTemplate(ctx context.Context, appName string, envFile string) string {
 	// Check if user defined (not built-in OR missing ENABLED var)
 	if !IsAppBuiltIn(appName) {
-		return "{{|App|}}" + GetNiceName(ctx, appName) + "{{[-]}} is a user defined application"
+		return "{{|UserApp|}}" + GetNiceName(ctx, appName) + "{{[-]}} is a user defined application"
 	}
 
 	// Prefer description from .meta.toml (supports style tags) over labels.yml
