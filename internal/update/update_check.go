@@ -248,7 +248,8 @@ func GetDockerAPIVersionDisplay(ctx context.Context) string {
 
 func formatDockerDaemonVersion(st dockercheck.Status) string {
 	if !st.Reachable || st.ServerVersion == "" {
-		return "{{|ApplicationName|}}Docker Engine{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
+		notDetected := console.FormatLink("Error", "not detected", dockercheck.SetupURL)
+		return fmt.Sprintf("{{|ApplicationName|}}Docker Engine{{[-]}} [%s] (external dependency)", notDetected)
 	}
 	ver := versionTag("v"+st.ServerVersion, "https://github.com/moby/moby/releases/tag/docker-v"+st.ServerVersion)
 	return fmt.Sprintf("{{|ApplicationName|}}Docker Engine{{[-]}} [%s] (external dependency)", ver)
@@ -256,7 +257,8 @@ func formatDockerDaemonVersion(st dockercheck.Status) string {
 
 func formatDockerAPIVersion(st dockercheck.Status) string {
 	if !st.Reachable || st.APIVersion == "" {
-		return "{{|ApplicationName|}}Docker API{{[-]}} [{{|Error|}}not detected{{[-]}}] (external dependency)"
+		notDetected := console.FormatLink("Error", "not detected", dockercheck.SetupURL)
+		return fmt.Sprintf("{{|ApplicationName|}}Docker API{{[-]}} [%s] (external dependency)", notDetected)
 	}
 	maxVer := versionTag("v"+st.APIVersion, "https://docs.docker.com/reference/api/engine/version/v"+st.APIVersion+"/")
 	if st.NegotiatedAPIVersion == "" || st.NegotiatedAPIVersion == st.APIVersion {
