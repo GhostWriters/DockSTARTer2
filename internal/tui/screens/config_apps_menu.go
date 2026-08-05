@@ -110,7 +110,7 @@ func configAppItemHelp(item displayengine.MenuItem) (itemTitle, itemText string)
 		if rawDesc := item.Metadata["rawDesc"]; rawDesc != "" {
 			return item.Tag, rawDesc
 		}
-		return item.Tag, "{{|App|}}" + item.Tag + "{{[-]}} is a user defined application"
+		return item.Tag, "{{|UserApp|}}" + item.Tag + "{{[-]}} is a user defined application"
 	}
 	ctx := context.Background()
 	appMeta, _ := appenv.LoadAppMeta(ctx, item.BaseApp)

@@ -15,7 +15,7 @@ import (
 func StyleServiceName(svc string) string {
 	url := appenv.AppURL(svc)
 	if url == "" {
-		return "{{|App|}}" + svc + "{{[-]}}"
+		return "{{|UserApp|}}" + svc + "{{[-]}}"
 	}
 	return console.FormatLink("App", svc, url)
 }

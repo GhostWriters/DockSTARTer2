@@ -70,6 +70,7 @@ type AppColors struct {
 	UnitTestFail           string
 	UnitTestFailArrow      string
 	App                    string
+	UserApp                string
 	ApplicationName        string
 	Branch                 string
 	FailingCommand         string
@@ -176,7 +177,8 @@ var Colors = AppColors{
 	UnitTestPass:           "{{[-]}}{{[green]}}",
 	UnitTestFail:           "{{[-]}}{{[red]}}",
 	UnitTestFailArrow:      "{{[-]}}{{[red]}}",
-	App:                    "{{[-]}}{{[cyan]}}",
+	App:                    "{{[-]}}{{[cyan::B]}}",
+	UserApp:                "{{[-]}}{{[cyan]}}",
 	ApplicationName:        "{{[-]}}{{[cyan::B]}}",
 	Branch:                 "{{[-]}}{{[cyan]}}",
 	FailingCommand:         "{{[-]}}{{[red]}}",
