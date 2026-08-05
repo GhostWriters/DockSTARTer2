@@ -13,11 +13,13 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/version"
 	"github.com/GhostWriters/semstyle"
 
 	"github.com/adrg/xdg"
@@ -51,6 +53,17 @@ func DefaultConfig() AppConfig {
 }
 
 type migrationModeKey struct{}
+
+// isMigrationMode reports whether ctx was created by LoadAppConfig's one-time,
+// no-config-file-yet bootstrap. Distinguishes that path (safe to hard-exit:
+// runs once, before the server ever starts accepting sessions) from
+// validate()'s per-load repair of an already-live config, which can run
+// mid-session on a long-running --server-daemon and must never abort the
+// whole process over one user's compose_folder problem.
+func isMigrationMode(ctx context.Context) bool {
+	v, _ := ctx.Value(migrationModeKey{}).(bool)
+	return v
+}
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
@@ -351,6 +364,19 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 // Uses the same logic as first-run migration so the experience is consistent.
 func ResolveComposeFolder(ctx context.Context, conf *AppConfig, printer console.Printer) {
 	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
+
+	// The abort choice below hard-exits the process, which is only safe during
+	// the one-time migration bootstrap (see isMigrationMode) -- never during
+	// validate()'s per-load repair of an already-live config on a running
+	// --server-daemon, which would take down every connected session.
+	if detection.LegacyExists && isMigrationMode(ctx) {
+		if scriptFolder := paths.GetBashScriptFolder(); paths.DetectLegacyTemplatesInScriptFolder(scriptFolder) {
+			if warnLegacyTemplatesInScriptFolder(ctx, printer, scriptFolder, detection.CurrentPath) {
+				detection.LegacyExists = false
+			}
+		}
+	}
+
 	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
 		promptMsg := "Detected compose folders in multiple locations.\n   Legacy:  '" + console.FormatFolderPath(detection.LegacyPath) + "'\n   Default: '" + console.FormatFolderPath(detection.CurrentPath) + "'\n\nWould you like to use the Legacy location?"
 		useLegacy, err := console.QuestionPrompt(ctx, printer, "Multiple Compose Folders Detected", promptMsg, "Y", false)
@@ -367,6 +393,46 @@ func ResolveComposeFolder(ctx context.Context, conf *AppConfig, printer console.
 	} else if detection.CurrentExists {
 		conf.Paths.ComposeFolder = detection.CurrentPath
 	}
+}
+
+// warnLegacyTemplatesInScriptFolder is called when the detected legacy compose
+// folder belongs to a DS1 install so old that its app templates are still
+// stored inside the script folder itself, instead of their own separate
+// templates location -- migrating from an install this old isn't supported,
+// since DS1 needs to run its own migration to the templates repo first.
+// Returns true if the user chose to skip the legacy compose folder and
+// continue with the new default location instead; exits the process if they
+// chose to abort so they can update DS1 first.
+func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Printer, scriptFolder, defaultPath string) bool {
+	logger.Warn(ctx, "\nDetected a very old {{|ApplicationName|}}DockSTARTer{{[-]}} install where app templates are still\n"+
+		"stored in the script folder ('"+console.FormatFolderPath(scriptFolder)+"'), instead of\n"+
+		"their own templates location. This {{|ApplicationName|}}DockSTARTer{{[-]}} install needs to be\n"+
+		"updated before migrating to {{|ApplicationName|}}DockSTARTer2{{[-]}}.\n\n"+
+		"We recommend aborting and running '{{|UserCommand|}}ds -u{{[-]}}' to update the old\n"+
+		"{{|ApplicationName|}}DockSTARTer{{[-]}} install, then running {{|ApplicationName|}}DockSTARTer2{{[-]}} again to retry migration.\n")
+
+	promptMsg := "Abort migration to run '{{|UserCommand|}}ds -u{{[-]}}'? Answering No skips the legacy compose\n" +
+		"folder and uses the new default location instead, without migrating\n" +
+		"this install's existing app configuration."
+	abort, err := console.QuestionPrompt(ctx, printer, "Old DockSTARTer Install Detected", promptMsg, "Y", false)
+	if err != nil || abort {
+		logger.Error(ctx, "Aborting migration. Run '{{|UserCommand|}}ds -u{{[-]}}' to update your existing {{|ApplicationName|}}DockSTARTer{{[-]}} install, then run {{|ApplicationName|}}DockSTARTer2{{[-]}} again.")
+		// This exits deep inside LoadAppConfig, well before main.go's own
+		// exitCode/trailer logic ever runs -- print the same trailer here
+		// (matching main.go's wording exactly) so this looks like any other
+		// failed run instead of silently vanishing without it.
+		logger.Display(ctx, "{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)
+		logger.Display(ctx, "Check logs in '"+console.FormatFilePath(logger.GetLogFilePath())+"'.")
+		// Same exit hygiene as logger.Fatal*: give stdout/stderr a moment to
+		// flush and make sure the cursor isn't left hidden, without using
+		// Fatal itself, whose "let the dev know" footer is wrong for an
+		// expected, user-actionable stop (not a bug).
+		time.Sleep(100 * time.Millisecond)
+		console.RestoreCursor()
+		os.Exit(1)
+	}
+	logger.Warn(ctx, "Skipping legacy compose folder; using the new default location:\n   '"+console.FormatFolderPath(defaultPath)+"'")
+	return true
 }
 
 func LoadAppConfig() AppConfig {
