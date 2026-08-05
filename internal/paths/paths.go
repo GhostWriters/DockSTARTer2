@@ -320,3 +320,23 @@ func DetectComposeFolder(currentConfiguredPath string) DetectComposeFolderResult
 
 	return res
 }
+
+// DetectLegacyTemplatesInScriptFolder reports whether app templates are still
+// stored inside the DS1 script folder itself, rather than their own separate
+// templates location -- the layout used by very old DS1 installs, before
+// templates moved into their own repo. Signaled by a ".apps" folder directly
+// in scriptFolder or in scriptFolder/compose.
+func DetectLegacyTemplatesInScriptFolder(scriptFolder string) bool {
+	if scriptFolder == "" {
+		return false
+	}
+	for _, candidate := range []string{
+		filepath.Join(scriptFolder, ".apps"),
+		filepath.Join(scriptFolder, "compose", ".apps"),
+	} {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
+}
