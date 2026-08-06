@@ -55,9 +55,16 @@ jobs:
             exit 0
           fi
 
-          # Find the last tag specifically for this channel
-          # If no tag found, we assume a first-time release for this channel and run
-          LAST_TAG=$(git describe --tags --abbrev=0 --match "v2.*$SUFFIX" 2>/dev/null || echo "")
+          # Find the last tag specifically for this channel. Match exactly
+          # this channel's tag shape -- with an empty SUFFIX (stable
+          # releases from main), a glob like "v2.*" would also match
+          # suffixed tags (e.g. "-Prerelease") merged into main's history.
+          if [[ -z "$SUFFIX" ]]; then
+            PATTERN='^v2\.[0-9]+\.[0-9]+$'
+          else
+            PATTERN="^v2\.[0-9]+\.[0-9]+${SUFFIX}\$"
+          fi
+          LAST_TAG=$( (git tag -l 'v2.*' | grep -E "$PATTERN" || true) | sort -V | tail -n 1)
           echo "Last tag for channel [$SUFFIX]: ${LAST_TAG:-NONE}"
 
           if [[ -z "$LAST_TAG" ]]; then
@@ -159,8 +166,16 @@ jobs:
           SUFFIX="${{ needs.check.outputs.suffix }}"
           TODAY_INT=$(date -u +'%Y%m%d')
 
-          # Find highest sequence number (N) for today in this channel
-          LAST_N=$(git tag -l "v2.$TODAY_INT.*$SUFFIX" | sed "s/v2.$TODAY_INT.//" | sed "s/$SUFFIX//" | sort -n | tail -n 1)
+          # Find highest sequence number (N) for today in this channel. Match
+          # exactly this channel's tag shape -- with an empty SUFFIX (stable
+          # releases from main), a glob like "v2.$TODAY_INT.*" would also
+          # match suffixed tags (e.g. "-Prerelease") from the same day.
+          if [[ -z "$SUFFIX" ]]; then
+            PATTERN="^v2\.${TODAY_INT}\.[0-9]+\$"
+          else
+            PATTERN="^v2\.${TODAY_INT}\.[0-9]+${SUFFIX}\$"
+          fi
+          LAST_N=$( (git tag -l "v2.$TODAY_INT.*" | grep -E "$PATTERN" || true) | sed -E "s/^v2\.$TODAY_INT\.([0-9]+).*/\1/" | sort -n | tail -n 1)
           NEW_N=$(( ${LAST_N:-0} + 1 ))
           NEW_TAG="v2.$TODAY_INT.$NEW_N$SUFFIX"
 
