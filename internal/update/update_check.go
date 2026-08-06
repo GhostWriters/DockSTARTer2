@@ -299,13 +299,13 @@ func init() {
 	logger.ExtraPathsInfo = fatalPathsInfo
 }
 
+// dockerStatus always re-probes (and re-caches via StartupCheck), backing
+// the -V version display -- a one-shot user-initiated command, not a hot
+// loop, so a live check is cheap. This keeps reachability and version
+// current even on a long-running --server-daemon, where Docker may not have
+// been up at startup, or may have been updated since.
 func dockerStatus(ctx context.Context) dockercheck.Status {
-	st := dockercheck.Last()
-	if st == nil {
-		fresh := dockercheck.Check(ctx)
-		st = &fresh
-	}
-	return *st
+	return dockercheck.StartupCheck(ctx)
 }
 
 // maxChannelTagFallbacks bounds how many recent tags checkAppUpdate will try
