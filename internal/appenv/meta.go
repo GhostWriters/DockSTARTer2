@@ -1,0 +1,140 @@
+package appenv
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+
+	"github.com/pelletier/go-toml/v2"
+)
+
+var (
+	appMetaCache   = make(map[string]*AppMeta)
+	appMetaCacheMu sync.RWMutex
+)
+
+// InvalidateAppMetaCache clears the in-memory AppMeta cache (e.g. after a templates update).
+func InvalidateAppMetaCache() {
+	appMetaCacheMu.Lock()
+	appMetaCache = make(map[string]*AppMeta)
+	appMetaCacheMu.Unlock()
+}
+
+// VarMeta holds metadata for a single app-specific variable from a .meta.toml file.
+type VarMeta struct {
+	HelpLine string      `toml:"helpline"`
+	HelpText string      `toml:"helptext"`
+	Options  []VarOption `toml:"options"`
+}
+
+// AppInfo holds app-level metadata from the [app] section of a .meta.toml file.
+// These are fields that supplement (not duplicate) the labels.yml data.
+// nicename and deprecated remain in labels.yml.
+type AppInfo struct {
+	Description string `toml:"description"` // short description shown in lists (may contain style tags); overrides labels.yml when set
+	HelpText    string `toml:"helptext"`    // longer description for the help dialog
+	Website     string `toml:"website"`     // URL to the app's website or documentation
+}
+
+// AppMeta holds all metadata loaded from an app's .meta.toml file.
+type AppMeta struct {
+	App       AppInfo
+	Variables map[string]VarMeta
+}
+
+// GetVarMeta returns the metadata for a specific variable name. Keys in
+// Variables are concrete (LoadAppMeta already substitutes <__INSTANCE>), so
+// no pattern matching is needed here.
+//
+// App-specific vars (.env.app.appname): key is "APPNAME[__INSTANCE]:VARNAME"
+//   - e.g. "PLEX:VERSION" (no instance) or "PLEX__2:VERSION" (instance "2")
+//
+// Main .env vars (carry APPNAME__ prefix): key IS the full variable name
+//   - e.g. "ADGUARD__ENVIRONMENT_SERVERIP" or "ADGUARD__HOME__ENVIRONMENT_SERVERIP"
+//
+// Returns zero value and false if no metadata exists.
+func (m *AppMeta) GetVarMeta(varName, appName string) (VarMeta, bool) {
+	if m == nil {
+		return VarMeta{}, false
+	}
+	upper := strings.ToUpper(varName)
+	upperApp := strings.ToUpper(appName)
+
+	// Main .env vars have the APPNAME__ prefix — the full variable name is the key.
+	baseApp := strings.ToUpper(AppNameToBaseAppName(appName))
+	if strings.HasPrefix(upper, baseApp+"__") {
+		v, ok := m.Variables[upper]
+		return v, ok
+	}
+
+	// App-specific vars — key is "APPNAME[__INSTANCE]:VARNAME".
+	v, ok := m.Variables[upperApp+":"+upper]
+	return v, ok
+}
+
+// LoadAppMeta loads variable metadata for the given app instance, via
+// AppInstanceFile's processed .meta.toml path (substitutes <__INSTANCE>
+// markers with the actual instance value, so keys come back concrete).
+//
+// Cached in memory for the process lifetime; call InvalidateAppMetaCache()
+// after a templates update to clear stale entries. Returns nil (not an
+// error) if no meta file exists for the app.
+func LoadAppMeta(ctx context.Context, appName string) (*AppMeta, error) {
+	if appName == "" {
+		return nil, nil
+	}
+
+	cacheKey := strings.ToLower(appName)
+	appMetaCacheMu.RLock()
+	if cached, ok := appMetaCache[cacheKey]; ok {
+		appMetaCacheMu.RUnlock()
+		return cached, nil
+	}
+	appMetaCacheMu.RUnlock()
+
+	metaFile, err := AppInstanceFile(ctx, appName, "*.meta.toml")
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(metaFile)
+	if os.IsNotExist(err) {
+		appMetaCacheMu.Lock()
+		appMetaCache[cacheKey] = nil
+		appMetaCacheMu.Unlock()
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// First pass: extract the [app] section.
+	type rawHeader struct {
+		App AppInfo `toml:"app"`
+	}
+	var header rawHeader
+	_ = toml.Unmarshal(data, &header) // best-effort; ignore error
+
+	// Second pass: read all top-level keys as variable metadata.
+	// The [app] key will appear here too, but with zero VarMeta fields — delete it.
+	var raw map[string]VarMeta
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", metaFile, err)
+	}
+	delete(raw, "app")
+	delete(raw, "APP")
+
+	// Normalize all variable keys to uppercase for case-insensitive lookup.
+	normalized := make(map[string]VarMeta, len(raw))
+	for k, v := range raw {
+		normalized[strings.ToUpper(k)] = v
+	}
+
+	result := &AppMeta{App: header.App, Variables: normalized}
+	appMetaCacheMu.Lock()
+	appMetaCache[cacheKey] = result
+	appMetaCacheMu.Unlock()
+	return result, nil
+}

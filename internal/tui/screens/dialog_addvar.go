@@ -1,0 +1,1084 @@
+package screens
+
+import (
+	"strings"
+	"time"
+
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/components/sinput"
+
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+// addVarItemKind classifies each row in the Add Variable list.
+type addVarItemKind int
+
+const (
+	addVarKindTemplate  addVarItemKind = iota // prefix template — fills input on select
+	addVarKindSeparator                       // non-selectable divider
+	addVarKindAddAll                          // "Add All Stock Variables" action
+	addVarKindStock                           // individual stock variable
+)
+
+type addVarItem struct {
+	kind     addVarItemKind
+	name     string // full var name or prefix (no "…")
+	label    string // display text (includes "…" for templates)
+	tag      string // short category tag shown on the right (e.g. "Port", "Volume")
+	subLabel string // shown below label (default value for stock)
+	help     string
+}
+
+type addVarFocus int
+
+const (
+	addVarFocusInput addVarFocus = iota
+	addVarFocusList
+	addVarFocusCreate
+	addVarFocusCancel
+	addVarFocusExit
+)
+
+// addVarDialogModel is the "Add Variable" dialog that mimics bash menu_add_var.sh.
+// It shows a FormatMenuHeading block, an editable text input for the new variable
+// name, and a scrollable list of template prefixes and stock variables.
+type addVarDialogModel struct {
+	width   int
+	height  int
+	focused bool
+
+	displayengine.TitleBarFocus
+	buttons *displayengine.ButtonRow
+
+	appName string
+	appDesc string
+
+	input        sinput.Model
+	inputScreenX int
+	inputRelY    int // row of input text within dialog (for hardware cursor)
+	items        []addVarItem
+	cursor       int
+	offset       int
+	maxVis       int
+
+	focus addVarFocus
+
+	sbAbsTopY  int // absolute screen Y of scrollbar top (up arrow); set in GetHitRegions
+	sbDrag     displayengine.ScrollbarDragState
+	lastSbInfo displayengine.ScrollbarInfo
+
+	addAllVars     []string
+	addAllDefaults map[string]string
+}
+
+// newAddVarDialog constructs the Add Variable dialog.
+func newAddVarDialog(
+	appName, appDesc string,
+	templates []struct{ prefix, label, tag, help string },
+	stockItems []addVarItem,
+	addAllVars []string,
+	addAllDefaults map[string]string,
+) *addVarDialogModel {
+	ti := textinput.New()
+	if len(appName) > 0 {
+		prefix := strings.ToUpper(appName) + "__"
+		ti.Placeholder = prefix
+		ti.SetValue(prefix)
+		ti.CursorEnd()
+	}
+	ti.CharLimit = 256
+	ti.Focus()
+
+	styles := displayengine.GetStyles()
+	bg := styles.Dialog.GetBackground()
+	tiStyles := textinput.DefaultStyles(true)
+	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
+	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
+	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	ti.SetStyles(tiStyles)
+
+	var items []addVarItem
+	for _, t := range templates {
+		items = append(items, addVarItem{
+			kind:  addVarKindTemplate,
+			name:  t.prefix,
+			label: t.label,
+			tag:   t.tag,
+			help:  t.help,
+		})
+	}
+	if len(stockItems) > 0 {
+		items = append(items, addVarItem{kind: addVarKindSeparator})
+		if len(addAllVars) > 0 {
+			items = append(items, addVarItem{
+				kind:  addVarKindAddAll,
+				label: "Add All Stock Variables",
+				help:  "Add all stock variables listed below with their default values.",
+			})
+		}
+		items = append(items, stockItems...)
+	}
+
+	m := &addVarDialogModel{
+		appName:        appName,
+		appDesc:        appDesc,
+		input:          sinput.New(ti),
+		items:          items,
+		focus:          addVarFocusInput,
+		addAllVars:     addAllVars,
+		addAllDefaults: addAllDefaults,
+		maxVis:         8,
+	}
+	m.buttons = displayengine.NewButtonRow([]displayengine.ButtonDef{
+		{Label: "Create", ZoneID: "Create"},
+		{Label: "Cancel", ZoneID: "Cancel"},
+		{Label: "Exit", ZoneID: "Exit"},
+	})
+	return m
+}
+
+func (m *addVarDialogModel) Init() tea.Cmd {
+	return sinput.Blink
+}
+
+func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if tickCmd, ok := m.buttons.Update(msg); ok {
+		return m, tickCmd
+	}
+
+	if m.HandleWidgetClearPress(msg) {
+		return m, nil
+	}
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.recalc()
+		return m, nil
+
+	case tea.KeyPressMsg:
+		if handled, cmd := m.HandleTitleBarKey(msg, nil); handled {
+			m.focus = addVarFocusCancel
+			return m, tea.Batch(cmd, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm()))
+		}
+		switch {
+		case key.Matches(msg, displayengine.Keys.Esc):
+			m.focus = addVarFocusCancel
+			return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
+		case key.Matches(msg, displayengine.Keys.ForceQuit):
+			return m, m.cancelOrConfirm()
+
+		case key.Matches(msg, displayengine.Keys.Tab), key.Matches(msg, displayengine.Keys.CycleTab):
+			m.cycleFocus(+1)
+			return m, nil
+
+		case key.Matches(msg, displayengine.Keys.ShiftTab), key.Matches(msg, displayengine.Keys.CycleShiftTab):
+			m.cycleFocus(-1)
+			return m, nil
+
+		case key.Matches(msg, displayengine.Keys.Up):
+			if m.focus == addVarFocusList {
+				m.moveCursor(-1)
+			}
+			return m, nil
+
+		case key.Matches(msg, displayengine.Keys.Down):
+			if m.focus == addVarFocusList {
+				m.moveCursor(+1)
+			}
+			return m, nil
+
+		case key.Matches(msg, displayengine.Keys.Left), key.Matches(msg, displayengine.Keys.Right):
+			switch m.focus {
+			case addVarFocusCreate:
+				m.focus = addVarFocusCancel
+				return m, nil
+			case addVarFocusCancel:
+				m.focus = addVarFocusExit
+				return m, nil
+			case addVarFocusExit:
+				m.focus = addVarFocusCreate
+				return m, nil
+			}
+			// When focus is on input, fall through to input routing below
+
+		case msg.String() == "space" && m.focus == addVarFocusList:
+			// Space copies the selected template into the input and switches focus.
+			m.selectItem(m.cursor)
+			return m, nil
+
+		case key.Matches(msg, displayengine.Keys.Enter):
+			switch m.focus {
+			case addVarFocusInput:
+				m.focus = addVarFocusCreate
+				return m, m.buttons.SetProcessing("Create", m.submit())
+			case addVarFocusList:
+				return m, nil
+			case addVarFocusCreate:
+				return m, m.buttons.SetProcessing("Create", m.submit())
+			case addVarFocusCancel:
+				return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
+			case addVarFocusExit:
+				return m, m.buttons.SetProcessing("Exit", m.confirmExit())
+			}
+			return m, nil
+		}
+
+	case displayengine.DragDoneMsg:
+		if m.sbDrag.Dragging && msg.ID == "addvar_list_box" {
+			m.sbDrag.DragPending = false
+			// Catch up to any position skipped while the render was in-flight.
+			if m.sbDrag.PendingDragY != m.sbDrag.LastDragY {
+				lastY := m.sbDrag.PendingDragY
+				if m.applySbDrag(lastY) {
+					m.sbDrag.LastDragY = lastY
+					m.sbDrag.DragPending = true
+					return m, displayengine.DragDoneCmd("addvar_list_box")
+				}
+				m.sbDrag.LastDragY = lastY
+			}
+		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		// Fallback: raw wheel scrolls the list.
+		switch msg.Button {
+		case tea.MouseWheelDown:
+			m.moveCursor(+1)
+		case tea.MouseWheelUp:
+			m.moveCursor(-1)
+		}
+		return m, nil
+
+	case displayengine.LayerWheelMsg:
+		// Semantic wheel from IDListPanel path — scroll without focus snap.
+		switch msg.Button {
+		case tea.MouseWheelDown:
+			m.moveCursor(+1)
+		case tea.MouseWheelUp:
+			m.moveCursor(-1)
+		}
+		return m, nil
+
+	case tea.MouseMotionMsg:
+		// Applied unconditionally on every event -- the render itself (not
+		// this state update) is what gets coalesced during a fast drag, at
+		// the AppModel level.
+		if m.sbDrag.Dragging {
+			m.applySbDrag(msg.Y)
+		}
+		if m.input.IsSelecting() {
+			m.input.HandleDragTo(msg.X)
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		if m.sbDrag.Dragging {
+			m.sbDrag.StopDrag()
+			return m, nil
+		}
+		m.input.EndDrag()
+		return m, nil
+
+	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+
+	case displayengine.LayerHitMsg:
+		if msg.Button == tea.MouseMiddle {
+			return m, nil
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+displayengine.IDInsOvr) {
+			m.input.ToggleOverwrite()
+			return m, nil
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+displayengine.IDTitleWidgetClose) {
+			m.BlurTitleBar()
+			m.focus = addVarFocusCancel
+			return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
+		}
+		if msg.Button == tea.MouseLeft && strings.HasSuffix(msg.ID, "."+displayengine.IDTitleWidgetHelp) {
+			m.BlurTitleBar()
+			return m, func() tea.Msg { return displayengine.TriggerHelpMsg{ScreenLevelOnly: true} }
+		}
+		if msg.Button == tea.MouseRight && msg.ID == "addvar_input" {
+			return m, displayengine.ShowInputContextMenu(m.input, msg.X, msg.Y, m.width, m.height)
+		}
+		// Hover focus from wheel routing: switch focus to list without selecting.
+		if msg.Button == displayengine.HoverButton && msg.ID == displayengine.IDListPanel {
+			m.focus = addVarFocusList
+			m.input.Blur()
+			return m, nil
+		}
+		if msg.Button == tea.MouseLeft {
+			if strings.HasSuffix(msg.ID, ".Create") {
+				m.focus = addVarFocusCreate
+				return m, m.buttons.SetProcessing("Create", m.submit())
+			}
+			if strings.HasSuffix(msg.ID, ".Cancel") {
+				m.focus = addVarFocusCancel
+				return m, m.buttons.SetProcessing("Cancel", m.cancelOrConfirm())
+			}
+			if strings.HasSuffix(msg.ID, ".Exit") {
+				m.focus = addVarFocusExit
+				return m, m.buttons.SetProcessing("Exit", m.confirmExit())
+			}
+			if msg.ID == "addvar_input" {
+				m.focus = addVarFocusInput
+				m.input.Focus()
+				m.input.HandleClick(msg.X)
+				return m, nil
+			}
+			if msg.ID == "addvar_list" {
+				// Focus the list AND trigger selection on an actual item row.
+				m.focus = addVarFocusList
+				m.input.Blur()
+				idx := m.itemIndexAt(msg.Y)
+				if idx >= 0 {
+					m.selectItem(idx)
+					m.cursor = idx
+				}
+				return m, nil
+			}
+			if msg.ID == "addvar_list_box" {
+				// Clicks on the border that are NOT on the scrollbar: focus only.
+				m.focus = addVarFocusList
+				m.input.Blur()
+				return m, nil
+			}
+
+			// Granular scrollbar interaction:
+			newOff, changed := displayengine.HandleScrollbarLayerHit("addvar_list_box", msg, m.offset, len(m.items), m.maxVis)
+			if changed {
+				m.focus = addVarFocusList
+				m.input.Blur()
+				m.offset = newOff
+				m.clampScroll()
+				return m, nil
+			}
+			if strings.HasSuffix(msg.ID, ".sb.thumb") && strings.HasPrefix(msg.ID, "addvar_list_box") {
+				m.focus = addVarFocusList
+				m.input.Blur()
+				m.sbDrag.StartDrag(msg.Y, m.sbAbsTopY, m.lastSbInfo)
+				return m, nil
+			}
+		}
+	}
+
+	if m.focus == addVarFocusInput {
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m *addVarDialogModel) cycleFocus(dir int) {
+	order := []addVarFocus{addVarFocusInput, addVarFocusList, addVarFocusCreate, addVarFocusCancel, addVarFocusExit}
+	cur := 0
+	for i, f := range order {
+		if f == m.focus {
+			cur = i
+			break
+		}
+	}
+	next := ((cur + dir) + len(order)) % len(order)
+	if order[next] == addVarFocusList && len(m.selectableItems()) == 0 {
+		next = ((next + dir) + len(order)) % len(order)
+	}
+	m.focus = order[next]
+	if m.focus == addVarFocusInput {
+		m.input.Focus()
+	} else {
+		m.input.Blur()
+	}
+}
+
+func (m *addVarDialogModel) selectableItems() []addVarItem {
+	var out []addVarItem
+	for _, item := range m.items {
+		if item.kind != addVarKindSeparator {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func (m *addVarDialogModel) moveCursor(delta int) {
+	// Move cursor, skipping separators.
+	for {
+		m.cursor += delta
+		if m.cursor < 0 {
+			m.cursor = 0
+			break
+		}
+		if m.cursor >= len(m.items) {
+			m.cursor = len(m.items) - 1
+			break
+		}
+		if m.items[m.cursor].kind != addVarKindSeparator {
+			break
+		}
+	}
+	m.clampScroll()
+}
+
+func (m *addVarDialogModel) clampScroll() {
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	}
+	// Scroll down: check if cursor is beyond the visible row budget from offset.
+	rows := 0
+	lastVisible := m.offset
+	for i := m.offset; i < len(m.items); i++ {
+		r := 1
+		if m.items[i].subLabel != "" {
+			r = 2
+		}
+		if rows+r > m.maxVis {
+			break
+		}
+		rows += r
+		lastVisible = i
+	}
+	if m.cursor > lastVisible {
+		for m.cursor > lastVisible && m.offset < m.cursor {
+			m.offset++
+			rows = 0
+			lastVisible = m.offset
+			for i := m.offset; i < len(m.items); i++ {
+				r := 1
+				if m.items[i].subLabel != "" {
+					r = 2
+				}
+				if rows+r > m.maxVis {
+					break
+				}
+				rows += r
+				lastVisible = i
+			}
+		}
+	}
+}
+
+func (m *addVarDialogModel) closeWith(result any) tea.Cmd {
+	return func() tea.Msg { return displayengine.CloseDialogMsg{Result: result} }
+}
+
+func (m *addVarDialogModel) cancelOrConfirm() tea.Cmd {
+	return func() tea.Msg {
+		if m.input.Value() == "" {
+			return displayengine.CloseDialogMsg{}
+		}
+		return tui.ShowConfirmDialogMsg{
+			Title:      "Discard Input",
+			Question:   "Discard the variable name you entered?",
+			DefaultYes: false,
+			OnResult: func(confirmed bool) tea.Cmd {
+				if !confirmed {
+					return nil
+				}
+				return func() tea.Msg { return displayengine.CloseDialogMsg{} }
+			},
+		}
+	}
+}
+
+// EscapeAction implements tui.EscapeActioner: same as clicking Cancel.
+func (m *addVarDialogModel) EscapeAction() tea.Cmd {
+	return m.cancelOrConfirm()
+}
+
+func (m *addVarDialogModel) submit() tea.Cmd {
+	val := strings.TrimSpace(m.input.Value())
+	if val == "" {
+		return nil
+	}
+	return m.closeWith(envAddVarMsg{key: val})
+}
+
+func (m *addVarDialogModel) confirmExit() tea.Cmd {
+	return func() tea.Msg { return tui.QuitMsg{} }
+}
+
+func (m *addVarDialogModel) selectItem(idx int) tea.Cmd {
+	if idx < 0 || idx >= len(m.items) {
+		return nil
+	}
+	item := m.items[idx]
+	switch item.kind {
+	case addVarKindTemplate, addVarKindStock:
+		m.input.SetValue(item.name)
+		m.input.CursorEnd()
+		m.focus = addVarFocusInput
+		m.input.Focus()
+	case addVarKindAddAll:
+		return m.closeWith(envAddAllStockMsg{vars: m.addAllVars, defaults: m.addAllDefaults})
+	}
+	return nil
+}
+
+func (m *addVarDialogModel) HelpText() string {
+	if m.focus == addVarFocusList && m.cursor >= 0 && m.cursor < len(m.items) {
+		return m.items[m.cursor].help
+	}
+	return ""
+}
+
+func (m *addVarDialogModel) SetFocused(f bool) { m.focused = f }
+
+func (m *addVarDialogModel) Title() string { return "Add Variable" }
+
+func (m *addVarDialogModel) IsScrollbarDragging() bool { return m.sbDrag.Dragging }
+
+func (m *addVarDialogModel) applySbDrag(mouseY int) bool {
+	totalRows := 0
+	for _, item := range m.items {
+		totalRows++
+		if item.subLabel != "" {
+			totalRows++
+		}
+	}
+	if totalRows <= m.maxVis {
+		return false
+	}
+	maxOffRows := totalRows - m.maxVis
+
+	newOffRows, _ := m.sbDrag.ScrollOffset(mouseY, m.sbAbsTopY, maxOffRows, m.lastSbInfo)
+
+	// Map newOffRows back to item index (offset)
+	rows := 0
+	newIdx := 0
+	for i := range m.items {
+		if rows >= newOffRows {
+			newIdx = i
+			break
+		}
+		rows++
+		if m.items[i].subLabel != "" {
+			rows++
+		}
+	}
+
+	if newIdx == m.offset {
+		return false
+	}
+
+	m.offset = newIdx
+	// Sync selection (cursor) to stay within the new visible range
+	maxIdx := len(m.items) - 1
+	if m.cursor < m.offset {
+		m.cursor = m.offset
+		// Skip separators (moving down)
+		for m.cursor < maxIdx && m.items[m.cursor].kind == addVarKindSeparator {
+			m.cursor++
+		}
+	} else {
+		// Calculate last visible item index
+		lastVisibleIdx := m.offset
+		r := 0
+		for i := m.offset; i < len(m.items); i++ {
+			h := 1
+			if m.items[i].subLabel != "" {
+				h = 2
+			}
+			if r+h > m.maxVis {
+				break
+			}
+			r += h
+			lastVisibleIdx = i
+		}
+		if m.cursor > lastVisibleIdx {
+			m.cursor = lastVisibleIdx
+			// Skip separators (moving up)
+			for m.cursor > 0 && m.items[m.cursor].kind == addVarKindSeparator {
+				m.cursor--
+			}
+		}
+	}
+
+	m.clampScroll()
+	return true
+}
+
+func (m *addVarDialogModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+	m.recalc()
+}
+
+func (m *addVarDialogModel) recalc() {
+	ctx := displayengine.GetActiveContext()
+	contentW := m.innerWidth()
+
+	// Robust layout calculation: Render components at the current width to get their true heights.
+	headingRaw := FormatMenuHeading(MenuHeadingParams{
+		AppName:        m.appName,
+		AppDescription: m.appDesc,
+	}, contentW)
+	headingStyle := ctx.Dialog.Padding(1, 2).Width(contentW).Border(lipgloss.Border{})
+	headingH := lipgloss.Height(headingStyle.Render(theme.ToANSI(headingRaw, "")))
+
+	// "Variable Name" section height (Bordered box with title and labeled bottom border)
+	// Top border(1) + InputRow(1) + Bottom border(1) = 3
+	varNameH := 3
+
+	// Buttons height
+	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Create"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+
+	// Total overhead:
+	// - outer dialog border top + bottom: 2
+	// - large titlebar extra rows (when enabled): LargeTitleBarOverhead
+	// - rendered heading: headingH
+	// - "Variable Name" input section: varNameH
+	// - "Available Variables" list box borders: 2
+	// - spacing/margin: 1
+	// - buttons: btnH
+	titleBudget := m.height - 2 - headingH - varNameH - 2 - btnH
+	useLarge, _ := displayengine.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
+	largeTitleOverhead := 0
+	if useLarge {
+		largeTitleOverhead = displayengine.LargeTitleBarOverhead
+	}
+	overhead := 2 + largeTitleOverhead + headingH + varNameH + 2 + btnH
+	m.maxVis = m.height - overhead
+	if m.maxVis < 2 {
+		m.maxVis = 2
+	}
+
+	// Re-validate cursor/offset against the new row budget so the scrollbar
+	// thumb is correct immediately after a terminal resize.
+	if len(m.items) > 0 {
+		m.clampScroll()
+	}
+}
+
+func (m *addVarDialogModel) IsMaximized() bool { return true }
+
+// MinHeight returns the minimum content-area height for the Add Variable dialog.
+// Breakdown: outer border(2) + heading min(3) + varName box(3) + list min(5: border+3 items+border) + flat buttons(1) = 14.
+// Increases by LargeTitleBarOverhead when large titlebars are enabled.
+func (m *addVarDialogModel) MinHeight() int {
+	base := 14
+	if displayengine.GetActiveContext().LargeTitleBars {
+		base += displayengine.LargeTitleBarOverhead
+	}
+	return base
+}
+
+func (m *addVarDialogModel) innerWidth() int {
+	w := m.width - 2
+	if w < 20 {
+		w = 20
+	}
+	return w
+}
+
+func (m *addVarDialogModel) itemIndexAt(screenY int) int {
+	// m.sbAbsTopY is set by GetHitRegions each frame to the absolute screen Y
+	// of the first visible list item. Use it directly so click coordinates match.
+	rowY := m.sbAbsTopY
+	rowBudget := m.maxVis
+	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
+		item := m.items[i]
+		if item.kind == addVarKindSeparator {
+			if rowBudget < 1 {
+				break
+			}
+			rowBudget--
+			rowY++
+			continue
+		}
+		h := 1
+		if item.subLabel != "" {
+			h = 2
+		}
+		if h > rowBudget {
+			break
+		}
+		rowBudget -= h
+		if screenY >= rowY && screenY < rowY+h {
+			return i
+		}
+		rowY += h
+	}
+	return -1
+}
+
+// GetInputCursor returns the hardware cursor position relative to the dialog's
+// top-left corner, cursor shape, and whether to show it.
+func (m *addVarDialogModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if m.focus != addVarFocusInput || !m.input.Focused() {
+		return 0, 0, tea.CursorBar, false
+	}
+	relX = 3 + m.input.CursorColumn()
+	relY = m.inputRelY
+	if m.input.IsOverwrite() {
+		shape = tea.CursorBlock
+	} else {
+		shape = tea.CursorBar
+	}
+	return relX, relY, shape, true
+}
+
+func (m *addVarDialogModel) ViewString() string {
+	if m.width == 0 {
+		return ""
+	}
+	ctx := displayengine.GetActiveContext()
+	contentW := m.innerWidth()
+	sInnerW := contentW - 2 // inner width of each bordered section
+
+	bgStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
+	selectedStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
+	subLabelStyle := theme.ThemeSemanticStyle("{{|HelpItem|}}")
+	sepChar := "─"
+	if !ctx.LineCharacters {
+		sepChar = "-"
+	}
+
+	// Heading
+	headingRaw := FormatMenuHeading(MenuHeadingParams{
+		AppName:        m.appName,
+		AppDescription: m.appDesc,
+	}, contentW)
+	headingText := strings.TrimRight(
+		ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")), "\n")
+
+	// "Variable Name" section — titled bordered box, thick border when focused
+	inputFocused := m.focus == addVarFocusInput
+	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
+	inputTitleTag := "TitleSubMenu"
+	if inputFocused {
+		inputTitleTag = "TitleSubMenuFocused"
+	}
+	varNameSection := strings.TrimRight(displayengine.RenderBorderedBoxCtx(
+		"Variable Name", inputContent, sInnerW, 0, inputFocused, true, true,
+		ctx.SubmenuTitleAlign, inputTitleTag, ctx,
+	), "\n")
+	// Inject INS/OVR label into the bottom-left of the Variable Name section border.
+	modeLabel := "INS"
+	if m.input.IsOverwrite() {
+		modeLabel = "OVR"
+	}
+	vnLines := strings.Split(varNameSection, "\n")
+	if len(vnLines) > 0 {
+		vnLines[len(vnLines)-1] = displayengine.BuildLabeledBottomBorderCtx(sInnerW+2, modeLabel, inputFocused, ctx)
+		varNameSection = strings.Join(vnLines, "\n")
+	}
+
+	// "Available Variables" section — titled bordered box, thick border when focused
+	listFocused := m.focus == addVarFocusList
+	// Always reserve one column for the scrollbar gutter so width is stable.
+	maxItemW := sInnerW - 2 // cursor(1) + space(1) + scrollbar appended by ApplyScrollbarColumnTracked(1)
+
+	// Compute max tag width for column alignment (tagged items only).
+	maxLabelW := 0
+	for _, item := range m.items {
+		if item.tag != "" {
+			if w := lipgloss.Width(item.tag); w > maxLabelW {
+				maxLabelW = w
+			}
+		}
+	}
+	if maxLabelW > maxItemW-4 {
+		maxLabelW = maxItemW - 4
+	}
+
+	// Compute scroll metrics for the scrollbar / scroll indicator.
+	totalRows := 0
+	offsetRows := 0
+	for i, item := range m.items {
+		r := 1
+		if item.subLabel != "" {
+			r = 2
+		}
+		if i < m.offset {
+			offsetRows += r
+		}
+		totalRows += r
+	}
+
+	// Button row rendered first so we can derive the available section height budget.
+	avBtnSpecs := m.buttons.ApplySpinner([]displayengine.ButtonSpec{
+		{Text: "Create", Active: m.focus == addVarFocusInput || m.focus == addVarFocusCreate || m.buttons.IsProcessingID("Create"), ZoneID: "Create"},
+		{Text: "Cancel", Active: m.focus == addVarFocusCancel || m.buttons.IsProcessingID("Cancel"), ZoneID: "Cancel"},
+		{Text: "Exit", Active: m.focus == addVarFocusExit || m.buttons.IsProcessingID("Exit"), ZoneID: "Exit"},
+	})
+	buttonRow := strings.TrimRight(displayengine.RenderCenteredButtonsCtx(contentW, ctx, avBtnSpecs...), "\n")
+
+	// Size the available section to fill all remaining space above the buttons.
+	buttonRowH := lipgloss.Height(buttonRow)
+	headingH := lipgloss.Height(headingText)
+	varNameH := lipgloss.Height(varNameSection)
+	titleBudget2 := m.height - 2 - headingH - varNameH - buttonRowH - 2
+	useLarge2, _ := displayengine.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget2, 3)
+	largeTitleOverhead := 0
+	if useLarge2 {
+		largeTitleOverhead = displayengine.LargeTitleBarOverhead
+	}
+	// Sync with recalc() logic:
+	// availableTargetH is the total physical height of the "Available Variables" box.
+	// We subtract outer borders (2), large titlebar extra rows, heading, var name box, and buttons.
+	availableTargetH := m.height - 2 - largeTitleOverhead - headingH - varNameH - buttonRowH
+	if availableTargetH < 3 {
+		availableTargetH = 3
+	}
+	// The logical item budget (m.maxVis) should always be exactly inner physical height.
+	m.maxVis = availableTargetH - 2
+	if m.maxVis < 1 {
+		m.maxVis = 1
+	}
+
+	var listLines []string
+	rowBudget := m.maxVis
+	for i := m.offset; i < len(m.items) && rowBudget > 0; i++ {
+		item := m.items[i]
+		if item.kind == addVarKindSeparator {
+			rowBudget--
+			sepW := sInnerW - displayengine.ScrollbarGutterWidth - 2
+			if sepW < 0 {
+				sepW = 0
+			}
+			listLines = append(listLines, bgStyle.Render(" "+strutil.Repeat(sepChar, sepW)+" "))
+			continue
+		}
+		itemRows := 1
+		if item.subLabel != "" {
+			itemRows = 2
+		}
+		if itemRows > rowBudget {
+			break
+		}
+		rowBudget -= itemRows
+
+		focused := i == m.cursor && listFocused
+		// tag as label column, item.label as value column; fall back to label-only when no tag.
+		label, value := item.tag, item.label
+		if item.tag == "" {
+			label, value = item.label, ""
+		}
+		listLines = append(listLines, RenderTwoColumnRow(
+			label, value,
+			i == m.cursor, focused,
+			maxLabelW, maxItemW, ctx,
+		))
+		if item.subLabel != "" {
+			sl := item.subLabel
+			if lipgloss.Width(sl) > maxItemW {
+				sl = displayengine.TruncateRight(sl, maxItemW)
+			}
+			slPad := maxItemW - lipgloss.Width(sl)
+			if slPad < 0 {
+				slPad = 0
+			}
+			slLine := "  " + sl + strutil.Repeat(" ", slPad) + " "
+			if focused {
+				listLines = append(listLines, displayengine.MaintainBackground(selectedStyle.Render(slLine), selectedStyle))
+			} else {
+				listLines = append(listLines, displayengine.MaintainBackground(subLabelStyle.Background(bgStyle.GetBackground()).Render(slLine), bgStyle))
+			}
+		}
+	}
+
+	var sbInfo displayengine.ScrollbarInfo
+	availableSection, sbInfo := RenderListInBorderedBox(
+		"Available Variables", listLines,
+		totalRows, m.maxVis, offsetRows,
+		sInnerW, availableTargetH, listFocused, ctx,
+	)
+	m.lastSbInfo = sbInfo
+
+	parts := []string{headingText, varNameSection, availableSection, buttonRow}
+	return displayengine.RenderDialogWithTypeAndWidgets("Add Variable", lipgloss.JoinVertical(lipgloss.Left, parts...), m.focused || m.TitleBarFocused(), m.height, displayengine.DialogTypeInfo, m.State())
+}
+
+func (m *addVarDialogModel) View() tea.View {
+	return tea.NewView(m.ViewString())
+}
+
+func (m *addVarDialogModel) Layers() []*lipgloss.Layer {
+	return []*lipgloss.Layer{
+		lipgloss.NewLayer(m.ViewString()).Z(displayengine.ZScreen).ID("addvar_dialog"),
+	}
+}
+
+func (m *addVarDialogModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
+	ctx := displayengine.GetActiveContext()
+	contentW := m.innerWidth()
+
+	headingRaw := FormatMenuHeading(MenuHeadingParams{AppName: m.appName, AppDescription: m.appDesc}, contentW)
+	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")))
+	varNameH := 3
+	buttonRowH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Create"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+
+	// Matches ViewString's titleBudget2/DecideLargeTitleBar call exactly, so a
+	// budget too tight to afford a large title bar downgrades identically
+	// here instead of assuming the large title bar always matches the raw
+	// config flag regardless of available space.
+	titleBudget := m.height - 2 - headingH - varNameH - buttonRowH - 2
+	useLarge, _ := displayengine.DecideLargeTitleBar(ctx.LargeTitleBars, titleBudget, 3)
+	largeTitleOverhead := 0
+	if useLarge {
+		largeTitleOverhead = displayengine.LargeTitleBarOverhead
+	}
+
+	// list starts at: outer border(1) + largeTitleOverhead + headingH + "Variable Name" section(3)
+	listTop := 1 + largeTitleOverhead + headingH + varNameH
+
+	listH := 0
+	rowBudget := m.maxVis
+	offsetRows := 0
+	for i, item := range m.items {
+		h := 1
+		if item.subLabel != "" {
+			h = 2
+		}
+		if i < m.offset {
+			offsetRows += h
+		}
+		if h > rowBudget {
+			break
+		}
+		rowBudget -= h
+		listH += h
+	}
+
+	// Input hit region: outer_border(1) + largeTitleOverhead + headingH + section_top_border(1)
+	inputY := 1 + largeTitleOverhead + headingH + 1
+	m.inputRelY = inputY
+	m.inputScreenX = offsetX + 1 + 1 + 1 + m.input.PromptWidth()
+	m.input.SetScreenTextX(m.inputScreenX)
+
+	// Re-compute scrollbar info for hit regions so it matches exactly what was rendered.
+	totalRows := 0
+	for _, item := range m.items {
+		totalRows++
+		if item.subLabel != "" {
+			totalRows++
+		}
+	}
+	// Use exactly the same layout math as ViewString()
+	availableTargetH := m.height - 2 - largeTitleOverhead - headingH - varNameH - buttonRowH
+	if availableTargetH < 3 {
+		availableTargetH = 3
+	}
+
+	// Physical inner height: availableTargetH - 2 (borders)
+	innerH := availableTargetH - 2
+	if innerH < 1 {
+		innerH = 1
+	}
+	m.sbAbsTopY = offsetY + listTop + 1
+	// Use the physical inner height for hit regions to match ApplyScrollbarColumnTracked padding.
+	sbInfo := displayengine.ComputeScrollbarInfo(totalRows, innerH, offsetRows, innerH)
+	m.lastSbInfo = sbInfo
+
+	var regions []displayengine.HitRegion
+	regions = append(regions, displayengine.HitRegion{
+		ID:     "addvar_input",
+		X:      offsetX + 1,
+		Y:      offsetY + inputY,
+		Width:  contentW,
+		Height: 1,
+		ZOrder: displayengine.ZDialog + 10,
+		Label:  "Variable Name",
+		Help: &displayengine.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Editing",
+			PageText:   "Enter a name for the new environment variable.",
+			ItemText:   "Type the name and press Enter to create, or Esc to cancel.",
+		},
+	})
+	// INS/OVR hit region — bottom-left of the "Variable Name" section border.
+	// inputY = outer_border(1) + largeTitleOverhead + headingH + section_top_border(1); bottom border = inputY+1
+	insOvrY := 1 + largeTitleOverhead + headingH + 2
+	regions = append(regions, displayengine.HitRegion{
+		ID:     "addvar_dialog." + displayengine.IDInsOvr,
+		X:      offsetX + 2, // outer border(1) + section border corner(1)
+		Y:      offsetY + insOvrY,
+		Width:  3,
+		Height: 1,
+		ZOrder: displayengine.ZDialog + 15,
+		Label:  "INS/OVR",
+		Help:   &displayengine.HelpContext{ScreenName: "Add Variable", PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+	})
+
+	regions = append(regions, ListBoxHitRegions(
+		"addvar_list_box", "addvar_list",
+		offsetX+1, offsetY+listTop,
+		contentW, innerH,
+		displayengine.ZDialog+5,
+		"Available Variables",
+		sbInfo,
+		nil,
+	)...)
+
+	// Dialog background
+	regions = append(regions, displayengine.HitRegion{
+		ID:     "addvar_dialog",
+		X:      offsetX,
+		Y:      offsetY,
+		Width:  m.width,
+		Height: m.height,
+		ZOrder: displayengine.ZDialog,
+		Label:  "Add Variable",
+		Help: &displayengine.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Description",
+			PageText:   "Enter a name for the new environment variable.",
+		},
+	})
+
+	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Create"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+	buttonY := m.height - 1 - btnH
+	regions = append(regions, displayengine.HitRegion{
+		ID:     "addvar_buttons",
+		X:      offsetX + 1,
+		Y:      offsetY + buttonY,
+		Width:  contentW,
+		Height: btnH,
+		ZOrder: displayengine.ZDialog + 5,
+		Label:  "Actions",
+		Help: &displayengine.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Description",
+			PageText:   "Enter a name for the new environment variable.",
+		},
+	})
+	regions = append(regions, displayengine.GetButtonHitRegions(
+		displayengine.HelpContext{
+			ScreenName: "Add Variable",
+			PageTitle:  "Description",
+			PageText:   "Enter a name for the new environment variable.",
+		},
+		"addvar_dialog", offsetX+1, offsetY+buttonY, contentW, displayengine.ZDialog+20,
+		displayengine.ButtonSpec{Text: "Create", ZoneID: "Create", Help: "Create the new variable with the entered name."},
+		displayengine.ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Cancel and return to the editor."},
+		displayengine.ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Exit the application."},
+	)...)
+
+	// Title widget regions
+	activeW := m.ActiveWidgets()
+	widgetStr := displayengine.BuildInactiveTitleWidgetsFor(activeW, ctx)
+	widgetWidth := lipgloss.Width(displayengine.GetPlainText(widgetStr))
+	widgetsStartX := offsetX + m.width - 1 - 1 - widgetWidth
+	widgetY := displayengine.TitleBarWidgetY(offsetY, useLarge)
+	regions = append(regions, displayengine.TitleBarWidgetRegions("addvar_dialog", activeW, widgetsStartX, widgetY, displayengine.ZDialog)...)
+
+	return regions
+}
+
+func (m *addVarDialogModel) AdvanceSpinners(now time.Time) bool {
+	return m.buttons.AdvanceSpinner(now)
+}

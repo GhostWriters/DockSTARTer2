@@ -1,0 +1,1135 @@
+package classic
+
+import (
+	"strings"
+
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+
+	"charm.land/lipgloss/v2"
+)
+
+const vIdxBorderFlag = 0x40000000
+
+// bracketGlyphs returns the open/close glyphs for the focused-row bracket
+// indicator (App Select's [AppName], Menu Brackets), following the same
+// ui.line_characters toggle as every other Unicode/ASCII glyph pair.
+func bracketGlyphs(ctx StyleContext) (open, closeCh string) {
+	if ctx.LineCharacters {
+		return tagBracketOpen, tagBracketClose
+	}
+	return tagBracketOpenAscii, tagBracketCloseAscii
+}
+
+// buttonBracketGlyphs returns the open/close glyphs for small/flat button
+// brackets, following the same ui.line_characters toggle as bracketGlyphs
+// but with its own (visually distinct) glyph pair.
+func buttonBracketGlyphs(ctx StyleContext) (open, closeCh string) {
+	if ctx.LineCharacters {
+		return buttonBracketOpen, buttonBracketClose
+	}
+	return buttonBracketOpenAscii, buttonBracketCloseAscii
+}
+
+// renderVariableHeightList renders items vertically with dynamic heights for word wrapping
+func (m *MenuModel) renderVariableHeightList() string {
+	ctx := GetActiveContext()
+	layout := GetLayout()
+
+	// Memoization Check
+	if m.lastListView != "" &&
+		m.lastWidth == m.width &&
+		m.lastHeight == m.height &&
+		m.lastIndex == m.list.Index() &&
+		m.lastFilter == m.list.FilterValue() &&
+		m.lastActive == m.IsActive() &&
+		m.lastListActive == m.IsListActive() &&
+		m.lastLineChars == ctx.LineCharacters &&
+		m.ViewStartY == m.lastViewStartY &&
+		m.lastVersion == m.renderVersion &&
+		m.lastColumn == m.ActiveColumn() {
+		return m.lastListView
+	}
+
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
+
+	maxWidth := m.list.Width()
+	if maxWidth < 1 {
+		maxWidth = 1
+	}
+	maxHeight := m.Layout.ViewportHeight
+	if maxHeight < 1 {
+		maxHeight = 1
+	}
+
+	listContentWidth := maxWidth - 1
+	if listContentWidth < 1 {
+		listContentWidth = 1
+	}
+
+	filter := m.list.FilterValue()
+	var visibleItems []MenuItem
+	var selectedVisibleIndex = -1
+
+	filteredCount := 0
+	for _, item := range m.items {
+		if filter != "" && !strings.Contains(strings.ToLower(item.Tag), strings.ToLower(filter)) {
+			continue
+		}
+		visibleItems = append(visibleItems, item)
+		if filteredCount == m.list.Index() {
+			selectedVisibleIndex = len(visibleItems) - 1
+		}
+		filteredCount++
+	}
+
+	if len(visibleItems) == 0 {
+		return lipgloss.NewStyle().
+			Background(dialogBG).
+			Height(maxHeight).
+			Width(listContentWidth).
+			Padding(0, 1).
+			Render("No results found.")
+	}
+
+	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
+	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
+	itemStyleBase := theme.ThemeSemanticStyle("{{|Item|}}")
+	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
+	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
+	itemStyleSel := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
+	// A whole disabled section (m.disabled) or a single locked item
+	// (item.Locked) dims its tag/key/description -- an explicit
+	// "<...>Disabled" theme tag if defined, else the normal style dimmed
+	// (see ResolveDisabledStyle). Separate Focused variants so the cursor
+	// stays visible on a disabled/locked row instead of every disabled row
+	// looking identical regardless of focus.
+	tagStyleDisabled, _ := ResolveDisabledStyle("Tag")
+	keyStyleDisabled, _ := ResolveDisabledStyle("TagKey")
+	itemStyleDisabled, _ := ResolveDisabledStyle("Item")
+	tagStyleDisabledSel, _ := ResolveDisabledStyle("TagFocused")
+	keyStyleDisabledSel, _ := ResolveDisabledStyle("TagKeyFocused")
+	itemStyleDisabledSel, _ := ResolveDisabledStyle("ItemFocused")
+	// CheckboxOffFocused, not the removed generic CheckboxFocused tag: used
+	// for decorative focus markers with no real on/off state of their own
+	// (the expand arrow, the inert "-" shown on an expanded group header's
+	// A/E columns), not an actual checked/unchecked glyph.
+	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxOffFocused|}}")
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+
+	var mainItems []MenuItem
+	for _, item := range visibleItems {
+		if !item.IsEditing && !item.IsSeparator {
+			mainItems = append(mainItems, item)
+		}
+	}
+	maxTagLen := calculateMaxTagLength(mainItems)
+
+	var renderedItems []string
+	var itemHeights []int
+	var itemMappings []int
+
+	for i := 0; i < len(visibleItems); i++ {
+		item := visibleItems[i]
+		isAppSelect := m.id == "app-select"
+		isSelected := i == selectedVisibleIndex && m.IsListActive()
+
+		// Highlight the parent header if a child item is selected
+		isParentOfSelected := false
+		paddingStr := neutralStyle.Render(strutil.Repeat(" ", m.itemPaddingWidth))
+		if item.IsGroupHeader && selectedVisibleIndex != -1 {
+			selItem := visibleItems[selectedVisibleIndex]
+			if (selItem.IsSubItem || selItem.IsAddInstance || selItem.IsEditing) && selItem.BaseApp == item.BaseApp {
+				isParentOfSelected = true
+			}
+		}
+
+		isDisabled := m.disabled || item.Locked
+
+		tStyle := tagStyleBase
+		kStyle := keyStyleBase
+		dStyle := itemStyleBase
+		if isDisabled && isSelected {
+			tStyle = tagStyleDisabledSel
+			kStyle = keyStyleDisabledSel
+			dStyle = itemStyleDisabledSel
+		} else if isDisabled {
+			tStyle = tagStyleDisabled
+			kStyle = keyStyleDisabled
+			dStyle = itemStyleDisabled
+		} else if isSelected {
+			tStyle = tagStyleSel
+			kStyle = keyStyleSel
+			dStyle = itemStyleSel
+		} else if isParentOfSelected {
+			// A child instance is focused, not this header row itself -- keep the
+			// app name unfocused, but still highlight the description so it's
+			// clear which app's description is showing below the instance list.
+			dStyle = itemStyleSel
+		}
+
+		isActuallySub := item.IsSubItem || item.IsAddInstance
+		if isActuallySub {
+			var subItems []MenuItem
+			subGroupHasCursor := false
+			j := i
+			for j < len(visibleItems) && (visibleItems[j].IsSubItem || visibleItems[j].IsAddInstance) {
+				subItems = append(subItems, visibleItems[j])
+				if j == selectedVisibleIndex {
+					subGroupHasCursor = true
+				}
+				j++
+			}
+
+			subLines, subH, subM := m.renderSubListSequence(subItems, i, selectedVisibleIndex, maxWidth, subGroupHasCursor, ctx)
+
+			for k := 0; k < len(subLines); k++ {
+				renderedItems = append(renderedItems, subLines[k])
+				itemHeights = append(itemHeights, subH[k])
+				itemMappings = append(itemMappings, subM[k])
+			}
+
+			i = j - 1
+			continue
+		}
+
+		if item.IsSeparator {
+			line := ""
+			if item.Tag != "" {
+				line = RenderThemeText(item.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
+			} else {
+				line = strutil.Repeat("─", listContentWidth)
+			}
+			renderedItems = append(renderedItems, neutralStyle.PaddingLeft(0).Render(line))
+			itemHeights = append(itemHeights, 1)
+			itemMappings = append(itemMappings, i)
+			continue
+		}
+
+		if item.IsEditing && !isActuallySub {
+			cbStr := ""
+			if item.IsCheckbox {
+				content, bracket := checkboxStylePair(false, item.Checked, isSelected, isDisabled)
+				cbStr = renderCheckbox(false, item.Checked, ctx.LineCharacters, true, "always", content, bracket) + neutralStyle.Render(" ")
+			}
+			editStr := RenderThemeText(item.Tag, dStyle)
+			line := cbStr + editStr
+			rowStyle := neutralStyle.Width(maxWidth)
+			renderedItems = append(renderedItems, rowStyle.Render(line)+semstyle.CodeReset)
+			itemHeights = append(itemHeights, 1)
+			itemMappings = append(itemMappings, i)
+			continue
+		}
+
+		checkbox := ""
+		if item.IsGroupHeader {
+			cb := subMenuExpanded
+			if !ctx.LineCharacters {
+				cb = subMenuExpandedAscii
+			}
+			checkbox = tStyle.Render(cb)
+		} else if item.IsRadioButton || item.IsCheckbox {
+			// Regular (non-flow, non-app-select) checkbox/radio rows respect
+			// the user's ui.checkbox_brackets/ui.radio_brackets setting;
+			// renderCheckbox always brackets the focused row regardless.
+			mode := ctx.CheckboxBrackets
+			if item.IsRadioButton {
+				mode = ctx.RadioBrackets
+			}
+			content, bracket := checkboxStylePair(item.IsRadioButton, item.Checked, isSelected, isDisabled)
+			checkbox = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, isSelected, mode, content, bracket)
+		}
+
+		var cbAdd3, cbEnabled3, cbExpand3 string
+		if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
+			cbXStyle := neutralStyle
+			if isSelected && m.activeColumn == ColExpand {
+				cbXStyle = checkboxStyleSel
+			}
+
+			// Expandable rows are the plain (collapsed) base-app row and the
+			// group-header (expanded) row -- never sub-items or the "+ Add
+			// instance..." row, which have no arrow of their own.
+			canExpand := item.IsGroupHeader || (item.IsCheckbox && !item.IsSubItem && !item.IsAddInstance)
+
+			addFocused := isSelected && m.activeColumn == ColAdd
+			enableFocused := isSelected && m.activeColumn == ColEnable
+			expandFocused := isSelected && m.activeColumn == ColExpand
+
+			if item.IsGroupHeader {
+				// Expanded: the header's own A/E columns are inert (toggling
+				// them here does nothing -- the real, actionable checkboxes
+				// are the sub-item rows below), so showing a bracketed
+				// checkbox would be misleading. An unstyled "-" makes that
+				// explicit; a blank glyph would be ambiguous with "unchecked"
+				// under ui.checkbox_brackets = "never"/"selected". The
+				// focused column still gets the same bracket+color treatment
+				// as the expand arrow, so cursor position stays visible.
+				aStyle := neutralStyle
+				if addFocused {
+					aStyle = checkboxStyleSel
+				}
+				eStyle := neutralStyle
+				if enableFocused {
+					eStyle = checkboxStyleSel
+				}
+				if addFocused {
+					cbAdd3 = aStyle.Render("[-]")
+				} else {
+					cbAdd3 = neutralStyle.Render(" - ")
+				}
+				if enableFocused {
+					cbEnabled3 = eStyle.Render("[-]")
+				} else {
+					cbEnabled3 = neutralStyle.Render(" - ")
+				}
+			} else {
+				addColFocused := isSelected && m.activeColumn == ColAdd
+				enableColFocused := isSelected && m.activeColumn == ColEnable
+				cAContent, cABracket := checkboxStylePair(false, item.Checked, addColFocused, isDisabled)
+				cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableColFocused, isDisabled)
+
+				// The checkbox columns respect the user's ui.checkbox_brackets
+				// setting (App Select has no radio columns), with the
+				// focused column always bracketed regardless.
+				addBrackets := addFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Checked)
+				enableBrackets := enableFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Enabled)
+
+				if ctx.LineCharacters {
+					ca, ce := checkOffBare, checkOffBare
+					if item.Checked {
+						ca = checkOnBare
+					}
+					if item.Enabled {
+						ce = checkOnBare
+					}
+					if addBrackets {
+						ca = checkOff
+						if item.Checked {
+							ca = checkOn
+						}
+					}
+					if enableBrackets {
+						ce = checkOff
+						if item.Enabled {
+							ce = checkOn
+						}
+					}
+					cbAdd3 = renderCheckboxGlyphSplit(ca, cAContent, cABracket)
+					cbEnabled3 = renderCheckboxGlyphSplit(ce, cEContent, cEBracket)
+				} else {
+					caText, ceText := checkOffBareAscii, checkOffBareAscii
+					if item.Checked {
+						caText = checkOnBareAscii
+					}
+					if item.Enabled {
+						ceText = checkOnBareAscii
+					}
+					if addBrackets {
+						caText = checkOffAscii
+						if item.Checked {
+							caText = checkOnAscii
+						}
+					}
+					if enableBrackets {
+						ceText = checkOffAscii
+						if item.Enabled {
+							ceText = checkOnAscii
+						}
+					}
+					cbAdd3 = renderCheckboxGlyphSplit(caText, cAContent, cABracket)
+					cbEnabled3 = renderCheckboxGlyphSplit(ceText, cEContent, cEBracket)
+				}
+			}
+
+			// The Expand arrow isn't a checkbox -- it's the same kind of
+			// focus/navigate indicator as the Name column's [AppName] and
+			// rename brackets, so it uses TagBrackets (bracketGlyphs) rather
+			// than the checkbox bracket styling used by Add/Enable.
+			expandOpen, expandClose := bracketGlyphs(ctx)
+			if ctx.LineCharacters {
+				if canExpand {
+					arrow := subMenuCollapsed
+					if item.IsGroupHeader {
+						arrow = subMenuExpanded
+					}
+					if expandFocused {
+						cbExpand3 = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandOpen+"{{[-]}}", neutralStyle) + cbXStyle.Render(arrow) + RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandClose+"{{[-]}}", neutralStyle)
+					} else {
+						cbExpand3 = neutralStyle.Render(" ") + cbXStyle.Render(arrow) + neutralStyle.Render(" ")
+					}
+				} else {
+					cbExpand3 = neutralStyle.Render("   ")
+				}
+			} else {
+				if canExpand {
+					arrow := subMenuCollapsedAscii
+					if item.IsGroupHeader {
+						arrow = subMenuExpandedAscii
+					}
+					if expandFocused {
+						cbExpand3 = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandOpen+"{{[-]}}", neutralStyle) + cbXStyle.Render(arrow) + RenderThemeText("{{[-]}}{{|TagBrackets|}}"+expandClose+"{{[-]}}", neutralStyle)
+					} else {
+						cbExpand3 = neutralStyle.Render(" ") + cbXStyle.Render(arrow) + neutralStyle.Render(" ")
+					}
+				} else {
+					cbExpand3 = neutralStyle.Render("   ")
+				}
+			}
+		}
+
+		tagStr := ""
+		isProcessingItem := m.processingItemIdx >= 0 && i == m.processingItemIdx
+		menuBracketsShown := ctx.MenuBrackets && isSelected && !isProcessingItem && !isAppSelect &&
+			!item.IsCheckbox && !item.IsRadioButton && !item.IsGroupHeader
+		if len(item.Tag) > 0 {
+			runes := []rune(item.Tag)
+			letterIdx := 0
+			if strings.HasPrefix(item.Tag, "[") && len(runes) > 1 {
+				letterIdx = 1
+			}
+			// App-select rows with a docs URL render the tag as a clickable
+			// hyperlink (two adjacent OSC8 spans -- hotkey-letter style and
+			// rest-of-name style -- both pointing at the same URL, since a
+			// single hyperlink span can't carry two different text styles).
+			var linkURL string
+			if isAppSelect {
+				linkURL = item.Metadata["docsURL"]
+			}
+			if letterIdx < len(runes) {
+				if linkURL != "" {
+					tagStr = tStyle.Render(string(runes[:letterIdx])) +
+						kStyle.Hyperlink(linkURL).Render(string(runes[letterIdx])) +
+						tStyle.Hyperlink(linkURL).Render(string(runes[letterIdx+1:]))
+				} else {
+					tagStr = tStyle.Render(string(runes[:letterIdx])) + kStyle.Render(string(runes[letterIdx])) + RenderThemeText(string(runes[letterIdx+1:]), tStyle)
+				}
+			} else if linkURL != "" {
+				tagStr = tStyle.Hyperlink(linkURL).Render(item.Tag)
+			} else {
+				tagStr = RenderThemeText(item.Tag, tStyle)
+			}
+			if isProcessingItem {
+				spinL, spinR := m.titleSpinner.Indicators()
+				if spinL != "" {
+					spinStyle := GetStyles().TagSpinner
+					tagStr = spinStyle.Render(spinL) + tagStr + spinStyle.Render(spinR)
+				}
+			}
+			if menuBracketsShown {
+				// Same reserved slots the spinner uses above: the leading
+				// "sep" character becomes the open bracket, and the close
+				// bracket eats into the already-reserved minGap the same way
+				// spinR does (ASCII glyphs are 1 cell, a no-op shift; the
+				// fullwidth Unicode variant is 2 cells, see spinTagExtra
+				// below). Reset ({{[-]}}) before the tag so bold/dim from
+				// adjacent text doesn't leak through a raw Style.Render() call.
+				open, closeCh := bracketGlyphs(ctx)
+				openB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
+				closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
+				tagStr = openB + tagStr + closeB
+			}
+		}
+
+		// Prefix width calculation (Left of the Tag)
+		var gutterWidth int
+
+		hasAnyCheckboxes := false
+		for _, it := range visibleItems {
+			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
+				hasAnyCheckboxes = true
+				break
+			}
+		}
+
+		menuPrefixWidth := 0
+		if isAppSelect {
+			menuPrefixWidth = 11 // cbAdd(3) + sp(1) + cbEnabled(3) + cbExpand(3) + sp(1)
+		} else if hasAnyCheckboxes {
+			menuPrefixWidth = layout.CheckboxWidth()
+		}
+		minGap := 3
+
+		// Gutter width is already lock + activity.
+		// We use StatusGutterWidth() as the definitive source.
+		gutterWidth = m.StatusGutterWidth()
+		totalGutterWidth := gutterWidth + m.itemPaddingWidth
+		availableWidth := listContentWidth - totalGutterWidth - menuPrefixWidth - (maxTagLen + minGap)
+		if availableWidth < 0 {
+			availableWidth = 0
+		}
+
+		var descStr string
+		if (isSelected || isParentOfSelected) && item.Desc != "" {
+			switch {
+			case strings.HasPrefix(item.Desc, "{{|ItemListUserDefined|}}"):
+				// Swap to the focused variant instead of stripping the tag,
+				// so the user-defined/built-in distinction survives focus
+				// instead of collapsing to the generic selected-row style.
+				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListUserDefined|}}", "{{|ItemListUserDefinedFocused|}}", 1), dStyle)
+			case strings.HasPrefix(item.Desc, "{{|ItemListDeprecated|}}"):
+				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListDeprecated|}}", "{{|ItemListDeprecatedFocused|}}", 1), dStyle)
+			case strings.HasPrefix(item.Desc, "{{|ItemList|}}"):
+				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemList|}}", "{{|ItemListFocused|}}", 1), dStyle)
+			default:
+				// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
+				// "{{|ItemList|}}..."), which overrides dStyle entirely -- strip
+				// tags here so dStyle (itemStyleSel) actually takes effect, same
+				// as the plain isSelected case already did. Routed through
+				// RenderThemeText rather than dStyle.Render directly so a
+				// dStyle resolving to a hard reset ("~") still gets an active
+				// ANSI reset injected (MaintainBackground's job) instead of
+				// silently emitting nothing.
+				descStr = RenderThemeText(GetPlainText(item.Desc), dStyle)
+			}
+		} else {
+			descStr = RenderThemeText(item.Desc, dStyle)
+		}
+		wrapped := lipgloss.NewStyle().Width(availableWidth).Render(descStr)
+		lines := strings.Split(strings.TrimSuffix(wrapped, "\n"), "\n")
+		for k, l := range lines {
+			lines[k] = strings.TrimRight(l, " ")
+		}
+
+		// When VariableHeight is false (Uniform mode), strictly enforce 1-line per item.
+		// This keeps the scrollbar math (which uses item indices) in sync with the renderer.
+		if !m.variableHeight {
+			lines = lines[:1]
+		}
+
+		// Gutter: Use unified helper which respects StatusGutterWidth
+		itemGutter := m.RenderItemGutter(item, neutralStyle, "")
+
+		// Name-column focus indicator: "[AppName]", with the "[" replacing the
+		// separator space before the tag (no extra width) and an unstyled "]"
+		// appended right after it (accounted for via spinTagExtra-style gap
+		// shrink below, since it does add a character).
+		nameFocused := isAppSelect && isSelected && m.activeColumn == ColName
+		nameSep := neutralStyle.Render(" ")
+		nameClose := ""
+		nameCloseWidth := 0
+		if nameFocused {
+			// Reset ({{[-]}}) before applying the tag -- a raw Style.Render()
+			// call doesn't emit a leading full reset, so bold/dim attributes
+			// from the adjacent tag text can otherwise leak through.
+			open, closeCh := bracketGlyphs(ctx)
+			nameSep = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
+			nameClose = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
+			// Net extra width beyond the tag's own footprint: the open
+			// bracket replaces the reserved 1-char sep (extra only if wider
+			// than that), plus the full width of the close bracket.
+			nameCloseWidth = (lipgloss.Width(open) - m.itemPaddingWidth) + lipgloss.Width(closeCh)
+		}
+
+		prefixPadding := ""
+		prefixWidth := 0
+		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
+			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
+				// Slot1(3) + Space(1) + Slot2(3) + Slot3(3) + Space(1) = 11 characters.
+				// No separator between Slot2 and Slot3 -- the Expand slot's own
+				// leading character (a blank when unfocused, "[" when focused)
+				// already acts as that gap, matching the single space everywhere
+				// else instead of doubling up.
+				// This MUST match menuPrefixWidth above to align with standard app-select rows.
+				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + cbExpand3 + nameSep
+			} else {
+				// Standard menus or Radio buttons: indicator followed by one space
+				prefixPadding = checkbox + neutralStyle.Render(" ")
+			}
+		}
+		prefixWidth = lipgloss.Width(GetPlainText(prefixPadding))
+
+		// Padding spaces are AFTER the tag to reach the description column.
+		// Alignment column for descriptions: menuGutterWidth(2) + menuPrefixWidth + maxTagLen + minGap(3)
+		spinTagExtra := 0
+		if isProcessingItem {
+			// We replace the 1-char sep with spinL, and add spinR after the tag.
+			// Net extra chars = +2 spinners - 1 sep = +1; shrink gap by 1 to keep desc aligned.
+			spinTagExtra = 1
+		} else if menuBracketsShown {
+			// Same accounting as the spinner case above: the open bracket
+			// replaces the 1-char sep (blanked below), and the close bracket
+			// is offset by shrinking the gap -- width-aware so the fullwidth
+			// Unicode variant (2 cells) shrinks the gap correctly too, not
+			// just the 1-cell ASCII glyphs.
+			open, closeCh := bracketGlyphs(ctx)
+			spinTagExtra = (lipgloss.Width(open) - m.itemPaddingWidth) + lipgloss.Width(closeCh)
+		}
+		if nameFocused {
+			spinTagExtra += nameCloseWidth
+		}
+		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
+		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
+
+		firstLine := prefixPadding + tagStr + nameClose + neutralStyle.Render(paddingSpaces) + lines[0]
+		indent := neutralStyle.Render(strutil.Repeat(" ", menuPrefixWidth+maxTagLen+minGap))
+		renderedItemLines := []string{firstLine}
+		for j := 1; j < len(lines); j++ {
+			renderedItemLines = append(renderedItemLines, indent+lines[j])
+		}
+
+		finalItem := ""
+		// m.itemPaddingWidth is typically 1. gutterWidth(1) + 1 = 2 indent.
+		// This results in the requested "|! Tag" or "|! X Tag" layout.
+		rowStyle := neutralStyle.Width(maxWidth)
+		gutterSpaces := neutralStyle.Render(strutil.Repeat(" ", m.StatusGutterWidth()))
+
+		sep := paddingStr
+		if isAppSelect || isProcessingItem || menuBracketsShown {
+			sep = ""
+		}
+		// Continuation lines always use the normal separator width so they align
+		// with the description column on line 0 (the spinner only affects line 0).
+		contSep := paddingStr
+		if isAppSelect {
+			contSep = ""
+		}
+
+		for j, l := range renderedItemLines {
+			if j > 0 {
+				finalItem += "\n"
+				finalItem += rowStyle.Render(gutterSpaces+contSep+l) + semstyle.CodeReset
+			} else {
+				finalItem += rowStyle.Render(itemGutter+sep+l) + semstyle.CodeReset
+			}
+		}
+		renderedItems = append(renderedItems, finalItem)
+		if m.variableHeight {
+			itemHeights = append(itemHeights, len(lines))
+		} else {
+			itemHeights = append(itemHeights, 1)
+		}
+		itemMappings = append(itemMappings, i)
+	}
+
+	totalContentHeight := 0
+	for _, h := range itemHeights {
+		totalContentHeight += h
+	}
+	m.lastScrollTotal = totalContentHeight
+	m.lastItemHeights = itemHeights
+	m.lastItemMappings = itemMappings
+
+	for i, item := range renderedItems {
+		linesRows := strings.Split(item, "\n")
+		for j, line := range linesRows {
+			w := lipgloss.Width(GetPlainText(line))
+			if w < maxWidth {
+				linesRows[j] = line + neutralStyle.Render(strutil.Repeat(" ", maxWidth-w))
+			}
+		}
+		renderedItems[i] = strings.Join(linesRows, "\n")
+	}
+
+	if totalContentHeight <= maxHeight {
+		var newHitRegions []HitRegion
+		aggY := 0
+		searchFrom := 0
+		for i, h := range itemHeights {
+			vIdx := itemMappings[i]
+			isBorder := (vIdx & vIdxBorderFlag) != 0
+			if vIdx >= 0 && vIdx < len(visibleItems) && !visibleItems[vIdx].IsSeparator {
+				cleanVIdx := vIdx & ^vIdxBorderFlag
+				actualIndex := -1
+				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
+					mi := m.items[actIdx]
+					if mi.Tag == visibleItems[cleanVIdx].Tag && mi.Desc == visibleItems[cleanVIdx].Desc && mi.BaseApp == visibleItems[cleanVIdx].BaseApp {
+						actualIndex = actIdx
+						if !isBorder {
+							searchFrom = actIdx + 1
+						}
+						break
+					}
+				}
+				if actualIndex >= 0 {
+					itemID := GetMenuItemID(m.id, actualIndex)
+					if isBorder {
+						itemID += "-parent" // Clicks on group borders jump to parent
+					}
+					item := m.items[actualIndex]
+					if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader || item.IsAddInstance) && !isBorder {
+						// Row Margin Catch-all: Registered FIRST so specific regions on top take priority
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-border",
+							X:      0,
+							Y:      aggY,
+							Width:  listContentWidth,
+							Height: h,
+						})
+
+						// Sub-items and add-instance rows are indented by SubItemOffset
+						baseShift := 0
+						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+							baseShift = layout.SubItemOffset()
+						}
+
+						// Specific Regions (Add, Enable, Expand)
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-add",
+							X:      baseShift + layout.SingleBorder()*2,
+							Y:      aggY,
+							Width:  layout.CheckboxWidth(),
+							Height: h,
+						})
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-enable",
+							X:      baseShift + layout.SingleBorder()*6,
+							Y:      aggY,
+							Width:  layout.CheckboxWidth(),
+							Height: h,
+						})
+						tagX := baseShift + layout.SingleBorder()*9
+						// Simple rows and group headers have a dedicated 3-char-wide arrow
+						// column at tagX. Clicks past it (the app name / description) fall
+						// through to "-border" so the name's own hyperlink hit region
+						// (registered separately, higher ZOrder) and plain row-selection
+						// both work. Sub-items and "+ Add instance..." rows have no arrow
+						// column, so they keep the wide region for rename/add-instance clicks.
+						expandX, expandWidth := tagX, 3
+						if item.IsSubItem || item.IsAddInstance {
+							expandX, expandWidth = tagX, listContentWidth-tagX
+						}
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-expand",
+							X:      max(0, expandX),
+							Y:      aggY,
+							Width:  max(1, expandWidth),
+							Height: h,
+						})
+					} else {
+						// Standard single-hit region or border hit region
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID,
+							X:      0,
+							Y:      aggY,
+							Width:  listContentWidth,
+							Height: h,
+						})
+					}
+				}
+			}
+			aggY += h
+		}
+
+		var viewLines []string
+		for _, item := range renderedItems {
+			viewLines = append(viewLines, strings.Split(item, "\n")...)
+		}
+		// Concatenate all lines to form the final visible list view
+		result := strings.Join(viewLines, "\n")
+		m.lastListView = result
+		m.lastHitRegions = newHitRegions
+		m.lastVersion = m.renderVersion
+		m.lastColumn = m.ActiveColumn()
+		m.lastListActive = m.IsListActive()
+		return result
+	}
+
+	currentY := 0
+	aggY_scroll := 0
+	selectedY := 0
+	for i, h := range itemHeights {
+		if itemMappings[i] == selectedVisibleIndex {
+			selectedY = aggY_scroll
+			break
+		}
+		aggY_scroll += h
+	}
+	currentY = selectedY
+
+	selectedHeight := 1
+	for i, h := range itemHeights {
+		if itemMappings[i] == selectedVisibleIndex {
+			selectedHeight = h
+			break
+		}
+	}
+
+	// When dragging the scrollbar, viewStartY is set explicitly by Scrollbar.Update —
+	// skip the cursor-visibility snap so it doesn't fight the drag position.
+	if !m.Scroll.Drag.Dragging {
+		if currentY < m.ViewStartY {
+			m.ViewStartY = currentY
+		} else if currentY+selectedHeight > m.ViewStartY+maxHeight {
+			m.ViewStartY = currentY + selectedHeight - maxHeight
+		}
+	}
+	if m.ViewStartY < 0 {
+		m.ViewStartY = 0
+	}
+	if m.ViewStartY+maxHeight > totalContentHeight {
+		m.ViewStartY = totalContentHeight - maxHeight
+	}
+
+	viewStart := m.ViewStartY
+	var viewLines []string
+	var newHitRegions []HitRegion
+	aggY := 0
+	searchFrom := 0
+	for i, item := range renderedItems {
+		h := itemHeights[i]
+		vIdx := itemMappings[i]
+		isBorder := (vIdx & vIdxBorderFlag) != 0
+		if aggY+h > viewStart && aggY < viewStart+maxHeight {
+			if vIdx >= 0 && !visibleItems[vIdx & ^vIdxBorderFlag].IsSeparator {
+				cleanVIdx := vIdx & ^vIdxBorderFlag
+				y := aggY - viewStart
+				itemH := h
+				if aggY < viewStart {
+					itemH -= (viewStart - aggY)
+					y = 0
+				}
+				if aggY+h > viewStart+maxHeight {
+					itemH -= (aggY + h - (viewStart + maxHeight))
+				}
+				actualIndex := -1
+				for actIdx := searchFrom; actIdx < len(m.items); actIdx++ {
+					mi := m.items[actIdx]
+					if mi.Tag == visibleItems[cleanVIdx].Tag && mi.Desc == visibleItems[cleanVIdx].Desc && mi.BaseApp == visibleItems[cleanVIdx].BaseApp {
+						actualIndex = actIdx
+						if !isBorder {
+							searchFrom = actIdx + 1
+						}
+						break
+					}
+				}
+				if actualIndex >= 0 {
+					itemID := GetMenuItemID(m.id, actualIndex)
+					if isBorder {
+						itemID += "-parent" // Clicks on group borders jump to parent
+					}
+					item := m.items[actualIndex]
+					if m.groupedMode && (item.IsCheckbox || item.IsSubItem || item.IsGroupHeader || item.IsAddInstance) && !isBorder {
+						// Row Margin Catch-all: Registered FIRST so specific regions on top take priority
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-border",
+							X:      0,
+							Y:      y,
+							Width:  listContentWidth,
+							Height: itemH,
+						})
+
+						// Sub-items and add-instance rows are indented by SubItemOffset
+						baseShift := 0
+						if item.IsSubItem || item.IsAddInstance || item.IsEditing {
+							baseShift = layout.SubItemOffset()
+						}
+
+						// Specific Regions (Add, Enable, Expand)
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-add",
+							X:      baseShift + layout.SingleBorder()*2,
+							Y:      y,
+							Width:  layout.CheckboxWidth(),
+							Height: itemH,
+						})
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-enable",
+							X:      baseShift + layout.SingleBorder()*6,
+							Y:      y,
+							Width:  layout.CheckboxWidth(),
+							Height: itemH,
+						})
+						tagX := baseShift + layout.SingleBorder()*9
+						// See the corresponding comment in the non-scrolled render path above:
+						// widen the arrow's hit region by 1 char on each side for easier clicking.
+						expandX, expandWidth := tagX-1, 3
+						if item.IsSubItem || item.IsAddInstance {
+							expandX, expandWidth = tagX, listContentWidth-tagX
+						}
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID + "-expand",
+							X:      max(0, expandX),
+							Y:      y,
+							Width:  max(1, expandWidth),
+							Height: itemH,
+						})
+					} else {
+						// Standard single-hit region or border hit region
+						newHitRegions = append(newHitRegions, HitRegion{
+							ID:     itemID,
+							X:      0,
+							Y:      y,
+							Width:  listContentWidth,
+							Height: itemH,
+						})
+					}
+				}
+			}
+			parts := strings.Split(item, "\n")
+			for j, p := range parts {
+				lineY := aggY + j
+				if lineY >= viewStart && lineY < viewStart+maxHeight {
+					viewLines = append(viewLines, p)
+				}
+			}
+		}
+		aggY += h
+	}
+	// Concatenate all lines to form the final visible list view
+	finalResult := strings.Join(viewLines, "\n")
+	m.lastListView = finalResult
+	m.lastHitRegions = newHitRegions
+	m.lastVersion = m.renderVersion
+	m.lastColumn = m.ActiveColumn()
+	m.lastViewStartY = m.ViewStartY
+	m.lastListActive = m.IsListActive()
+	return finalResult
+}
+
+// renderSubListSequence handles a contiguous sequence of sub-items by wrapping them in a border.
+func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex int, selectedVisibleIndex int, maxWidth int, hasCursor bool, ctx StyleContext) ([]string, []int, []int) {
+	styles := GetStyles()
+	dialogBG := styles.Dialog.GetBackground()
+	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
+	tagStyleBase := theme.ThemeSemanticStyle("{{|Tag|}}")
+	keyStyleBase := theme.ThemeSemanticStyle("{{|TagKey|}}")
+	tagStyleSel := theme.ThemeSemanticStyle("{{|TagFocused|}}")
+	keyStyleSel := theme.ThemeSemanticStyle("{{|TagKeyFocused|}}")
+
+	var subGroupTagMaxW int
+	for _, item := range items {
+		w := lipgloss.Width(GetPlainText(item.Tag))
+		if item.IsEditing {
+			// The opening "[" replaces one of the two blank spaces already
+			// before the tag (see rowContent below), but the closing " ]" has
+			// no space slot to replace -- account for those 2 extra characters
+			// (the space leaves room for the hardware cursor to be visible
+			// instead of sitting directly on top of "]").
+			w += 2
+		}
+		if w > subGroupTagMaxW {
+			subGroupTagMaxW = w
+		}
+	}
+
+	// Instance Grid: Indent 10, Dash 1, Left Pad 1, Right Pad 1.
+	// Prefix = 1(sp_l) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10 -- that single
+	// separator space becomes "[" while editing (see nameSep below), same as
+	// the top-level Name column, rather than reserving a permanent extra one.
+	// Total width: 1(│l) + 10(prefix) + maxTag + 1(sp_r) + 1(│r) = 13 + maxTag.
+	subListWidth := 12 + subGroupTagMaxW
+	if subListWidth > maxWidth {
+		subListWidth = maxWidth
+	}
+
+	subFocused := m.IsListActive() && hasCursor
+
+	// While renaming/adding an instance, keyboard input goes to the text
+	// field, not the Add/Enable columns -- don't let the "A E" border labels
+	// keep claiming one of them has focus.
+	anyEditing := false
+	for _, it := range items {
+		if it.IsEditing {
+			anyEditing = true
+			break
+		}
+	}
+	aeBorderFocused := subFocused && !anyEditing
+
+	var resLines []string
+	var resH []int
+	var resM []int
+
+	// 1. Build Top Border with 1 dash.
+	topBorder := BuildAETopBorder(subListWidth, 1, aeBorderFocused, m.activeColumn, ctx)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
+	resH = append(resH, 1)
+	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
+
+	vStyleLight := lipgloss.NewStyle().Foreground(ctx.BorderColor).Background(dialogBG)
+	vStyleDark := lipgloss.NewStyle().Foreground(ctx.Border2Color).Background(dialogBG)
+	var border lipgloss.Border
+	if ctx.LineCharacters {
+		if subFocused {
+			border = ThickRoundedBorder
+		} else {
+			border = lipgloss.RoundedBorder()
+		}
+	} else {
+		if subFocused {
+			border = RoundedThickAsciiBorder
+		} else {
+			border = RoundedAsciiBorder
+		}
+	}
+	vBorderChar := border.Left
+
+	for i, item := range items {
+		visibleIdx := startVisibleIndex + i
+		isSelected := visibleIdx == selectedVisibleIndex && m.IsListActive()
+		isDisabled := m.disabled || item.Locked
+
+		tStyle := tagStyleBase
+		kStyle := keyStyleBase
+		if isDisabled && isSelected {
+			tStyle, _ = ResolveDisabledStyle("TagFocused")
+			kStyle, _ = ResolveDisabledStyle("TagKeyFocused")
+		} else if isDisabled {
+			tStyle, _ = ResolveDisabledStyle("Tag")
+			kStyle, _ = ResolveDisabledStyle("TagKey")
+		} else if isSelected {
+			tStyle = tagStyleSel
+			kStyle = keyStyleSel
+		}
+
+		lockMarker := ""
+		if m.showLockGutter {
+			if item.IsInvalid {
+				lockMarker = RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
+			} else if item.Locked {
+				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+			} else {
+				lockMarker = neutralStyle.Render(" ")
+			}
+		}
+
+		var g0, g1 string
+		if item.IsReferenced {
+			if item.Checked {
+				g0 = RenderThemeText("{{|MarkerAdded|}}R{{[-]}}", neutralStyle)
+			} else {
+				g0 = RenderThemeText("{{|MarkerModified|}}r{{[-]}}", neutralStyle)
+			}
+		} else if item.Checked && !item.WasAdded {
+			g0 = RenderThemeText("{{|MarkerAdded|}}+{{[-]}}", neutralStyle)
+		} else if !item.Checked && item.WasAdded {
+			g0 = RenderThemeText("{{|MarkerDeleted|}}-{{[-]}}", neutralStyle)
+		} else {
+			g0 = neutralStyle.Render(" ")
+		}
+
+		if m.activityGutterWidth >= 2 {
+			if item.Enabled && !item.WasEnabled {
+				g1 = RenderThemeText("{{|MarkerAdded|}}E{{[-]}}", neutralStyle)
+			} else if !item.Enabled && item.WasEnabled && (item.Checked || !item.WasAdded) {
+				g1 = RenderThemeText("{{|MarkerDeleted|}}D{{[-]}}", neutralStyle)
+			} else {
+				g1 = neutralStyle.Render(" ")
+			}
+		}
+
+		tagStr := ""
+		if item.IsEditing {
+			// Same bracket-style indicator as the top-level Name column,
+			// themed via TagBrackets. The opening bracket is added by
+			// rowContent below, replacing a blank separator space rather than
+			// adding width; the closing bracket is added here with a leading
+			// space so the hardware cursor (AppSelectionScreen.GetInputCursor,
+			// landing right after the typed text) has room to be visible.
+			editTag := GetPlainText(item.Tag)
+			editStyle := theme.ThemeSemanticStyle("{{|ItemFocused|}}")
+			_, closeCh := bracketGlyphs(ctx)
+			closeB := RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", neutralStyle)
+			tagStr += editStyle.Render(editTag) + neutralStyle.Render(" ") + closeB
+		} else if len(item.Tag) > 0 {
+			runes := []rune(item.Tag)
+			tagStr += kStyle.Render(string(runes[0])) + tStyle.Render(string(runes[1:]))
+		}
+
+		// Sub-item Add/Enable columns respect ui.checkbox_brackets, same
+		// convention as the top-level app row's cbAdd3/cbEnabled3 above. While
+		// this row is being renamed, keyboard input goes to the text field,
+		// not Add/Enable -- neither column should keep claiming whichever one
+		// was active before editing started.
+		addFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColAdd
+		enableFocused := isSelected && subFocused && !item.IsEditing && m.activeColumn == ColEnable
+		addBrackets := addFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Checked)
+		enableBrackets := enableFocused || ctx.CheckboxBrackets == "always" || (ctx.CheckboxBrackets == "selected" && item.Enabled)
+		cAContent, cABracket := checkboxStylePair(false, item.Checked, addFocused, isDisabled)
+		cEContent, cEBracket := checkboxStylePair(false, item.Enabled, enableFocused, isDisabled)
+
+		var checkboxA3, checkboxE3 string
+		if ctx.LineCharacters {
+			cA, cE := checkOffBare, checkOffBare
+			if item.Checked {
+				cA = checkOnBare
+			}
+			if item.Enabled {
+				cE = checkOnBare
+			}
+			if addBrackets {
+				cA = checkOff
+				if item.Checked {
+					cA = checkOn
+				}
+			}
+			if enableBrackets {
+				cE = checkOff
+				if item.Enabled {
+					cE = checkOn
+				}
+			}
+			checkboxA3 = renderCheckboxGlyphSplit(cA, cAContent, cABracket)
+			checkboxE3 = renderCheckboxGlyphSplit(cE, cEContent, cEBracket)
+		} else {
+			caA, ceA := checkOffAscii, checkOffAscii
+			if item.Checked {
+				caA = checkOnAscii
+			}
+			if item.Enabled {
+				ceA = checkOnAscii
+			}
+			if addBrackets {
+				checkboxA3 = cABracket.Render("[") + cAContent.Render(string(caA[1])) + cABracket.Render("]")
+			} else {
+				checkboxA3 = neutralStyle.Render(" ") + cAContent.Render(string(caA[1])) + neutralStyle.Render(" ")
+			}
+			if enableBrackets {
+				checkboxE3 = cEBracket.Render("[") + cEContent.Render(string(ceA[1])) + cEBracket.Render("]")
+			} else {
+				checkboxE3 = neutralStyle.Render(" ") + cEContent.Render(string(ceA[1])) + neutralStyle.Render(" ")
+			}
+		}
+
+		// Sub-menus require a 10-character indent to align with the top/bottom borders.
+		// Indent consists of: g0(1) + g1(1) + 8 spaces.
+		indent := neutralStyle.Render(strutil.Repeat(" ", 8))
+
+		// The rowContent starts with the left border, followed by a mandatory internal space.
+		// The single separator before the tag becomes the open bracket while
+		// editing rather than adding a new character -- matches the
+		// top-level Name column's own [AppName] indicator, which does the same.
+		nameSep := neutralStyle.Render(" ")
+		if item.IsEditing {
+			open, _ := bracketGlyphs(ctx)
+			nameSep = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", neutralStyle)
+		}
+		// The mandatory internal space right after the border doubles as a
+		// transient "you just added this" marker -- same glyph as the
+		// top-level list's own expand/collapse indicator, cleared by
+		// AppSelectionScreen on the next keypress/click (see IsNew's
+		// clearing logic), at which point this reverts to a plain space.
+		leadSpace := neutralStyle.Render(" ")
+		if item.IsNew {
+			arrow := subMenuCollapsed
+			if !ctx.LineCharacters {
+				arrow = subMenuCollapsedAscii
+			}
+			leadSpace = RenderThemeText("{{|MarkerAdded|}}"+arrow+"{{[-]}}", neutralStyle)
+		}
+		rowContent := vStyleLight.Render(vBorderChar) + leadSpace + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + nameSep + tagStr
+		rowWidth := subListWidth - 1
+		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
+
+		itemGutter := lockMarker + g0
+		if m.activityGutterWidth >= 2 {
+			itemGutter += g1
+		}
+		line := itemGutter + indent + pContent + vStyleDark.Render(vBorderChar)
+
+		resLines = append(resLines, line+semstyle.CodeReset)
+		resH = append(resH, 1)
+		resM = append(resM, visibleIdx)
+	}
+
+	// 3. Build Bottom Border with 1 dash.
+	bottomBorder := BuildAEBottomBorder(subListWidth, 1, aeBorderFocused, m.activeColumn, -1, ctx)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+semstyle.CodeReset)
+	resH = append(resH, 1)
+	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
+
+	return resLines, resH, resM
+}

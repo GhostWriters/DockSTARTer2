@@ -1,0 +1,1139 @@
+package screens
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/glyphs"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+func getAppSelectionLegend() string {
+	ctx := displayengine.GetActiveContext()
+	l, r := ">", "<"
+	cbChecked, cbUnchecked := "[{{|TagFocused|}}x{{[-]}}]", "[{{|TagFocused|}} {{[-]}}]"
+	if ctx.LineCharacters {
+		l, r = "▸", "◂"
+		cbChecked = "{{|TagFocused|}}" + glyphs.CheckOn + "{{[-]}}"
+		cbUnchecked = "{{|TagFocused|}}" + glyphs.CheckOff + "{{[-]}}"
+	}
+
+	// Line 1: Gutter markers
+	parts := []string{
+		"| {{|MarkerAdded|}}+{{[-]}} Added",
+		"{{|MarkerDeleted|}}-{{[-]}} Removed",
+		"{{|MarkerModified|}}r{{[-]}} Referenced",
+		"{{|MarkerAdded|}}R{{[-]}} Referenced \u0026 Added",
+		"{{|MarkerAdded|}}E{{[-]}} Enabled",
+		"{{|MarkerDeleted|}}D{{[-]}} Disabled |",
+	}
+	line1 := strings.Join(parts, " | ")
+
+	// Line 2: Focus markers and Checkbox Simulation
+	parts2 := []string{
+		"| {{|TitleFocusIndicator|}}" + l + "{{[-]}}{{|TitleCheckboxFocused|}}A{{[-]}}{{|TitleFocusIndicator|}}" + r + "{{[-]}} Add App",
+		"{{|TitleFocusIndicator|}}" + l + "{{[-]}}{{|TitleCheckboxFocused|}}E{{[-]}}{{|TitleFocusIndicator|}}" + r + "{{[-]}} Enable App",
+		cbChecked + " Checked",
+		cbUnchecked + " Unchecked |",
+	}
+	line2 := strings.Join(parts2, " | ")
+
+	return line2 + "\n" + line1
+}
+
+// AppSelectionScreen wraps MenuModel to provide a custom Legend help panel.
+type AppSelectionScreen struct {
+	menu *displayengine.MenuModel
+	conf config.AppConfig
+
+	// ready gates rendering — false until the 250ms reveal delay fires or load completes.
+	ready bool
+
+	// Inline editing state
+	isEditing               bool
+	editingBaseApp          string
+	editingIdx              int
+	editContent             string
+	editError               string
+	isRenaming              bool
+	renamingOriginal        displayengine.MenuItem
+	convertedFromSimple     bool
+	convertedSimpleOriginal displayengine.MenuItem
+	connType                string
+}
+
+func (s *AppSelectionScreen) Init() tea.Cmd {
+	return tea.Batch(s.menu.Init(), showSpinnerAfterDelayCmd(), s.loadAppSelectItemsCmd())
+}
+func (s *AppSelectionScreen) View() tea.View              { return s.menu.View() }
+func (s *AppSelectionScreen) ViewString() string          { return s.menu.ViewString() }
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer   { return s.menu.Layers() }
+func (s *AppSelectionScreen) Title() string               { return s.menu.Title() }
+func (s *AppSelectionScreen) HelpText() string {
+	items := s.menu.GetItems()
+	idx := s.menu.Cursor()
+	if idx < 0 || idx >= len(items) {
+		return s.menu.HelpText()
+	}
+	item := items[idx]
+	if item.IsEditing {
+		// The active column here is leftover from whatever was focused
+		// before the edit started (e.g. ColEnable, per startRenaming), not
+		// a real column focus on the edit row itself -- always show its own
+		// dedicated Help text instead of a column-based override.
+		return s.menu.HelpText()
+	}
+	col := s.menu.ActiveColumn()
+	// Columns share one Help string per row today (MenuModel.HelpText isn't
+	// column-aware), so override it here with column- and row-type-specific
+	// wording instead -- distinct text per column, and per top-level app vs.
+	// instance, styled like every other app name in the app ({{|App|}}).
+	if item.IsCheckbox && !item.IsGroupHeader {
+		name := appenv.StyledAppName(context.Background(), item.BaseApp)
+		switch col {
+		case displayengine.ColAdd:
+			if item.IsSubItem {
+				return "Add or remove instance of " + name
+			}
+			return "Add or remove " + name
+		case displayengine.ColEnable:
+			if item.IsSubItem {
+				return "Enable or disable instance of " + name
+			}
+			return "Enable or disable " + name
+		case displayengine.ColExpand:
+			if item.IsSubItem {
+				return "Rename instance of " + name
+			}
+			return "Expand instance list of " + name
+		case displayengine.ColName:
+			return "Go to documentation for " + name
+		}
+	} else if item.IsGroupHeader && col == displayengine.ColName {
+		return "Go to documentation for " + appenv.StyledAppName(context.Background(), item.BaseApp)
+	} else if item.IsGroupHeader && col == displayengine.ColExpand {
+		// Mirrors the collapsed row's "Expand instance list of X" -- clicking
+		// here descends into the already-expanded list (or collapses it, but
+		// only if it's empty; "Enter" describes what a click reliably does).
+		return "Enter instance list of " + appenv.StyledAppName(context.Background(), item.BaseApp)
+	} else if item.IsAddInstance {
+		// Same text regardless of column -- the row has no real per-column
+		// behavior of its own, Space/Enter always starts adding one.
+		return "Add an instance of " + appenv.StyledAppName(context.Background(), item.BaseApp)
+	}
+	return s.menu.HelpText()
+}
+func (s *AppSelectionScreen) SetSize(w, h int)            { s.menu.SetSize(w, h) }
+func (s *AppSelectionScreen) SetFocused(f bool)           { s.menu.SetFocused(f) }
+func (s *AppSelectionScreen) SetListFocusOverride(v bool) { s.menu.SetListFocusOverride(v) }
+func (s *AppSelectionScreen) IsMaximized() bool           { return s.menu.IsMaximized() }
+func (s *AppSelectionScreen) MinHeight() int              { return s.menu.MinHeight() }
+func (s *AppSelectionScreen) HasDialog() bool             { return s.menu.HasDialog() }
+func (s *AppSelectionScreen) MenuName() string            { return s.menu.MenuName() }
+func (s *AppSelectionScreen) IsDestructive() bool         { return true }
+func (s *AppSelectionScreen) IsLoading() bool             { return !s.ready }
+func (s *AppSelectionScreen) GetHitRegions(x, y int) []displayengine.HitRegion {
+	return s.menu.GetHitRegions(x, y)
+}
+func (s *AppSelectionScreen) IsScrollbarDragging() bool { return s.menu.IsScrollbarDragging() }
+func (s *AppSelectionScreen) FocusTitleBar()            { s.menu.FocusTitleBar() }
+func (s *AppSelectionScreen) BlurTitleBar()             { s.menu.BlurTitleBar() }
+func (s *AppSelectionScreen) TitleBarFocused() bool     { return s.menu.TitleBarFocused() }
+func (s *AppSelectionScreen) EscapeAction() tea.Cmd     { return s.menu.EscapeAction() }
+
+// GetInputCursor implements tui.InputCursorProvider so the real hardware
+// cursor tracks the rename/add-instance text field, instead of a hand-drawn
+// cursor glyph embedded in the row's text. The editing row's on-screen
+// position is read back from its own "-expand" hit region (already correctly
+// positioned by the renderer, scroll offset and all) rather than
+// recalculating list layout math independently here.
+func (s *AppSelectionScreen) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if !s.isEditing || s.editingIdx < 0 {
+		return 0, 0, tea.CursorBar, false
+	}
+	itemID := displayengine.GetMenuItemID(s.menu.ID(), s.editingIdx) + "-expand"
+	for _, r := range s.menu.GetHitRegions(0, 0) {
+		if r.ID != itemID {
+			continue
+		}
+		niceName := appenv.GetNiceName(context.Background(), s.editingBaseApp)
+		content := niceName
+		if s.editContent != "" {
+			content = niceName + "__" + appenv.CapitalizeFirstLetter(s.editContent)
+		}
+		// +1 skips the opening "[" itself, landing right after the typed text.
+		return r.X + 1 + lipgloss.Width(content), r.Y, tea.CursorBar, true
+	}
+	return 0, 0, tea.CursorBar, false
+}
+
+func (s *AppSelectionScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(appSelectShowSpinnerMsg); ok {
+		// Only show the spinner if loading hasn't finished yet.
+		if !s.ready {
+			spinCmd := s.menu.SetLoadingText("Loading...")
+			return s, spinCmd
+		}
+		return s, nil
+	}
+	if loaded, ok := msg.(appSelectLoadedMsg); ok {
+		// applyLoadedItems is expensive — run it as a cmd so the spinner keeps
+		// ticking on the main goroutine while items are being built.
+		return s, func() tea.Msg {
+			s.applyLoadedItems(loaded)
+			return appSelectAppliedMsg{}
+		}
+	}
+	if _, ok := msg.(appSelectAppliedMsg); ok {
+		s.ready = true
+		s.menu.SetLoadingText("")
+		return s, nil
+	}
+	// Block most input until items are loaded, but allow Esc (back/cancel),
+	// ? / F1 (help), and mouse hits (for focus restoration and Back/Exit/Help widgets).
+	if !s.ready {
+		if kMsg, ok := msg.(tea.KeyPressMsg); ok {
+			if key.Matches(kMsg, displayengine.Keys.Esc) {
+				return s, s.menu.EscapeAction()
+			}
+			if key.Matches(kMsg, displayengine.Keys.Help) ||
+				key.Matches(kMsg, displayengine.Keys.Left) ||
+				key.Matches(kMsg, displayengine.Keys.Right) ||
+				key.Matches(kMsg, displayengine.Keys.Enter) ||
+				key.Matches(kMsg, displayengine.Keys.FocusPanelTitle) {
+				m, cmd := s.menu.Update(msg)
+				if mm, ok := m.(*displayengine.MenuModel); ok {
+					s.menu = mm
+				}
+				return s, cmd
+			}
+			return s, nil
+		}
+		if _, ok := msg.(displayengine.ToggleFocusedMsg); ok {
+			return s, nil
+		}
+		m, cmd := s.menu.Update(msg)
+		if mm, ok := m.(*displayengine.MenuModel); ok {
+			s.menu = mm
+		}
+		return s, cmd
+	}
+	// The "just added this instance" marker (IsNew) is transient -- clear it
+	// on the next keypress or click, before that input is otherwise handled,
+	// so it never lingers past the interaction that follows the add.
+	switch msg.(type) {
+	case tea.KeyPressMsg, displayengine.LayerHitMsg:
+		s.clearJustAdded()
+	}
+
+	m, cmd := s.menu.Update(msg)
+	if mm, ok := m.(*displayengine.MenuModel); ok {
+		s.menu = mm
+	}
+	return s, cmd
+}
+
+// clearJustAdded removes the transient IsNew marker from whichever row
+// currently carries it (see confirmEdit), if any.
+func (s *AppSelectionScreen) clearJustAdded() {
+	items := s.menu.GetItems()
+	for i, it := range items {
+		if it.IsNew {
+			items[i].IsNew = false
+			s.menu.SetItems(items)
+			return
+		}
+	}
+}
+
+func (s *AppSelectionScreen) HelpContext(maxWidth int) displayengine.HelpContext {
+	return s.menu.HelpContext(maxWidth)
+}
+
+func (s *AppSelectionScreen) isSubRow(it displayengine.MenuItem) bool {
+	return it.IsSubItem || it.IsAddInstance || it.IsEditing
+}
+
+// NewAppSelectionScreen creates the app selection screen.
+func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) *AppSelectionScreen {
+	s := &AppSelectionScreen{
+		conf:     conf,
+		connType: connType,
+	}
+
+	var backAction tea.Cmd
+	if !isRoot {
+		backAction = func() tea.Msg {
+			cs := s.computeChanges()
+			msg := s.buildChangeSummary(cs)
+			if msg != "No changes pending." {
+				msg += "\n\nGo back and discard these changes?"
+			} else {
+				msg = "Go back?"
+			}
+			return tui.ShowConfirmDialogMsg{
+				Title:      "Go Back",
+				Question:   msg,
+				DefaultYes: false,
+				OnResult: func(confirmed bool) tea.Cmd {
+					if !confirmed {
+						return nil
+					}
+					return func() tea.Msg { return tui.NavigateBackMsg{} }
+				},
+			}
+		}
+	}
+
+	menu := displayengine.NewMenuModel(
+		"app-select",
+		"Select Applications",
+		"{{[-]}}Choose which apps you would like to install:\nUse {{|KeyCap|}}[up]{{[-]}}/{{|KeyCap|}}[down]{{[-]}} and {{|KeyCap|}}[space]{{[-]}} to select; {{|KeyCap|}}[ctrl+←/→]{{[-]}} to move between columns.",
+		nil,
+	)
+	s.menu = menu
+
+	menu.SetMenuName("app-select")
+	menu.SetConnType(connType)
+	menu.SetHelpItemPrefix("App")
+	menu.SetItemHelpFunc(func(item displayengine.MenuItem) (itemTitle, itemText string) {
+		if item.BaseApp == "" || item.IsSeparator {
+			return "", ""
+		}
+		ctx := context.Background()
+		appMeta, err := appenv.LoadAppMeta(ctx, item.BaseApp)
+		var parts []string
+		if err == nil && appMeta != nil && appMeta.App.HelpText != "" {
+			parts = append(parts, appMeta.App.HelpText)
+		} else if desc := appenv.GetDescriptionFromTemplate(ctx, item.BaseApp, ""); desc != "" {
+			parts = append(parts, desc)
+		}
+		if appMeta != nil && appMeta.App.Website != "" {
+			parts = append(parts, "Website: {{|URL|}}"+appMeta.App.Website+"{{[-]}}")
+		}
+		if appenv.IsAppDeprecated(ctx, item.BaseApp) {
+			parts = append(parts, "{{|TitleError|}}⚠ This app is deprecated.{{[-]}}")
+		}
+		if len(parts) == 0 {
+			return "", ""
+		}
+		return displayengine.GetPlainText(item.Tag), strings.Join(parts, "\n\n")
+	})
+	menu.SetItemDocFunc(func(item displayengine.MenuItem) (docMarkdown, docAppName string) {
+		if item.BaseApp == "" || item.IsSeparator {
+			return "", ""
+		}
+		doc, err := appenv.GetAppMarkdown(context.Background(), item.BaseApp)
+		if err != nil {
+			return "", ""
+		}
+		return doc, item.Tag
+	})
+	if backAction != nil {
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Back", ZoneID: "btn-back", Action: backAction, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
+	menu.SetGroupedMode(true)
+	menu.SetVariableHeight(true)
+	menu.SetMaximized(true)
+	menu.SetSubMenuMode(false)
+	menu.SetShowLockGutter(false)
+	menu.SetActivityGutterWidth(2)
+	menu.SetFocusedItem(displayengine.FocusBtn)
+
+	menu.SetEnterAction(func() tea.Msg {
+		return s.handleSave()
+	})
+
+	menu.SetUpdateInterceptor(s.updateInterceptor)
+
+	menu.SetHelpLegend(getAppSelectionLegend())
+	menu.SetContextMenuFunc(s.contextMenuHandler)
+
+	return s
+}
+
+func (s *AppSelectionScreen) toggleItem(idx int) tea.Cmd {
+	items := s.menu.GetItems()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	item := items[idx]
+	if item.IsAddInstance {
+		s.startEditing(item.BaseApp)
+		return nil
+	}
+	if !item.Selectable {
+		return nil
+	}
+	if item.IsSeparator || item.IsEditing {
+		return nil
+	}
+
+	col := s.menu.ActiveColumn()
+
+	if col == displayengine.ColName {
+		return tui.OpenAppLink(context.Background(), item.Metadata["docsURL"])
+	}
+
+	if col == displayengine.ColExpand {
+		// expandGroup/Select rebuild or move the list selection themselves;
+		// nothing left in items/item is valid afterward, so return immediately
+		// rather than falling into the generic Checked/Enabled post-processing
+		// below (which also doesn't apply to group headers -- see the
+		// IsGroupHeader guard right after this block).
+		if item.IsGroupHeader {
+			// Already expanded (and not collapsible, e.g. has real instances)
+			// -- Space just descends into the visible instance list instead of
+			// being a dead end, matching Ctrl/Alt+Right's existing behavior.
+			s.menu.Select(idx + 1)
+			s.menu.SetActiveColumn(displayengine.ColAdd)
+			return nil
+		}
+		s.expandGroup(item.BaseApp)
+		s.collapseAllEmptyGroups(item.BaseApp)
+		s.menu.SetActiveColumn(displayengine.ColAdd)
+		return nil
+	}
+
+	if item.IsGroupHeader {
+		return nil
+	}
+
+	switch col {
+	case displayengine.ColAdd:
+		item.Checked = !item.Checked
+		if item.Checked {
+			item.Enabled = true // Auto-enable when adding
+		} else {
+			item.Enabled = false // Auto-disable when removing
+		}
+		item.ShowEnabledGutter = item.Checked
+	case displayengine.ColEnable:
+		item.Enabled = !item.Enabled
+		if item.Enabled {
+			item.Checked = true // Auto-add if user enables
+			item.ShowEnabledGutter = true
+		}
+	}
+
+	// Defensive invariant: Enabled => Checked (Added)
+	if !item.Checked {
+		item.Enabled = false
+		item.ShowEnabledGutter = false
+	}
+
+	items[idx] = item
+	if item.IsSubItem {
+		items = s.refreshGroupHeaders(items)
+	}
+	s.menu.SetItems(items)
+	return nil
+}
+
+func (s *AppSelectionScreen) navUp(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, item displayengine.MenuItem) {
+	if idx <= 0 {
+		return
+	}
+	prevBase := item.BaseApp
+	if s.isSubRow(item) {
+		// Constrain to this group
+		if idx > 0 && items[idx-1].BaseApp == prevBase && !items[idx-1].IsSeparator {
+			// Don't go back into header from sub-row via Up
+			if items[idx-1].IsGroupHeader {
+				return
+			}
+			m.Select(idx - 1)
+		}
+		return
+	}
+	// Main list: skip all sub-items and go to previous Header
+	for i := idx - 1; i >= 0; i-- {
+		if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+			m.Select(i)
+			// Smart Collapse: collapse the group we just left
+			if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
+				m.SetItems(ni)
+				for j, it := range ni {
+					if it.BaseApp == items[i].BaseApp {
+						m.Select(j)
+						break
+					}
+				}
+			}
+			break
+		}
+	}
+}
+
+func (s *AppSelectionScreen) navDown(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, item displayengine.MenuItem) {
+	if idx >= len(items)-1 {
+		return
+	}
+	prevBase := item.BaseApp
+	if s.isSubRow(item) {
+		// Constrain to this group
+		if idx+1 < len(items) && items[idx+1].BaseApp == prevBase && !items[idx+1].IsSeparator {
+			m.Select(idx + 1)
+		}
+		return
+	}
+	// Main list: skip all sub-items and go to next Header
+	for i := idx + 1; i < len(items); i++ {
+		if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+			m.Select(i)
+			// Smart Collapse: collapse the group we just left
+			if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), prevBase); ok {
+				m.SetItems(ni)
+				for j, it := range ni {
+					if it.BaseApp == items[i].BaseApp {
+						m.Select(j)
+						break
+					}
+				}
+			}
+			break
+		}
+	}
+}
+
+// pageJump moves the selection by one viewport page (PgUp/PgDn, and the
+// scrollbar's above/below-thumb track clicks -- both are the same "jump a
+// page" operation). Works entirely in row-space: shifts ViewStartY by a
+// page of rows, then selects whatever occupies the same relative row via
+// IndexForRowOffset (RowOffsetForIndex's inverse).
+func (s *AppSelectionScreen) pageJump(m *displayengine.MenuModel, items []displayengine.MenuItem, idx int, forward bool) {
+	pageSize := m.Layout.ViewportHeight
+	if pageSize < 1 {
+		pageSize = 5
+	}
+	currentRow := m.RowOffsetForIndex(idx) - m.ViewStartY
+	if currentRow < 0 {
+		currentRow = 0
+	}
+	var newViewStartY int
+	if forward {
+		newViewStartY = m.ViewStartY + pageSize
+	} else {
+		newViewStartY = m.ViewStartY - pageSize
+		if newViewStartY < 0 {
+			newViewStartY = 0
+		}
+	}
+	cur := m.IndexForRowOffset(newViewStartY + currentRow)
+	// Never land selection inside an expanded instance list or on a divider
+	// -- snap to the nearest real main-list item in the scroll direction.
+	if forward {
+		for cur < len(items)-1 && (items[cur].IsSeparator || s.isSubRow(items[cur])) {
+			cur++
+		}
+		if cur >= len(items) {
+			cur = len(items) - 1
+		}
+	} else {
+		for cur > 0 && (items[cur].IsSeparator || s.isSubRow(items[cur])) {
+			cur--
+		}
+		if cur < 0 {
+			cur = 0
+		}
+	}
+	m.Select(cur)
+	m.ViewStartY = newViewStartY
+}
+
+func (s *AppSelectionScreen) updateInterceptor(msg tea.Msg, m *displayengine.MenuModel) (tea.Cmd, bool) {
+	idx := m.Index()
+	items := m.GetItems()
+	if idx < 0 || idx >= len(items) {
+		return nil, false
+	}
+	item := items[idx]
+
+	if _, ok := msg.(displayengine.ToggleFocusedMsg); ok {
+		return s.toggleItem(idx), true
+	}
+
+	if hitMsg, ok := msg.(displayengine.LayerHitMsg); ok && (hitMsg.Button == tea.MouseLeft || hitMsg.Button == tea.MouseRight) {
+		if s.isEditing {
+			return nil, true
+		}
+
+		// Scrollbar track clicks above/below the thumb are a page jump, same
+		// as PgUp/PgDn -- intercept them here instead of letting the generic
+		// Scrollbar.Update path handle it, since that path's own
+		// syncSelectionToViewport just snaps the cursor to whichever
+		// viewport edge it ends up outside of, not the same relative row
+		// pageJump preserves.
+		if hitMsg.Button == tea.MouseLeft {
+			if strings.HasSuffix(hitMsg.ID, ".sb.above") {
+				s.pageJump(m, items, idx, false)
+				return nil, true
+			}
+			if strings.HasSuffix(hitMsg.ID, ".sb.below") {
+				s.pageJump(m, items, idx, true)
+				return nil, true
+			}
+		}
+
+		// Handle suffix-based IDs from grouped regions
+		id := hitMsg.ID
+		suffix := ""
+		if strings.HasSuffix(id, "-add") {
+			id = strings.TrimSuffix(id, "-add")
+			suffix = "add"
+		} else if strings.HasSuffix(id, "-enable") {
+			id = strings.TrimSuffix(id, "-enable")
+			suffix = "enable"
+		} else if strings.HasSuffix(id, "-expand") {
+			id = strings.TrimSuffix(id, "-expand")
+			suffix = "expand"
+		} else if strings.HasSuffix(id, "-parent") {
+			id = strings.TrimSuffix(id, "-parent")
+			suffix = "parent"
+		} else if strings.HasSuffix(id, "-border") {
+			id = strings.TrimSuffix(id, "-border")
+			suffix = "border"
+		}
+
+		if idx, ok := displayengine.ParseMenuItemIndex(id, m.ID()); ok {
+			items := m.GetItems()
+			if idx < 0 || idx >= len(items) {
+				return nil, true
+			}
+			item := items[idx]
+
+			// Case: Right click always focuses the item, column, and shows context menu
+			if hitMsg.Button == tea.MouseRight {
+				m.Select(idx)
+				switch suffix {
+				case "add":
+					m.SetActiveColumn(displayengine.ColAdd)
+				case "enable":
+					m.SetActiveColumn(displayengine.ColEnable)
+				}
+				return m.ShowContextMenu(idx, hitMsg.X, hitMsg.Y), true
+			}
+
+			// Case: Left click moves selection and handles region focus
+			m.Select(idx)
+
+			// Helper to trigger expansion/collapse. An already-expanded group
+			// collapses on click when it can (no real instances to hide --
+			// see collapseGroupIfNeeded); when it can't (has real named
+			// instances), collapsing is a dedicated Ctrl/Alt+Left action
+			// instead (see the help line), so a click just moves focus to
+			// the expand column rather than being a silent dead end.
+			handleExpand := func() {
+				base := item.BaseApp
+				if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), base); ok {
+					m.SetItems(ni)
+					for i, it := range ni {
+						if it.BaseApp == base {
+							m.Select(i)
+							break
+						}
+					}
+				}
+				// Either way -- collapsed or left expanded -- the expand
+				// column ends up focused, since that's what was clicked.
+				m.SetActiveColumn(displayengine.ColExpand)
+			}
+
+			// Every click ends with a sweep for empty groups that should
+			// collapse. skipBase exempts the group this click just entered or
+			// expanded, so opening an empty group doesn't immediately undo
+			// itself. Cleared to "" only for a group header's own Add/Enable
+			// click (not really inside the bordered instance list, so it can
+			// self-collapse immediately) -- a real subitem's own toggle is
+			// inside the list the user is actively working in, so it still
+			// exempts collapse this click even if it made the group
+			// newly-collapsible, deferring to whatever click follows instead.
+			skipBase := item.BaseApp
+			var cmd tea.Cmd
+
+			// 1. Process specific region suffixes
+			switch suffix {
+			case "add":
+				m.SetActiveColumn(displayengine.ColAdd)
+				if !item.IsGroupHeader {
+					cmd = s.toggleItem(idx)
+				} else {
+					skipBase = ""
+				}
+			case "enable":
+				m.SetActiveColumn(displayengine.ColEnable)
+				if !item.IsGroupHeader {
+					cmd = s.toggleItem(idx)
+				} else {
+					skipBase = ""
+				}
+			case "expand":
+				if item.IsSubItem {
+					if !item.IsReferenced && !item.WasAdded {
+						s.startRenaming(idx)
+					}
+				} else if item.IsGroupHeader {
+					handleExpand()
+				} else if item.IsAddInstance {
+					s.startEditing(item.BaseApp)
+				} else {
+					s.expandGroup(item.BaseApp)
+					// expandGroup selects the new first subitem row, but
+					// subitems have no visible focus indicator for
+					// ColExpand (only Add/Enable draw focus brackets) --
+					// leaving whatever column was active before this click
+					// (e.g. ColExpand, from clicking the expand arrow
+					// itself) would land on a selected row with no visibly
+					// focused cell at all.
+					m.SetActiveColumn(displayengine.ColAdd)
+				}
+			case "parent", "border":
+				// Clicks on the instance border/background now "enter" the
+				// list by selecting that instance (m.Select(idx) above
+				// already did the work).
+			default:
+				// 2. Default Action: no specific region suffix was hit
+				// (standard row click) -- same Expansion/Selection logic as
+				// the "expand" region.
+				if item.IsSubItem {
+					if !item.IsReferenced && !item.WasAdded {
+						s.startRenaming(idx)
+					}
+				} else if item.IsGroupHeader {
+					handleExpand()
+				} else if item.IsAddInstance {
+					s.startEditing(item.BaseApp)
+				} else {
+					s.expandGroup(item.BaseApp)
+					// expandGroup selects the new first subitem row, but
+					// subitems have no visible focus indicator for
+					// ColExpand (only Add/Enable draw focus brackets) --
+					// leaving whatever column was active before this click
+					// (e.g. ColExpand, from clicking the expand arrow
+					// itself) would land on a selected row with no visibly
+					// focused cell at all.
+					m.SetActiveColumn(displayengine.ColAdd)
+				}
+			}
+
+			s.collapseAllEmptyGroups(skipBase)
+			return cmd, true
+		}
+
+		// Swallow all clicks targeting this menu ID but not a specific item index
+		if hitMsg.ID == m.ID() {
+			// A click on the list's own background/margin -- still inside the
+			// app list, just not on any row -- counts as clicking away from
+			// whatever group is expanded, so check whether it should now
+			// collapse (empty, no real instances). skipBase="" means no
+			// group is exempt. Clicks outside the list entirely (Done/Back/
+			// Exit) fall through to "return nil, false" below and don't
+			// apply here.
+			s.collapseAllEmptyGroups("")
+			return nil, true
+		}
+		return nil, false
+	}
+
+	var wheelBtn tea.MouseButton
+	switch wm := msg.(type) {
+	case tea.MouseWheelMsg:
+		wheelBtn = wm.Button
+	case displayengine.LayerWheelMsg:
+		wheelBtn = wm.Button
+	}
+	if wheelBtn == tea.MouseWheelUp || wheelBtn == tea.MouseWheelDown {
+		if s.isEditing {
+			return nil, true
+		}
+		items := m.GetItems()
+		idx := m.Index()
+		if idx < 0 || idx >= len(items) {
+			return nil, false
+		}
+		item := items[idx]
+		if wheelBtn == tea.MouseWheelUp {
+			s.navUp(m, items, idx, item)
+		} else {
+			s.navDown(m, items, idx, item)
+		}
+		return nil, true
+	}
+
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		if s.isEditing {
+			switch keyMsg.String() {
+			case "enter":
+				s.confirmEdit()
+			case "esc":
+				s.cancelEdit()
+			case "backspace", "ctrl+h":
+				// Some terminals/keyboard protocols send ctrl+h for
+				// backspace instead of a dedicated backspace keycode.
+				if len(s.editContent) > 0 {
+					runes := []rune(s.editContent)
+					s.editContent = string(runes[:len(runes)-1])
+					s.editError = ""
+					s.refreshEditRow()
+				}
+			case "up", "down", "left", "right", "tab", "shift+tab":
+			default:
+				if keyMsg.Text != "" {
+					s.editContent += strings.ToUpper(keyMsg.Text)
+					s.editError = ""
+					s.refreshEditRow()
+				} else {
+					return nil, false
+				}
+			}
+			return nil, true
+		}
+
+		// Use keymap bindings for keys that have alt+/ctrl+ aliases.
+		switch {
+		case key.Matches(keyMsg, displayengine.Keys.EnvPrevTab):
+			if m.ActiveColumn() == displayengine.ColName {
+				m.SetActiveColumn(displayengine.ColExpand)
+				return nil, true
+			}
+			if m.ActiveColumn() == displayengine.ColExpand {
+				m.SetActiveColumn(displayengine.ColEnable)
+				return nil, true
+			}
+			if s.isSubRow(item) && m.ActiveColumn() == displayengine.ColAdd {
+				base := item.BaseApp
+				for i := idx - 1; i >= 0; i-- {
+					if items[i].BaseApp == base && items[i].IsGroupHeader {
+						m.Select(i)
+						// Exiting the instance list from its leftmost (Add) column
+						// lands back on the Expand column, mirroring how expanding
+						// (Space on Expand) lands on Add going in.
+						m.SetActiveColumn(displayengine.ColExpand)
+						// Collapse the group if no active named instances remain
+						if ni, ok := s.collapseGroupIfNeeded(m.GetItems(), base); ok {
+							m.SetItems(ni)
+							for j, it := range ni {
+								if it.BaseApp == base && !s.isSubRow(it) {
+									m.Select(j)
+									break
+								}
+							}
+						}
+						return nil, true
+					}
+					if items[i].BaseApp != base {
+						break
+					}
+				}
+			}
+			if m.ActiveColumn() == displayengine.ColEnable {
+				m.SetActiveColumn(displayengine.ColAdd)
+			}
+			return nil, true
+		case key.Matches(keyMsg, displayengine.Keys.EnvNextTab):
+			if m.ActiveColumn() == displayengine.ColExpand {
+				// Only reachable for main-list rows (collapsed or expanded-header) --
+				// sub-item rows never set ColExpand, so this never fires for them.
+				// Space here (once wired) opens the app's docs page; sub-item rows
+				// keep Ctrl/Alt+Right for renaming, untouched below.
+				m.SetActiveColumn(displayengine.ColName)
+				return nil, true
+			}
+			if m.ActiveColumn() == displayengine.ColEnable {
+				if item.IsGroupHeader {
+					// Land on the Expand column like a collapsed row does --
+					// Space (toggleItem's ColExpand case) is what descends into
+					// the instance list, rather than Ctrl/Alt+Right doing it
+					// immediately.
+					m.SetActiveColumn(displayengine.ColExpand)
+					return nil, true
+				}
+				if item.IsSubItem && !item.IsEditing {
+					if !item.IsReferenced && !item.WasAdded {
+						s.startRenaming(idx)
+					}
+					return nil, true
+				}
+				if !item.IsSubItem && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
+					// Land on the Expand column rather than expanding immediately --
+					// Up/Down can now browse rows while it stays focused, and Space
+					// (toggleItem's ColExpand case) is what actually triggers it.
+					m.SetActiveColumn(displayengine.ColExpand)
+					return nil, true
+				}
+				if item.IsAddInstance {
+					// This row has no further column to move to -- Ctrl/Alt+Right
+					// here does the same thing Space/Enter does, matching the
+					// "+ Add instance..." row's own Help text.
+					s.startEditing(item.BaseApp)
+					return nil, true
+				}
+			}
+			if m.ActiveColumn() == displayengine.ColAdd {
+				m.SetActiveColumn(displayengine.ColEnable)
+			}
+			return nil, true
+		}
+
+		switch keyMsg.String() {
+		case "up":
+			s.navUp(m, items, idx, item)
+			return nil, true
+		case "down":
+			s.navDown(m, items, idx, item)
+			return nil, true
+		case "pgup", "ctrl+b", "ctrl+up", "ctrl+u":
+			if s.isSubRow(item) {
+				first := idx
+				for i := idx - 1; i >= 0; i-- {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					first = i
+				}
+				m.Select(first)
+			} else {
+				s.pageJump(m, items, idx, false)
+			}
+			return nil, true
+		case "pgdown", "ctrl+f", "ctrl+down", "ctrl+d":
+			if s.isSubRow(item) {
+				last := idx
+				for i := idx + 1; i < len(items); i++ {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					last = i
+				}
+				m.Select(last)
+			} else {
+				s.pageJump(m, items, idx, true)
+			}
+			return nil, true
+		case "home", "ctrl+home":
+			if s.isSubRow(item) {
+				first := idx
+				for i := idx - 1; i >= 0; i-- {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					first = i
+				}
+				m.Select(first)
+			} else {
+				for i := 0; i < len(items); i++ {
+					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+						m.Select(i)
+						break
+					}
+				}
+			}
+			return nil, true
+		case "end", "ctrl+end":
+			if s.isSubRow(item) {
+				last := idx
+				for i := idx + 1; i < len(items); i++ {
+					if items[i].BaseApp != item.BaseApp || !s.isSubRow(items[i]) {
+						break
+					}
+					last = i
+				}
+				m.Select(last)
+			} else {
+				for i := len(items) - 1; i >= 0; i-- {
+					if !items[i].IsSeparator && !s.isSubRow(items[i]) {
+						m.Select(i)
+						break
+					}
+				}
+			}
+			return nil, true
+		case "space":
+			return s.toggleItem(idx), true
+		case "f2":
+			if item.IsSubItem {
+				s.startRenaming(idx)
+				return nil, true
+			}
+			if item.IsAddInstance {
+				s.startEditing(item.BaseApp)
+				return nil, true
+			}
+			if !item.IsGroupHeader && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
+				// Fast-Rename: Expand and immediately rename base instance
+				s.expandGroup(item.BaseApp)
+				s.collapseAllEmptyGroups(item.BaseApp)
+
+				// Find the newly expanded base instance row
+				newItems := m.GetItems()
+				for i, it := range newItems {
+					if it.IsSubItem && it.BaseApp == item.BaseApp && it.Metadata["appName"] == item.BaseApp {
+						m.Select(i)
+						if !it.IsReferenced && !it.WasAdded {
+							s.startRenaming(i)
+						}
+						break
+					}
+				}
+				return nil, true
+			}
+		}
+	}
+
+	return nil, false
+}
+
+func (s *AppSelectionScreen) contextMenuHandler(idx int) []displayengine.ContextMenuItem {
+	items := s.menu.GetItems()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	item := items[idx]
+
+	if item.IsSeparator || item.IsEditing {
+		return nil
+	}
+
+	var res []displayengine.ContextMenuItem
+
+	// --- 1. Rename Action ---
+	canRename := false
+	renameHelp := "Customize this instance name (F2)."
+	if item.IsSubItem && !item.IsReferenced && !item.WasAdded {
+		canRename = true
+	} else if !item.IsGroupHeader && !item.IsSeparator && !item.IsEditing && item.IsCheckbox {
+		// Base instance from main list
+		if !item.IsReferenced && !item.WasAdded {
+			canRename = true
+		} else {
+			renameHelp = "Cannot rename referenced or locked app."
+		}
+	} else if item.IsAddInstance {
+		renameHelp = "Right-click text to rename existing instances."
+	} else if item.IsGroupHeader {
+		renameHelp = "Expand to rename specific instances."
+	}
+
+	res = append(res, displayengine.ContextMenuItem{
+		Label:    "Rename Instance",
+		Help:     renameHelp,
+		Disabled: !canRename,
+		Action: func() tea.Msg {
+			if !item.IsSubItem && !item.IsGroupHeader && item.IsCheckbox {
+				// Fast-Rename logic
+				s.expandGroup(item.BaseApp)
+				s.collapseAllEmptyGroups(item.BaseApp)
+				newItems := s.menu.GetItems()
+				for i, it := range newItems {
+					if it.IsSubItem && it.BaseApp == item.BaseApp && it.Metadata["appName"] == item.BaseApp {
+						s.menu.Select(i)
+						s.startRenaming(i)
+						break
+					}
+				}
+			} else {
+				s.startRenaming(idx)
+			}
+			return displayengine.CloseDialogMsg{}
+		},
+	})
+
+	// --- 2. Add/Remove Action ---
+	if item.IsCheckbox || item.IsAddInstance {
+		label := "Add to List"
+		if item.Checked {
+			label = "Remove from List"
+		}
+		res = append(res, displayengine.ContextMenuItem{
+			Label: label,
+			Help:  "Toggle selection state (Space).",
+			Action: func() tea.Msg {
+				s.menu.SetActiveColumn(displayengine.ColAdd)
+				s.toggleItem(idx)
+				return displayengine.CloseDialogMsg{}
+			},
+		})
+	}
+
+	// --- 3. Enable/Disable Action ---
+	if item.IsCheckbox || item.IsGroupHeader {
+		label := "Enable Instance"
+		if item.Enabled {
+			label = "Disable Instance"
+		}
+		res = append(res, displayengine.ContextMenuItem{
+			Label: label,
+			Help:  "Toggle enabled state (Ctrl/Alt+Right on checkbox area).",
+			Action: func() tea.Msg {
+				s.menu.SetActiveColumn(displayengine.ColEnable)
+				s.toggleItem(idx)
+				return displayengine.CloseDialogMsg{}
+			},
+		})
+	}
+
+	return res
+}
+
+func (s *AppSelectionScreen) ShortHelp() []key.Binding {
+	return []key.Binding{displayengine.Keys.Up, displayengine.Keys.Down, displayengine.Keys.Enter, displayengine.Keys.Esc, displayengine.Keys.Help}
+}
+
+func (s *AppSelectionScreen) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{
+			displayengine.Keys.Help,
+			displayengine.Keys.Esc,
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter/left click", "activate button")),
+			key.NewBinding(key.WithKeys("space"), key.WithHelp("space/middle click", "toggle item")),
+			displayengine.Keys.MouseRight,
+			displayengine.Keys.ContextMenu,
+			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑/↓/scroll", "up/down")),
+			key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup/pgdn", "page up/down")),
+			key.NewBinding(key.WithKeys("home"), key.WithHelp("home/end", "top/bottom")),
+		},
+		{
+			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
+			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p", "next/previous element")),
+			displayengine.Keys.CycleTab,
+			displayengine.Keys.CycleShiftTab,
+			key.NewBinding(key.WithKeys("f2"), key.WithHelp("F2", "edit instance name")),
+			displayengine.Keys.ToggleLog,
+			displayengine.Keys.FocusPanelTitle,
+			displayengine.Keys.ForceQuit,
+		},
+	}
+}
+
+func (s *AppSelectionScreen) AdvanceSpinners(now time.Time) bool {
+	return s.menu != nil && s.menu.AdvanceSpinners(now)
+}
+
+// ClearProcessingState clears any in-flight button spinner on the menu.
+// Called by AppModel when a dialog closes and returns focus to this screen
+// (e.g. the Exit or Back confirm dialog resolving) -- without this, a
+// button's spinner started via SetProcessingBtnDeferred keeps running
+// forever once its action resolves without navigating away, since s.menu is
+// a named field here rather than an embedded/promoted MenuModel.
+func (s *AppSelectionScreen) ClearProcessingState() {
+	if s.menu != nil {
+		s.menu.ClearProcessingState()
+	}
+}

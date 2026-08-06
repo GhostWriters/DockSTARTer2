@@ -1,0 +1,499 @@
+package tui
+
+import (
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/strutil"
+	"image/color"
+	"sort"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+// shadowBoxCache caches the most recently computed shadow box.
+// The shadow depends only on the content dimensions and context settings —
+// not the content itself — so we key on (width, height, shadowLevel, lineChars).
+var shadowBoxCache struct {
+	width, height, level int
+	lineChars            bool
+	result               string
+}
+
+// invalidateShadowCache clears the shadow box cache so it is recomputed on
+// the next render. Call this whenever theme or shadow settings change.
+func invalidateShadowCache() {
+	shadowBoxCache = struct {
+		width, height, level int
+		lineChars            bool
+		result               string
+	}{}
+}
+
+// ViewStringer is an interface for models that provide string content for compositing
+type ViewStringer interface {
+	ViewString() string
+}
+
+// InputCursorProvider is implemented by dialog models that contain a sinput field.
+// AppModel.View() calls this on the topmost dialog to position the hardware cursor.
+type InputCursorProvider interface {
+	// GetInputCursor returns the cursor position relative to the dialog's top-left
+	// corner, the desired cursor shape, and whether to show the cursor at all.
+	GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool)
+}
+
+// View implements tea.Model
+// Uses backdrop + overlay pattern (same as dialogs)
+func (m *AppModel) View() (v tea.View) {
+	if console.IsTUIDying() {
+		// Silence the renderer by blocking this goroutine forever.
+		// This prevents Bubble Tea from rendering a final "empty" frame
+		// which would hide the cursor after we've already restored it.
+		select {}
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			// Restore terminal immediately
+			EmergencyShutdown()
+
+			// Log and exit
+			logger.FatalWithStackSkip(m.ctx, 2, "TUI View Panic: %v", r)
+		}
+	}()
+
+	if m.suppressRender {
+		// Fill every cell with the screen background color so BubbleTea's diff
+		// renderer is forced to overwrite all stale cells from the previous frame,
+		// even when the background color matches the terminal default.
+		row := displayengine.GetStyles().Screen.Render(strutil.Repeat(" ", m.width))
+		content := strutil.Repeat(row+"\n", m.height)
+		v := tea.NewView(content)
+		v.MouseMode = tea.MouseModeCellMotion
+		v.AltScreen = true
+		return v
+	}
+
+	if !m.ready {
+		// Enable mouse tracking immediately so the terminal receives \x1b[?1002h
+		// before the first WindowSizeMsg is processed. Without this, clicks that
+		// arrive during startup (common on Linux/SSH where there is round-trip
+		// latency between renders) are silently dropped by the terminal because
+		// mouse reporting has not been enabled yet.
+		v := tea.NewView("Initializing.")
+		v.MouseMode = tea.MouseModeCellMotion
+		v.AltScreen = true
+		return v
+	}
+
+	if m.renderSkipped {
+		// A fast drag/scroll coalesced this frame -- state was already applied
+		// by handleMouseMsg, only the (expensive) recomposition below is
+		// skipped. Returning the previous frame verbatim is safe because
+		// nothing else can have changed since renderSkipped is reset to false
+		// at the top of Update() for every non-motion/wheel message.
+		return m.cachedView
+	}
+
+	// Must run before ViewString/GetInputCursor below -- see SyncInputPrompt's
+	// doc comment for why.
+	m.panel.SyncInputPrompt()
+
+	// Use displayengine.Layout helpers for consistent positioning
+	layout := displayengine.GetLayout()
+	// Query the backdrop for the actual rendered chrome height (header + bottom border).
+	// This avoids hardcoding a constant and correctly handles multi-line headers.
+	contentYOffset := layout.ContentStartY(1) // fallback: 1-line header
+	headerH := 1                              // header content height, needed by layout functions
+	if m.backdrop != nil {
+		headerH = m.backdrop.ChromeHeight() - 1
+		contentYOffset = layout.ContentStartY(headerH)
+	}
+	displayengine.SetActiveContentStartY(contentYOffset)
+	displayengine.SetActiveScreenSize(m.width, m.height)
+
+	// Create native compositor for rendering
+	comp := lipgloss.NewCompositor()
+	maxZ := displayengine.ZScreen
+
+	// Reset hit regions for this frame
+	m.hitRegions = nil
+
+	// 1. Layer: Backdrop
+	if m.backdrop != nil {
+		comp.AddLayers(m.backdrop.Layers()...)
+		// Collect hit regions from backdrop (header version labels)
+		m.hitRegions = append(m.hitRegions, m.backdrop.GetHitRegions(0, 0)...)
+	}
+
+	// 2. Layer: Log panel
+	logY := m.height - m.panel.Height()
+	if lv, ok := interface{}(m.panel).(LayeredView); ok {
+		for _, l := range lv.Layers() {
+			comp.AddLayers(l.Y(l.GetY() + logY))
+		}
+	} else if vs, ok := interface{}(m.panel).(ViewStringer); ok {
+		if logContent := vs.ViewString(); logContent != "" {
+			comp.AddLayers(lipgloss.NewLayer(logContent).
+				X(0).Y(logY).Z(displayengine.ZPanel).ID(displayengine.IDPanel))
+		}
+	}
+	// Collect hit regions from log panel
+	m.hitRegions = append(m.hitRegions, m.panel.GetHitRegions(0, logY)...)
+
+	// Base coordinates for maximized elements (edge indent from left, content start from top)
+	maxX := layout.EdgeIndent
+	maxY := contentYOffset
+
+	// 3. Layer: Active Screen only
+	// The screen stack is navigation history — previous screens must not render through
+	// the active screen's background. Dialogs overlay via the dialog stack below.
+	var allScreens []ScreenModel
+	if m.activeScreen != nil {
+		allScreens = []ScreenModel{m.activeScreen}
+	}
+
+	// Track the active screen's rendered position for hardware cursor routing.
+	lastScreenX, lastScreenY := maxX, maxY
+
+	for i, s := range allScreens {
+		var screenContent string
+		if vs, ok := s.(ViewStringer); ok {
+			screenContent = vs.ViewString()
+		}
+
+		if screenContent != "" {
+			// Calculate centered position for non-maximized screens
+			caW, caH := m.getContentArea()
+			screenW := displayengine.WidthWithoutZones(screenContent)
+			screenH := lipgloss.Height(screenContent)
+
+			screenX := maxX
+			screenY := maxY
+
+			maximized := false
+			if ms, ok := s.(interface{ IsMaximized() bool }); ok {
+				maximized = ms.IsMaximized()
+			}
+
+			if !maximized {
+				// Center if smaller than content area
+				if screenW < caW {
+					screenX = maxX + (caW-screenW)/2
+				}
+				if screenH < caH {
+					screenY = maxY + (caH-screenH)/2
+				}
+			}
+
+			// Base Z for screens: each screen level is 10 units apart within displayengine.ZScreen band
+			screenZBase := displayengine.ZScreen + (i * 10)
+
+			if lv, ok := s.(LayeredView); ok {
+				for _, l := range lv.Layers() {
+					// Translate layer relative to screen position and stack Z
+					l = l.X(l.GetX() + screenX).Y(l.GetY() + screenY).Z(l.GetZ() + screenZBase - displayengine.ZScreen)
+					if l.GetZ() > maxZ {
+						maxZ = l.GetZ()
+					}
+					compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
+					comp.AddLayers(l)
+				}
+			} else {
+				l := lipgloss.NewLayer(screenContent).X(screenX).Y(screenY).Z(screenZBase)
+				if l.GetZ() > maxZ {
+					maxZ = l.GetZ()
+				}
+				compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
+				comp.AddLayers(l)
+			}
+
+			// Record this screen's position for HandleContextMenuKey (keyboard
+			// context-menu shortcut), which has no other way to learn where a
+			// non-maximized/centered screen actually landed.
+			displayengine.SetActiveDialogOffset(screenX, screenY)
+
+			// Save screen position for hardware cursor routing below.
+			lastScreenX, lastScreenY = screenX, screenY
+
+			// Collect hit regions from screen with the actual position
+			if hrp, ok := s.(displayengine.HitRegionProvider); ok {
+				m.hitRegions = append(m.hitRegions, hrp.GetHitRegions(screenX, screenY)...)
+			}
+		}
+	}
+
+	// 4. Layer: Modal Dialog Stack
+	allDialogs := append([]tea.Model{}, m.dialogStack...)
+	if m.dialog != nil {
+		allDialogs = append(allDialogs, m.dialog)
+	}
+
+	for i, d := range allDialogs {
+		var content string
+		if vs, ok := d.(ViewStringer); ok {
+			content = vs.ViewString()
+		} else {
+			content = d.View().Content
+		}
+
+		if content != "" {
+			maximized := false
+			if md, ok := d.(interface{ IsMaximized() bool }); ok {
+				maximized = md.IsMaximized()
+			}
+
+			fgWidth := displayengine.WidthWithoutZones(content)
+			fgHeight := lipgloss.Height(content)
+
+			mode := displayengine.DialogAbsoluteCentered
+			targetHeight := m.backdropHeight()
+
+			hasHalo := false
+			if hp, ok := d.(HaloProvider); ok {
+				hasHalo = hp.HasHalo()
+			}
+
+			if _, ok := d.(*HelpDialogModel); ok {
+				targetHeight = m.height
+			}
+
+			if maximized {
+				mode = displayengine.DialogMaximized
+				targetHeight = m.backdropHeight()
+			}
+
+			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
+
+			// Record the topmost dialog's position for HandleContextMenuKey
+			// (keyboard context-menu shortcut) -- a centered dialog (e.g. Main
+			// Menu) has no fixed screen position the way a maximized screen
+			// does, so this is its only way to learn where it actually landed.
+			if i == len(allDialogs)-1 {
+				displayengine.SetActiveDialogOffset(lx, ly)
+			}
+
+			modalZBase := maxZ + displayengine.ZModalBaseOffset + (i * displayengine.ZModalStackStep)
+
+			// Context menus are small positioned popups, not full dialogs -- a
+			// shadow/halo behind them looks out of place, so skip both.
+			_, isContextMenu := d.(*displayengine.ContextMenuModel)
+
+			if lv, ok := d.(LayeredView); ok {
+				for _, l := range lv.Layers() {
+					// Apply modal offset to ensure it sits above the background content
+					l = l.X(l.GetX() + lx).Y(l.GetY() + ly).Z(l.GetZ() + modalZBase - displayengine.ZScreen)
+					if isContextMenu {
+						// No shadow/halo.
+					} else if hasHalo {
+						compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
+					} else {
+						compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
+					}
+					comp.AddLayers(l)
+				}
+			} else {
+				l := lipgloss.NewLayer(content).X(lx).Y(ly).Z(modalZBase)
+				if isContextMenu {
+					// No shadow/halo.
+				} else if hasHalo {
+					compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
+				} else {
+					compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
+				}
+				comp.AddLayers(l)
+			}
+
+			// Collect hit regions from dialog.
+			// Shift their ZOrder so they track with the visual modal stack.
+			if hrp, ok := d.(displayengine.HitRegionProvider); ok {
+				regions := hrp.GetHitRegions(lx, ly)
+				for j := range regions {
+					regions[j].ZOrder += modalZBase - displayengine.ZScreen
+				}
+				m.hitRegions = append(m.hitRegions, regions...)
+			}
+		}
+	}
+
+	// Sort hit regions ascending by ZOrder so FindHit (reverse iteration) checks highest-Z first.
+	// Use Stable sort to ensure specific regions added later take precedence over generic ones.
+	sort.SliceStable(m.hitRegions, func(i, j int) bool {
+		return m.hitRegions[i].ZOrder < m.hitRegions[j].ZOrder
+	})
+
+	// Render the compositor
+	v = tea.NewView(comp.Render())
+	v.MouseMode = tea.MouseModeCellMotion
+	v.AltScreen = true
+
+	// Hardware cursor: ask the topmost dialog for its input cursor position.
+	// allDialogs is built above; the last entry is the topmost (frontmost) dialog.
+	if len(allDialogs) > 0 {
+		topDialog := allDialogs[len(allDialogs)-1]
+		if cp, ok := topDialog.(InputCursorProvider); ok {
+			rx, ry, shape, show := cp.GetInputCursor()
+			if show {
+				// We need the absolute position of this dialog on screen.
+				// Re-derive lx/ly using the same logic as the dialog render loop above.
+				var content string
+				if vs, ok2 := topDialog.(ViewStringer); ok2 {
+					content = vs.ViewString()
+				} else {
+					content = topDialog.View().Content
+				}
+				if content != "" {
+					maximized := false
+					if md, ok2 := topDialog.(interface{ IsMaximized() bool }); ok2 {
+						maximized = md.IsMaximized()
+					}
+					fgWidth := displayengine.WidthWithoutZones(content)
+					fgHeight := lipgloss.Height(content)
+					mode := displayengine.DialogAbsoluteCentered
+					targetHeight := m.backdropHeight()
+					if _, ok2 := topDialog.(*HelpDialogModel); ok2 {
+						targetHeight = m.height
+					}
+					if maximized {
+						mode = displayengine.DialogMaximized
+						targetHeight = m.backdropHeight()
+					}
+					hasHalo := false
+					if hp, ok := topDialog.(HaloProvider); ok {
+						hasHalo = hp.HasHalo()
+					}
+					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
+					c := tea.NewCursor(lx+rx, ly+ry)
+					c.Shape = shape
+					c.Blink = true
+					v.Cursor = c
+				}
+			}
+		}
+	}
+
+	// If no dialog claimed the cursor, ask the active screen (e.g. the env editor).
+	if v.Cursor == nil && m.activeScreen != nil {
+		if cp, ok := m.activeScreen.(InputCursorProvider); ok {
+			rx, ry, shape, show := cp.GetInputCursor()
+			if show {
+				c := tea.NewCursor(lastScreenX+rx, lastScreenY+ry)
+				c.Shape = shape
+				c.Blink = true
+				v.Cursor = c
+			}
+		}
+	}
+
+	// If no dialog or screen claimed the cursor, ask the log panel (the console).
+	if v.Cursor == nil {
+		if cp, ok := interface{}(m.panel).(InputCursorProvider); ok {
+			rx, ry, shape, show := cp.GetInputCursor()
+			if show {
+				logY := m.height - m.panel.Height()
+				c := tea.NewCursor(rx, logY+ry)
+				c.Shape = shape
+				c.Blink = true
+				v.Cursor = c
+			}
+		}
+	}
+
+	textInputActive := v.Cursor != nil
+	if textInputActive != m.lastTextInputActive {
+		m.lastTextInputActive = textInputActive
+		SendTextInputFocusMsg(textInputActive)
+	}
+
+	m.cachedView = v
+	return v
+}
+
+// GetActiveScreen returns the currently active screen
+func (m AppModel) GetActiveScreen() ScreenModel {
+	return m.activeScreen
+}
+
+// Backdrop returns the shared backdrop model
+func (m *AppModel) Backdrop() *displayengine.BackdropModel {
+	return m.backdrop
+}
+
+// GetPanel returns the log panel model
+func (m AppModel) GetPanel() displayengine.PanelModel {
+	return m.panel
+}
+
+// compositorAddShadow adds a drop-shadow layer behind l in the compositor.
+// It fires only when enabled is true and l is a base content layer (l.GetZ() == baseZ).
+// displayengine.DialogShadowWidth/Height from dialog.go are used as the canonical offsets.
+// The shadow box is cached by content dimensions + context settings so it is
+// not recomputed on frames where neither the dialog size nor the theme changed.
+func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, enabled bool) {
+	if !enabled || l.GetZ()-baseZ != 0 {
+		return
+	}
+	content := l.GetContent()
+	w := displayengine.WidthWithoutZones(content)
+	h := lipgloss.Height(content)
+	if w <= 0 || h <= 0 {
+		return
+	}
+	ctx := displayengine.GetActiveContext()
+	var shadowBox string
+	if shadowBoxCache.width == w && shadowBoxCache.height == h &&
+		shadowBoxCache.level == ctx.ShadowLevel && shadowBoxCache.lineChars == ctx.LineCharacters {
+		shadowBox = shadowBoxCache.result
+	} else {
+		shadowBox = displayengine.GetShadowBoxCtx(content, ctx)
+		shadowBoxCache.width = w
+		shadowBoxCache.height = h
+		shadowBoxCache.level = ctx.ShadowLevel
+		shadowBoxCache.lineChars = ctx.LineCharacters
+		shadowBoxCache.result = shadowBox
+	}
+	if shadowBox != "" {
+		comp.AddLayers(lipgloss.NewLayer(shadowBox).
+			X(l.GetX() + displayengine.DialogShadowWidth).
+			Y(l.GetY() + displayengine.DialogShadowHeight).
+			Z(l.GetZ() - 1))
+	}
+}
+
+// compositorAddHalo adds a background halo layer behind l in the compositor.
+// Halo is 2 chars wider on each side and 1 line taller on top and bottom.
+func compositorAddHalo(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int, haloColor color.Color) {
+	if haloColor == nil || l.GetZ()-baseZ != 0 {
+		return
+	}
+	content := l.GetContent()
+	w := displayengine.WidthWithoutZones(content)
+	h := lipgloss.Height(content)
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	layout := displayengine.GetLayout()
+	haloW := w + layout.HaloWidth
+	haloH := h + layout.HaloHeight
+
+	// Use existing displayengine.GetSolidBoxCtx if possible, otherwise build manual string
+	haloBox := displayengine.GetSolidBoxCtx(haloW, haloH, haloColor)
+	if haloBox != "" {
+		comp.AddLayers(lipgloss.NewLayer(haloBox).
+			X(l.GetX() - (layout.HaloWidth / 2)).
+			Y(l.GetY() - (layout.HaloHeight / 2)).
+			Z(l.GetZ() - 2)) // Below shadow (shadow is at Z-1)
+	}
+}
+
+// TruncateStack returns the first n lines of a stack trace string.
+func TruncateStack(stack string, n int) string {
+	lines := strings.Split(stack, "\n")
+	if len(lines) > n {
+		return strings.Join(lines[:n], "\n") + "\n."
+	}
+	return stack
+}

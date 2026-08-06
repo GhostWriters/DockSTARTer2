@@ -1,0 +1,1100 @@
+package config
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/user"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"runtime"
+	"strings"
+	"time"
+
+	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/version"
+	"github.com/GhostWriters/semstyle"
+
+	"github.com/adrg/xdg"
+	"github.com/go-viper/mapstructure/v2"
+	toml "github.com/pelletier/go-toml/v2"
+)
+
+// MinRefreshRateMS and MaxRefreshRateMS bound UI.RefreshRate (screen repaint
+// interval, in milliseconds). Shared by config validation, the Appearance
+// menu's prompt, and the Browser Settings dialog's refresh-rate field.
+const (
+	MinRefreshRateMS = 16
+	MaxRefreshRateMS = 1000
+)
+
+func defaultConfigBytes() []byte {
+	b, _ := assets.GetDefaultConfig()
+	return b
+}
+
+// ThemeDefaultsOverlayHook, if set, is the last step of MigrateFromLegacy:
+// it overlays the theme's suggested defaults for fields not in
+// legacyPresent. Set by the theme package to avoid a config->theme cycle.
+var ThemeDefaultsOverlayHook func(conf *AppConfig, legacyPresent map[string]bool)
+
+// DefaultConfig returns an AppConfig populated purely from the embedded defaults TOML.
+func DefaultConfig() AppConfig {
+	var conf AppConfig
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
+	return conf
+}
+
+type migrationModeKey struct{}
+
+// isMigrationMode reports whether ctx was created by LoadAppConfig's one-time,
+// no-config-file-yet bootstrap. Distinguishes that path (safe to hard-exit:
+// runs once, before the server ever starts accepting sessions) from
+// validate()'s per-load repair of an already-live config, which can run
+// mid-session on a long-running --server-daemon and must never abort the
+// whole process over one user's compose_folder problem.
+func isMigrationMode(ctx context.Context) bool {
+	v, _ := ctx.Value(migrationModeKey{}).(bool)
+	return v
+}
+
+// AppConfig holds the application configuration settings.
+type AppConfig struct {
+	UI     UIConfig     `toml:"ui"`
+	Paths  PathConfig   `toml:"paths"`
+	Server ServerConfig `toml:"server"`
+	System SystemConfig `toml:"system"`
+
+	// These are helper fields for runtime use, not saved to TOML
+	Arch       string     `toml:"-"`
+	ConfigDir  string     `toml:"-"`
+	ComposeDir string     `toml:"-"`
+	RawPaths   PathConfig `toml:"-"` // Unexpanded values as read from TOML
+}
+
+// SystemConfig holds host-system integration settings.
+type SystemConfig struct {
+	// SetcapAsked records whether the one-time AutoSetcap question has
+	// already been put to the user, so it's never asked twice. Setting
+	// AutoSetcap true by hand works without this: an enabled AutoSetcap
+	// applies regardless of whether the question was ever asked.
+	SetcapAsked bool `toml:"setcap_asked"`
+	// AutoSetcap enables the optional Linux capability grant
+	// (CAP_CHOWN/CAP_FOWNER via "sudo setcap") that lets DS2 fix file
+	// ownership/permissions without sudo. When true, the grant is
+	// re-applied automatically whenever the binary lacks the capabilities
+	// (e.g. after a self-update replaced it).
+	AutoSetcap bool `toml:"auto_setcap"`
+}
+
+// ServerConfig holds SSH and web server settings.
+// The server is active when ssh.port > 0. Set ssh.port = 0 (or omit it) to
+// disable. There is no separate enabled flag — the port is the intent signal.
+type ServerConfig struct {
+	SSH     SSHConfig  `toml:"ssh"`
+	Web     WebConfig  `toml:"web"`
+	Auth    AuthConfig `toml:"auth"`
+	HostKey string     `toml:"host_key"` // Path to persistent host key file
+}
+
+// SSHConfig holds settings for the SSH server.
+type SSHConfig struct {
+	Port int `toml:"port"` // TCP port for the SSH server (0 = disabled)
+}
+
+// WebConfig holds settings for the optional xterm.js web frontend.
+type WebConfig struct {
+	Port int `toml:"port"` // TCP port for the HTTP/WebSocket server (0 = disabled)
+}
+
+// AuthConfig holds authentication settings for the SSH server.
+type AuthConfig struct {
+	// Mode: "password", "pubkey", or "none" (none prints a warning on startup)
+	Mode         string `toml:"mode"`
+	Password     string `toml:"password"`       // bcrypt hash of the password
+	AuthKeysFile string `toml:"auth_keys_file"` // Path to authorized_keys file
+}
+
+// UIConfig holds user interface related settings.
+type UIConfig struct {
+	Theme              string `toml:"theme"`
+	Borders            bool   `toml:"borders"`
+	LargeButtons       bool   `toml:"large_buttons"`
+	LargeTitleBars     bool   `toml:"large_title_bars"`
+	LineCharacters     bool   `toml:"line_characters"`
+	Shadow             bool   `toml:"shadow"`
+	ShadowLevel        int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
+	Scrollbar          bool   `toml:"scrollbar"`
+	Spinner            bool   `toml:"spinner"`
+	SpinnerSpeed       int    `toml:"spinner_speed"`        // milliseconds per frame, default 120
+	RefreshRate        int    `toml:"refresh_rate"`         // screen repaint interval in milliseconds, default 60
+	BorderColor        int    `toml:"border_color"`         // 1=Border, 2=Border2, 3=Both
+	DialogTitleAlign   string `toml:"dialog_title_align"`   // "center" or "left"
+	SubmenuTitleAlign  string `toml:"submenu_title_align"`  // "center" or "left"
+	PanelTitleAlign    string `toml:"panel_title_align"`    // "center" or "left"
+	PanelLocal         string `toml:"panel_local"`          // "log", "console", or "none" (for local sessions)
+	PanelRemote        string `toml:"panel_remote"`         // "log", "console", or "none" (for ssh/web sessions)
+	CheckboxBrackets   string `toml:"checkbox_brackets"`    // "never", "selected", or "always" -- the focused row's brackets always show regardless
+	RadioBrackets      string `toml:"radio_brackets"`       // "never", "selected", or "always" -- the focused row's brackets always show regardless
+	MenuBrackets       bool   `toml:"menu_brackets"`        // wrap the focused menu item's tag in [brackets]
+	LineNumberBrackets bool   `toml:"line_number_brackets"` // wrap the focused line's number in [brackets] in the env editor
+	TabLayout          string `toml:"tab_layout"`           // "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
+	ShowPreview        bool   `toml:"show_preview"`         // default visibility of the Appearance Settings preview panel
+}
+
+// PathConfig holds directory path settings.
+type PathConfig struct {
+	ConfigFolder  string `toml:"config_folder"`
+	ComposeFolder string `toml:"compose_folder"`
+}
+
+// getArch returns the CPU architecture (x86_64 or aarch64).
+func getArch() string {
+	arch := runtime.GOARCH
+	switch arch {
+	case "amd64":
+		return "x86_64"
+	case "arm64":
+		return "aarch64"
+	default:
+		return arch
+	}
+}
+
+// ExpandVariables expands environment variables in the config values.
+// It supports:
+// - ${XDG_CONFIG_HOME} -> xdg.ConfigHome
+// - ${XDG_DATA_HOME}   -> xdg.DataHome
+// - ${XDG_STATE_HOME}  -> xdg.StateHome
+// - ${XDG_CACHE_HOME}  -> xdg.CacheHome
+// - ${HOME}            -> os.UserHomeDir()
+// - ${USER}            -> Current username
+// - ~/...              -> home-relative path (tilde expansion)
+// - ${ANY}             -> os.Getenv("ANY") fallback for unrecognised variables
+func ExpandVariables(val string) string {
+	// Support legacy ${VAR?} syntax by normalizing it to ${VAR}
+	// Use regex to be precise: find ${...?} and replace with ${...}
+	re := regexp.MustCompile(`\$\{([^}]+)\?\}`)
+	val = re.ReplaceAllString(val, `${$1}`)
+
+	// Tilde expansion: ~/... or bare ~
+	if val == "~" || strings.HasPrefix(val, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			val = home + val[1:]
+		}
+	}
+
+	mapper := func(varName string) string {
+		switch varName {
+		case "XDG_CONFIG_HOME":
+			return xdg.ConfigHome
+		case "XDG_DATA_HOME":
+			return xdg.DataHome
+		case "XDG_STATE_HOME":
+			return xdg.StateHome
+		case "XDG_CACHE_HOME":
+			return xdg.CacheHome
+		case "HOME":
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return ""
+			}
+			return home
+		case "USER":
+			u, err := user.Current()
+			if err != nil {
+				return os.Getenv("USERNAME") // Fallback for Windows
+			}
+			return u.Username
+		case "ScriptFolder":
+			return paths.GetBashScriptFolder()
+		}
+		// Fall back to the real environment for any unrecognised variable
+		return os.Getenv(varName)
+	}
+	return os.Expand(val, mapper)
+}
+
+// CollapseVariables replaces absolute paths with their environment variable equivalents.
+// It specifically EXCLUDES ${ScriptFolder} from reverse resolution.
+func CollapseVariables(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	// Order matters: more specific paths first
+	path = filepath.Clean(path)
+	home, _ := os.UserHomeDir()
+	home = filepath.Clean(home)
+
+	// Use a slice of pairs to ensure deterministic order
+	type pair struct {
+		abs    string
+		envVar string
+	}
+	vars := []pair{
+		{filepath.Clean(xdg.ConfigHome), "${XDG_CONFIG_HOME}"},
+		{filepath.Clean(xdg.DataHome), "${XDG_DATA_HOME}"},
+		{filepath.Clean(xdg.StateHome), "${XDG_STATE_HOME}"},
+		{filepath.Clean(xdg.CacheHome), "${XDG_CACHE_HOME}"},
+		{home, "${HOME}"},
+	}
+
+	for _, v := range vars {
+		if v.abs != "" {
+			// Check if the path is exactly the variable's value or if it's a sub-path
+			if path == v.abs {
+				return v.envVar
+			}
+			if strings.HasPrefix(path, v.abs+string(os.PathSeparator)) {
+				return v.envVar + strings.TrimPrefix(path, v.abs)
+			}
+		}
+	}
+
+	return path
+}
+
+// LoadAppConfig reads the configuration file and returns the configuration.
+// defaults.toml (embedded) is always unmarshalled first; the user's file is
+// overlaid on top, so keys present in the user's file override the defaults
+// and keys absent from the user's file fall back to the embedded defaults.
+// sanitizeConfig resets any UIConfig field that has an invalid value, using the
+// embedded defaults as the source of truth for fallback values.
+// Warns for each field that had to be corrected.
+func sanitizeConfig(ctx context.Context, conf *AppConfig) {
+	var def AppConfig
+	_ = toml.Unmarshal(defaultConfigBytes(), &def)
+	ui := &conf.UI
+
+	warn := func(field, bad, fixed string) {
+		logger.Warn(ctx, "Config: invalid value for {{|Var|}}%s{{[-]}} ({{|Var|}}%s{{[-]}}) — reset to {{|Var|}}%s{{[-]}}.", field, bad, fixed)
+	}
+
+	if ui.ShadowLevel < 0 || ui.ShadowLevel > 4 {
+		warn("shadow_level", fmt.Sprintf("%d", ui.ShadowLevel), fmt.Sprintf("%d", def.UI.ShadowLevel))
+		ui.ShadowLevel = def.UI.ShadowLevel
+		ui.Shadow = def.UI.Shadow
+	}
+	if ui.SpinnerSpeed < 50 || ui.SpinnerSpeed > 5000 {
+		warn("spinner_speed", fmt.Sprintf("%d", ui.SpinnerSpeed), fmt.Sprintf("%d", def.UI.SpinnerSpeed))
+		ui.SpinnerSpeed = def.UI.SpinnerSpeed
+	}
+	if ui.RefreshRate < MinRefreshRateMS || ui.RefreshRate > MaxRefreshRateMS {
+		warn("refresh_rate", fmt.Sprintf("%d", ui.RefreshRate), fmt.Sprintf("%d", def.UI.RefreshRate))
+		ui.RefreshRate = def.UI.RefreshRate
+	}
+	if ui.BorderColor < 1 || ui.BorderColor > 3 {
+		warn("border_color", fmt.Sprintf("%d", ui.BorderColor), fmt.Sprintf("%d", def.UI.BorderColor))
+		ui.BorderColor = def.UI.BorderColor
+	}
+	switch ui.DialogTitleAlign {
+	case "left", "center":
+	default:
+		warn("dialog_title_align", ui.DialogTitleAlign, def.UI.DialogTitleAlign)
+		ui.DialogTitleAlign = def.UI.DialogTitleAlign
+	}
+	switch ui.SubmenuTitleAlign {
+	case "left", "center":
+	default:
+		warn("submenu_title_align", ui.SubmenuTitleAlign, def.UI.SubmenuTitleAlign)
+		ui.SubmenuTitleAlign = def.UI.SubmenuTitleAlign
+	}
+	switch ui.PanelTitleAlign {
+	case "left", "center":
+	default:
+		warn("panel_title_align", ui.PanelTitleAlign, def.UI.PanelTitleAlign)
+		ui.PanelTitleAlign = def.UI.PanelTitleAlign
+	}
+	switch ui.PanelLocal {
+	case "log", "console", "none", "system":
+	default:
+		warn("panel_local", ui.PanelLocal, def.UI.PanelLocal)
+		ui.PanelLocal = def.UI.PanelLocal
+	}
+	switch ui.PanelRemote {
+	case "log", "console", "none", "system":
+	default:
+		warn("panel_remote", ui.PanelRemote, def.UI.PanelRemote)
+		ui.PanelRemote = def.UI.PanelRemote
+	}
+	switch ui.TabLayout {
+	case "maximized", "sidebyside", "stacked":
+	default:
+		warn("tab_layout", ui.TabLayout, def.UI.TabLayout)
+		ui.TabLayout = def.UI.TabLayout
+	}
+	switch ui.CheckboxBrackets {
+	case "never", "selected", "always":
+	default:
+		warn("checkbox_brackets", ui.CheckboxBrackets, def.UI.CheckboxBrackets)
+		ui.CheckboxBrackets = def.UI.CheckboxBrackets
+	}
+	switch ui.RadioBrackets {
+	case "never", "selected", "always":
+	default:
+		warn("radio_brackets", ui.RadioBrackets, def.UI.RadioBrackets)
+		ui.RadioBrackets = def.UI.RadioBrackets
+	}
+
+	isValidPath := func(p string) bool {
+		expanded := filepath.Clean(ExpandVariables(p))
+		return filepath.IsAbs(expanded)
+	}
+	if !isValidPath(conf.Paths.ConfigFolder) {
+		warn("config_folder", conf.Paths.ConfigFolder, def.Paths.ConfigFolder)
+		conf.Paths.ConfigFolder = def.Paths.ConfigFolder
+	}
+	if !isValidPath(conf.Paths.ComposeFolder) {
+		logger.Warn(ctx, "Config: invalid value for {{|Var|}}compose_folder{{[-]}} ({{|Var|}}%s{{[-]}}) — attempting detection.", conf.Paths.ComposeFolder)
+		ResolveComposeFolder(ctx, conf, logNotice)
+	}
+}
+
+// ResolveComposeFolder runs compose folder detection and, when multiple candidates
+// are found, prompts the user to choose. Updates conf.Paths.ComposeFolder in place.
+// Uses the same logic as first-run migration so the experience is consistent.
+func ResolveComposeFolder(ctx context.Context, conf *AppConfig, printer console.Printer) {
+	detection := paths.DetectComposeFolder(conf.Paths.ComposeFolder)
+
+	// The abort choice below hard-exits the process, which is only safe during
+	// the one-time migration bootstrap (see isMigrationMode) -- never during
+	// validate()'s per-load repair of an already-live config on a running
+	// --server-daemon, which would take down every connected session.
+	if detection.LegacyExists && isMigrationMode(ctx) {
+		if scriptFolder := paths.GetBashScriptFolder(); paths.DetectLegacyTemplatesInScriptFolder(scriptFolder) {
+			if warnLegacyTemplatesInScriptFolder(ctx, printer, scriptFolder, detection.CurrentPath) {
+				detection.LegacyExists = false
+			}
+		}
+	}
+
+	if detection.LegacyExists && detection.CurrentExists && detection.LegacyPath != detection.CurrentPath {
+		promptMsg := "Detected compose folders in multiple locations.\n   Legacy:  '" + console.FormatFolderPath(detection.LegacyPath) + "'\n   Default: '" + console.FormatFolderPath(detection.CurrentPath) + "'\n\nWould you like to use the Legacy location?"
+		useLegacy, err := console.QuestionPrompt(ctx, printer, "Multiple Compose Folders Detected", promptMsg, "Y", false)
+		if err == nil && useLegacy {
+			printer(ctx, "Chose the Legacy compose folder location:\n   '"+console.FormatFolderPath(detection.LegacyPath)+"'")
+			conf.Paths.ComposeFolder = detection.LegacyPath
+		} else if err == nil {
+			printer(ctx, "Chose the Default compose folder location:\n   '"+console.FormatFolderPath(detection.CurrentPath)+"'")
+			conf.Paths.ComposeFolder = detection.CurrentPath
+		}
+	} else if detection.LegacyExists && !detection.CurrentExists {
+		printer(ctx, "Detected compose folder at '"+console.FormatFolderPath(detection.LegacyPath)+"'.")
+		conf.Paths.ComposeFolder = detection.LegacyPath
+	} else if detection.CurrentExists {
+		conf.Paths.ComposeFolder = detection.CurrentPath
+	}
+}
+
+// warnLegacyTemplatesInScriptFolder is called when the detected legacy compose
+// folder belongs to a DS1 install so old that its app templates are still
+// stored inside the script folder itself, instead of their own separate
+// templates location -- migrating from an install this old isn't supported,
+// since DS1 needs to run its own migration to the templates repo first.
+// Returns true if the user chose to skip the legacy compose folder and
+// continue with the new default location instead; exits the process if they
+// chose to abort so they can update DS1 first.
+func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Printer, scriptFolder, defaultPath string) bool {
+	logger.Warn(ctx, "\nDetected a very old {{|ApplicationName|}}DockSTARTer{{[-]}} install where app templates are still\n"+
+		"stored in the script folder ('"+console.FormatFolderPath(scriptFolder)+"'), instead of\n"+
+		"their own templates location. This {{|ApplicationName|}}DockSTARTer{{[-]}} install needs to be\n"+
+		"updated before migrating to {{|ApplicationName|}}DockSTARTer2{{[-]}}.\n\n"+
+		"We recommend aborting and running '{{|UserCommand|}}ds -u{{[-]}}' to update the old\n"+
+		"{{|ApplicationName|}}DockSTARTer{{[-]}} install, then running {{|ApplicationName|}}DockSTARTer2{{[-]}} again to retry migration.\n")
+
+	promptMsg := "Abort migration to run '{{|UserCommand|}}ds -u{{[-]}}'? Answering No skips the legacy compose\n" +
+		"folder and uses the new default location instead, without migrating\n" +
+		"this install's existing app configuration."
+	abort, err := console.QuestionPrompt(ctx, printer, "Old DockSTARTer Install Detected", promptMsg, "Y", false)
+	if err != nil || abort {
+		logger.Error(ctx, "Aborting migration. Run '{{|UserCommand|}}ds -u{{[-]}}' to update your existing {{|ApplicationName|}}DockSTARTer{{[-]}} install, then run {{|ApplicationName|}}DockSTARTer2{{[-]}} again.")
+		// This exits deep inside LoadAppConfig, well before main.go's own
+		// exitCode/trailer logic ever runs -- print the same trailer here
+		// (matching main.go's wording exactly) so this looks like any other
+		// failed run instead of silently vanishing without it.
+		logger.Display(ctx, "{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)
+		logger.Display(ctx, "Check logs in '"+console.FormatFilePath(logger.GetLogFilePath())+"'.")
+		// Same exit hygiene as logger.Fatal*: give stdout/stderr a moment to
+		// flush and make sure the cursor isn't left hidden, without using
+		// Fatal itself, whose "let the dev know" footer is wrong for an
+		// expected, user-actionable stop (not a bug).
+		time.Sleep(100 * time.Millisecond)
+		console.RestoreCursor()
+		os.Exit(1)
+	}
+	logger.Warn(ctx, "Skipping legacy compose folder; using the new default location:\n   '"+console.FormatFolderPath(defaultPath)+"'")
+	return true
+}
+
+func LoadAppConfig() AppConfig {
+	var conf AppConfig
+	// Start from embedded defaults so every key has a known baseline value.
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
+
+	// Set architecture (runtime only)
+	conf.Arch = getArch()
+
+	path := paths.GetConfigFilePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// No config file found. Attempt migration from legacy.
+		migrationCtx := context.WithValue(context.Background(), migrationModeKey{}, true)
+		logNotice(migrationCtx, "No {{|ApplicationName|}}%s{{[-]}} config file detected. Performing initial configuration.", "DockSTARTer2")
+		migrated, foundLegacy, foundCompose := MigrateFromLegacy(migrationCtx)
+
+		cfgPath := paths.GetConfigFilePath()
+		dir := filepath.Dir(cfgPath)
+		if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+			logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
+			if err := os.Remove(dir); err != nil {
+				logger.FatalWithStack(context.Background(), []string{
+					"Failed to remove existing file.",
+					"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+				}, dir)
+			}
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				logger.FatalWithStack(context.Background(), []string{
+					"Failed to create config folder.",
+					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+				}, dir)
+			}
+		}
+
+		var baseline AppConfig
+		_ = toml.Unmarshal(defaultConfigBytes(), &baseline)
+		if reflect.DeepEqual(migrated, baseline) {
+			// Unchanged from pristine defaults -- keep the file's comments.
+			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
+			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+		} else if merged, err := toml.Marshal(migrated); err == nil {
+			_ = os.WriteFile(cfgPath, merged, 0600)
+			logNotice(context.Background(), "Writing migrated configuration to '"+console.FormatFilePath(cfgPath)+"'.")
+		} else {
+			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
+			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+		}
+
+		conf = LoadAppConfig()
+		if foundLegacy || foundCompose {
+			// Show the config after migration, matching bash version behavior
+			logNotice(migrationCtx, " ")
+			ShowAppConfig(migrationCtx, &conf)
+			logNotice(migrationCtx, " ")
+		}
+		return conf
+	} else {
+		// Overlay user config on top of defaults.
+		// Use Robust unmarshaling to handle any loose types from manual edits
+		if _, err := UnmarshalRobust(data, &conf); err == nil {
+			// Write back only if the merged config differs from what was on disk
+			// (e.g. new keys added in a newer version). Avoids a pointless write
+			// on every load which would also trigger any file watchers.
+			if merged, err := toml.Marshal(conf); err == nil {
+				if string(merged) != string(data) {
+					_ = SaveAppConfig(conf)
+				}
+			}
+			sanitizeConfig(context.Background(), &conf)
+			conf.RawPaths = conf.Paths
+			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
+			conf.ConfigDir = conf.Paths.ConfigFolder
+			conf.ComposeDir = conf.Paths.ComposeFolder
+			return conf
+		}
+	}
+
+	// Existing config file could not be parsed even robustly (corrupt file).
+	// Fall back to the embedded defaults, preserving comments, without going
+	// through the migration/theme-overlay flow (there's nothing to migrate).
+	_ = os.WriteFile(path, defaultConfigBytes(), 0600)
+	logNotice(context.Background(), "Config file at '"+console.FormatFilePath(path)+"' could not be parsed; reset to embedded defaults.")
+	sanitizeConfig(context.Background(), &conf)
+	conf.RawPaths = conf.Paths
+	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
+	conf.ConfigDir = conf.Paths.ConfigFolder
+	conf.ComposeDir = conf.Paths.ComposeFolder
+	return conf
+}
+
+// TryLoadAppConfig loads and validates the config file strictly, returning an
+// error if the file cannot be read or parsed. Unlike LoadAppConfig it does not
+// fall back to defaults or write anything to disk, making it safe to call from
+// a file watcher to gate whether a change should be applied.
+func TryLoadAppConfig() (AppConfig, error) {
+	var conf AppConfig
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
+	conf.Arch = getArch()
+
+	data, err := os.ReadFile(paths.GetConfigFilePath())
+	if err != nil {
+		return AppConfig{}, err
+	}
+	if err := toml.Unmarshal(data, &conf); err != nil {
+		return AppConfig{}, err
+	}
+	conf.RawPaths = conf.Paths
+	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
+	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
+	conf.ConfigDir = conf.Paths.ConfigFolder
+	conf.ComposeDir = conf.Paths.ComposeFolder
+	return conf, nil
+}
+
+// SaveAppConfig writes the configuration to dockstarter2.toml.
+// SaveAppConfig writes the configuration to the application configuration file.
+// Paths are stored in their unexpanded form (e.g. ${XDG_CONFIG_HOME}) so that
+// the file remains portable and variables are resolved fresh on each read.
+func SaveAppConfig(conf AppConfig) error {
+	path := paths.GetConfigFilePath()
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(path)
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		logger.Info(context.Background(), "Removing existing file '"+console.FormatFilePath(dir)+"' before folder can be created.")
+		if err := os.Remove(dir); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to remove existing file.",
+				"Failing command: {{|FailingCommand|}}rm -f \"%s\"{{[-]}}",
+			}, dir)
+		}
+	}
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		logNotice(context.Background(), "Creating '"+console.FormatFolderPath(dir)+"'.")
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			logger.FatalWithStack(context.Background(), []string{
+				"Failed to create config folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, dir)
+			return err
+		}
+	}
+
+	// 1. If RawPaths was set (e.g. from a recent Load), prioritize those original strings
+	if conf.RawPaths.ConfigFolder != "" {
+		conf.Paths.ConfigFolder = conf.RawPaths.ConfigFolder
+	} else {
+		// 2. Otherwise, auto-collapse absolute paths to variables (XDG, HOME, etc.)
+		conf.Paths.ConfigFolder = CollapseVariables(conf.Paths.ConfigFolder)
+	}
+
+	if conf.RawPaths.ComposeFolder != "" {
+		conf.Paths.ComposeFolder = conf.RawPaths.ComposeFolder
+	} else {
+		conf.Paths.ComposeFolder = CollapseVariables(conf.Paths.ComposeFolder)
+	}
+
+	data, err := toml.Marshal(conf)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0600)
+}
+
+// UnmarshalRobust unmarshals TOML data into a struct using mapstructure
+// to allow for "weak" type conversion (e.g., string "true" to boolean true).
+func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
+	present := make(map[string]bool)
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	// Helper to track present keys in the flat namespace of AppConfig
+	var trackKeys func(m map[string]any, prefix string)
+	trackKeys = func(m map[string]any, prefix string) {
+		for k, val := range m {
+			fullKey := k
+			if prefix != "" {
+				fullKey = prefix + "." + k
+			}
+
+			// Special case: map the TOML structure to the flat keys used in ShowAppConfig
+			switch fullKey {
+			case "paths.config_folder":
+				present["ConfigFolder"] = true
+			case "paths.compose_folder":
+				present["ComposeFolder"] = true
+			case "ui.theme":
+				present["Theme"] = true
+			case "ui.borders":
+				present["Borders"] = true
+			case "ui.large_buttons":
+				present["LargeButtons"] = true
+			case "ui.large_title_bars":
+				present["LargeTitleBars"] = true
+			case "ui.line_characters":
+				present["LineCharacters"] = true
+			case "ui.scrollbar":
+				present["Scrollbar"] = true
+			case "ui.spinner":
+				present["Spinner"] = true
+			case "ui.spinner_speed":
+				present["SpinnerSpeed"] = true
+			case "ui.shadow":
+				present["Shadow"] = true
+			case "ui.shadow_level":
+				present["ShadowLevel"] = true
+			case "ui.border_color":
+				present["BorderColor"] = true
+			case "ui.dialog_title_align":
+				present["DialogTitleAlign"] = true
+			case "ui.submenu_title_align":
+				present["SubmenuTitleAlign"] = true
+			case "ui.panel_title_align":
+				present["PanelTitleAlign"] = true
+			case "ui.panel_local":
+				present["PanelLocal"] = true
+			case "ui.panel_remote":
+				present["PanelRemote"] = true
+			case "ui.checkbox_brackets":
+				present["CheckboxBrackets"] = true
+			case "ui.radio_brackets":
+				present["RadioBrackets"] = true
+			case "ui.menu_brackets":
+				present["MenuBrackets"] = true
+			case "ui.line_number_brackets":
+				present["LineNumberBrackets"] = true
+			case "server.ssh.port":
+				present["SSHPort"] = true
+			case "server.web.port":
+				present["WebPort"] = true
+			case "server.auth.mode":
+				present["AuthMode"] = true
+			}
+
+			if subMap, ok := val.(map[string]any); ok {
+				trackKeys(subMap, fullKey)
+			}
+		}
+	}
+	trackKeys(raw, "")
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		WeaklyTypedInput: true,
+		Result:           v,
+		TagName:          "toml",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return present, decoder.Decode(raw)
+}
+
+// ReadLegacyMap parses a legacy .ini configuration file and returns a map of raw key-value pairs.
+func ReadLegacyMap(data []byte) map[string]string {
+	raw := make(map[string]string)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if parts := strings.SplitN(line, "=", 2); len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			raw[key] = val
+		}
+	}
+	return raw
+}
+
+// UnmarshalLegacyIni parses a legacy .ini configuration file and maps it to AppConfig.
+func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
+	present := make(map[string]bool)
+	raw := ReadLegacyMap(data)
+
+	// Permissive boolean parsing (matching legacy is_true)
+	isTrue := func(s string) bool {
+		s = strings.Trim(strings.TrimSpace(s), "'\"")
+		s = strings.ToUpper(s)
+		return s == "TRUE" || s == "1" || s == "ON" || s == "YES"
+	}
+
+	if val, ok := raw["ConfigFolder"]; ok {
+		v.Paths.ConfigFolder = ExpandVariables(val)
+		present["ConfigFolder"] = true
+	}
+	if val, ok := raw["ComposeFolder"]; ok {
+		v.Paths.ComposeFolder = ExpandVariables(val)
+		present["ComposeFolder"] = true
+	}
+	if val, ok := raw["Theme"]; ok {
+		v.UI.Theme = val
+		present["Theme"] = true
+	}
+
+	if val, ok := raw["Scrollbar"]; ok {
+		v.UI.Scrollbar = isTrue(val)
+		present["Scrollbar"] = true
+	} else if val, ok := raw["Scrollbars"]; ok {
+		v.UI.Scrollbar = isTrue(val)
+		present["Scrollbar"] = true
+	}
+
+	if val, ok := raw["Spinner"]; ok {
+		v.UI.Spinner = isTrue(val)
+		present["Spinner"] = true
+	}
+
+	if val, ok := raw["Shadow"]; ok {
+		v.UI.Shadow = isTrue(val)
+		present["Shadow"] = true
+	} else if val, ok := raw["Shadows"]; ok {
+		v.UI.Shadow = isTrue(val)
+		present["Shadow"] = true
+	}
+
+	if val, ok := raw["Borders"]; ok {
+		v.UI.Borders = isTrue(val)
+		present["Borders"] = true
+	} else if val, ok := raw["LineCharacters"]; ok {
+		v.UI.Borders = isTrue(val)
+		present["Borders"] = true
+	}
+
+	if val, ok := raw["LineCharacters"]; ok {
+		v.UI.LineCharacters = isTrue(val)
+		present["LineCharacters"] = true
+	}
+
+	return present, nil
+}
+
+// MigrateFromLegacy always starts from the embedded defaults, overlays a
+// legacy DS1 config if found, resolves the compose folder, and overlays the
+// theme's suggested defaults for fields not already set. foundLegacy and
+// foundCompose are for the caller's migration-summary display only.
+func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, foundCompose bool) {
+	_ = toml.Unmarshal(defaultConfigBytes(), &conf)
+	legacyPresent := map[string]bool{}
+
+	var legacyFiles []string
+	// DS1's current .toml format takes priority over its older .ini format.
+	legacyFiles = append(legacyFiles, filepath.Join(xdg.ConfigHome, "dockstarter", "dockstarter.toml"))
+	legacyFiles = append(legacyFiles, paths.GetLegacyIniPaths()...)
+
+	for _, path := range legacyFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue // Try next file
+		}
+
+		if strings.HasSuffix(path, ".toml") {
+			var probe AppConfig
+			present, unmarshalErr := UnmarshalRobust(data, &probe)
+			if unmarshalErr != nil || len(present) == 0 {
+				continue // Try next file
+			}
+			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
+			heading := "Configuration options in legacy config file '" + console.FormatFilePath(path) + "':"
+			logNotice(ctx, " ")
+			ShowAppConfigWithTitleAndPresent(ctx, &probe, heading, present)
+			logNotice(ctx, " ")
+			logNotice(ctx, "Migrating '"+console.FormatFilePath(path)+"' to '"+console.FormatFilePath(paths.GetConfigFilePath())+"'.")
+
+			// Apply to the actual merged config (defaults already unmarshalled above)
+			legacyPresent, _ = UnmarshalRobust(data, &conf)
+			conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
+			conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			foundLegacy = true
+			break // STOP after the first successful migration source is processed
+		}
+
+		raw := ReadLegacyMap(data)
+		if len(raw) > 0 {
+			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
+			heading := "Configuration options in legacy config file '" + console.FormatFilePath(path) + "':"
+			logNotice(ctx, " ")
+
+			headers := []string{
+				"{{|UsageCommand|}}Option{{[-]}}",
+				"{{|UsageCommand|}}Value{{[-]}}",
+				"{{|UsageCommand|}}Expanded Value{{[-]}}",
+			}
+			var tableData []string
+			// Map legacy keys to display names and format values (matching DS2 table style)
+			legacyMapping := []struct {
+				key   string
+				name  string
+				isDir bool
+			}{
+				{"ConfigFolder", "Config Folder", true},
+				{"ComposeFolder", "Compose Folder", true},
+				{"Theme", "Theme", false},
+				{"Borders", "Borders", false},
+				{"Scrollbar", "Scrollbar", false},
+				{"Shadow", "Shadow", false},
+				{"LineCharacters", "Line Characters", false},
+			}
+
+			for _, m := range legacyMapping {
+				val, ok := raw[m.key]
+				if !ok {
+					// Check aliases
+					switch m.key {
+					case "ConfigFolder":
+						val, ok = raw["DOCKER_CONFIG_FOLDER"]
+					case "Scrollbar":
+						val, ok = raw["Scrollbars"]
+					case "Shadow":
+						val, ok = raw["Shadows"]
+					}
+				}
+				if ok {
+					tableData = append(tableData, m.name)
+					if m.isDir {
+						tableData = append(tableData, console.FormatFolderPath(val))
+						tableData = append(tableData, console.FormatFolderPath(ExpandVariables(val)))
+					} else {
+						tableData = append(tableData, fmt.Sprintf("{{|Var|}}%s{{[-]}}", val))
+						tableData = append(tableData, "")
+					}
+				}
+			}
+
+			logNotice(ctx, heading)
+			var sb strings.Builder
+			console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, tableData, false) // Force ASCII borders
+			logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
+
+			logNotice(ctx, " ")
+			logNotice(ctx, "Migrating '"+console.FormatFilePath(path)+"' to '"+console.FormatFilePath(paths.GetConfigFilePath())+"'.")
+
+			// Apply to the actual merged config (defaults already unmarshalled above)
+			legacyPresent, _ = UnmarshalLegacyIni(data, &conf)
+			foundLegacy = true
+			break // STOP after the first successful migration source is processed
+		}
+	}
+
+	before := conf.Paths.ComposeFolder
+	ResolveComposeFolder(ctx, &conf, logNotice)
+	foundCompose = conf.Paths.ComposeFolder != before
+
+	if ThemeDefaultsOverlayHook != nil {
+		ThemeDefaultsOverlayHook(&conf, legacyPresent)
+	}
+
+	return conf, foundLegacy, foundCompose
+}
+
+// ShowAppConfig prints a summary table of the current configuration.
+func ShowAppConfig(ctx context.Context, conf *AppConfig) {
+	ShowAppConfigWithTitle(ctx, conf, "")
+}
+
+// ShowAppConfigWithTitle prints a summary table with a custom title.
+func ShowAppConfigWithTitle(ctx context.Context, conf *AppConfig, title string) {
+	ShowAppConfigWithTitleAndPresent(ctx, conf, title, nil)
+}
+
+// ShowAppConfigWithTitleAndPresent prints a summary table with a custom title, optionally filtering by present keys.
+func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, title string, presentKeys map[string]bool) {
+	headers := []string{
+		"{{|UsageCommand|}}Option{{[-]}}",
+		"{{|UsageCommand|}}Value{{[-]}}",
+		"{{|UsageCommand|}}Expanded Value{{[-]}}",
+	}
+
+	keys := []string{
+		"ConfigFolder", "ComposeFolder",
+		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
+		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview",
+		"SSHPort", "WebPort", "AuthMode",
+	}
+	displayNames := map[string]string{
+		"ConfigFolder":       "Config Folder",
+		"ComposeFolder":      "Compose Folder",
+		"Theme":              "Theme",
+		"Borders":            "Borders",
+		"LargeButtons":       "Large Buttons",
+		"LargeTitleBars":     "Large Title Bars",
+		"LineCharacters":     "Line Characters",
+		"Scrollbar":          "Scrollbar",
+		"Spinner":            "Spinner",
+		"SpinnerSpeed":       "Spinner Speed",
+		"Shadow":             "Shadow",
+		"ShadowLevel":        "Shadow Level",
+		"BorderColor":        "Border Color",
+		"DialogTitleAlign":   "Dialog Title Align",
+		"SubmenuTitleAlign":  "Submenu Title Align",
+		"PanelTitleAlign":    "Panel Title Align",
+		"PanelLocal":         "Panel Local",
+		"PanelRemote":        "Panel Remote",
+		"CheckboxBrackets":   "Checkbox Brackets",
+		"RadioBrackets":      "Radio Brackets",
+		"MenuBrackets":       "Menu Brackets",
+		"LineNumberBrackets": "Line Number Brackets",
+		"TabLayout":          "Tab Layout",
+		"ShowPreview":        "Show Preview",
+		"SSHPort":            "SSH Port",
+		"WebPort":            "Web Port",
+		"AuthMode":           "Auth Mode",
+	}
+
+	var data []string
+
+	boolToYesNo := func(val bool) string {
+		if val {
+			return "{{|Var|}}yes{{[-]}}"
+		}
+		return "{{|Var|}}no{{[-]}}"
+	}
+
+	for _, key := range keys {
+		// Filter out keys not present in the legacy file if presentKeys is provided
+		if presentKeys != nil && !presentKeys[key] {
+			continue
+		}
+
+		var value, expandedValue string
+		var useFolderColor bool
+
+		switch key {
+		case "ConfigFolder":
+			value = conf.RawPaths.ConfigFolder
+			expandedValue = conf.ConfigDir
+			useFolderColor = true
+		case "ComposeFolder":
+			value = conf.RawPaths.ComposeFolder
+			expandedValue = conf.ComposeDir
+			useFolderColor = true
+		case "Theme":
+			value = conf.UI.Theme
+		case "Borders":
+			value = boolToYesNo(conf.UI.Borders)
+		case "LargeButtons":
+			value = boolToYesNo(conf.UI.LargeButtons)
+		case "LargeTitleBars":
+			value = boolToYesNo(conf.UI.LargeTitleBars)
+		case "LineCharacters":
+			value = boolToYesNo(conf.UI.LineCharacters)
+		case "Scrollbar":
+			value = boolToYesNo(conf.UI.Scrollbar)
+		case "Spinner":
+			value = boolToYesNo(conf.UI.Spinner)
+		case "SpinnerSpeed":
+			value = fmt.Sprintf("{{|Var|}}%dms{{[-]}}", conf.UI.SpinnerSpeed)
+		case "Shadow":
+			value = boolToYesNo(conf.UI.Shadow)
+		case "ShadowLevel":
+			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.ShadowLevel)
+		case "BorderColor":
+			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.BorderColor)
+		case "DialogTitleAlign":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.DialogTitleAlign)
+		case "SubmenuTitleAlign":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.SubmenuTitleAlign)
+		case "PanelTitleAlign":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelTitleAlign)
+		case "PanelLocal":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelLocal)
+		case "PanelRemote":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelRemote)
+		case "CheckboxBrackets":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.CheckboxBrackets)
+		case "RadioBrackets":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.RadioBrackets)
+		case "MenuBrackets":
+			value = boolToYesNo(conf.UI.MenuBrackets)
+		case "LineNumberBrackets":
+			value = boolToYesNo(conf.UI.LineNumberBrackets)
+		case "TabLayout":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
+		case "ShowPreview":
+			value = boolToYesNo(conf.UI.ShowPreview)
+		case "SSHPort":
+			if conf.Server.SSH.Port > 0 {
+				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)
+			} else {
+				value = "{{|Var|}}not set{{[-]}}"
+			}
+		case "WebPort":
+			if conf.Server.Web.Port > 0 {
+				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.Web.Port)
+			} else {
+				value = "{{|Var|}}not set{{[-]}}"
+			}
+		case "AuthMode":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.Server.Auth.Mode)
+		}
+
+		data = append(data, displayNames[key])
+
+		switch {
+		case useFolderColor:
+			data = append(data, console.FormatFolderPath(value))
+		case key == "Theme":
+			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", value))
+		default:
+			data = append(data, value)
+		}
+
+		switch {
+		case expandedValue == "":
+			data = append(data, "")
+		case useFolderColor:
+			data = append(data, console.FormatFolderPath(expandedValue))
+		default:
+			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", expandedValue))
+		}
+	}
+
+	if title == "" {
+		title = "Configuration options stored in '" + console.FormatFilePath(paths.GetConfigFilePath()) + "':"
+	}
+
+	if val, ok := ctx.Value("migration_mode").(bool); ok && val {
+		logNotice(ctx, title)
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
+		logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
+	} else if w := console.GetTUIWriter(ctx); w != nil {
+		// Route through the caller's writer (e.g. the console panel's pipe)
+		// instead of stdout -- fmt.Println would write straight to the real
+		// terminal, bypassing the TUI's own screen compositing entirely.
+		fmt.Fprintln(w, semstyle.ToANSI(title))
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
+		fmt.Fprintln(w, semstyle.ToANSI(sb.String()))
+	} else {
+		fmt.Println(semstyle.ToANSI(title))
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
+		fmt.Println(semstyle.ToANSI(sb.String()))
+	}
+}
+
+// logNotice logs a notice message, splitting multi-line messages and logging each separately.
+// It uses slog.LevelInfo which is mapped to LevelNotice in the application logger.
+func logNotice(ctx context.Context, msg any, args ...any) {
+	msgStr := fmt.Sprint(msg)
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
+	} else if len(args) > 0 {
+		msgStr = fmt.Sprint(append([]any{msgStr}, args...)...)
+	}
+	lines := strings.Split(msgStr, "\n")
+	for _, line := range lines {
+		slog.Log(ctx, slog.LevelInfo, line)
+	}
+}

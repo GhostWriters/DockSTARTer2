@@ -1,0 +1,391 @@
+package appenv
+
+import (
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/envutil"
+	"DockSTARTer2/internal/paths"
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+
+	"go.yaml.in/yaml/v4"
+)
+
+// ListAddedApps returns a sorted list of all added applications (those with __ENABLED variables).
+func ListAddedApps(ctx context.Context, envFile string) ([]string, error) {
+	vars, err := ListVars(envFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var added []string
+	for key := range vars {
+		// key: APPNAME__ENABLED
+		if strings.HasSuffix(key, "__ENABLED") {
+			appName := strings.TrimSuffix(key, "__ENABLED")
+			if IsAppNameValid(appName) && IsAppBuiltIn(appName) {
+				added = append(added, appName)
+			}
+		}
+	}
+
+	slices.Sort(added)
+	return added, nil
+}
+
+// ListBuiltinApps returns a sorted list of all builtin applications.
+func ListBuiltinApps() ([]string, error) {
+	templatesDir := paths.GetTemplatesDir()
+	appsDir := filepath.Join(templatesDir, constants.TemplatesDirName)
+
+	entries, err := os.ReadDir(appsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var builtin []string
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			builtin = append(builtin, strings.ToUpper(entry.Name()))
+		}
+	}
+
+	slices.Sort(builtin)
+	return builtin, nil
+}
+
+// ListDeprecatedApps returns a sorted list of all deprecated applications.
+func ListDeprecatedApps(ctx context.Context) ([]string, error) {
+	builtin, err := ListBuiltinApps()
+	if err != nil {
+		return nil, err
+	}
+
+	var deprecated []string
+	for _, appName := range builtin {
+		if IsAppDeprecated(ctx, appName) {
+			deprecated = append(deprecated, appName)
+		}
+	}
+
+	slices.Sort(deprecated)
+	return deprecated, nil
+}
+
+// ListDisabledApps returns a sorted list of disabled applications.
+func ListDisabledApps(envFile string) ([]string, error) {
+	vars, err := ListVars(envFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var disabled []string
+	for key, val := range vars {
+		if strings.HasSuffix(key, "__ENABLED") && !IsTrue(val) {
+			appName := strings.TrimSuffix(key, "__ENABLED")
+			if IsAppNameValid(appName) && IsAppBuiltIn(appName) {
+				disabled = append(disabled, appName)
+			}
+		}
+	}
+
+	slices.Sort(disabled)
+	return disabled, nil
+}
+
+// ListNonDeprecatedApps returns all builtin applications that are NOT deprecated.
+func ListNonDeprecatedApps(ctx context.Context) ([]string, error) {
+	builtin, err := ListBuiltinApps()
+	if err != nil {
+		return nil, err
+	}
+
+	var nonDeprecated []string
+	for _, app := range builtin {
+		if !IsAppDeprecated(ctx, app) {
+			nonDeprecated = append(nonDeprecated, app)
+		}
+	}
+
+	slices.Sort(nonDeprecated)
+	return nonDeprecated, nil
+}
+
+// ListReferencedApps returns all applications mentioned in .env, app-specific envs, or override file.
+func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, error) {
+	referenced := make(map[string]bool)
+
+	// 1. Scan global .env for all app variables
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	vars, _ := ListVars(envFile)
+	for key := range vars {
+		if !IsGlobalVar(key) {
+			appName := VarNameToAppName(key)
+			if appName != "" {
+				referenced[strings.ToUpper(appName)] = true
+			}
+		}
+	}
+
+	// 2. Scan for app-specific env files with variables
+	entries, _ := os.ReadDir(conf.ComposeDir)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
+			appName := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
+			appUpper := strings.ToUpper(appName)
+			// Check if it has any variables
+			appSpecificVars, _ := ListAppVars(ctx, appUpper+":", conf)
+			if len(appSpecificVars) > 0 {
+				referenced[appUpper] = true
+			}
+		}
+	}
+
+	// 3. Scan override file
+	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+	if _, err := os.Stat(overrideFile); err == nil {
+		content, err := os.ReadFile(overrideFile)
+		if err == nil {
+			var override struct {
+				Services map[string]struct {
+					EnvFile interface{} `yaml:"env_file"`
+				} `yaml:"services"`
+			}
+			if err := yaml.Unmarshal(content, &override); err == nil {
+				for _, service := range override.Services {
+					checkEnvFile := func(v interface{}) {
+						switch val := v.(type) {
+						case string:
+							clean := strings.TrimPrefix(val, "./")
+							if strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
+								appName := strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix)
+								referenced[strings.ToUpper(appName)] = true
+							}
+						case []interface{}:
+							for _, item := range val {
+								if s, ok := item.(string); ok {
+									clean := strings.TrimPrefix(s, "./")
+									if strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
+										appName := strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix)
+										referenced[strings.ToUpper(appName)] = true
+									}
+								}
+							}
+						}
+					}
+					checkEnvFile(service.EnvFile)
+				}
+			}
+		}
+	}
+
+	var result []string
+	for app := range referenced {
+		// Validating names keeps results clean
+		if IsAppNameValid(app) {
+			result = append(result, app)
+		}
+	}
+	slices.Sort(result)
+	return result, nil
+}
+
+// ListEnabledApps returns a sorted list of enabled applications.
+func ListEnabledApps(conf config.AppConfig) ([]string, error) {
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	vars, err := ListVars(envFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var enabled []string
+	for key, val := range vars {
+		if strings.HasSuffix(key, "__ENABLED") && IsTrue(val) {
+			appName := strings.TrimSuffix(key, "__ENABLED")
+			if IsAppNameValid(appName) && IsAppBuiltIn(appName) {
+				enabled = append(enabled, appName)
+			}
+		}
+	}
+
+	slices.Sort(enabled)
+	return enabled, nil
+}
+
+// ListAppVars returns a list of variable names for the specified app.
+func ListAppVars(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+
+	// If appName ends with ":", use app-specific env file
+	if strings.HasSuffix(appName, ":") {
+		baseApp := strings.TrimSuffix(appName, ":")
+		targetFile := filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+strings.ToLower(baseApp))
+		varsMap, err := ListVars(targetFile)
+		if err != nil {
+			return nil, err
+		}
+		var result []string
+		for k := range varsMap {
+			result = append(result, k)
+		}
+		slices.Sort(result)
+		return result, nil
+	}
+
+	// Otherwise, use AppVarsLines to filter from global .env
+	content, err := os.ReadFile(envFile)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	appVarLines := AppVarsLines(strings.ToUpper(appName), lines)
+
+	var result []string
+	for _, line := range appVarLines {
+		// Extract variable name from line
+		idx := strings.Index(line, "=")
+		if idx > 0 {
+			varName := strings.TrimSpace(line[:idx])
+			result = append(result, varName)
+		}
+	}
+	slices.Sort(result)
+	return result, nil
+}
+
+// ListVars returns a map of all variable keys and values found in the file.
+func ListVars(file string) (map[string]string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]string), nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	return ListVarsFromReader(f)
+}
+
+// ListVarsData returns a map of all variable keys and values found in the data string.
+func ListVarsData(data string) (map[string]string, error) {
+	return ListVarsFromReader(strings.NewReader(data))
+}
+
+// ListVarsLiteralsData returns a map of all variable keys and literal values from the data string.
+func ListVarsLiteralsData(data string) (map[string]string, error) {
+	return ListVarsLiteralsFromReader(strings.NewReader(data))
+}
+
+// ListVarsFromReader returns a map of all variable keys and values (trimmed) from an io.Reader.
+func ListVarsFromReader(r io.Reader) (map[string]string, error) {
+	return listVars(r, true)
+}
+
+// ListVarsLiteralsFromReader returns a map of all variable keys and literal values (raw) from an io.Reader.
+func ListVarsLiteralsFromReader(r io.Reader) (map[string]string, error) {
+	return listVars(r, false)
+}
+
+func listVars(r io.Reader, trim bool) (map[string]string, error) {
+	vars := make(map[string]string)
+	re := regexp.MustCompile(`^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=(.*)`)
+
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		matches := re.FindStringSubmatch(line)
+		if matches != nil {
+			key := matches[1]
+			val := matches[2]
+			if trim {
+				val = strings.Trim(val, `"' `)
+			}
+			vars[key] = val
+		}
+	}
+	return vars, scanner.Err()
+}
+
+// AppVarsLines filters environment variable lines to only those belonging to the specified app.
+func AppVarsLines(appName string, lines []string) []string {
+	if appName == "" {
+		var globals []string
+		// Search for all variables not for an app
+		// Exclude empty lines and comments
+		reEmpty := regexp.MustCompile(`^\s*$`)
+		reComment := regexp.MustCompile(`^\s*#`)
+
+		for _, line := range lines {
+			if reEmpty.MatchString(line) || reComment.MatchString(line) {
+				continue
+			}
+
+			// Check if line contains a variable assignment
+			if idx := strings.Index(line, "="); idx > 0 {
+				varName := strings.TrimSpace(line[:idx])
+				if IsGlobalVar(varName) {
+					globals = append(globals, line)
+				}
+			}
+		}
+		return globals
+	}
+
+	// Search for all variables for app "appName"
+	// Match lines starting with appName__
+	pattern := fmt.Sprintf(`^\s*%s__([A-Za-z0-9_]+)\s*=`, regexp.QuoteMeta(appName))
+	re := regexp.MustCompile(pattern)
+
+	var appVars []string
+	for _, line := range lines {
+		matches := re.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			suffix := matches[1]
+			// Bash: APPNAME__(?![A-Za-z0-9]+__)\w+
+			// Use a regex that checks if the suffix starts with another instance-like segment
+			reNext := regexp.MustCompile(`^([A-Z0-9]+)__`)
+			if !reNext.MatchString(suffix) {
+				// No next segment, appName owns it
+				appVars = append(appVars, line)
+			}
+		}
+	}
+
+	return appVars
+}
+
+// ListAppVarLines returns a list of variable lines (KEY=VALUE) for the specified app.
+func ListAppVarLines(ctx context.Context, appName string, conf config.AppConfig) ([]string, error) {
+	appName = strings.ToUpper(appName)
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+
+	// If appName ends with ":", use app-specific env file
+	if strings.HasSuffix(appName, ":") {
+		baseApp := strings.TrimSuffix(appName, ":")
+		targetFile := filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+strings.ToLower(baseApp))
+		return envutil.ReadLines(targetFile)
+	}
+
+	// Otherwise, use AppVarsLines to filter from global .env
+	content, err := os.ReadFile(envFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	result := AppVarsLines(appName, lines)
+	slices.Sort(result)
+	return result, nil
+}

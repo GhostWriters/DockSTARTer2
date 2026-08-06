@@ -1,0 +1,340 @@
+package appenv
+
+import (
+	"testing"
+)
+
+func TestAppNameToBaseAppName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"RADARR", "RADARR"},
+		{"RADARR__4K", "RADARR"},
+		{"SONARR__ANIME", "SONARR"},
+	}
+
+	for _, test := range tests {
+		result := AppNameToBaseAppName(test.input)
+		if result != test.expected {
+			t.Errorf("AppNameToBaseAppName(%q) = %q; want %q", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestVarNameToAppName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// No double underscore
+		{"SONARR_CONTAINER_NAME", ""},
+		{"DOCKER_VOLUME_STORAGE", ""},
+
+		// Valid app variables
+		{"SONARR__CONTAINER_NAME", "SONARR"},
+		{"SONARR__4K__CONTAINER_NAME", "SONARR__4K"},
+		{"SONARR__4K__CONTAINER_NAME__TEST", "SONARR__4K"},
+		{"SONARR__4K__CONTAINER__NAME", "SONARR__4K"},
+
+		// Invalid patterns
+		{"SONARR_4K__CONTAINER__NAME", ""}, // Single underscore
+		{"4RADARR__ANIME__VAR", ""},        // Starts with number
+
+		// These extract successfully, but IsAppNameValid would reject them
+		{"RADARR__ENABLED__FOO", "RADARR__ENABLED"},
+		{"RADARR__TAG__VAR", "RADARR__TAG"},
+
+		// Colon-format (APPNAME:VARNAME) — used for .env.app.* vars
+		{"WATCHTOWER:WATCHTOWER_CLEANUP", "WATCHTOWER"},
+		{"SONARR:PORT_8989", "SONARR"},
+		{"PLEX__4K:PLEX_CLAIM", "PLEX__4K"},
+	}
+
+	for _, test := range tests {
+		result := VarNameToAppName(test.input)
+		if result != test.expected {
+			t.Errorf("VarNameToAppName(%q) = %q; want %q", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestAppNameToInstanceName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"RADARR", ""},
+		{"RADARR__4K", "4K"},
+		{"RADARR__4K__EXTRA", "4K__EXTRA"}, // Everything after first __
+		{"SONARR__ANIME", "ANIME"},
+	}
+
+	for _, test := range tests {
+		result := AppNameToInstanceName(test.input)
+		if result != test.expected {
+			t.Errorf("AppNameToInstanceName(%q) = %q; want %q", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestIsAppNameValid(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		// Valid app names (case-insensitive)
+		{"SONARR", true},
+		{"Sonarr", true},
+		{"RADARR__4K", true},
+		{"RADARR__ANIME", true},
+		{"SONARR_4K", false}, // Single underscore
+		{"SONARR 4K", false}, // Space
+		{"4SONARR", false},   // Starts with number
+
+		// Invalid instance names (reserved)
+		{"RADARR__ENABLED", false},
+		{"RADARR__TAG", false},
+		{"RADARR__CONTAINER", false},
+		{"RADARR__HOSTNAME", false},
+
+		// Colon handling (Bash compatibility)
+		{"SONARR:", true},
+		{":SONARR", true},
+	}
+
+	for _, test := range tests {
+		result := IsAppNameValid(test.input)
+		if result != test.expected {
+			t.Errorf("IsAppNameValid(%q) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestInstanceNameIsValid(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		// Valid instances
+		{"4K", true},
+		{"ANIME", true},
+		{"TEST", true},
+
+		// Invalid instances (reserved)
+		{"ENABLED", false},
+		{"TAG", false},
+		{"CONTAINER", false},
+		{"DEVICE", false},
+		{"DEVICES", false},
+		{"ENVIRONMENT", false},
+		{"HOSTNAME", false},
+		{"PORT", false},
+		{"NETWORK", false},
+		{"RESTART", false},
+		{"STORAGE", false},
+		{"STORAGE2", false},
+		{"STORAGE3", false},
+		{"STORAGE4", false},
+		{"TAG", false},
+
+		// Case insensitive
+		{"enabled", false},
+		{"tag", false},
+	}
+
+	for _, test := range tests {
+		result := InstanceNameIsValid(test.input)
+		if result != test.expected {
+			t.Errorf("InstanceNameIsValid(%q) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestIsGlobalVar(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		// Global variables (no __ or only one segment)
+		{"PUID", true},
+		{"PGID", true},
+		{"TZ", true},
+		{"DOCKER_VOLUME_STORAGE", true},
+		{"HOME", true},
+
+		// App variables (have __ with segments)
+		{"RADARR__ENABLED", false},
+		{"RADARR__PORT_7878", false},
+		{"RADARR__4K__ENABLED", false},
+		{"SONARR__CONTAINER_NAME", false},
+	}
+
+	for _, test := range tests {
+		result := IsGlobalVar(test.input)
+		if result != test.expected {
+			t.Errorf("IsGlobalVar(%q) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestAppVarsLines(t *testing.T) {
+	lines := []string{
+		"PUID='1000'",
+		"PGID='1000'",
+		"TZ='UTC'",
+		"RADARR__ENABLED='true'",
+		"RADARR__PORT_7878='7878'",
+		"RADARR__CONTAINER_NAME='radarr'",
+		"RADARR__4K__ENABLED='true'",
+		"RADARR__4K__PORT_7878='7879'",
+		"RADARR__4K__CONTAINER_NAME='radarr__4k'",
+		"SONARR__ENABLED='true'",
+		"# Comment line",
+		"",
+	}
+
+	globals := AppVarsLines("", lines)
+	expectedGlobals := []string{
+		"PUID='1000'",
+		"PGID='1000'",
+		"TZ='UTC'",
+	}
+	if len(globals) != len(expectedGlobals) {
+		t.Errorf("AppVarsLines(\"\") returned %d variables, want %d", len(globals), len(expectedGlobals))
+	}
+	for i, expected := range expectedGlobals {
+		if i >= len(globals) || globals[i] != expected {
+			t.Errorf("AppVarsLines(\"\")[%d] = %q; want %q", i, globals[i], expected)
+		}
+	}
+
+	radarrVars := AppVarsLines("RADARR", lines)
+	expectedRadarr := []string{
+		"RADARR__ENABLED='true'",
+		"RADARR__PORT_7878='7878'",
+		"RADARR__CONTAINER_NAME='radarr'",
+	}
+	if len(radarrVars) != len(expectedRadarr) {
+		t.Errorf("AppVarsLines(\"RADARR\") returned %d variables, want %d", len(radarrVars), len(expectedRadarr))
+		t.Logf("Got: %v", radarrVars)
+	}
+	for i, expected := range expectedRadarr {
+		if i >= len(radarrVars) || radarrVars[i] != expected {
+			t.Errorf("AppVarsLines(\"RADARR\")[%d] = %q; want %q", i, radarrVars[i], expected)
+		}
+	}
+
+	radarr4kVars := AppVarsLines("RADARR__4K", lines)
+	expectedRadarr4k := []string{
+		"RADARR__4K__ENABLED='true'",
+		"RADARR__4K__PORT_7878='7879'",
+		"RADARR__4K__CONTAINER_NAME='radarr__4k'",
+	}
+	if len(radarr4kVars) != len(expectedRadarr4k) {
+		t.Errorf("AppVarsLines(\"RADARR__4K\") returned %d variables, want %d", len(radarr4kVars), len(expectedRadarr4k))
+		t.Logf("Got: %v", radarr4kVars)
+	}
+	for i, expected := range expectedRadarr4k {
+		if i >= len(radarr4kVars) || radarr4kVars[i] != expected {
+			t.Errorf("AppVarsLines(\"RADARR__4K\")[%d] = %q; want %q", i, radarr4kVars[i], expected)
+		}
+	}
+
+	sonarrVars := AppVarsLines("SONARR", lines)
+	if len(sonarrVars) != 1 {
+		t.Errorf("AppVarsLines(\"SONARR\") returned %d variables, want 1", len(sonarrVars))
+	}
+}
+
+// TestVarNameIsValid mirrors test_varname_is_valid in varname_is_valid.sh.
+// VarTypes: "", _BARE_, _GLOBAL_, _APPNAME_, _APPNAME_:, <appname>:, <appname>
+func TestVarNameIsValid(t *testing.T) {
+	tests := []struct {
+		varName  string
+		varType  string
+		expected bool
+	}{
+		// VarType="" — accepts any valid variable
+		{"TZ", "", true},
+		{"RADARR__TEST", "", true},
+		{"RADARR_4K", "", true},
+		{"RADARR__TAG", "", true},
+		{"Radarr__TAG", "", true},
+		{"RADARR__4K__TAG", "", true},
+		{"RADARR__4K__tag", "", true},
+		{"RADARR:varname", "", true}, // colon-format
+		{"2TZ", "", false},
+		{"2radarr:radarr", "", false},
+		{"radarr:varname", "", true}, // case-insensitive appname
+
+		// VarType="_BARE_" — any valid identifier (letters, digits, underscore)
+		{"TZ", "_BARE_", true},
+		{"RADARR__TEST", "_BARE_", true},
+		{"RADARR_4K", "_BARE_", true},
+		{"RADARR__TAG", "_BARE_", true},
+		{"Radarr__TAG", "_BARE_", true},
+		{"RADARR__4K__TAG", "_BARE_", true},
+		{"RADARR__4K__tag", "_BARE_", true},
+		{"2TZ", "_BARE_", false},
+		{"2radarr:radarr", "_BARE_", false},
+		{"radarr:varname", "_BARE_", false},
+
+		// VarType="_GLOBAL_" — bare identifier that is not an app var
+		{"TZ", "_GLOBAL_", true},
+		{"RADARR_4K", "_GLOBAL_", true},
+		{"Radarr__TAG", "_GLOBAL_", true}, // mixed case → VarNameToAppName=""
+		{"RADARR__TEST", "_GLOBAL_", false},
+		{"RADARR__TAG", "_GLOBAL_", false},
+		{"RADARR__4K__TAG", "_GLOBAL_", false},
+		{"RADARR__4K__tag", "_GLOBAL_", false},
+		{"2TZ", "_GLOBAL_", false},
+		{"radarr:varname", "_GLOBAL_", false},
+
+		// VarType="_APPNAME_" — bare identifier that is an app var
+		{"RADARR__TEST", "_APPNAME_", true},
+		{"RADARR__TAG", "_APPNAME_", true},
+		{"RADARR__4K__TAG", "_APPNAME_", true},
+		{"RADARR__4K__tag", "_APPNAME_", true},
+		{"TZ", "_APPNAME_", false},
+		{"RADARR_4K", "_APPNAME_", false},
+		{"Radarr__TAG", "_APPNAME_", false}, // VarNameToAppName=""
+		{"2TZ", "_APPNAME_", false},
+		{"radarr:varname", "_APPNAME_", false},
+
+		// VarType="_APPNAME_:" — colon-format with any valid app name
+		{"RADARR:varname", "_APPNAME_:", true},
+		{"RADARR__4K:varname", "_APPNAME_:", true},
+		{"radarr:varname", "_APPNAME_:", true}, // case-insensitive appname
+		{"2radarr:radarr", "_APPNAME_:", false},
+		{"RADARR:2var", "_APPNAME_:", false}, // var starts with digit
+		{"TZ", "_APPNAME_:", false},
+		{"RADARR__TEST", "_APPNAME_:", false},
+
+		// VarType="radarr:" — colon-format for specific app (case-insensitive)
+		{"radarr:varname", "radarr:", true},
+		{"RADARR:varname", "radarr:", true},
+		{"SONARR:varname", "radarr:", false},
+		{"2radarr:radarr", "radarr:", false},
+		{"radarr:2var", "radarr:", false},
+		{"TZ", "radarr:", false},
+		{"RADARR__TEST", "radarr:", false},
+
+		// VarType="radarr" — double-underscore var for specific app (case-insensitive)
+		{"RADARR__TEST", "radarr", true},
+		{"RADARR__TAG", "radarr", true},
+		{"RADARR__4K__TAG", "radarr", false}, // appname is RADARR__4K, not RADARR
+		{"SONARR__TEST", "radarr", false},
+		{"TZ", "radarr", false},
+		{"radarr:varname", "radarr", false}, // Matching Bash behavior: APPNAME (no colon) requires __ prefix
+		{"radarr:varname", "radarr:", true}, // Matching Bash behavior: APPNAME: (with colon) requires : separator
+		{"Radarr__TAG", "radarr", false},    // VarNameToAppName=""
+	}
+
+	for _, test := range tests {
+		result := VarNameIsValid(test.varName, test.varType)
+		if result != test.expected {
+			t.Errorf("VarNameIsValid(%q, %q) = %v; want %v", test.varName, test.varType, result, test.expected)
+		}
+	}
+}

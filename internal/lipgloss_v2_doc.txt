@@ -1,0 +1,1665 @@
+package lipgloss // import "charm.land/lipgloss/v2"
+
+Package lipgloss provides style definitions for nice terminal layouts. Built
+with TUIs in mind.
+
+CONSTANTS
+
+const (
+	Black ansi.BasicColor = iota
+	Red
+	Green
+	Yellow
+	Blue
+	Magenta
+	Cyan
+	White
+
+	BrightBlack
+	BrightRed
+	BrightGreen
+	BrightYellow
+	BrightBlue
+	BrightMagenta
+	BrightCyan
+	BrightWhite
+)
+    4-bit color constants.
+
+const (
+	// NBSP is the non-breaking space rune.
+	NBSP = '\u00A0'
+)
+const (
+	// UnderlineNone is no underline.
+	UnderlineNone = ansi.UnderlineNone
+	// UnderlineSingle is a single underline. This is the default when underline is enabled.
+	UnderlineSingle = ansi.UnderlineSingle
+	// UnderlineDouble is a double underline.
+	UnderlineDouble = ansi.UnderlineDouble
+	// UnderlineCurly is a curly underline.
+	UnderlineCurly = ansi.UnderlineCurly
+	// UnderlineDotted is a dotted underline.
+	UnderlineDotted = ansi.UnderlineDotted
+	// UnderlineDashed is a dashed underline.
+	UnderlineDashed = ansi.UnderlineDashed
+)
+const NoTabConversion = -1
+    NoTabConversion can be passed to Style.TabWidth to disable the replacement
+    of tabs with spaces at render time.
+
+
+VARIABLES
+
+var Writer = colorprofile.NewWriter(os.Stdout, os.Environ())
+    Writer is the default writer that prints to stdout, automatically
+    downsampling colors when necessary.
+
+
+FUNCTIONS
+
+func Alpha(c color.Color, alpha float64) color.Color
+    Alpha adjusts the alpha value of a color using a 0-1 (clamped) float scale 0
+    = transparent, 1 = opaque.
+
+func BackgroundColor(in term.File, out term.File) (bg color.Color, err error)
+    BackgroundColor queries the terminal's background color. Typically, you'll
+    want to query against stdin and either stdout or stderr, depending on what
+    you're writing to.
+
+    This function is intended for standalone Lip Gloss use only. If you're using
+    Bubble Tea, listen for tea.BackgroundColorMsg in your update function.
+
+func Blend1D(steps int, stops ...color.Color) []color.Color
+    Blend1D blends a series of colors together in one linear dimension using
+    multiple stops, into the provided number of steps. Uses the "CIE L*, a*,
+    b*" (CIELAB) color-space.
+
+    Note that if any of the provided colors are completely transparent,
+    we will assume that the alpha value was lost in conversion from RGB -> RGBA,
+    and we will set the alpha to opaque, as it's not possible to blend something
+    completely transparent.
+
+func Blend2D(width, height int, angle float64, stops ...color.Color) []color.Color
+    Blend2D blends a series of colors together in two linear dimensions using
+    multiple stops, into the provided width/height. Uses the "CIE L*, a*,
+    b*" (CIELAB) color-space. The angle parameter controls the rotation of
+    the gradient (0-360°), where 0° is left-to-right, 45° is bottom-left to
+    top-right (diagonal). The function returns colors in a 1D row-major order
+    ([row1, row2, row3, ...]).
+
+    Example of how to iterate over the result:
+
+        gradient := colors.Blend2D(width, height, 180, color1, color2, color3, ...)
+        gradientContent := strings.Builder{}
+        for y := range height {
+        	for x := range width {
+        		index := y*width + x
+        		gradientContent.WriteString(
+        			lipgloss.NewStyle().
+        				Background(gradient[index]).
+        				Render(" "),
+        		)
+        	}
+        	if y < height-1 { // End of row.
+        		gradientContent.WriteString("\n")
+        	}
+        }
+
+    Note that if any of the provided colors are completely transparent,
+    we will assume that the alpha value was lost in conversion from RGB -> RGBA,
+    and we will set the alpha to opaque, as it's not possible to blend something
+    completely transparent.
+
+func Color(s string) color.Color
+    Color specifies a color by hex or ANSI256 value. For example:
+
+        ansiColor := lipgloss.Color("1") // The same as lipgloss.Red
+        ansi256Color := lipgloss.Color("21")
+        hexColor := lipgloss.Color("#0000ff")
+
+func Complementary(c color.Color) color.Color
+    Complementary returns the complementary color (180° away on color wheel) of
+    the given color. This is useful for creating a contrasting color.
+
+func Darken(c color.Color, percent float64) color.Color
+    Darken takes a color and makes it darker by a specific percentage (0-1,
+    clamped).
+
+func EnableLegacyWindowsANSI(f *os.File)
+    EnableLegacyWindowsANSI enables support for ANSI color sequences in the
+    Windows default console (cmd.exe and the PowerShell application). Note that
+    this only works with Windows 10 and greater. Also note that Windows Terminal
+    supports colors by default.
+
+func Fprint(w io.Writer, v ...any) (int, error)
+    Fprint pritnts to the given writer, automatically downsampling colors when
+    necessary.
+
+    Example:
+
+        str := NewStyle().
+            Foreground(lipgloss.Color("#6a00ff")).
+            Render("guzzle")
+
+        Fprint(os.Stderr, "I %s horchata pretty much all the time.\n", str)
+
+func Fprintf(w io.Writer, format string, v ...any) (int, error)
+    Fprintf prints text to a writer, against the given format, automatically
+    downsampling colors when necessary.
+
+    Example:
+
+        str := NewStyle().
+            Foreground(lipgloss.Color("#6a00ff")).
+            Render("artichokes")
+
+        Fprintf(os.Stderr, "I really love %s!\n", food)
+
+func Fprintln(w io.Writer, v ...any) (int, error)
+    Fprintln prints to the given writer, automatically downsampling colors when
+    necessary, and ending with a trailing newline.
+
+    Example:
+
+        str := NewStyle().
+            Foreground(lipgloss.Color("#6a00ff")).
+            Render("Sandwich time!")
+
+        Fprintln(os.Stderr, str)
+
+func HasDarkBackground(in term.File, out term.File) bool
+    HasDarkBackground detects whether the terminal has a light or dark
+    background.
+
+    Typically, you'll want to query against stdin and either stdout or stderr
+    depending on what you're writing to.
+
+        hasDarkBG := HasDarkBackground(os.Stdin, os.Stdout)
+        lightDark := LightDark(hasDarkBG)
+        myHotColor := lightDark("#ff0000", "#0000ff")
+
+    This is intended for use in standalone Lip Gloss only. In Bubble Tea,
+    listen for tea.BackgroundColorMsg in your Update function.
+
+        case tea.BackgroundColorMsg:
+            hasDarkBackground = msg.IsDark()
+
+    By default, this function will return true if it encounters an error.
+
+func Height(str string) int
+    Height returns height of a string in cells. This is done simply by counting
+    \n characters. If your output has \r\n, that sequence will be replaced with
+    a \n in Style.Render.
+
+func JoinHorizontal(pos Position, strs ...string) string
+    JoinHorizontal is a utility function for horizontally joining two
+    potentially multi-lined strings along a vertical axis. The first argument is
+    the position, with 0 being all the way at the top and 1 being all the way at
+    the bottom.
+
+    If you just want to align to the top, center or bottom you may as well just
+    use the helper constants Top, Center, and Bottom.
+
+    Example:
+
+        blockB := "...\n...\n..."
+        blockA := "...\n...\n...\n...\n..."
+
+        // Join 20% from the top
+        str := lipgloss.JoinHorizontal(0.2, blockA, blockB)
+
+        // Join on the top edge
+        str := lipgloss.JoinHorizontal(lipgloss.Top, blockA, blockB)
+
+func JoinVertical(pos Position, strs ...string) string
+    JoinVertical is a utility function for vertically joining two potentially
+    multi-lined strings along a horizontal axis. The first argument is the
+    position, with 0 being all the way to the left and 1 being all the way to
+    the right.
+
+    If you just want to align to the left, right or center you may as well just
+    use the helper constants Left, Center, and Right.
+
+    Example:
+
+        blockB := "...\n...\n..."
+        blockA := "...\n...\n...\n...\n..."
+
+        // Join 20% from the top
+        str := lipgloss.JoinVertical(0.2, blockA, blockB)
+
+        // Join on the right edge
+        str := lipgloss.JoinVertical(lipgloss.Right, blockA, blockB)
+
+func Lighten(c color.Color, percent float64) color.Color
+    Lighten makes a color lighter by a specific percentage (0-1, clamped).
+
+func Place(width, height int, hPos, vPos Position, str string, opts ...WhitespaceOption) string
+    Place places a string or text block vertically in an unstyled box of a given
+    width or height.
+
+func PlaceHorizontal(width int, pos Position, str string, opts ...WhitespaceOption) string
+    PlaceHorizontal places a string or text block horizontally in an unstyled
+    block of a given width. If the given width is shorter than the max width of
+    the string (measured by its longest line) this will be a noop.
+
+func PlaceVertical(height int, pos Position, str string, opts ...WhitespaceOption) string
+    PlaceVertical places a string or text block vertically in an unstyled block
+    of a given height. If the given height is shorter than the height of the
+    string (measured by its newlines) then this will be a noop.
+
+func Print(v ...any) (int, error)
+    Print to stdout, automatically downsampling colors when necessary.
+
+    Example:
+
+        str := NewStyle().
+            Foreground(lipgloss.Color("#6a00ff")).
+            Render("Who wants marmalade?\n")
+
+        Print(str)
+
+func Printf(format string, v ...any) (int, error)
+    Printf prints formatted text to stdout, automatically downsampling colors
+    when necessary.
+
+    Example:
+
+        str := NewStyle().
+          Foreground(lipgloss.Color("#6a00ff")).
+          Render("knuckle")
+
+        Printf("Time for a %s sandwich!\n", str)
+
+func Println(v ...any) (int, error)
+    Println to stdout, automatically downsampling colors when necessary,
+    ending with a trailing newline.
+
+    Example:
+
+        str := NewStyle().
+            Foreground(lipgloss.Color("#6a00ff")).
+            Render("breakfast")
+
+        Println("Time for a", str, "sandwich!")
+
+func Size(str string) (width, height int)
+    Size returns the width and height of the string in cells. ANSI sequences are
+    ignored and characters wider than one cell (such as Chinese characters and
+    emojis) are appropriately measured.
+
+func Sprint(v ...any) string
+    Sprint returns a string for stdout, automatically downsampling colors when
+    necessary.
+
+    Example:
+
+        str := NewStyle().
+        	Faint(true).
+            Foreground(lipgloss.Color("#6a00ff")).
+            Render("I love to eat")
+
+        str = Sprint(str)
+
+func Sprintf(format string, v ...any) string
+    Sprintf returns a formatted string for stdout, automatically downsampling
+    colors when necessary.
+
+    Example:
+
+        str := NewStyle().
+        	Bold(true).
+        	Foreground(lipgloss.Color("#fccaee")).
+        	Render("Cantaloupe")
+
+        str = Sprintf("I really love %s!", str)
+
+func Sprintln(v ...any) string
+    Sprintln returns a string for stdout, automatically downsampling colors when
+    necessary, and ending with a trailing newline.
+
+    Example:
+
+        str := NewStyle().
+        	Bold(true).
+        	Foreground(lipgloss.Color("#6a00ff")).
+        	Render("Yummy!")
+
+        str = Sprintln(str)
+
+func StyleRanges(s string, ranges ...Range) string
+    StyleRanges applying styling to ranges in a string. Existing styles will be
+    taken into account. Ranges should not overlap.
+
+func StyleRunes(str string, indices []int, matched, unmatched Style) string
+    StyleRunes apply a given style to runes at the given indices in the string.
+    Note that you must provide styling options for both matched and unmatched
+    runes. Indices out of bounds will be ignored.
+
+func Width(str string) (width int)
+    Width returns the cell width of characters in the string. ANSI sequences are
+    ignored and characters wider than one cell (such as Chinese characters and
+    emojis) are appropriately measured.
+
+    You should use this instead of len(string) or len([]rune(string) as neither
+    will give you accurate results.
+
+func Wrap(s string, width int, breakpoints string) string
+    Wrap wraps the given string to the given width, preserving ANSI styles and
+    links.
+
+
+TYPES
+
+type ANSIColor = ansi.IndexedColor
+    ANSIColor is a color specified by an ANSI256 color value.
+
+    Example usage:
+
+        colorA := lipgloss.ANSIColor(8)
+        colorB := lipgloss.ANSIColor(134)
+
+type Border struct {
+	Top          string
+	Bottom       string
+	Left         string
+	Right        string
+	TopLeft      string
+	TopRight     string
+	BottomLeft   string
+	BottomRight  string
+	MiddleLeft   string
+	MiddleRight  string
+	Middle       string
+	MiddleTop    string
+	MiddleBottom string
+}
+    Border contains a series of values which comprise the various parts of a
+    border.
+
+func ASCIIBorder() Border
+    ASCIIBorder returns a table border with ASCII characters.
+
+func BlockBorder() Border
+    BlockBorder returns a border that takes the whole block.
+
+func DoubleBorder() Border
+    DoubleBorder returns a border comprised of two thin strokes.
+
+func HiddenBorder() Border
+    HiddenBorder returns a border that renders as a series of single-cell
+    spaces. It's useful for cases when you want to remove a standard border but
+    maintain layout positioning. This said, you can still apply a background
+    color to a hidden border.
+
+func InnerHalfBlockBorder() Border
+    InnerHalfBlockBorder returns a half-block border that sits inside the frame.
+
+func MarkdownBorder() Border
+    MarkdownBorder return a table border in markdown style.
+
+    Make sure to disable top and bottom border for the best result. This will
+    ensure that the output is valid markdown.
+
+        table.New().Border(lipgloss.MarkdownBorder()).BorderTop(false).BorderBottom(false)
+
+func NormalBorder() Border
+    NormalBorder returns a standard-type border with a normal weight and 90
+    degree corners.
+
+func OuterHalfBlockBorder() Border
+    OuterHalfBlockBorder returns a half-block border that sits outside the
+    frame.
+
+func RoundedBorder() Border
+    RoundedBorder returns a border with rounded corners.
+
+func ThickBorder() Border
+    ThickBorder returns a border that's thicker than the one returned by
+    NormalBorder.
+
+func (b Border) GetBottomSize() int
+    GetBottomSize returns the width of the bottom border. If borders contain
+    runes of varying widths, the widest rune is returned. If no border exists on
+    the bottom edge, 0 is returned.
+
+func (b Border) GetLeftSize() int
+    GetLeftSize returns the width of the left border. If borders contain runes
+    of varying widths, the widest rune is returned. If no border exists on the
+    left edge, 0 is returned.
+
+func (b Border) GetRightSize() int
+    GetRightSize returns the width of the right border. If borders contain runes
+    of varying widths, the widest rune is returned. If no border exists on the
+    right edge, 0 is returned.
+
+func (b Border) GetTopSize() int
+    GetTopSize returns the width of the top border. If borders contain runes of
+    varying widths, the widest rune is returned. If no border exists on the top
+    edge, 0 is returned.
+
+type Canvas struct {
+	// Has unexported fields.
+}
+    Canvas is a cell-buffer that can be used to compose and draw [uv.Drawable]s
+    like [Layer]s.
+
+    Composed drawables are drawn onto the canvas in the order they were
+    composed, meaning later drawables will appear "on top" of earlier ones.
+
+    A canvas can read, modify, and render its cell contents.
+
+    It implements uv.Screen and uv.Drawable.
+
+func NewCanvas(width, height int) *Canvas
+    NewCanvas creates a new Canvas with the given size.
+
+func (c *Canvas) Bounds() uv.Rectangle
+    Bounds implements uv.Screen.
+
+func (c *Canvas) CellAt(x int, y int) *uv.Cell
+    CellAt implements uv.Screen.
+
+func (c *Canvas) Clear()
+    Clear clears the canvas.
+
+func (c *Canvas) Compose(drawer uv.Drawable) *Canvas
+    Compose composes a Layer or any uv.Drawable onto the Canvas.
+
+func (c *Canvas) Draw(scr uv.Screen, area uv.Rectangle)
+    Draw draws the Canvas onto the given uv.Screen within the specified area.
+
+    It implements uv.Drawable.
+
+func (c *Canvas) Height() int
+    Height returns the height of the canvas.
+
+func (c *Canvas) Render() string
+    Render renders the canvas into a styled string.
+
+func (c *Canvas) Resize(width, height int)
+    Resize resizes the canvas to the given width and height.
+
+func (c *Canvas) SetCell(x int, y int, cell *uv.Cell)
+    SetCell implements uv.Screen.
+
+func (c *Canvas) Width() int
+    Width returns the width of the canvas.
+
+func (c *Canvas) WidthMethod() uv.WidthMethod
+    WidthMethod implements uv.Screen.
+
+type CompleteFunc func(ansi, ansi256, truecolor color.Color) color.Color
+    CompleteFunc is a function that returns the appropriate color based on the
+    given color profile.
+
+    Example usage:
+
+        p := colorprofile.Detect(os.Stderr, os.Environ())
+        complete := lipgloss.Complete(p)
+        color := complete(
+        	lipgloss.Color(1), // ANSI
+        	lipgloss.Color(124), // ANSI256
+        	lipgloss.Color("#ff34ac"), // TrueColor
+        )
+        fmt.Println("Ooh, pretty color: ", color)
+
+    For more info see Complete.
+
+func Complete(p colorprofile.Profile) CompleteFunc
+    Complete returns a function that will return the appropriate color based on
+    the given color profile.
+
+    Example usage:
+
+        p := colorprofile.Detect(os.Stderr, os.Environ())
+        complete := lipgloss.Complete(p)
+        color := complete(
+            lipgloss.Color(1), // ANSI
+            lipgloss.Color(124), // ANSI256
+            lipgloss.Color("#ff34ac"), // TrueColor
+        )
+        fmt.Println("Ooh, pretty color: ", color)
+
+type Compositor struct {
+	// Has unexported fields.
+}
+    Compositor manages the composition of layers. It flattens a layer
+    hierarchy once and provides efficient drawing and hit testing operations.
+    All computation related to layers happens in the Compositor.
+
+func NewCompositor(layers ...*Layer) *Compositor
+    NewCompositor creates a new Compositor with an internal root layer.
+    Optional layers can be provided which will be added as children of the root.
+    The layer hierarchy is flattened and sorted by z-index for efficient
+    rendering and hit testing.
+
+func (c *Compositor) AddLayers(layers ...*Layer) *Compositor
+    AddLayers adds layers to the compositor's root and refreshes the internal
+    state.
+
+func (c *Compositor) Bounds() image.Rectangle
+    Bounds returns the overall bounds of all layers in the compositor.
+
+func (c *Compositor) Draw(scr uv.Screen, area image.Rectangle)
+    Draw draws all layers onto the given uv.Screen in z-index order.
+
+func (c *Compositor) GetLayer(id string) *Layer
+    GetLayer returns a layer by its ID, or nil if not found. Layers with empty
+    IDs are not indexed and cannot be retrieved.
+
+func (c *Compositor) Hit(x, y int) LayerHit
+    Hit performs a hit test at the given (x, y) coordinates. If a layer is hit,
+    it returns the ID of the top-most layer at that point. Layers with empty IDs
+    are ignored. If no layer is hit, it returns an empty LayerHit.
+
+func (c *Compositor) Refresh()
+    Refresh re-flattens the layer hierarchy. Call this after modifying the layer
+    tree structure or positions to update the compositor's internal state.
+
+func (c *Compositor) Render() string
+    Render renders the compositor into a styled string. This is a helper
+    function that creates a temporary canvas, draws the compositor onto it,
+    and returns the resulting string.
+
+type Layer struct {
+	// Has unexported fields.
+}
+    Layer represents a visual layer with content and positioning. It's a pure
+    data structure that defines the layer hierarchy without any computation.
+
+func NewLayer(content string, layers ...*Layer) *Layer
+    NewLayer creates a new Layer with the given content and optional child
+    layers.
+
+func (l *Layer) AddLayers(layers ...*Layer) *Layer
+    AddLayers adds child layers to the Layer.
+
+func (l *Layer) Draw(scr uv.Screen, area uv.Rectangle)
+    Draw draws the content of the layer on the screen at the specified area.
+
+func (l *Layer) GetContent() string
+    GetContent returns the content of the Layer.
+
+func (l *Layer) GetID() string
+    GetID returns the ID of the Layer.
+
+func (l *Layer) GetLayer(id string) *Layer
+    GetLayer returns a descendant layer by its ID, or nil if not found. Layers
+    with empty IDs are skipped.
+
+func (l *Layer) GetX() int
+    GetX returns the x-coordinate of the Layer relative to its parent.
+
+func (l *Layer) GetY() int
+    GetY returns the y-coordinate of the Layer relative to its parent.
+
+func (l *Layer) GetZ() int
+    GetZ returns the z-index of the Layer relative to its parent.
+
+func (l *Layer) Height() int
+    Height returns the height of the Layer.
+
+func (l *Layer) ID(id string) *Layer
+    ID sets the ID of the Layer.
+
+func (l *Layer) MaxZ() int
+    MaxZ returns the maximum z-index among this layer and all its descendants.
+
+func (l *Layer) Width() int
+    Width returns the width of the Layer.
+
+func (l *Layer) X(x int) *Layer
+    X sets the x-coordinate of the Layer relative to its parent.
+
+func (l *Layer) Y(y int) *Layer
+    Y sets the y-coordinate of the Layer relative to its parent.
+
+func (l *Layer) Z(z int) *Layer
+    Z sets the z-index of the Layer relative to its parent.
+
+type LayerHit struct {
+	// Has unexported fields.
+}
+    LayerHit represents the result of a hit test on a Layer.
+
+func (lh LayerHit) Bounds() image.Rectangle
+    Bounds returns the bounds of the LayerHit.
+
+func (lh LayerHit) Empty() bool
+    Empty returns true if the LayerHit represents no hit.
+
+func (lh LayerHit) ID() string
+    ID returns the ID of the hit Layer.
+
+func (lh LayerHit) Layer() *Layer
+    Layer returns the layer that was hit.
+
+type LightDarkFunc func(light, dark color.Color) color.Color
+    LightDarkFunc is a function that returns a color based on whether the
+    terminal has a light or dark background. You can create one of these with
+    LightDark.
+
+    Example:
+
+        lightDark := lipgloss.LightDark(hasDarkBackground)
+        red, blue := lipgloss.Color("#ff0000"), lipgloss.Color("#0000ff")
+        myHotColor := lightDark(red, blue)
+
+    For more info see LightDark.
+
+func LightDark(isDark bool) LightDarkFunc
+    LightDark is a simple helper type that can be used to choose the appropriate
+    color based on whether the terminal has a light or dark background.
+
+        lightDark := lipgloss.LightDark(hasDarkBackground)
+        red, blue := lipgloss.Color("#ff0000"), lipgloss.Color("#0000ff")
+        myHotColor := lightDark(red, blue)
+
+    In practice, there are slightly different workflows between Bubble Tea and
+    Lip Gloss standalone.
+
+    In Bubble Tea, listen for tea.BackgroundColorMsg, which automatically
+    flows through Update on start. This message will be received whenever the
+    background color changes:
+
+        case tea.BackgroundColorMsg:
+            m.hasDarkBackground = msg.IsDark()
+
+    Later, when you're rendering use:
+
+        lightDark := lipgloss.LightDark(m.hasDarkBackground)
+        red, blue := lipgloss.Color("#ff0000"), lipgloss.Color("#0000ff")
+        myHotColor := lightDark(red, blue)
+
+    In standalone Lip Gloss, the workflow is simpler:
+
+        hasDarkBG := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+        lightDark := lipgloss.LightDark(hasDarkBG)
+        red, blue := lipgloss.Color("#ff0000"), lipgloss.Color("#0000ff")
+        myHotColor := lightDark(red, blue)
+
+type NoColor struct{}
+    NoColor is used to specify the absence of color styling. When this is active
+    foreground colors will be rendered with the terminal's default text color,
+    and background colors will not be drawn at all.
+
+    Example usage:
+
+        var style = someStyle.Background(lipgloss.NoColor{})
+
+func (n NoColor) RGBA() (r, g, b, a uint32)
+    RGBA returns the RGBA value of this color. Because we have to return
+    something, despite this color being the absence of color, we're returning
+    black with 100% opacity.
+
+    Red: 0x0, Green: 0x0, Blue: 0x0, Alpha: 0xFFFF.
+
+type Position float64
+    Position represents a position along a horizontal or vertical axis.
+    It's in situations where an axis is involved, like alignment, joining,
+    placement and so on.
+
+    A value of 0 represents the start (the left or top) and 1 represents the end
+    (the right or bottom). 0.5 represents the center.
+
+    There are constants Top, Bottom, Center, Left and Right in this package that
+    can be used to aid readability.
+
+const (
+	Top    Position = 0.0
+	Bottom Position = 1.0
+	Center Position = 0.5
+	Left   Position = 0.0
+	Right  Position = 1.0
+)
+    Position aliases.
+
+type RGBColor struct {
+	R uint8
+	G uint8
+	B uint8
+}
+    RGBColor is a color specified by red, green, and blue values.
+
+func (c RGBColor) RGBA() (r, g, b, a uint32)
+    RGBA returns the RGBA value of this color. This satisfies the Go Color
+    interface.
+
+type Range struct {
+	Start, End int
+	Style      Style
+}
+    Range is a range of text and associated styling to be used with StyleRanges.
+
+func NewRange(start, end int, style Style) Range
+    NewRange returns a range and style that can be used with StyleRanges.
+
+type Style struct {
+	// Has unexported fields.
+}
+    Style contains a set of rules that comprise a style as a whole.
+
+func NewStyle() Style
+    NewStyle returns a new, empty Style. While it's syntactic sugar for the
+    Style{} primitive, it's recommended to use this function for creating styles
+    in case the underlying implementation changes.
+
+func (s Style) Align(p ...Position) Style
+    Align is a shorthand method for setting horizontal and vertical alignment.
+
+    With one argument, the position value is applied to the horizontal
+    alignment.
+
+    With two arguments, the value is applied to the horizontal and vertical
+    alignments, in that order.
+
+func (s Style) AlignHorizontal(p Position) Style
+    AlignHorizontal sets a horizontal text alignment rule.
+
+func (s Style) AlignVertical(p Position) Style
+    AlignVertical sets a vertical text alignment rule.
+
+func (s Style) Background(c color.Color) Style
+    Background sets a background color.
+
+func (s Style) Blink(v bool) Style
+    Blink sets a rule for blinking foreground text.
+
+func (s Style) Bold(v bool) Style
+    Bold sets a bold formatting rule.
+
+func (s Style) Border(b Border, sides ...bool) Style
+    Border is shorthand for setting the border style and which sides should have
+    a border at once. The variadic argument sides works as follows:
+
+    With one value, the value is applied to all sides.
+
+    With two values, the values are applied to the vertical and horizontal
+    sides, in that order.
+
+    With three values, the values are applied to the top side, the horizontal
+    sides, and the bottom side, in that order.
+
+    With four values, the values are applied clockwise starting from the top
+    side, followed by the right side, then the bottom, and finally the left.
+
+    With more than four arguments the border will be applied to all sides.
+
+    Examples:
+
+        // Applies borders to the top and bottom only
+        lipgloss.NewStyle().Border(lipgloss.NormalBorder(), true, false)
+
+        // Applies rounded borders to the right and bottom only
+        lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), false, true, true, false)
+
+func (s Style) BorderBackground(c ...color.Color) Style
+    BorderBackground is a shorthand function for setting all of the background
+    colors of the borders at once. The arguments work as follows:
+
+    With one argument, the argument is applied to all sides.
+
+    With two arguments, the arguments are applied to the vertical and horizontal
+    sides, in that order.
+
+    With three arguments, the arguments are applied to the top side, the
+    horizontal sides, and the bottom side, in that order.
+
+    With four arguments, the arguments are applied clockwise starting from the
+    top side, followed by the right side, then the bottom, and finally the left.
+
+    With more than four arguments nothing will be set.
+
+func (s Style) BorderBottom(v bool) Style
+    BorderBottom determines whether or not to draw a bottom border.
+
+func (s Style) BorderBottomBackground(c color.Color) Style
+    BorderBottomBackground sets the background color of the bottom of the
+    border.
+
+func (s Style) BorderBottomForeground(c color.Color) Style
+    BorderBottomForeground sets the foreground color for the bottom of the
+    border.
+
+func (s Style) BorderForeground(c ...color.Color) Style
+    BorderForeground is a shorthand function for setting all of the foreground
+    colors of the borders at once. The arguments work as follows:
+
+    With one argument, the argument is applied to all sides.
+
+    With two arguments, the arguments are applied to the vertical and horizontal
+    sides, in that order.
+
+    With three arguments, the arguments are applied to the top side, the
+    horizontal sides, and the bottom side, in that order.
+
+    With four arguments, the arguments are applied clockwise starting from the
+    top side, followed by the right side, then the bottom, and finally the left.
+
+    With more than four arguments nothing will be set.
+
+func (s Style) BorderForegroundBlend(c ...color.Color) Style
+    BorderForegroundBlend sets the foreground colors for the border blend.
+    At least 2 colors are required to use blending, otherwise this will no-op
+    with 0 colors, and pass to BorderForeground with 1 color. This will override
+    all other border foreground colors when used.
+
+    When providing colors, in most cases (e.g. when all border sides are
+    enabled), you will want to provide a wrapping-set of colors, so the start
+    and end color are either the same, or very similar. For example:
+
+        lipgloss.NewStyle().BorderForegroundBlend(
+        	lipgloss.Color("#00FA68"),
+        	lipgloss.Color("#9900FF"),
+        	lipgloss.Color("#ED5353"),
+        	lipgloss.Color("#9900FF"),
+        	lipgloss.Color("#00FA68"),
+        )
+
+func (s Style) BorderForegroundBlendOffset(v int) Style
+    BorderForegroundBlendOffset sets the border blend offset cells, starting
+    from the top left corner. Value can be positive or negative, and does not
+    need to equal the dimensions of the border region. Direction (when positive)
+    is as follows ("o" is starting point):
+
+          o -------->
+          ┌──────────┐
+        ^ │          │ |
+        | │          │ |
+        | │          │ |
+        | │          │ v
+          └──────────┘
+           <---------
+
+func (s Style) BorderLeft(v bool) Style
+    BorderLeft determines whether or not to draw a left border.
+
+func (s Style) BorderLeftBackground(c color.Color) Style
+    BorderLeftBackground set the background color of the left side of the
+    border.
+
+func (s Style) BorderLeftForeground(c color.Color) Style
+    BorderLeftForeground sets the foreground color for the left side of the
+    border.
+
+func (s Style) BorderRight(v bool) Style
+    BorderRight determines whether or not to draw a right border.
+
+func (s Style) BorderRightBackground(c color.Color) Style
+    BorderRightBackground sets the background color of right side the border.
+
+func (s Style) BorderRightForeground(c color.Color) Style
+    BorderRightForeground sets the foreground color for the right side of the
+    border.
+
+func (s Style) BorderStyle(b Border) Style
+    BorderStyle defines the Border on a style. A Border contains a series of
+    definitions for the sides and corners of a border.
+
+    Note that if border visibility has not been set for any sides when setting
+    the border style, the border will be enabled for all sides during rendering.
+
+    You can define border characters as you'd like, though several default
+    styles are included: NormalBorder(), RoundedBorder(), BlockBorder(),
+    OuterHalfBlockBorder(), InnerHalfBlockBorder(), ThickBorder(), and
+    DoubleBorder().
+
+    Example:
+
+        lipgloss.NewStyle().BorderStyle(lipgloss.ThickBorder())
+
+func (s Style) BorderTop(v bool) Style
+    BorderTop determines whether or not to draw a top border.
+
+func (s Style) BorderTopBackground(c color.Color) Style
+    BorderTopBackground sets the background color of the top of the border.
+
+func (s Style) BorderTopForeground(c color.Color) Style
+    BorderTopForeground set the foreground color for the top of the border.
+
+func (s Style) ColorWhitespace(v bool) Style
+    ColorWhitespace determines whether or not the background color should be
+    applied to the padding. This is true by default as it's more than likely the
+    desired and expected behavior, but it can be disabled for certain graphic
+    effects.
+
+    Deprecated: Just use margins and padding.
+
+func (s Style) Copy() Style
+    Copy returns a copy of this style, including any underlying string values.
+
+    Deprecated: to copy just use assignment (i.e. a := b). All methods also
+    return a new style.
+
+func (s Style) Faint(v bool) Style
+    Faint sets a rule for rendering the foreground color in a dimmer shade.
+
+func (s Style) Foreground(c color.Color) Style
+    Foreground sets a foreground color.
+
+        // Sets the foreground to blue
+        s := lipgloss.NewStyle().Foreground(lipgloss.Color("#0000ff"))
+
+        // Removes the foreground color
+        s.Foreground(lipgloss.NoColor)
+
+func (s Style) GetAlign() Position
+    GetAlign returns the style's implicit horizontal alignment setting. If no
+    alignment is set Position.Left is returned.
+
+func (s Style) GetAlignHorizontal() Position
+    GetAlignHorizontal returns the style's implicit horizontal alignment
+    setting. If no alignment is set Position.Left is returned.
+
+func (s Style) GetAlignVertical() Position
+    GetAlignVertical returns the style's implicit vertical alignment setting.
+    If no alignment is set Position.Top is returned.
+
+func (s Style) GetBackground() color.Color
+    GetBackground returns the style's background color. If no value is set
+    NoColor{} is returned.
+
+func (s Style) GetBlink() bool
+    GetBlink returns the style's blink value. If no value is set false is
+    returned.
+
+func (s Style) GetBold() bool
+    GetBold returns the style's bold value. If no value is set false is
+    returned.
+
+func (s Style) GetBorder() (b Border, top, right, bottom, left bool)
+    GetBorder returns the style's border style (type Border) and value for
+    the top, right, bottom, and left in that order. If no value is set for the
+    border style, Border{} is returned. For all other unset values false is
+    returned.
+
+func (s Style) GetBorderBottom() bool
+    GetBorderBottom returns the style's bottom border setting. If no value is
+    set false is returned.
+
+func (s Style) GetBorderBottomBackground() color.Color
+    GetBorderBottomBackground returns the style's border bottom background
+    color. If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderBottomForeground() color.Color
+    GetBorderBottomForeground returns the style's border bottom foreground
+    color. If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderBottomSize() int
+    GetBorderBottomSize returns the width of the bottom border. If borders
+    contain runes of varying widths, the widest rune is returned. If no border
+    exists on the left edge, 0 is returned.
+
+func (s Style) GetBorderForegroundBlend() []color.Color
+    GetBorderForegroundBlend returns the style's border blend foreground colors.
+    If no value is set, nil is returned.
+
+func (s Style) GetBorderForegroundBlendOffset() int
+    GetBorderForegroundBlendOffset returns the style's border blend offset.
+    If no value is set, 0 is returned.
+
+func (s Style) GetBorderLeft() bool
+    GetBorderLeft returns the style's left border setting. If no value is set
+    false is returned.
+
+func (s Style) GetBorderLeftBackground() color.Color
+    GetBorderLeftBackground returns the style's border left background color.
+    If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderLeftForeground() color.Color
+    GetBorderLeftForeground returns the style's border left foreground color.
+    If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderLeftSize() int
+    GetBorderLeftSize returns the width of the left border. If borders contain
+    runes of varying widths, the widest rune is returned. If no border exists on
+    the left edge, 0 is returned.
+
+func (s Style) GetBorderRight() bool
+    GetBorderRight returns the style's right border setting. If no value is set
+    false is returned.
+
+func (s Style) GetBorderRightBackground() color.Color
+    GetBorderRightBackground returns the style's border right background color.
+    If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderRightForeground() color.Color
+    GetBorderRightForeground returns the style's border right foreground color.
+    If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderRightSize() int
+    GetBorderRightSize returns the width of the right border. If borders contain
+    runes of varying widths, the widest rune is returned. If no border exists on
+    the right edge, 0 is returned.
+
+func (s Style) GetBorderStyle() Border
+    GetBorderStyle returns the style's border style (type Border). If no value
+    is set Border{} is returned.
+
+func (s Style) GetBorderTop() bool
+    GetBorderTop returns the style's top border setting. If no value is set
+    false is returned.
+
+func (s Style) GetBorderTopBackground() color.Color
+    GetBorderTopBackground returns the style's border top background color.
+    If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderTopForeground() color.Color
+    GetBorderTopForeground returns the style's border top foreground color.
+    If no value is set NoColor{} is returned.
+
+func (s Style) GetBorderTopSize() int
+    GetBorderTopSize returns the width of the top border. If borders contain
+    runes of varying widths, the widest rune is returned. If no border exists on
+    the top edge, 0 is returned.
+
+func (s Style) GetBorderTopWidth() int
+    GetBorderTopWidth returns the width of the top border. If borders contain
+    runes of varying widths, the widest rune is returned. If no border exists on
+    the top edge, 0 is returned.
+
+    Deprecated: This function simply calls Style.GetBorderTopSize.
+
+func (s Style) GetColorWhitespace() bool
+    GetColorWhitespace returns the style's whitespace coloring setting. If no
+    value is set false is returned.
+
+func (s Style) GetFaint() bool
+    GetFaint returns the style's faint value. If no value is set false is
+    returned.
+
+func (s Style) GetForeground() color.Color
+    GetForeground returns the style's foreground color. If no value is set
+    NoColor{} is returned.
+
+func (s Style) GetFrameSize() (x, y int)
+    GetFrameSize returns the sum of the margins, padding and border width for
+    both the horizontal and vertical margins.
+
+func (s Style) GetHeight() int
+    GetHeight returns the style's height setting. If no height is set 0 is
+    returned.
+
+func (s Style) GetHorizontalBorderSize() int
+    GetHorizontalBorderSize returns the width of the horizontal borders.
+    If borders contain runes of varying widths, the widest rune is returned.
+    If no border exists on the horizontal edges, 0 is returned.
+
+func (s Style) GetHorizontalFrameSize() int
+    GetHorizontalFrameSize returns the sum of the style's horizontal margins,
+    padding and border widths.
+
+    Provisional: this method may be renamed.
+
+func (s Style) GetHorizontalMargins() int
+    GetHorizontalMargins returns the style's left and right margins. Unset
+    values are measured as 0.
+
+func (s Style) GetHorizontalPadding() int
+    GetHorizontalPadding returns the style's left and right padding. Unset
+    values are measured as 0.
+
+func (s Style) GetHyperlink() (link, params string)
+    GetHyperlink returns the hyperlink along with its parameters. If no
+    hyperlink is set, empty strings are returned.
+
+func (s Style) GetInline() bool
+    GetInline returns the style's inline setting. If no value is set false is
+    returned.
+
+func (s Style) GetItalic() bool
+    GetItalic returns the style's italic value. If no value is set false is
+    returned.
+
+func (s Style) GetMargin() (top, right, bottom, left int)
+    GetMargin returns the style's top, right, bottom, and left margins, in that
+    order. 0 is returned for unset values.
+
+func (s Style) GetMarginBottom() int
+    GetMarginBottom returns the style's bottom margin. If no value is set 0 is
+    returned.
+
+func (s Style) GetMarginChar() rune
+    GetMarginChar returns the style's padding character. If no value is set a
+    space is returned.
+
+func (s Style) GetMarginLeft() int
+    GetMarginLeft returns the style's left margin. If no value is set 0 is
+    returned.
+
+func (s Style) GetMarginRight() int
+    GetMarginRight returns the style's right margin. If no value is set 0 is
+    returned.
+
+func (s Style) GetMarginTop() int
+    GetMarginTop returns the style's top margin. If no value is set 0 is
+    returned.
+
+func (s Style) GetMaxHeight() int
+    GetMaxHeight returns the style's max height setting. If no value is set 0 is
+    returned.
+
+func (s Style) GetMaxWidth() int
+    GetMaxWidth returns the style's max width setting. If no value is set 0 is
+    returned.
+
+func (s Style) GetPadding() (top, right, bottom, left int)
+    GetPadding returns the style's top, right, bottom, and left padding values,
+    in that order. 0 is returned for unset values.
+
+func (s Style) GetPaddingBottom() int
+    GetPaddingBottom returns the style's bottom padding. If no value is set 0 is
+    returned.
+
+func (s Style) GetPaddingChar() rune
+    GetPaddingChar returns the style's padding character. If no value is set a
+    space is returned.
+
+func (s Style) GetPaddingLeft() int
+    GetPaddingLeft returns the style's left padding. If no value is set 0 is
+    returned.
+
+func (s Style) GetPaddingRight() int
+    GetPaddingRight returns the style's right padding. If no value is set 0 is
+    returned.
+
+func (s Style) GetPaddingTop() int
+    GetPaddingTop returns the style's top padding. If no value is set 0 is
+    returned.
+
+func (s Style) GetReverse() bool
+    GetReverse returns the style's reverse value. If no value is set false is
+    returned.
+
+func (s Style) GetStrikethrough() bool
+    GetStrikethrough returns the style's strikethrough value. If no value is set
+    false is returned.
+
+func (s Style) GetStrikethroughSpaces() bool
+    GetStrikethroughSpaces returns whether or not the style is set to
+    strikethrough spaces. If not value is set false is returned.
+
+func (s Style) GetTabWidth() int
+    GetTabWidth returns the style's tab width setting. If no value is set 4 is
+    returned which is the implicit default.
+
+func (s Style) GetTransform() func(string) string
+    GetTransform returns the transform set on the style. If no transform is set
+    nil is returned.
+
+func (s Style) GetUnderline() bool
+    GetUnderline returns the style's underline value. If no value is set false
+    is returned.
+
+func (s Style) GetUnderlineColor() color.Color
+    GetUnderlineColor returns the style's underline color. If no value is set
+    NoColor{} is returned.
+
+func (s Style) GetUnderlineSpaces() bool
+    GetUnderlineSpaces returns whether or not the style is set to underline
+    spaces. If not value is set false is returned.
+
+func (s Style) GetUnderlineStyle() Underline
+    GetUnderlineStyle returns the style's underline style. If no value is set
+    UnderlineNone is returned.
+
+func (s Style) GetVerticalBorderSize() int
+    GetVerticalBorderSize returns the width of the vertical borders. If borders
+    contain runes of varying widths, the widest rune is returned. If no border
+    exists on the vertical edges, 0 is returned.
+
+func (s Style) GetVerticalFrameSize() int
+    GetVerticalFrameSize returns the sum of the style's vertical margins,
+    padding and border widths.
+
+    Provisional: this method may be renamed.
+
+func (s Style) GetVerticalMargins() int
+    GetVerticalMargins returns the style's top and bottom margins. Unset values
+    are measured as 0.
+
+func (s Style) GetVerticalPadding() int
+    GetVerticalPadding returns the style's top and bottom padding. Unset values
+    are measured as 0.
+
+func (s Style) GetWidth() int
+    GetWidth returns the style's width setting. If no width is set 0 is
+    returned.
+
+func (s Style) Height(i int) Style
+    Height sets the height of the block before applying margins. If the height
+    of the text block is less than this value after applying padding (or not),
+    the block will be set to this height.
+
+func (s Style) Hyperlink(link string, params ...string) Style
+    Hyperlink sets a hyperlink on a style. This is useful for rendering text
+    that can be clicked on in a terminal emulator that supports hyperlinks.
+
+    Example:
+
+        s := lipgloss.NewStyle().Hyperlink("https://charm.sh")
+        s := lipgloss.NewStyle().Hyperlink("https://charm.sh", "id=1")
+
+func (s Style) Inherit(i Style) Style
+    Inherit overlays the style in the argument onto this style by copying
+    each explicitly set value from the argument style onto this style if it
+    is not already explicitly set. Existing set values are kept intact and not
+    overwritten.
+
+    Margins, padding, and underlying string values are not inherited.
+
+func (s Style) Inline(v bool) Style
+    Inline makes rendering output one line and disables the rendering of
+    margins, padding and borders. This is useful when you need a style to apply
+    only to font rendering and don't want it to change any physical dimensions.
+    It works well with Style.MaxWidth.
+
+    Because this in intended to be used at the time of render, this method will
+    not mutate the style and instead return a copy.
+
+    Example:
+
+        var userInput string = "..."
+        var userStyle = text.Style{ /* ... */ }
+        fmt.Println(userStyle.Inline(true).Render(userInput))
+
+func (s Style) Italic(v bool) Style
+    Italic sets an italic formatting rule. In some terminal emulators this will
+    render with "reverse" coloring if not italic font variant is available.
+
+func (s Style) Margin(i ...int) Style
+    Margin is a shorthand method for setting margins on all sides at once.
+
+    With one argument, the value is applied to all sides.
+
+    With two arguments, the value is applied to the vertical and horizontal
+    sides, in that order.
+
+    With three arguments, the value is applied to the top side, the horizontal
+    sides, and the bottom side, in that order.
+
+    With four arguments, the value is applied clockwise starting from the top
+    side, followed by the right side, then the bottom, and finally the left.
+
+    With more than four arguments no margin will be added.
+
+func (s Style) MarginBackground(c color.Color) Style
+    MarginBackground sets the background color of the margin. Note that this is
+    also set when inheriting from a style with a background color. In that case
+    the background color on that style will set the margin color on this style.
+
+func (s Style) MarginBottom(i int) Style
+    MarginBottom sets the value of the bottom margin.
+
+func (s Style) MarginChar(r rune) Style
+    MarginChar sets the character used for the margin. This is useful for
+    rendering blocks with a specific character, such as a space or a dot.
+
+func (s Style) MarginLeft(i int) Style
+    MarginLeft sets the value of the left margin.
+
+func (s Style) MarginRight(i int) Style
+    MarginRight sets the value of the right margin.
+
+func (s Style) MarginTop(i int) Style
+    MarginTop sets the value of the top margin.
+
+func (s Style) MaxHeight(n int) Style
+    MaxHeight applies a max height to a given style. This is useful in enforcing
+    a certain height at render time, particularly with arbitrary strings and
+    styles.
+
+    Because this in intended to be used at the time of render, this method will
+    not mutate the style and instead returns a copy.
+
+func (s Style) MaxWidth(n int) Style
+    MaxWidth applies a max width to a given style. This is useful in enforcing
+    a certain width at render time, particularly with arbitrary strings and
+    styles.
+
+    Because this in intended to be used at the time of render, this method will
+    not mutate the style and instead return a copy.
+
+    Example:
+
+        var userInput string = "..."
+        var userStyle = text.Style{ /* ... */ }
+        fmt.Println(userStyle.MaxWidth(16).Render(userInput))
+
+func (s Style) Padding(i ...int) Style
+    Padding is a shorthand method for setting padding on all sides at once.
+
+    With one argument, the value is applied to all sides.
+
+    With two arguments, the value is applied to the vertical and horizontal
+    sides, in that order.
+
+    With three arguments, the value is applied to the top side, the horizontal
+    sides, and the bottom side, in that order.
+
+    With four arguments, the value is applied clockwise starting from the top
+    side, followed by the right side, then the bottom, and finally the left.
+
+    With more than four arguments no padding will be added.
+
+func (s Style) PaddingBottom(i int) Style
+    PaddingBottom adds padding to the bottom of the block.
+
+func (s Style) PaddingChar(r rune) Style
+    PaddingChar sets the character used for padding. This is useful for
+    rendering blocks with a specific character, such as a space or a dot.
+    Example of using NBSP as padding to prevent line breaks:
+
+        ```go
+        s := lipgloss.NewStyle().PaddingChar(lipgloss.NBSP)
+        ```
+
+func (s Style) PaddingLeft(i int) Style
+    PaddingLeft adds padding on the left.
+
+func (s Style) PaddingRight(i int) Style
+    PaddingRight adds padding on the right.
+
+func (s Style) PaddingTop(i int) Style
+    PaddingTop adds padding to the top of the block.
+
+func (s Style) Render(strs ...string) string
+    Render applies the defined style formatting to a given string.
+
+func (s Style) Reverse(v bool) Style
+    Reverse sets a rule for inverting foreground and background colors.
+
+func (s Style) SetString(strs ...string) Style
+    SetString sets the underlying string value for this style. To render
+    once the underlying string is set, use the Style.String. This method is a
+    convenience for cases when having a stringer implementation is handy, such
+    as when using fmt.Sprintf. You can also simply define a style and render out
+    strings directly with Style.Render.
+
+func (s Style) Strikethrough(v bool) Style
+    Strikethrough sets a strikethrough rule. By default, strikes will not be
+    drawn on whitespace like margins and padding. To change this behavior set
+    StrikethroughSpaces.
+
+func (s Style) StrikethroughSpaces(v bool) Style
+    StrikethroughSpaces determines whether to apply strikethroughs to spaces
+    between words. By default, this is true. Spaces can also be struck without
+    underlining the text itself.
+
+func (s Style) String() string
+    String implements stringer for a Style, returning the rendered result based
+    on the rules in this style. An underlying string value must be set with
+    Style.SetString prior to using this method.
+
+func (s Style) TabWidth(n int) Style
+    TabWidth sets the number of spaces that a tab (/t) should be rendered as.
+    When set to 0, tabs will be removed. To disable the replacement of tabs with
+    spaces entirely, set this to NoTabConversion.
+
+    By default, tabs will be replaced with 4 spaces.
+
+func (s Style) Transform(fn func(string) string) Style
+    Transform applies a given function to a string at render time, allowing for
+    the string being rendered to be manipuated.
+
+    Example:
+
+        s := NewStyle().Transform(strings.ToUpper)
+        fmt.Println(s.Render("raow!") // "RAOW!"
+
+func (s Style) Underline(v bool) Style
+    Underline sets an underline rule. By default, underlines will not be
+    drawn on whitespace like margins and padding. To change this behavior set
+    Style.UnderlineSpaces.
+
+func (s Style) UnderlineColor(c color.Color) Style
+    UnderlineColor sets the color of the underline. By default, the underline
+    will be the same color as the foreground.
+
+    Note that not all terminal emulators support colored underlines. If color
+    is not supported, it might produce unexpected results. This depends on the
+    terminal emulator being used.
+
+func (s Style) UnderlineSpaces(v bool) Style
+    UnderlineSpaces determines whether to underline spaces between words.
+    By default, this is true. Spaces can also be underlined without underlining
+    the text itself.
+
+func (s Style) UnderlineStyle(u Underline) Style
+    UnderlineStyle sets the underline style. This can be used to set the
+    underline to be a single, double, curly, dotted, or dashed line.
+
+    Note that not all terminal emulators support underline styles. If a style is
+    not supported, it will typically fall back to a single underline but this is
+    not guaranteed. This depends on the terminal emulator being used.
+
+func (s Style) UnsetAlign() Style
+    UnsetAlign removes the horizontal and vertical text alignment style rule,
+    if set.
+
+func (s Style) UnsetAlignHorizontal() Style
+    UnsetAlignHorizontal removes the horizontal text alignment style rule,
+    if set.
+
+func (s Style) UnsetAlignVertical() Style
+    UnsetAlignVertical removes the vertical text alignment style rule, if set.
+
+func (s Style) UnsetBackground() Style
+    UnsetBackground removes the background style rule, if set.
+
+func (s Style) UnsetBlink() Style
+    UnsetBlink removes the blink style rule, if set.
+
+func (s Style) UnsetBold() Style
+    UnsetBold removes the bold style rule, if set.
+
+func (s Style) UnsetBorderBackground() Style
+    UnsetBorderBackground removes all border background color styles, if set.
+
+func (s Style) UnsetBorderBottom() Style
+    UnsetBorderBottom removes the border bottom style rule, if set.
+
+func (s Style) UnsetBorderBottomBackground() Style
+    UnsetBorderBottomBackground removes the bottom border background color rule,
+    if set.
+
+func (s Style) UnsetBorderBottomForeground() Style
+    UnsetBorderBottomForeground removes the bottom border foreground color rule,
+    if set.
+
+func (s Style) UnsetBorderForeground() Style
+    UnsetBorderForeground removes all border foreground color styles, if set.
+
+func (s Style) UnsetBorderForegroundBlend() Style
+    UnsetBorderForegroundBlend removes the border blend foreground color rules,
+    if set.
+
+func (s Style) UnsetBorderForegroundBlendOffset() Style
+    UnsetBorderForegroundBlendOffset removes the border blend offset style rule,
+    if set.
+
+func (s Style) UnsetBorderLeft() Style
+    UnsetBorderLeft removes the border left style rule, if set.
+
+func (s Style) UnsetBorderLeftBackground() Style
+    UnsetBorderLeftBackground removes the left border color rule, if set.
+
+func (s Style) UnsetBorderLeftForeground() Style
+    UnsetBorderLeftForeground removes the left border foreground color rule,
+    if set.
+
+func (s Style) UnsetBorderRight() Style
+    UnsetBorderRight removes the border right style rule, if set.
+
+func (s Style) UnsetBorderRightBackground() Style
+    UnsetBorderRightBackground removes the right border background color rule,
+    if set.
+
+func (s Style) UnsetBorderRightForeground() Style
+    UnsetBorderRightForeground removes the right border foreground color rule,
+    if set.
+
+func (s Style) UnsetBorderStyle() Style
+    UnsetBorderStyle removes the border style rule, if set.
+
+func (s Style) UnsetBorderTop() Style
+    UnsetBorderTop removes the border top style rule, if set.
+
+func (s Style) UnsetBorderTopBackground() Style
+    UnsetBorderTopBackground removes the top border background color rule,
+    if set.
+
+func (s Style) UnsetBorderTopBackgroundColor() Style
+    UnsetBorderTopBackgroundColor removes the top border background color rule,
+    if set.
+
+    Deprecated: This function simply calls Style.UnsetBorderTopBackground.
+
+func (s Style) UnsetBorderTopForeground() Style
+    UnsetBorderTopForeground removes the top border foreground color rule,
+    if set.
+
+func (s Style) UnsetColorWhitespace() Style
+    UnsetColorWhitespace removes the rule for coloring padding, if set.
+
+func (s Style) UnsetFaint() Style
+    UnsetFaint removes the faint style rule, if set.
+
+func (s Style) UnsetForeground() Style
+    UnsetForeground removes the foreground style rule, if set.
+
+func (s Style) UnsetHeight() Style
+    UnsetHeight removes the height style rule, if set.
+
+func (s Style) UnsetHyperlink() Style
+    UnsetHyperlink removes the value set by Hyperlink.
+
+func (s Style) UnsetInline() Style
+    UnsetInline removes the inline style rule, if set.
+
+func (s Style) UnsetItalic() Style
+    UnsetItalic removes the italic style rule, if set.
+
+func (s Style) UnsetMarginBackground() Style
+    UnsetMarginBackground removes the margin's background color. Note that the
+    margin's background color can be set from the background color of another
+    style during inheritance.
+
+func (s Style) UnsetMarginBottom() Style
+    UnsetMarginBottom removes the bottom margin style rule, if set.
+
+func (s Style) UnsetMarginLeft() Style
+    UnsetMarginLeft removes the left margin style rule, if set.
+
+func (s Style) UnsetMarginRight() Style
+    UnsetMarginRight removes the right margin style rule, if set.
+
+func (s Style) UnsetMarginTop() Style
+    UnsetMarginTop removes the top margin style rule, if set.
+
+func (s Style) UnsetMargins() Style
+    UnsetMargins removes all margin style rules.
+
+func (s Style) UnsetMaxHeight() Style
+    UnsetMaxHeight removes the max height style rule, if set.
+
+func (s Style) UnsetMaxWidth() Style
+    UnsetMaxWidth removes the max width style rule, if set.
+
+func (s Style) UnsetPadding() Style
+    UnsetPadding removes all padding style rules.
+
+func (s Style) UnsetPaddingBottom() Style
+    UnsetPaddingBottom removes the bottom padding style rule, if set.
+
+func (s Style) UnsetPaddingChar() Style
+    UnsetPaddingChar removes the padding character style rule, if set.
+
+func (s Style) UnsetPaddingLeft() Style
+    UnsetPaddingLeft removes the left padding style rule, if set.
+
+func (s Style) UnsetPaddingRight() Style
+    UnsetPaddingRight removes the right padding style rule, if set.
+
+func (s Style) UnsetPaddingTop() Style
+    UnsetPaddingTop removes the top padding style rule, if set.
+
+func (s Style) UnsetReverse() Style
+    UnsetReverse removes the reverse style rule, if set.
+
+func (s Style) UnsetStrikethrough() Style
+    UnsetStrikethrough removes the strikethrough style rule, if set.
+
+func (s Style) UnsetStrikethroughSpaces() Style
+    UnsetStrikethroughSpaces removes the value set by StrikethroughSpaces.
+
+func (s Style) UnsetString() Style
+    UnsetString sets the underlying string value to the empty string.
+
+func (s Style) UnsetTabWidth() Style
+    UnsetTabWidth removes the tab width style rule, if set.
+
+func (s Style) UnsetTransform() Style
+    UnsetTransform removes the value set by Transform.
+
+func (s Style) UnsetUnderline() Style
+    UnsetUnderline removes the underline style rule, if set.
+
+func (s Style) UnsetUnderlineSpaces() Style
+    UnsetUnderlineSpaces removes the value set by UnderlineSpaces.
+
+func (s Style) UnsetWidth() Style
+    UnsetWidth removes the width style rule, if set.
+
+func (s Style) Value() string
+    Value returns the raw, unformatted, underlying string value for this style.
+
+func (s Style) Width(i int) Style
+    Width sets the width of the block before applying margins. This means your
+    styled content will exactly equal the size set here. Text will wrap based on
+    Padding and Borders set on the style.
+
+type Underline = ansi.Underline
+    Underline is the style of the underline.
+
+    Caveats: - Not all terminals support all underline styles. - Some terminals
+    may render unsupported styles as standard underlines. - Terminal themes may
+    affect the visibility of different underline styles.
+
+type WhitespaceOption func(*whitespace)
+    WhitespaceOption sets a styling rule for rendering whitespace.
+
+func WithWhitespaceChars(s string) WhitespaceOption
+    WithWhitespaceChars sets the characters to be rendered in the whitespace.
+
+func WithWhitespaceStyle(s Style) WhitespaceOption
+    WithWhitespaceStyle sets the style for the whitespace.
+
+type WrapWriter struct {
+	// Has unexported fields.
+}
+    WrapWriter is a writer that writes to a buffer and keeps track of the
+    current pen style and link state for the purpose of wrapping with newlines.
+
+    When it encounters a newline, it resets the style and link, writes the
+    newline, and then reapplies the style and link to the next line.
+
+func NewWrapWriter(w io.Writer) *WrapWriter
+    NewWrapWriter returns a new WrapWriter.
+
+func (w *WrapWriter) Close() error
+    Close closes the writer, resets the style and link if necessary, and
+    releases its parser. Calling it is performance critical, but forgetting it
+    does not cause safety issues or leaks.
+
+func (w *WrapWriter) Link() uv.Link
+    Link returns the current pen link.
+
+func (w *WrapWriter) Style() uv.Style
+    Style returns the current pen style.
+
+func (w *WrapWriter) Write(p []byte) (int, error)
+    Write writes to the buffer.
+

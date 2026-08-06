@@ -1,0 +1,630 @@
+package screens
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/tui"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+// ServerOptionsScreen allows the user to configure the SSH (and web) server.
+type ServerOptionsScreen struct {
+	settingsMenu *displayengine.MenuModel
+	statusMenu   *displayengine.MenuModel
+	outerMenu    *displayengine.MenuModel
+
+	isRoot bool
+
+	config   config.AppConfig
+	connType string
+
+	width   int
+	height  int
+	focused bool
+}
+
+// updateServerOptionMsg is sent when an option is changed in the menu.
+type updateServerOptionMsg struct {
+	update func(*config.AppConfig)
+}
+
+// serverStatusRefreshMsg is sent to trigger a re-read of live session state.
+type serverStatusRefreshMsg struct{}
+
+// NewServerOptionsScreen creates a new server settings screen.
+func NewServerOptionsScreen(isRoot bool, connType string) *ServerOptionsScreen {
+	cfg := config.LoadAppConfig()
+	s := &ServerOptionsScreen{
+		isRoot:   isRoot,
+		config:   cfg,
+		connType: connType,
+		focused:  true,
+	}
+	s.initMenus()
+	return s
+}
+
+func (s *ServerOptionsScreen) initMenus() {
+	s.settingsMenu = s.buildSettingsMenu()
+	s.statusMenu = s.buildStatusMenu()
+
+	var outerBack tea.Cmd
+	if !s.isRoot {
+		outerBack = navigateBack()
+	}
+	outerMenu := displayengine.NewMenuModel("server_outer", "Server Settings", "", nil)
+	if s.isRoot {
+		outerMenu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		outerMenu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
+			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
+	outerMenu.SetConnType(s.connType)
+	outerMenu.AddContentSection(s.settingsMenu)
+	outerMenu.AddContentSection(s.statusMenu)
+	s.outerMenu = outerMenu
+	s.outerMenu.SetFocused(s.focused)
+}
+
+func (s *ServerOptionsScreen) buildSettingsMenu() *displayengine.MenuModel {
+	authModeDesc := func() string {
+		switch s.config.Server.Auth.Mode {
+		case "password":
+			return "Password"
+		case "pubkey":
+			return "Public Key"
+		default:
+			return "None (insecure)"
+		}
+	}
+
+	items := []displayengine.MenuItem{
+		{
+			Tag:           "SSH Port",
+			Desc:          fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port),
+			Help:          "TCP port the SSH server listens on. Set to 0 to disable. (Enter to change)",
+			Action:        s.promptSSHPort(),
+			IsDestructive: true,
+		},
+		{
+			Tag:           "Web Port",
+			Desc:          fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port),
+			Help:          "TCP port the web server listens on. Set to 0 to disable. (Enter to change)",
+			Action:        s.promptWebPort(),
+			IsDestructive: true,
+		},
+		{
+			Tag:           "Auth Mode",
+			Desc:          s.dropdownDesc(authModeDesc()),
+			Help:          "Authentication mode for incoming SSH connections (Enter for options)",
+			Action:        s.showAuthModeDropdown(),
+			IsDestructive: true,
+		},
+		{
+			Tag:           "Password",
+			Desc:          s.passwordDesc(),
+			Help:          "Password for SSH auth (Enter to change). Stored as bcrypt hash.",
+			Action:        s.promptPassword(),
+			IsDestructive: true,
+		},
+		{
+			Tag:           "Authorized Keys File",
+			Desc:          s.truncatePath(s.config.Server.Auth.AuthKeysFile),
+			Help:          "Path to authorized_keys file for public-key auth (Enter to change)",
+			Action:        s.promptAuthKeysFile(),
+			IsDestructive: true,
+		},
+	}
+
+	menu := displayengine.NewMenuModel("server_settings", "Configuration", "", items)
+	menu.SetConnType(s.connType)
+	menu.SetHelpItemPrefix("Setting")
+	menu.SetHelpPageText("Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used.")
+	menu.SetSubMenuMode(true)
+	menu.SetIsDialog(false)
+	menu.SetButtons([]displayengine.ButtonDef{})
+	menu.SetMaximized(true)
+	return menu
+}
+
+func (s *ServerOptionsScreen) buildStatusMenu() *displayengine.MenuModel {
+	servers := sessionlocks.Sessions.ListServerInfos()
+	editInfo := sessionlocks.Sessions.ReadEditInfo()
+
+	serverStatus := "{{|TitleError|}}Not running{{[-]}}"
+	if len(servers) > 0 {
+		si := servers[0]
+		serverStatus = fmt.Sprintf("{{|Yes|}}Running{{[-]}} (PID %d, port %d)", si.PID, si.Port)
+		if len(servers) > 1 {
+			serverStatus += fmt.Sprintf(" +%d more", len(servers)-1)
+		}
+	}
+
+	sessionStatus := "None"
+	disconnectEnabled := false
+	if editInfo.PID != 0 && sessionlocks.ProcessExists(editInfo.PID) {
+		ip := editInfo.ClientIP
+		if ip == "" {
+			ip = "local"
+		}
+		sessionStatus = fmt.Sprintf("{{|TitleQuestion|}}Editing{{[-]}} — %s (PID %d)", ip, editInfo.PID)
+		disconnectEnabled = true
+	}
+
+	items := []displayengine.MenuItem{
+		{
+			Tag:        "Server",
+			Desc:       serverStatus,
+			Help:       "Current SSH server state",
+			Selectable: false,
+		},
+		{
+			Tag:        "Session",
+			Desc:       sessionStatus,
+			Help:       "Active remote session, if any",
+			Selectable: false,
+		},
+		{
+			Tag:    "Disconnect Session",
+			Desc:   "Request graceful disconnect of active session",
+			Help:   "Send a graceful disconnect request to the active session",
+			Action: s.disconnectAction(false, disconnectEnabled),
+		},
+		{
+			Tag:    "Force Disconnect",
+			Desc:   "{{|TitleError|}}Immediately kill active session{{[-]}}",
+			Help:   "Forcibly kill the active session process",
+			Action: s.disconnectAction(true, disconnectEnabled),
+		},
+	}
+
+	menu := displayengine.NewMenuModel("server_status", "Live Status", "", items)
+	menu.SetConnType(s.connType)
+	menu.SetHelpItemPrefix("Status")
+	menu.SetHelpPageText("Live status of the SSH server and any active remote session. Use Disconnect to gracefully close a session.")
+	menu.SetSubMenuMode(true)
+	menu.SetIsDialog(false)
+	menu.SetButtons([]displayengine.ButtonDef{})
+	menu.SetMaximized(true)
+	return menu
+}
+
+// refreshStatus rebuilds the status menu from live session data and reconnects
+// it to the outer menu (which uses a slice reference that must be replaced).
+func (s *ServerOptionsScreen) refreshStatus() {
+	// Preserve focus position across the rebuild below.
+	var focusedSection, focusedBtnIndex int
+	var focusedItem displayengine.FocusItem
+	if s.outerMenu != nil {
+		focusedSection = s.outerMenu.GetFocusedSection()
+		focusedItem = s.outerMenu.GetFocusedItem()
+		focusedBtnIndex = s.outerMenu.GetFocusedBtnIndex()
+	}
+
+	s.statusMenu = s.buildStatusMenu()
+	// Rebuild the outer container so it holds the updated section reference.
+	var outerBack tea.Cmd
+	if !s.isRoot {
+		outerBack = navigateBack()
+	}
+	outer := displayengine.NewMenuModel("server_outer", "Server Settings", "", nil)
+	if s.isRoot {
+		outer.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	} else {
+		outer.SetButtons([]displayengine.ButtonDef{
+			{Label: "Apply", ZoneID: "btn-select", Action: s.handleApply(), Help: "Apply and save server settings."},
+			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: outerBack, Help: "Return to the previous screen."},
+			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
+		})
+	}
+	outer.SetConnType(s.connType)
+	outer.AddContentSection(s.settingsMenu)
+	outer.AddContentSection(s.statusMenu)
+	if s.width != 0 && s.height != 0 {
+		outer.SetSize(s.width, s.height)
+	}
+	outer.SetFocused(s.focused)
+	outer.SetFocusedSection(focusedSection)
+	outer.SetFocusedBtnIndex(focusedBtnIndex)
+	outer.SetFocusedItem(focusedItem)
+	s.outerMenu = outer
+}
+
+// syncSettingsMenu updates item labels/states from s.config without rebuilding.
+func (s *ServerOptionsScreen) syncSettingsMenu() {
+	items := s.settingsMenu.GetItems()
+
+	// indices: 0=SSH port, 1=web port, 2=auth mode, 3=password, 4=authkeys file
+	items[0].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.SSH.Port)
+	items[1].Desc = fmt.Sprintf("{{|OptionValue|}}%d{{[-]}}", s.config.Server.Web.Port)
+	items[2].Desc = s.dropdownDesc(s.authModeLabel())
+	items[3].Desc = s.passwordDesc()
+	items[4].Desc = s.truncatePath(s.config.Server.Auth.AuthKeysFile)
+
+	s.settingsMenu.SetItems(items)
+}
+
+func (s *ServerOptionsScreen) authModeLabel() string {
+	switch s.config.Server.Auth.Mode {
+	case "password":
+		return "Password"
+	case "pubkey":
+		return "Public Key"
+	default:
+		return "None (insecure)"
+	}
+}
+
+func (s *ServerOptionsScreen) dropdownDesc(val string) string {
+	return fmt.Sprintf("{{|OptionValue|}}%s▼{{[-]}}", val)
+}
+
+func (s *ServerOptionsScreen) passwordDesc() string {
+	if s.config.Server.Auth.Password == "" {
+		return "{{|TitleError|}}(not set){{[-]}}"
+	}
+	return "{{|Yes|}}(set){{[-]}}"
+}
+
+func (s *ServerOptionsScreen) truncatePath(p string) string {
+	if p == "" {
+		return "{{|TitleError|}}(not set){{[-]}}"
+	}
+	const maxLen = 40
+	if len(p) > maxLen {
+		return "…" + p[len(p)-maxLen+1:]
+	}
+	return p
+}
+
+// ── Prompt Actions ──────────────────────────────────────────────────────────
+
+func (s *ServerOptionsScreen) promptSSHPort() tea.Cmd {
+	return func() tea.Msg {
+		result, err := console.TextPrompt(context.Background(),
+			func(context.Context, any, ...any) {}, "SSH Port", "Enter SSH port number", false)
+		if err != nil {
+			return nil
+		}
+		port, err := strconv.Atoi(strings.TrimSpace(result))
+		if err != nil || port < 1 || port > 65535 {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Invalid Port",
+				Message: "Port must be a number between 1 and 65535.",
+				Type:    tui.MessageError,
+			}
+		}
+		return updateServerOptionMsg{func(cfg *config.AppConfig) {
+			cfg.Server.SSH.Port = port
+		}}
+	}
+}
+
+func (s *ServerOptionsScreen) promptWebPort() tea.Cmd {
+	return func() tea.Msg {
+		result, err := console.TextPrompt(context.Background(),
+			func(context.Context, any, ...any) {}, "Web Port", "Enter web server port number", false)
+		if err != nil {
+			return nil
+		}
+		port, err := strconv.Atoi(strings.TrimSpace(result))
+		if err != nil || port < 1 || port > 65535 {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Invalid Port",
+				Message: "Port must be a number between 1 and 65535.",
+				Type:    tui.MessageError,
+			}
+		}
+		return updateServerOptionMsg{func(cfg *config.AppConfig) {
+			cfg.Server.Web.Port = port
+		}}
+	}
+}
+
+func (s *ServerOptionsScreen) promptPassword() tea.Cmd {
+	return func() tea.Msg {
+		pw, err := console.TextPrompt(context.Background(),
+			func(context.Context, any, ...any) {}, "SSH Password", "Enter new password", true)
+		if err != nil {
+			return nil
+		}
+		pw = strings.TrimSpace(pw)
+		if pw == "" {
+			return nil
+		}
+		hash, err := sessionlocks.HashPassword(pw)
+		if err != nil {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Password Error",
+				Message: fmt.Sprintf("Failed to hash password: %v", err),
+				Type:    tui.MessageError,
+			}
+		}
+		return updateServerOptionMsg{func(cfg *config.AppConfig) {
+			cfg.Server.Auth.Password = hash
+		}}
+	}
+}
+
+func (s *ServerOptionsScreen) promptAuthKeysFile() tea.Cmd {
+	return func() tea.Msg {
+		result, err := console.TextPrompt(context.Background(),
+			func(context.Context, any, ...any) {}, "Authorized Keys File",
+			"Enter path to authorized_keys file", false)
+		if err != nil {
+			return nil
+		}
+		result = strings.TrimSpace(result)
+		if result == "" {
+			return nil
+		}
+		return updateServerOptionMsg{func(cfg *config.AppConfig) {
+			cfg.Server.Auth.AuthKeysFile = result
+		}}
+	}
+}
+
+// ── Auth Mode Dropdown ───────────────────────────────────────────────────────
+
+func (s *ServerOptionsScreen) showAuthModeDropdown() tea.Cmd {
+	return func() tea.Msg {
+		modes := []struct {
+			value string
+			label string
+			help  string
+		}{
+			{"none", "None {{|TitleError|}}(insecure — anyone can connect){{[-]}}", "No authentication — all connections are accepted. Only use on a trusted network."},
+			{"password", "Password", "Authenticate with a plain password stored as a bcrypt hash in dockstarter2.toml."},
+			{"pubkey", "Public Key", "Authenticate using SSH public keys listed in an authorized_keys file."},
+		}
+
+		current := s.config.Server.Auth.Mode
+		if current == "" {
+			current = "none"
+		}
+
+		var items []displayengine.MenuItem
+		for i, m := range modes {
+			mode := m.value
+			label := m.label
+			help := m.help
+			selected := i
+			_ = selected
+			items = append(items, displayengine.MenuItem{
+				Tag:  label,
+				Help: help,
+				Action: func() tea.Msg {
+					return tea.Batch(
+						func() tea.Msg {
+							return updateServerOptionMsg{func(cfg *config.AppConfig) {
+								cfg.Server.Auth.Mode = mode
+							}}
+						},
+						tui.CloseDialog(),
+					)()
+				},
+			})
+		}
+
+		menu := displayengine.NewMenuModel("auth_mode_dropdown", "Auth Mode", "Select authentication mode", items)
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Select", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Close without applying."},
+		})
+
+		// Pre-select current mode
+		for i, m := range modes {
+			if m.value == current {
+				menu.Select(i)
+				break
+			}
+		}
+
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
+}
+
+// ── Disconnect Action ────────────────────────────────────────────────────────
+
+func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd {
+	if !enabled {
+		return func() tea.Msg {
+			return tui.ShowMessageDialogMsg{
+				Title:   "No Active Session",
+				Message: "There is no active remote session to disconnect.",
+				Type:    tui.MessageWarning,
+			}
+		}
+	}
+	return func() tea.Msg {
+		go func() {
+			_ = sessionlocks.Sessions.Disconnect(context.Background(), force)
+		}()
+		return serverStatusRefreshMsg{}
+	}
+}
+
+// ── Apply ────────────────────────────────────────────────────────────────────
+
+func (s *ServerOptionsScreen) handleApply() tea.Cmd {
+	doApply := func() tea.Msg {
+		if err := config.SaveAppConfig(s.config); err != nil {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Save Failed",
+				Message: fmt.Sprintf("Could not save server settings: %v", err),
+				Type:    tui.MessageError,
+			}
+		}
+		return tui.ShowMessageDialogMsg{
+			Title:   "Settings Saved",
+			Message: "Server settings saved. Restart the SSH server for changes to take effect.",
+			Type:    tui.MessageSuccess,
+		}
+	}
+	return func() tea.Msg {
+		if s.settingsMenu.AnyLocked() {
+			return nil
+		}
+		if len(sessionlocks.Sessions.ListServerInfos()) > 0 {
+			return tui.ShowConfirmDialogMsg{
+				Title:      "Server Is Running",
+				Question:   "Changing server settings while the server is running may disconnect active remote sessions.\n\nApply anyway?",
+				DefaultYes: false,
+				OnResult: func(confirmed bool) tea.Cmd {
+					if !confirmed {
+						return nil
+					}
+					return doApply
+				},
+			}
+		}
+		return doApply()
+	}
+}
+
+// ── Focus ────────────────────────────────────────────────────────────────────
+
+func (s *ServerOptionsScreen) SetFocused(f bool) {
+	s.focused = f
+	if s.outerMenu != nil {
+		s.outerMenu.SetFocused(f)
+	}
+}
+
+// ── ScreenModel interface ────────────────────────────────────────────────────
+
+func (s *ServerOptionsScreen) Init() tea.Cmd {
+	return tea.Batch(s.settingsMenu.Init(), s.statusMenu.Init())
+}
+
+func (s *ServerOptionsScreen) Title() string {
+	return "Server Settings"
+}
+
+func (s *ServerOptionsScreen) HelpText() string {
+	if s.outerMenu == nil {
+		return ""
+	}
+	switch s.outerMenu.GetFocusedSection() {
+	case 0:
+		return s.settingsMenu.HelpText()
+	case 1:
+		return s.statusMenu.HelpText()
+	}
+	return "Tab to cycle panels, Enter to Apply, Esc to Cancel"
+}
+
+func (s *ServerOptionsScreen) IsMaximized() bool {
+	return s.outerMenu.IsMaximized()
+}
+
+func (s *ServerOptionsScreen) MenuName() string {
+	return "server"
+}
+
+func (s *ServerOptionsScreen) IsDestructive() bool {
+	return true
+}
+
+// MinHeight: outer border(2) + settings section(5) + status section(4) + buttons(3) = 14.
+func (s *ServerOptionsScreen) MinHeight() int {
+	return 14
+}
+
+// EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.
+func (s *ServerOptionsScreen) EscapeAction() tea.Cmd {
+	if s.isRoot {
+		return tui.ConfirmExitAction()
+	}
+	return navigateBack()
+}
+
+func (s *ServerOptionsScreen) HasDialog() bool {
+	if s.settingsMenu == nil || s.statusMenu == nil {
+		return false
+	}
+	return s.settingsMenu.HasDialog() || s.statusMenu.HasDialog()
+}
+
+func (s *ServerOptionsScreen) FocusTitleBar() {
+	if s.outerMenu != nil {
+		s.outerMenu.FocusTitleBar()
+	}
+}
+
+func (s *ServerOptionsScreen) BlurTitleBar() {
+	if s.outerMenu != nil {
+		s.outerMenu.BlurTitleBar()
+	}
+}
+
+func (s *ServerOptionsScreen) TitleBarFocused() bool {
+	return s.outerMenu != nil && s.outerMenu.TitleBarFocused()
+}
+
+func (s *ServerOptionsScreen) IsScrollbarDragging() bool {
+	return s.settingsMenu.IsScrollbarDragging() || s.statusMenu.IsScrollbarDragging()
+}
+
+func (s *ServerOptionsScreen) HelpContext(maxWidth int) displayengine.HelpContext {
+	screenName := s.outerMenu.Title()
+	pageText := "Configure remote access to the DS2 TUI. SSH must be enabled and configured before the web server can be used."
+
+	var inner displayengine.HelpContext
+	if s.outerMenu != nil {
+		switch s.outerMenu.GetFocusedSection() {
+		case 0:
+			inner = s.settingsMenu.HelpContext(maxWidth)
+		case 1:
+			inner = s.statusMenu.HelpContext(maxWidth)
+		}
+	}
+
+	inner.ScreenName = screenName
+	inner.PageTitle = "Description"
+	inner.PageText = pageText
+	return inner
+}
+
+func (s *ServerOptionsScreen) AdvanceSpinners(now time.Time) bool {
+	a := s.settingsMenu != nil && s.settingsMenu.AdvanceSpinners(now)
+	b := s.statusMenu != nil && s.statusMenu.AdvanceSpinners(now)
+	c := s.outerMenu != nil && s.outerMenu.AdvanceSpinners(now)
+	return a || b || c
+}
+
+// ClearProcessingState clears spinner state on all inner menus.
+// Called by AppModel when a dialog closes and returns focus to this screen
+// (e.g. the Exit or Back confirm dialog resolving) -- without this, a
+// button's spinner started via SetProcessingBtnDeferred keeps running
+// forever once its action resolves without navigating away, since these
+// menus are named fields here rather than an embedded/promoted MenuModel.
+func (s *ServerOptionsScreen) ClearProcessingState() {
+	if s.settingsMenu != nil {
+		s.settingsMenu.ClearProcessingState()
+	}
+	if s.statusMenu != nil {
+		s.statusMenu.ClearProcessingState()
+	}
+	if s.outerMenu != nil {
+		s.outerMenu.ClearProcessingState()
+	}
+}

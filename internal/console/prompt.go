@@ -1,0 +1,258 @@
+package console
+
+import (
+	"github.com/GhostWriters/semstyle"
+	"bufio"
+	"context"
+	"errors"
+	"os"
+	"strings"
+
+	"golang.org/x/term"
+)
+
+// ErrUserAborted is returned when the user aborts an action
+var ErrUserAborted = errors.New("user aborted")
+
+// AbortHandler is a function that can be registered to handle CTRL-C aborts globally.
+var AbortHandler func(ctx context.Context)
+
+// Printer is a function compatible with logger.Notice
+type Printer func(ctx context.Context, msg any, args ...any)
+
+// TUIConfirm is a function that can be registered by the tui package
+// to allow QuestionPrompt to show a graphical dialog.
+var TUIConfirm func(title, question string, defaultYes bool) bool
+
+// TUIPrompt is a function that can be registered by the tui package
+// to allow TextPrompt to show a graphical text input dialog.
+var TUIPrompt func(title, question string, sensitive bool, initialValue ...string) (string, error)
+
+// TUIShutdown is a function that can be registered by the tui package
+// to allow the application to cleanly exit the TUI before re-execution.
+var TUIShutdown func()
+var TUIEmergencyShutdown func()
+
+// DaemonShutdown is registered by the serve package when running as a daemon.
+// Calling it cancels the server context so StartSSHServer returns and main()
+// can pick up PendingReExec to exec the new binary.
+var DaemonShutdown func()
+
+// ServerDisconnect is registered by the serve package when running as a daemon.
+// Calling it disconnects all active SSH/web sessions before shutdown, preventing
+// active sessions from blocking the server context from cancelling.
+var ServerDisconnect func()
+
+// IsDaemon is true when the process was started with --server-daemon.
+// Used by the update path to ensure re-exec restarts as a daemon.
+var IsDaemon bool
+
+// DaemonArgs is the exact argv (os.Args[1:]) this --server-daemon process was
+// launched with, captured once at startup. Used by the update/restart path
+// to re-exec with the same args -- notably any port override, since a daemon
+// on a non-default port only knows that port from these args, not from the
+// shared config file (see cmd/executor_serve.go's parsePortArgs).
+var DaemonArgs []string
+
+// NonInteractive is true when this --server-daemon process was launched
+// with the hidden --non-interactive flag (derived from DaemonArgs, so it's
+// only meaningful when IsDaemon is true). Consulted by the update/restart
+// path's re-exec sites that hardcode a bare --server-daemon instead of
+// reusing DaemonArgs wholesale, so a self-update re-exec doesn't silently
+// drop it and start prompting for input again.
+var NonInteractive bool
+
+// GlobalYes is set to true when the -y/--yes flag is passed to the application.
+// QuestionPrompt prompts the user with a Yes/No question.
+// It returns true if the user answers Yes, false otherwise.
+// defaultValue determines the default action if the user just presses Enter ("Y"=Yes, "N"=No, ""=Require Input).
+// forceYes if true, immediately returns true without prompting (useful for -y flag).
+func QuestionPrompt(ctx context.Context, printer Printer, title, question string, defaultValue string, forceYes bool) (bool, error) {
+	if forceYes || GlobalYes {
+		return true, nil
+	}
+
+	// Normalize title before any processing
+	if title == "" {
+		title = "Confirmation"
+	}
+
+	// Format text for console output (uses console color registry)
+	questionStr := semstyle.Sprintf("%s", question)
+
+	// Log the question regardless of prompt mode (matches bash notice behavior)
+	printer(ctx, "%s", questionStr)
+
+	// Prepare prompt string
+	ynPrompt := "[YN]"
+	if strings.EqualFold(defaultValue, "y") {
+		ynPrompt = "[Yn]"
+	} else if strings.EqualFold(defaultValue, "n") {
+		ynPrompt = "[yN]"
+	}
+
+	// Log the YN prompt regardless of mode (matches bash notice behavior)
+	printer(ctx, "%s", ynPrompt)
+
+	// Check if we should use TUI for this prompt. Prefer a session-scoped
+	// confirm callback attached to ctx (see WithConfirmFunc) over the global
+	// TUIConfirm var, which is shared process-wide and can point at the wrong
+	// (or an already-exited) session in a server-daemon process.
+	confirm := ConfirmFuncFromContext(ctx)
+	if confirm == nil {
+		confirm = TUIConfirm
+	}
+	if confirm != nil {
+		defaultYes := strings.EqualFold(defaultValue, "y")
+		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
+		// using the active theme instead of the hardcoded console color registry.
+		answer := confirm(title, question, defaultYes)
+		if answer {
+			printer(ctx, "%s", semstyle.Sprintf("Answered: {{|Yes|}}Yes{{[-]}}"))
+		} else {
+			printer(ctx, "%s", semstyle.Sprintf("Answered: {{|No|}}No{{[-]}}"))
+		}
+		return answer, nil
+	}
+
+	// When the viewport is active, its goroutine owns os.Stdin (fd 0).
+	// Open /dev/tty directly so we read from the terminal without racing.
+	// On Windows openTTY returns os.Stdin (viewport never active there anyway).
+	stdinReader := os.Stdin
+	if GlobalViewport != nil && GlobalViewport.IsActive() {
+		if tty, ok := openTTY(); ok {
+			defer tty.Close()
+			stdinReader = tty
+		}
+	}
+
+	// Enter raw mode so we can read a single keypress.
+	// When the viewport owns raw mode the terminal is already raw — no need to
+	// set it again (double-enter would corrupt state on the inner restore).
+	fd := int(stdinReader.Fd())
+	var oldState *term.State
+	viewportOwnsRaw := GlobalViewport != nil && GlobalViewport.IsRawMode()
+	if !viewportOwnsRaw && term.IsTerminal(fd) {
+		var err error
+		oldState, err = term.MakeRaw(fd)
+		if err == nil {
+			defer func() { _ = term.Restore(fd, oldState) }()
+		}
+	}
+
+	b := make([]byte, 1)
+	answer := false
+	answered := false
+
+	for !answered {
+		_, err := stdinReader.Read(b)
+		if err != nil {
+			// If read fails, use default if available, else default to No (safe)
+			if strings.EqualFold(defaultValue, "y") {
+				answer = true
+			} else {
+				answer = false
+			}
+			break
+		}
+
+		input := string(b[0])
+
+		// Handle Ctrl-C (0x03)
+		if input == "\x03" {
+			if oldState != nil {
+				_ = term.Restore(fd, oldState)
+			}
+			if AbortHandler != nil {
+				AbortHandler(ctx)
+			}
+			return false, ErrUserAborted
+		}
+
+		// Handle Enter key (CR or LF)
+		if input == "\r" || input == "\n" {
+			if strings.EqualFold(defaultValue, "y") {
+				answer = true
+				break
+			} else if strings.EqualFold(defaultValue, "n") {
+				answer = false
+				break
+			}
+			// If no default (defaultValue == ""), ignore Enter
+			continue
+		}
+
+		lower := strings.ToLower(input)
+		if lower == "y" {
+			answer = true
+			break
+		}
+		if lower == "n" {
+			answer = false
+			break
+		}
+		// Ignore other keys
+	}
+
+	// Restore terminal before printing log messages
+	if oldState != nil {
+		_ = term.Restore(fd, oldState)
+	}
+
+	if answer {
+		printer(ctx, "Answered: {{|Yes|}}Yes{{[-]}}")
+	} else {
+		printer(ctx, "Answered: {{|No|}}No{{[-]}}")
+	}
+
+	return answer, nil
+}
+
+// TextPrompt prompts the user for string input.
+// If sensitive is true, it attempts to mask the input in standard terminal.
+func TextPrompt(ctx context.Context, printer Printer, title, question string, sensitive bool, initialValue ...string) (string, error) {
+	// Normalize title before any processing
+	if title == "" {
+		title = "Input Required"
+	}
+
+	// Format text for console output (uses console color registry)
+	questionStr := semstyle.Sprintf("%s", question)
+	titleStr := semstyle.Sprintf("%s", title)
+
+	// Log the prompt regardless of mode (matches bash notice behavior)
+	if titleStr != "" {
+		printer(ctx, "%s", titleStr)
+	}
+	printer(ctx, "%s: ", questionStr)
+
+	// Prefer a session-scoped prompt callback attached to ctx (see
+	// WithPromptFunc) over the global TUIPrompt var, which is shared
+	// process-wide and can point at the wrong (or an already-exited)
+	// session in a server-daemon process.
+	prompt := PromptFuncFromContext(ctx)
+	if prompt == nil {
+		prompt = TUIPrompt
+	}
+	if prompt != nil {
+		// Pass raw (unprocessed) strings so the TUI dialog can expand semantic tags
+		// using the active theme instead of the hardcoded console color registry.
+		return prompt(title, question, sensitive, initialValue...)
+	}
+
+	if sensitive {
+		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		printer(ctx, "") // Print a newline after reading password
+		if err != nil {
+			return "", err
+		}
+		return string(passwordBytes), nil
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
+}
