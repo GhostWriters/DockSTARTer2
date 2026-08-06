@@ -27,6 +27,7 @@ import (
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 	"charm.land/lipgloss/v2"
+	"github.com/adrg/xdg"
 )
 
 func main() {
@@ -149,6 +150,13 @@ func run() (exitCode int) {
 	// migration needs these to load the chosen theme's suggested defaults.
 	theme.EmbeddedThemeLister = assets.ListThemes
 	theme.EmbeddedThemeReader = assets.GetTheme
+
+	// Fix ownership/permissions of the top-level XDG config dir itself
+	// (non-recursive -- other apps' subfolders in here are none of DS2's
+	// business) before the first LoadAppConfig() call below tries to create
+	// its own subfolder in it. Otherwise a ~/.config owned by root (e.g.
+	// left behind by an earlier root-run process) blocks that mkdir outright.
+	system.TakeOwnership(context.Background(), xdg.ConfigHome)
 
 	// Apply spinner/line-char config early so spinner works during startup log messages.
 	var earlyConf config.AppConfig
