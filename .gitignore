@@ -37,6 +37,7 @@ __debug_bin
 /menu.ini
 /dockstarter.ini
 *.log
+*.txt
 /share/
 /shared/
 /site/
@@ -44,5 +45,21 @@ __debug_bin
 # Project Specific
 ds2.exe
 dockstarter.exe
-dockstarter.log
-fatal.log
+DockSTARTer2.exe
+/build.ps1
+/build.bat
+/.ds2.new
+/scratch/
+
+# Local test binaries
+DockSTARTer2
+DockSTARTer2_linux
+ds2_test
+ds2_test_linux
+ds2_linux
+ds2_current
+ds2_prev
+
+
+# Local agent tooling config (not needed by CI/GitHub)
+.agent/

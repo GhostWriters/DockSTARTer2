@@ -1,0 +1,225 @@
+package commands
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/sessionlocks"
+	"DockSTARTer2/internal/update"
+	"DockSTARTer2/internal/version"
+)
+
+func HandleHelp(ctx context.Context, group *CommandGroup) error {
+	target := ""
+	if len(group.Args) > 0 {
+		target = group.Args[0]
+	}
+	PrintHelp(ctx, target)
+	return nil
+}
+
+// HandlePrintVersion writes just the raw version string to stdout.
+// Used by the restart watcher to verify the on-disk binary version without
+// parsing the styled --version output.
+func HandlePrintVersion() error {
+	fmt.Println(version.Version)
+	return nil
+}
+
+// HandlePrintTemplatesVersion writes just the raw templates version string to stdout.
+func HandlePrintTemplatesVersion() error {
+	fmt.Println(paths.GetTemplatesVersion())
+	return nil
+}
+
+func HandleVersion(ctx context.Context) error {
+	logger.Display(ctx, update.GetAppVersionDisplay())
+	logger.Display(ctx, update.GetTmplVersionDisplay())
+	logger.Display(ctx, update.GetComposeSdkVersionDisplay())
+	logger.Display(ctx, update.GetDockerDaemonVersionDisplay(ctx))
+	logger.Display(ctx, update.GetDockerAPIVersionDisplay(ctx))
+	return nil
+}
+
+// HandleSysInfo prints the same diagnostic system info shown in a
+// fatal-crash report, for troubleshooting issues that don't produce an
+// actual crash -- a user can be asked to run `ds2 --sysinfo` and paste the
+// output.
+func HandleSysInfo(ctx context.Context) error {
+	logger.PrintSystemInfo(ctx)
+	return nil
+}
+
+func HandleInstall(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. The only dependency is '{{|UserCommand|}}docker{{[-]}}'.", group.Command))
+	if state.Force {
+		logger.Notice(ctx, "Force flag ignored.")
+	}
+	return nil
+}
+
+func HandleConfigPm(ctx context.Context, group *CommandGroup) error {
+	logger.Warn(ctx, fmt.Sprintf("The '{{|UserCommand|}}%s{{[-]}}' command is deprecated. Package manager configuration is no longer needed.", group.Command))
+	return nil
+}
+
+func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, restArgs []string) error {
+	switch group.Command {
+	case "-u", "--update":
+		appVer := ""
+		templBranch := ""
+		if len(group.Args) > 0 {
+			appVer = group.Args[0]
+		}
+		if len(group.Args) > 1 {
+			templBranch = group.Args[1]
+		}
+		templInfo, err := update.CheckTemplatesUpdate(ctx, state.Force, templBranch)
+		if err == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			closing := fmt.Sprintf("Skipping template update from '%s' to '%s' while configuration is being edited.", update.TmplVersionLink(templInfo.CurrentDisplay), update.TmplVersionLink(templInfo.RemoteDisplay))
+			logger.Warn(ctx, sessionlocks.EditLockLines(info, closing))
+		} else if err == nil {
+			_ = update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes)
+		}
+		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
+	case "--update-app":
+		appVer := ""
+		if len(group.Args) > 0 {
+			appVer = group.Args[0]
+		}
+		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
+	case "--update-templates":
+		templBranch := ""
+		if len(group.Args) > 0 {
+			templBranch = group.Args[0]
+		}
+		if sessionlocks.Sessions.IsEditLocked() {
+			info := sessionlocks.Sessions.ReadEditInfo()
+			logger.Warn(ctx, sessionlocks.EditLockLines(info, "Skipping template update while configuration is being edited."))
+		} else {
+			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		}
+	}
+	// Server restart after update is handled by the cmd-layer caller (which has access to serve).
+	return nil
+}
+
+func HandleStatus(ctx context.Context, group *CommandGroup) error {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
+		return fmt.Errorf("no application name provided")
+	}
+
+	for _, arg := range group.Args {
+		status := appenv.Status(ctx, arg, conf)
+		logger.Display(ctx, status)
+	}
+	return nil
+}
+
+func HandleStatusChange(ctx context.Context, group *CommandGroup) error {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
+		return fmt.Errorf("no application name provided")
+	}
+
+	var err error
+	switch group.Command {
+	case "--status-enable":
+		err = appenv.Enable(ctx, group.Args, conf)
+	case "--status-disable":
+		err = appenv.Disable(ctx, group.Args, conf)
+	}
+
+	if err != nil {
+		logger.Error(ctx, "Failed to change app status: %v", err)
+		return err
+	}
+	if err := appenv.Update(ctx, false, filepath.Join(conf.ComposeDir, constants.EnvFileName)); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
+	}
+	return nil
+}
+
+func HandleRemove(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	conf := config.LoadAppConfig()
+
+	err := appenv.Remove(ctx, group.Args, conf, state.Yes)
+
+	if err != nil {
+		logger.Error(ctx, "Failed to remove app variables: %v", err)
+		return err
+	}
+	if err := appenv.Update(ctx, false, filepath.Join(conf.ComposeDir, constants.EnvFileName)); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
+	}
+	return nil
+}
+
+func HandleAppVarsCreate(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires at least one application name.", group.Command)
+		return fmt.Errorf("no application name provided")
+	}
+
+	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
+	if err := appenv.Create(ctx, envFile); err != nil {
+		logger.Debug(ctx, "Ensure env file error: %v", err)
+	}
+
+	var validArgs []string
+	for _, arg := range group.Args {
+		upper := strings.ToUpper(strings.TrimSpace(arg))
+		if !appenv.IsAppBuiltIn(upper) {
+			logger.Warn(ctx, "Application '{{|App|}}%s{{[-]}}' does not exist.", appenv.GetNiceName(ctx, upper))
+			continue
+		}
+		validArgs = append(validArgs, arg)
+	}
+	if len(validArgs) == 0 {
+		return nil
+	}
+
+	_ = appenv.MigrateEnabledLines(ctx, conf)
+
+	if err := appenv.Enable(ctx, validArgs, conf); err != nil {
+		logger.Error(ctx, "Failed to enable apps: %v", err)
+		return err
+	}
+
+	for _, arg := range validArgs {
+		if err := appenv.CreateApp(ctx, arg, state.Force, conf); err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
+		}
+	}
+
+	if err := appenv.Update(ctx, state.Force, envFile); err != nil {
+		logger.Warn(ctx, "Failed to update env usage: %v", err)
+	} else {
+		for _, arg := range group.Args {
+			appenv.UnsetNeedsCreateApp(ctx, strings.ToUpper(arg), conf)
+		}
+	}
+	return nil
+}
+
+func HandleAppVarsCreateAll(ctx context.Context, _group *CommandGroup, state *CmdState) error {
+	conf := config.LoadAppConfig()
+	if err := appenv.CreateAll(ctx, state.Force, conf); err != nil {
+		logger.Error(ctx, "Failed to create app variables: %v", err)
+		return err
+	}
+	return nil
+}

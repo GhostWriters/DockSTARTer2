@@ -1,0 +1,425 @@
+package logger
+
+import (
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/paths"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+	"DockSTARTer2/internal/version"
+	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"charm.land/lipgloss/v2"
+	charmlog "charm.land/log/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/muesli/termenv"
+)
+
+// TUIMode suppresses direct console output (stdout/stderr) when active.
+var TUIMode bool
+
+// suppressWriterKey is the context key holding the set of io.Writers to suppress.
+type suppressWriterKey struct{}
+
+// WithSuppressWriter returns a context that suppresses log output to the given writer.
+// Multiple calls accumulate — each writer is added to the suppress set.
+// Messages still appear in other destinations (log file, etc.). Fatal messages are always shown.
+func WithSuppressWriter(ctx context.Context, w io.Writer) context.Context {
+	existing, _ := ctx.Value(suppressWriterKey{}).(map[io.Writer]struct{})
+	next := make(map[io.Writer]struct{}, len(existing)+1)
+	for k := range existing {
+		next[k] = struct{}{}
+	}
+	next[w] = struct{}{}
+	return context.WithValue(ctx, suppressWriterKey{}, next)
+}
+
+// isSuppressed reports whether w is in the suppress set on ctx.
+func isSuppressed(ctx context.Context, w io.Writer) bool {
+	set, _ := ctx.Value(suppressWriterKey{}).(map[io.Writer]struct{})
+	_, ok := set[w]
+	return ok
+}
+
+// logSubs holds one delivery channel per active subscriber (one per
+// concurrent session's log/console panel). A single shared channel would
+// mean every session's panel goroutine competes to read the SAME line --
+// in a server-daemon process serving multiple concurrent SSH/web sessions,
+// each log line would go to whichever session's goroutine happened to win
+// that particular read, silently splitting one line's worth of output
+// across unrelated sessions instead of delivering it to all of them.
+var (
+	logSubMu sync.Mutex
+	logSubs  = make(map[chan string]struct{})
+)
+
+// LevelStyleFunc is a function that returns a styled string for a log level tag.
+// This is set by main.go to avoid import cycles.
+var LevelStyleFunc func(tag string, label string) lipgloss.Style
+
+// SubscribeLogLines registers a new subscriber and returns a channel that
+// receives its own copy of every TUI-formatted log line (same format written
+// to TUI writer), plus an unsubscribe function the caller must invoke when
+// done (e.g. when its session/panel ends) to stop receiving lines and free
+// the subscription slot. Call once per subscriber lifetime -- not once per
+// line -- and read repeatedly from the returned channel.
+func SubscribeLogLines() (ch <-chan string, unsubscribe func()) {
+	c := make(chan string, 200)
+	logSubMu.Lock()
+	logSubs[c] = struct{}{}
+	logSubMu.Unlock()
+	return c, func() {
+		logSubMu.Lock()
+		delete(logSubs, c)
+		logSubMu.Unlock()
+	}
+}
+
+// publishLogLine delivers line to every current subscriber's channel. A
+// subscriber whose buffer is full is skipped for this line (rather than
+// blocking every other subscriber on one slow reader).
+func publishLogLine(line string) {
+	logSubMu.Lock()
+	defer logSubMu.Unlock()
+	for c := range logSubs {
+		select {
+		case c <- line:
+		default:
+		}
+	}
+}
+
+// logFilePath and logDir are set during NewLogger so fatal/cleanup paths use the same location.
+var logFilePath string
+var logDir string
+
+// GetLogFilePath returns the path to the current log file (empty if not yet initialised).
+func GetLogFilePath() string {
+	return logFilePath
+}
+
+// GetFatalLogFilePath returns the path to the fatal-crash log file (empty if
+// not yet initialised), mirroring the construction in logFatal.
+func GetFatalLogFilePath() string {
+	if logDir == "" {
+		return ""
+	}
+	appName := strings.ToLower(version.ApplicationName)
+	return filepath.Join(logDir, appName+".fatal.log")
+}
+
+// Helper to resolve message from any type to string
+func resolveMsg(msg any) string {
+	switch v := msg.(type) {
+	case string:
+		return v
+	case []string:
+		return strings.Join(v, "\n")
+	case []any:
+		var parts []string
+		for _, item := range v {
+			parts = append(parts, resolveMsg(item))
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// Internal helper to split multi-line messages (legacy for auto-timestamp)
+func log(ctx context.Context, level slog.Level, msg any, args ...any) {
+	logAt(ctx, time.Now(), level, msg, args...)
+}
+
+// Internal helper to log with a specific timestamp
+func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...any) {
+	h := slog.Default().Handler()
+	if !h.Enabled(ctx, level) {
+		return
+	}
+
+	msgStr := resolveMsg(msg)
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
+		args = nil
+	}
+
+	lines := strings.Split(msgStr, "\n")
+	for i, line := range lines {
+		r := slog.NewRecord(t, level, line, 0)
+		if i == 0 {
+			r.Add(args...)
+		}
+		_ = h.Handle(ctx, r)
+	}
+}
+
+// FormatLevel returns a consistent 6-character string for log levels.
+func FormatLevel(level slog.Level) string {
+	switch level {
+	case LevelTrace:
+		return "TRACE "
+	case LevelDebug:
+		return "DEBUG "
+	case LevelInfo:
+		return "INFO  "
+	case LevelNotice:
+		return "NOTICE"
+	case LevelWarn:
+		return "WARN  "
+	case LevelError:
+		return "ERROR "
+	case LevelFatal:
+		return "FATAL "
+	default:
+		return level.String()
+	}
+}
+
+// Custom log levels to match DockSTARTer
+const (
+	LevelTrace  = slog.Level(-8)
+	LevelDebug  = slog.LevelDebug
+	LevelInfo   = slog.Level(-2)
+	LevelNotice = slog.LevelInfo
+	LevelWarn   = slog.LevelWarn
+	LevelError  = slog.LevelError
+	LevelFatal  = slog.Level(12)
+)
+
+// LevelVar allows dynamic changing of the log level
+var LevelVar = new(slog.LevelVar)
+var FileLevelVar = new(slog.LevelVar)
+
+// Package-level logger instances kept for dynamic level updates via SetLevel.
+var consoleLogger *charmlog.Logger
+var fileLogger *charmlog.Logger
+
+func init() {
+	LevelVar.Set(LevelNotice)
+	FileLevelVar.Set(LevelTrace) // File always receives all logs regardless of console level
+
+	// Register global abort handler for console prompts
+	console.AbortHandler = func(ctx context.Context) {
+		Error(ctx, "User aborted via CTRL-C")
+	}
+
+	// The URL semantic tag renders its content (up to the next reset) as a terminal
+	// hyperlink. The styling engine no longer hardcodes this, so DS2 opts in here.
+	semstyle.RegisterHyperlinkTag("URL")
+}
+
+func SetLevel(level slog.Level) {
+	LevelVar.Set(level)
+	if consoleLogger != nil {
+		consoleLogger.SetLevel(charmlog.Level(level))
+	}
+	// File level is always Trace — flags only affect console output.
+}
+
+// SetColorProfile forces the color profile for the console logger.
+func SetColorProfile(profile termenv.Profile) {
+	if consoleLogger != nil {
+		consoleLogger.SetColorProfile(colorprofile.Profile(profile))
+	}
+}
+
+// currentConsoleWriter tracks where the console logger is currently writing.
+// Updated by SetConsoleOutput; used by ConsoleWriter() for accurate suppression.
+var currentConsoleWriter io.Writer = os.Stderr
+
+// ConsoleWriter returns the io.Writer currently used by the console handler.
+// Use this with WithSuppressWriter to prevent logSummary from double-printing
+// after the viewport has already dumped its final state to the terminal.
+func ConsoleWriter() io.Writer {
+	return currentConsoleWriter
+}
+
+// SetConsoleOutput redirects the console logger output to the provided writer.
+// It returns a function that restores the original output (os.Stderr).
+// This is useful for capturing logger output in TUI components.
+func SetConsoleOutput(w io.Writer) func() {
+	if consoleLogger == nil {
+		return func() {}
+	}
+
+	currentConsoleWriter = w
+	consoleLogger.SetOutput(w)
+
+	return func() {
+		currentConsoleWriter = os.Stderr
+		// Restore to default stderr
+		consoleLogger.SetOutput(os.Stderr)
+	}
+}
+
+// timestampTagName is the semantic tag name for a log line's timestamp,
+// used by buildConsoleStyles and TUIHandler (logger_handlers.go).
+const timestampTagName = "Timestamp"
+
+// allLevels lists every level in display order, used by buildConsoleStyles
+// and TUIHandler.
+var allLevels = []slog.Level{LevelTrace, LevelDebug, LevelInfo, LevelNotice, LevelWarn, LevelError, LevelFatal}
+
+// levelTagName returns the semantic tag name for a log level (case-
+// insensitively matches a field in console.Styles), or "" for an unknown
+// level. Used by buildConsoleStyles and TUIHandler.
+func levelTagName(level slog.Level) string {
+	switch level {
+	case LevelTrace:
+		return "Trace"
+	case LevelDebug:
+		return "Debug"
+	case LevelInfo:
+		return "Info"
+	case LevelNotice:
+		return "Notice"
+	case LevelWarn:
+		return "Warn"
+	case LevelError:
+		return "Error"
+	case LevelFatal:
+		return "Fatal"
+	default:
+		return ""
+	}
+}
+
+// buildConsoleStyles returns level styles using lipgloss colors.
+// Colors are auto-stripped by charmbracelet/log when the output is not a TTY.
+func buildConsoleStyles() *charmlog.Styles {
+	// Ensure base semantic tags are registered before resolving them.
+	console.RegisterBaseTags()
+
+	st := charmlog.DefaultStyles()
+	if LevelStyleFunc != nil {
+		st.Timestamp = LevelStyleFunc("{{|"+timestampTagName+"|}}", "")
+	}
+
+	for _, lvl := range allLevels {
+		label := "[" + FormatLevel(lvl) + "]"
+		if LevelStyleFunc != nil {
+			st.Levels[charmlog.Level(lvl)] = LevelStyleFunc("{{|"+levelTagName(lvl)+"|}}", label)
+		} else {
+			st.Levels[charmlog.Level(lvl)] = lipgloss.NewStyle().SetString(label)
+		}
+	}
+
+	return st
+}
+
+func NewLogger() *slog.Logger {
+	wStderr := os.Stderr
+
+	// Configure Console Handler using charmbracelet/log.
+	// Color support is auto-detected from the output writer (TTY vs non-TTY).
+	consoleLogger = charmlog.NewWithOptions(wStderr, charmlog.Options{
+		Level:           charmlog.Level(LevelVar.Level()),
+		TimeFormat:      "2006-01-02 15:04:05",
+		ReportTimestamp: true,
+	})
+	consoleLogger.SetStyles(buildConsoleStyles())
+	consoleHandler := &TagProcessorHandler{base: consoleLogger, mode: "ansi", consoleWriter: wStderr}
+
+	// Configure File Handler (No Color)
+	logDir = paths.GetConfigDir()
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create config directory: %v\n", err)
+	}
+
+	appName := strings.ToLower(version.ApplicationName)
+	logFilePath = filepath.Join(logDir, appName+".log")
+
+	// Open file in Append mode
+	wFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+	}
+
+	handlers := []slog.Handler{
+		consoleHandler,
+		&TUIHandler{level: LevelDebug, global: true},
+		&TUIHandler{level: LevelVar, global: false},
+	}
+
+	if wFile != nil {
+		fmt.Fprintln(wFile, version.ApplicationName+" Log")
+
+		// File handler: charmbracelet/log auto-strips colors for non-TTY writers.
+		fileLogger = charmlog.NewWithOptions(wFile, charmlog.Options{
+			Level:           charmlog.Level(FileLevelVar.Level()),
+			TimeFormat:      "2006-01-02 15:04:05",
+			ReportTimestamp: true,
+		})
+		fileLogger.SetStyles(buildConsoleStyles())
+		fileHandler := &TagProcessorHandler{base: fileLogger, mode: "strip"}
+		handlers = append(handlers, fileHandler)
+	}
+
+	return slog.New(&FanoutHandler{handlers: handlers})
+}
+
+// Global helpers for custom levels that don't satisfy standard slog methods
+func Trace(ctx context.Context, msg any, args ...any) {
+	log(ctx, LevelTrace, msg, args...)
+}
+
+func Debug(ctx context.Context, msg any, args ...any) {
+	log(ctx, LevelDebug, msg, args...)
+}
+
+func Info(ctx context.Context, msg any, args ...any) {
+	log(ctx, LevelInfo, msg, args...)
+}
+
+func Notice(ctx context.Context, msg any, args ...any) {
+	log(ctx, LevelNotice, msg, args...)
+}
+
+func Warn(ctx context.Context, msg any, args ...any) {
+	log(ctx, LevelWarn, msg, args...)
+}
+
+func Error(ctx context.Context, msg any, args ...any) {
+	log(ctx, LevelError, msg, args...)
+}
+
+// Display prints a message without any timestamps or log level metadata.
+// It still redirects to the TUI if a TUI writer is present in the context.
+// This output is NOT written to the log file.
+func Display(ctx context.Context, msg any, args ...any) {
+	msgStr := resolveMsg(msg)
+	if len(args) > 0 && strings.Contains(msgStr, "%") {
+		msgStr = fmt.Sprintf(msgStr, args...)
+	}
+
+	lines := strings.Split(msgStr, "\n")
+	for _, line := range lines {
+		// Output to TUI if writer is in context
+		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
+			// Pass raw tags to TUI for component-side registry resolution
+			fmt.Fprintln(w, line)
+		}
+
+		// Output directly to terminal.
+		// Suppress in TUI mode (Bubble Tea owns the terminal).
+		if !TUIMode {
+			rendered := semstyle.ToANSI(line) + semstyle.CodeReset
+			if console.GlobalViewport != nil && console.GlobalViewport.IsActive() {
+				console.GlobalViewport.Append(rendered)
+			} else {
+				console.LockTerminal()
+				console.ClearSpinnerLine()
+				fmt.Println(rendered)
+				console.ShowSpinnerFrame()
+				console.UnlockTerminal()
+			}
+		}
+	}
+}

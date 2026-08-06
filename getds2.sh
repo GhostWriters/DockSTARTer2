@@ -101,15 +101,59 @@ if [ -z "$SRC_PATH" ]; then
 fi
 chmod +x "$SRC_PATH"
 
+# is_on_path DIR: true if DIR (no trailing slash) appears in $PATH.
+# Trailing slashes on PATH entries are stripped before comparing, so
+# "/usr/bin/" in PATH still matches candidate "/usr/bin".
+is_on_path() {
+    OLD_IFS="$IFS"; IFS=":"
+    for p in $PATH; do
+        p=${p%/}
+        if [ "$p" = "$1" ]; then
+            IFS="$OLD_IFS"
+            return 0
+        fi
+    done
+    IFS="$OLD_IFS"
+    return 1
+}
+
 # 8. Build Candidate List (Handles spaces via Positional Parameters)
 if [ -n "$CUSTOM_DEST" ]; then
     set -- "$CUSTOM_DEST"
 else
     EXISTING=$(command -v "$FILE_NAME")
+
+    # Reorder TARGET_LIST to match PATH order (dirs on PATH tried first,
+    # in PATH order), falling back to the rest of TARGET_LIST (not on
+    # PATH) rather than failing outright if none of it is on PATH.
+    # Mirrors DS1's symlink_ds.sh path_order().
+    REMAINING="$TARGET_LIST"
+    ORDERED=""
+    OLD_IFS="$IFS"; IFS=":"
+    for p in $PATH; do
+        p=${p%/}
+        [ -z "$p" ] && continue
+        NEW_REMAINING=""
+        FOUND=0
+        for d in $REMAINING; do
+            if [ "$FOUND" -eq 0 ] && [ "$d" = "$p" ]; then
+                FOUND=1
+                ORDERED="${ORDERED:+$ORDERED:}$d"
+            else
+                NEW_REMAINING="${NEW_REMAINING:+$NEW_REMAINING:}$d"
+            fi
+        done
+        REMAINING="$NEW_REMAINING"
+    done
+    ORDERED="${ORDERED:+$ORDERED:}$REMAINING"
+    IFS="$OLD_IFS"
+
     set --
     [ -n "$EXISTING" ] && set -- "$EXISTING"
     OLD_IFS="$IFS"; IFS=":"
-    for d in $TARGET_LIST; do set -- "$@" "$d/$FILE_NAME"; done
+    for d in $ORDERED; do
+        [ -n "$d" ] && set -- "$@" "$d/$FILE_NAME"
+    done
     IFS="$OLD_IFS"
 fi
 
@@ -134,6 +178,9 @@ for FINAL_DEST in "$@"; do
        { [ ! -f "$FINAL_DEST" ] || $PRE mv -f "$FINAL_DEST" "$FINAL_DEST.old" 2>/dev/null; } && \
        $PRE cp "$SRC_PATH" "$FINAL_DEST" 2>/dev/null; then
         echo "Successfully installed to $FINAL_DEST"
+        if ! is_on_path "$DEST_DIR"; then
+            echo "Warning: '$DEST_DIR' is not in your PATH. Add it to your PATH to use the '$FILE_NAME' command."
+        fi
         SUCCESS=1
         break
     else

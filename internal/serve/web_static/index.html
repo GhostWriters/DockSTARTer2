@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DockSTARTer2</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #terminal { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.8/lib/addon-unicode11.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18/lib/addon-webgl.min.js"></script>
+
+  <script>
+    const DS2_DISPLAY_KEY = 'ds2_display';
+
+    function loadDisplaySettings() {
+      try {
+        var saved = localStorage.getItem(DS2_DISPLAY_KEY);
+        if (saved) {
+          var s = JSON.parse(saved);
+          // Settings saved before useDefaultFont existed won't have it --
+          // default to true (matches the TUI dialog's own DefaultWebDisplaySettings).
+          if (typeof s.useDefaultFont !== 'boolean') s.useDefaultFont = true;
+          // 0 means "no browser-side override yet" -- the server falls back
+          // to the Appearance menu's configured refresh rate in that case.
+          if (typeof s.refreshRate !== 'number' || s.refreshRate < 0) s.refreshRate = 0;
+          return s;
+        }
+      } catch (e) {}
+      return { fontFamily: 'monospace', fontSize: 14, useDefaultFont: true, refreshRate: 0 };
+    }
+
+    function saveDisplaySettings(s) {
+      try { localStorage.setItem(DS2_DISPLAY_KEY, JSON.stringify(s)); } catch (e) {}
+    }
+
+    function applyDisplaySettings(s) {
+      term.options.fontFamily = s.fontFamily;
+      term.options.fontSize = s.fontSize;
+      fitAddon.fit();
+      term.refresh(0, term.rows - 1);
+    }
+
+    var display = loadDisplaySettings();
+
+    // Explicit ANSI 16-color palette -- without this, xterm.js falls back to
+    // its own default palette plus contrast heuristics that can silently
+    // override a color it judges too close to the background (e.g. an
+    // unbold yellow foreground rendering as white), and reverse-video
+    // (SGR 7) styling can look wrong against that guessed palette. This is
+    // a standard, well-tested 16-color scheme (matching VS Code's default
+    // terminal theme) rather than an attempt to exactly replicate any one
+    // native terminal's own palette.
+    const ds2TermTheme = {
+      background: '#000000',
+      foreground: '#e5e5e5',
+      cursor: '#e5e5e5',
+      black: '#000000',
+      red: '#cd3131',
+      green: '#0dbc79',
+      yellow: '#e5e510',
+      blue: '#2472c8',
+      magenta: '#bc3fbc',
+      cyan: '#11a8cd',
+      white: '#e5e5e5',
+      brightBlack: '#666666',
+      brightRed: '#f14c4c',
+      brightGreen: '#23d18b',
+      brightYellow: '#f5f543',
+      brightBlue: '#3b8eea',
+      brightMagenta: '#d670d6',
+      brightCyan: '#29b8db',
+      brightWhite: '#e5e5e5',
+    };
+
+    const term = new Terminal({
+      cursorBlink: true,
+      allowProposedApi: true,
+      fontFamily: display.fontFamily,
+      fontSize: display.fontSize,
+      lineHeight: 1.0,
+      letterSpacing: 0,
+      theme: ds2TermTheme,
+    });
+
+    // Treat Unicode ambiguous-width characters (░▒▓ etc.) as single-cell so
+    // they match the width the server-side TUI renderer assumes.
+    const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+    term.loadAddon(unicode11Addon);
+    term.unicode.activeVersion = '11';
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+
+    // Use the WebGL renderer for pixel-accurate box-drawing character rendering.
+    // Falls back to the default canvas renderer if WebGL is unavailable, or
+    // if ?nowebgl=1 is in the URL -- a diagnostic escape hatch for
+    // comparing rendering against the canvas renderer without a redeploy,
+    // since the WebGL addon has known bugs with some SGR combinations
+    // (bold-off + explicit color, reverse-video) that the canvas renderer
+    // doesn't share.
+    if (new URLSearchParams(location.search).get('nowebgl') !== '1') {
+      try {
+        const webglAddon = new WebglAddon.WebglAddon();
+        webglAddon.onContextLoss(function() {
+          webglAddon.dispose();
+        });
+        term.loadAddon(webglAddon);
+      } catch (e) {
+        console.warn('WebGL renderer unavailable, falling back to canvas:', e);
+      }
+    }
+
+    fitAddon.fit();
+
+    // Suppress the mobile on-screen keyboard by default -- xterm.js's hidden
+    // textarea otherwise pops it open on any tap inside the terminal, even
+    // taps that are really just mouse clicks forwarded to the TUI app (menu
+    // items, buttons). The server sends 'text-input-focus' messages when a
+    // real text-editing cursor is showing, toggling this so the keyboard is
+    // only offered while a genuine text field has focus.
+    if (term.textarea) {
+      term.textarea.setAttribute('inputmode', 'none');
+    }
+
+    function setTextInputActive(active) {
+      if (!term.textarea) return;
+      if (active) {
+        // Toggle the attribute on the already-focused textarea (the user's
+        // own tap already focused it via xterm's default click handling)
+        // rather than calling focus() ourselves -- a focus() call outside
+        // the original user gesture is unreliable for raising the keyboard
+        // on some mobile browsers (notably iOS Safari).
+        term.textarea.removeAttribute('inputmode');
+      } else {
+        term.textarea.setAttribute('inputmode', 'none');
+        // Dismissing (unlike opening) doesn't need a user gesture, so this
+        // reliably hides the keyboard as soon as no text field is focused.
+        term.textarea.blur();
+      }
+    }
+
+    // WebSocket connection with automatic reconnect on unexpected close.
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let ws = null;
+    let reconnectDelay = 1000;  // ms, doubles each attempt up to maxDelay
+    const maxDelay = 30000;
+    let intentionalClose = false;
+
+    function connect() {
+      intentionalClose = false;
+      ws = new WebSocket(proto + '//' + location.host + '/ws');
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = function() {
+        reconnectDelay = 1000;
+        sendResize();
+        // Send current display settings so the server can pre-populate the
+        // dialog. useDefaultFont comes from `display` (localStorage), not
+        // term.options, which has no concept of "was the checkbox checked."
+        ws.send(JSON.stringify({
+          type: 'display-settings-init',
+          fontFamily: term.options.fontFamily,
+          fontSize: term.options.fontSize,
+          useDefaultFont: display.useDefaultFont,
+          refreshRate: display.refreshRate,
+        }));
+      };
+
+      ws.onmessage = function(evt) {
+        if (evt.data instanceof ArrayBuffer) {
+          term.write(new Uint8Array(evt.data));
+        } else {
+          // Check for control messages from the server (JSON text frames).
+          if (evt.data.charAt(0) === '{') {
+            try {
+              var msg = JSON.parse(evt.data);
+              if (msg.type === 'reload') {
+                intentionalClose = true;
+                location.reload();
+                return;
+              }
+              if (msg.type === 'open-url' && msg.url) {
+                window.open(msg.url, '_blank');
+                return;
+              }
+              if (msg.type === 'text-input-focus') {
+                setTextInputActive(!!msg.active);
+                return;
+              }
+              if (msg.type === 'hostname' && msg.hostname) {
+                document.title = 'DockSTARTer2 (' + msg.hostname + ')';
+                return;
+              }
+              if (msg.type === 'display-settings') {
+                console.log('display-settings received:', msg);
+                var s = {
+                  fontFamily: msg.fontFamily || display.fontFamily,
+                  fontSize: msg.fontSize || display.fontSize,
+                  useDefaultFont: typeof msg.useDefaultFont === 'boolean' ? msg.useDefaultFont : display.useDefaultFont,
+                  refreshRate: typeof msg.refreshRate === 'number' && msg.refreshRate > 0 ? msg.refreshRate : display.refreshRate,
+                };
+                display = s;
+                saveDisplaySettings(s);
+                applyDisplaySettings(s);
+                return;
+              }
+            } catch (e) { /* not JSON, fall through */ }
+          }
+          term.write(evt.data);
+        }
+      };
+
+      ws.onclose = function() {
+        if (intentionalClose) {
+          term.writeln('\r\n\r\n\x1b[33mConnection closed.\x1b[0m');
+          return;
+        }
+        const secs = Math.round(reconnectDelay / 1000);
+        term.writeln('\r\n\r\n\x1b[33mConnection lost. Reconnecting in ' + secs + 's...\x1b[0m');
+        setTimeout(function() {
+          term.writeln('\x1b[33mReconnecting...\x1b[0m');
+          connect();
+        }, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, maxDelay);
+      };
+
+      ws.onerror = function() {
+        // onclose fires after onerror, so reconnect logic is handled there.
+      };
+    }
+
+    connect();
+
+    // Terminal input → WebSocket (text frame)
+    term.onData(function(data) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // Terminal resize → WebSocket (JSON text frame)
+    function sendResize() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        fitAddon.fit();
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    }
+
+    term.onResize(function(size) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+      }
+    });
+
+    window.addEventListener('resize', function() {
+      fitAddon.fit();
+    });
+
+    // Prevent the browser context menu from appearing on right-click inside
+    // the terminal so right-click can be handled by the TUI application.
+    document.getElementById('terminal').addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
+  </script>
+</body>
+</html>

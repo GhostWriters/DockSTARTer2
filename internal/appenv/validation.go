@@ -1,0 +1,390 @@
+package appenv
+
+import (
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/compose-spec/compose-go/v2/loader"
+	"github.com/compose-spec/compose-go/v2/types"
+	"go.yaml.in/yaml/v4"
+)
+
+// IsAppNameValid checks if an app name is valid according to DS rules.
+func IsAppNameValid(appName string) bool {
+	// 1. Strip leading/trailing colons and uppercase
+	name := strings.ToUpper(strings.TrimSpace(appName))
+	if strings.HasSuffix(name, ":") {
+		name = name[:len(name)-1]
+	} else if strings.HasPrefix(name, ":") {
+		name = name[1:]
+	}
+
+	// 2. Regex check: ^[A-Z][A-Z0-9]*(__[A-Z0-9]+)?$
+	re := regexp.MustCompile(`^[A-Z][A-Z0-9]*(__[A-Z0-9]+)?$`)
+	if !re.MatchString(name) {
+		return false
+	}
+
+	// 3. Instance name validation
+	instance := AppNameToInstanceName(name)
+	if instance != "" {
+		if !InstanceNameIsValid(instance) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// IsAppBuiltIn checks if the application has a corresponding template folder.
+func IsAppBuiltIn(appName string) bool {
+	base := AppNameToBaseAppName(appName)
+	base = strings.ToLower(base)
+
+	templatesDir := paths.GetTemplatesDir()
+	appDir := filepath.Join(templatesDir, constants.TemplatesDirName, base)
+	info, err := os.Stat(appDir)
+	return err == nil && info.IsDir()
+}
+
+// IsAppDeprecated checks if an app is marked deprecated in its labels.yml.
+func IsAppDeprecated(ctx context.Context, appName string) bool {
+	labelsFile, err := AppInstanceFile(ctx, appName, "*.labels.yml")
+	if err != nil || labelsFile == "" {
+		return false
+	}
+
+	content, err := os.ReadFile(labelsFile)
+	if err != nil {
+		return false
+	}
+
+	var labels LabelsFile
+	if err := yaml.Unmarshal(content, &labels); err != nil {
+		return false
+	}
+
+	for _, service := range labels.Services {
+		if val, ok := service.Labels["com.dockstarter.appinfo.deprecated"]; ok {
+			return strings.ToLower(strings.Trim(val, `"' `)) == "true"
+		}
+	}
+	return false
+}
+
+// IsAppUserDefined checks if an app is user-defined (not built-in OR missing ENABLED var).
+func IsAppUserDefined(ctx context.Context, appName string, envFile string) bool {
+	if !IsAppBuiltIn(appName) {
+		return true
+	}
+	appUpper := strings.ToUpper(appName)
+	exists, _ := EnvVarExists(ctx, appUpper+"__ENABLED", envFile)
+	return !exists
+}
+
+// IsAppAdded checks if an app is both builtin and has an __ENABLED variable.
+func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
+	appUpper := strings.ToUpper(appName)
+	exists, _ := EnvVarExists(ctx, appUpper+"__ENABLED", envFile)
+	return IsAppBuiltIn(appUpper) && exists
+}
+
+// IsAppRunnable checks if an app has the required YML template files for the current architecture.
+func IsAppRunnable(appName string, conf config.AppConfig) bool {
+	basename := AppNameToBaseAppName(appName)
+	templatesDir := paths.GetTemplatesDir()
+	templateFolder := filepath.Join(templatesDir, constants.TemplatesDirName, basename)
+
+	// Check for main.yml
+	mainYml := filepath.Join(templateFolder, basename+".yml")
+	if _, err := os.Stat(mainYml); err != nil {
+		return false
+	}
+
+	// Check for arch-specific yml
+	archYml := filepath.Join(templateFolder, basename+"."+conf.Arch+".yml")
+	if _, err := os.Stat(archYml); err != nil {
+		return false
+	}
+
+	return true
+}
+
+// IsAppNonDeprecated is a wrapper that returns the opposite of IsAppDeprecated.
+func IsAppNonDeprecated(ctx context.Context, appName string) bool {
+	return !IsAppDeprecated(ctx, appName)
+}
+
+// IsAppEnabled checks if an app is enabled (ENABLED=true).
+func IsAppEnabled(app, envFile string) bool {
+	if !IsAppBuiltIn(app) {
+		return false
+	}
+	// bash checks value being IsTrue.
+	// We need to read the value.
+	val, _ := Get(app+"__ENABLED", envFile)
+	return IsTrue(val)
+}
+
+// IsAppReferenced checks if an app is referenced in .env or compose override.
+func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) bool {
+	app = strings.ToUpper(app)
+
+	// 1. Check for app variables in the global .env file
+	appVars, _ := ListAppVars(ctx, app, conf)
+	if len(appVars) > 0 {
+		return true
+	}
+
+	// 2. Check for app variables in the .env.app.appname file
+	appSpecificVars, _ := ListAppVars(ctx, app+":", conf)
+	if len(appSpecificVars) > 0 {
+		return true
+	}
+
+	// 3. Check for an un-commented reference to .env.app.appname in the override file
+	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+	if _, err := os.Stat(overrideFile); err == nil {
+		content, err := os.ReadFile(overrideFile)
+		if err == nil {
+			var override struct {
+				Services map[string]struct {
+					EnvFile interface{} `yaml:"env_file"`
+				} `yaml:"services"`
+			}
+			if err := yaml.Unmarshal(content, &override); err == nil {
+				targetEnv := constants.AppEnvFileNamePrefix + strings.ToLower(app)
+				for _, service := range override.Services {
+					checkEnvFile := func(v interface{}) bool {
+						switch val := v.(type) {
+						case string:
+							clean := strings.TrimPrefix(val, "./")
+							if clean == targetEnv {
+								return true
+							}
+						case []interface{}:
+							for _, item := range val {
+								if s, ok := item.(string); ok {
+									clean := strings.TrimPrefix(s, "./")
+									if clean == targetEnv {
+										return true
+									}
+								}
+							}
+						}
+						return false
+					}
+					if checkEnvFile(service.EnvFile) {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// IsTrue checks if a string value represents true.
+func IsTrue(val string) bool {
+	val = strings.ToLower(strings.TrimSpace(val))
+	return val == "true" || val == "yes" || val == "1" || val == "on"
+}
+
+// GetFromLines returns the last value for key found in lines, and whether it was found.
+// Lines is a slice of raw KEY=value strings (comments and blanks are skipped).
+// Uses the last occurrence so duplicate keys behave like MergeEnv/save.
+func GetFromLines(key string, lines []string) (string, bool) {
+	key = strings.TrimSpace(key)
+	found := false
+	val := ""
+	for _, l := range lines {
+		eqIdx := strings.Index(l, "=")
+		if eqIdx <= 0 {
+			continue
+		}
+		if strings.TrimSpace(l[:eqIdx]) == key {
+			raw := strings.TrimSpace(l[eqIdx+1:])
+			// Strip surrounding quotes to match the behaviour of the file-based Get function.
+			if len(raw) >= 2 && (raw[0] == '\'' || raw[0] == '"') && raw[len(raw)-1] == raw[0] {
+				raw = raw[1 : len(raw)-1]
+			}
+			val = raw
+			found = true
+			// no break — last value wins
+		}
+	}
+	return val, found
+}
+
+// IsAppUserDefinedFromLines reports whether the app is user-defined according to the
+// provided staged env lines (instead of reading from disk).
+// An app is user-defined when it is not built-in, or when APPNAME__ENABLED is absent.
+func IsAppUserDefinedFromLines(ctx context.Context, appName string, lines []string) bool {
+	if !IsAppBuiltIn(appName) {
+		return true
+	}
+	appUpper := strings.ToUpper(appName)
+	_, exists := GetFromLines(appUpper+"__ENABLED", lines)
+	return !exists
+}
+
+// IsAppEnabledFromLines reports whether the app is enabled according to the
+// provided staged env lines (instead of reading from disk).
+func IsAppEnabledFromLines(appName string, lines []string) bool {
+	appUpper := strings.ToUpper(appName)
+	if !IsAppBuiltIn(appUpper) {
+		return false
+	}
+	val, exists := GetFromLines(appUpper+"__ENABLED", lines)
+	return exists && IsTrue(val)
+}
+
+// InstanceNameIsValid checks if an instance name is allowed.
+func InstanceNameIsValid(name string) bool {
+	invalidNames := map[string]bool{
+		"CONTAINER": true, "DEVICE": true, "DEVICES": true, "ENABLED": true,
+		"ENVIRONMENT": true, "HOSTNAME": true, "PORT": true, "NETWORK": true,
+		"RESTART": true, "STORAGE": true, "STORAGE2": true, "STORAGE3": true,
+		"STORAGE4": true, "TAG": true,
+	}
+	return !invalidNames[strings.ToUpper(name)]
+}
+
+// IsGlobalVar checks if a variable name is a global variable.
+func IsGlobalVar(varName string) bool {
+	return VarNameToAppName(varName) == ""
+}
+
+// VarNameIsValid validates if a variable name is valid.
+func VarNameIsValid(varName string, varType string) bool {
+	varType = strings.ToUpper(varType)
+	switch varType {
+	case "":
+		return VarNameIsValid(varName, "_BARE_") || VarNameIsValid(varName, "_APPNAME_:") || VarNameIsValid(varName, "_APPNAME_")
+	case "_BARE_":
+		return regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(varName)
+	case "_GLOBAL_":
+		if !VarNameIsValid(varName, "_BARE_") {
+			return false
+		}
+		return VarNameToAppName(varName) == ""
+	case "_APPNAME_":
+		if !VarNameIsValid(varName, "_BARE_") {
+			return false
+		}
+		return VarNameToAppName(varName) != ""
+	case "_APPNAME_:":
+		if !strings.Contains(varName, ":") {
+			return false
+		}
+		parts := strings.SplitN(varName, ":", 2)
+		return IsAppNameValid(parts[0]) && VarNameIsValid(parts[1], "_BARE_")
+	default:
+		if strings.HasSuffix(varType, ":") {
+			if !strings.Contains(varName, ":") {
+				return false
+			}
+			parts := strings.SplitN(varName, ":", 2)
+			return strings.EqualFold(parts[0], strings.TrimSuffix(varType, ":")) && VarNameIsValid(parts[1], "_BARE_")
+		}
+		if !VarNameIsValid(varName, "_BARE_") {
+			return false
+		}
+		return strings.EqualFold(VarNameToAppName(varName), varType)
+	}
+}
+
+// EnvVarExists checks if a variable exists in the specified file.
+// If key is "APPNAME:VARNAME", it resolves the app instance file.
+// Mirrors env_var_exists.sh.
+func EnvVarExists(ctx context.Context, key string, file string) (bool, error) {
+	targetFile := file
+	targetKey := key
+
+	// Check for APPNAME:VARNAME syntax
+	if strings.Contains(key, ":") {
+		parts := strings.SplitN(key, ":", 2)
+		appName := parts[0]
+		targetKey = parts[1]
+
+		f, err := AppInstanceFile(ctx, appName, constants.EnvFileName)
+		if err != nil {
+			return false, err
+		}
+		targetFile = f
+	}
+
+	if targetFile == "" {
+		return false, fmt.Errorf("no file specified")
+	}
+
+	// Logic: grep -q -E "^\s*${VAR_NAME}\s*="
+	line, err := GetLine(targetKey, targetFile)
+	if err != nil {
+		return false, err
+	}
+	return line != "", nil
+}
+
+// ValidateComposeOverride checks if the docker-compose.override.yml file is valid YAML.
+// It logs a warning if the file contains syntax errors.
+func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
+	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+
+	if _, err := os.Stat(overrideFile); os.IsNotExist(err) {
+		return
+	}
+
+	content, err := os.ReadFile(overrideFile)
+	if err != nil {
+		logger.Warn(ctx, "Failed to read '"+console.FormatFilePath(overrideFile)+"': %v", err)
+		return
+	}
+
+	var dst map[string]any
+	if err := yaml.Unmarshal(content, &dst); err != nil {
+		logger.Warn(ctx, "Failed to validate '"+console.FormatFilePath(overrideFile)+"': %v", err)
+		logger.Warn(ctx, "Please fix the syntax in your override file.")
+	}
+}
+
+// ValidateComposeOverrideStrict checks if the docker-compose.override.yml file is valid using the Docker Compose SDK.
+// This is a stricter check that validates against the Compose schema.
+// It is currently unused but kept for potential future use (e.g. before 'compose up').
+func ValidateComposeOverrideStrict(ctx context.Context, conf config.AppConfig) {
+	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
+
+	if _, err := os.Stat(overrideFile); os.IsNotExist(err) {
+		return
+	}
+
+	configDetails := types.ConfigDetails{
+		WorkingDir: conf.ComposeDir,
+		ConfigFiles: []types.ConfigFile{
+			{
+				Filename: overrideFile,
+			},
+		},
+	}
+
+	_, err := loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
+		options.SetProjectName("dockstarter", true)
+		options.SkipInterpolation = true
+		options.SkipValidation = false
+		options.SkipConsistencyCheck = true
+	})
+
+	if err != nil {
+		logger.Warn(ctx, "Strict validation failed for '"+console.FormatFilePath(overrideFile)+"': %v", err)
+	}
+}
