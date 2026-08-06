@@ -1,6 +1,0 @@
-[metadata]
-name        = "Empty"
-description = "Test theme with no [styles] entries -- proves every tag resolves via fallback"
-author      = "CLHatch"
-
-[styles]
