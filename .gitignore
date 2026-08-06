@@ -60,3 +60,6 @@ ds2_linux
 ds2_current
 ds2_prev
 
+
+# Local agent tooling config (not needed by CI/GitHub)
+.agent/
