@@ -53,6 +53,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.StringP("version", "V", "", "Show version")
 	fs.Bool("sysinfo", false, "Show diagnostic system info (versions, paths, user info) for troubleshooting")
 	fs.BoolP("reset", "R", false, "Reset "+version.ApplicationName+" to process all actions")
+	fs.Bool("uninstall", false, "Uninstall "+version.ApplicationName+" and remove its config, state, and binary")
 
 	// Environment Variables
 	fs.BoolP("env", "e", false, "Update .env files")

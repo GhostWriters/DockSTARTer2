@@ -353,6 +353,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 		case "-i", "--install",
 			"-p", "--prune",
 			"-R", "--reset",
+			"--uninstall",
 			"-e", "--env",
 			"--setcap", "--config-setcap", "--config-no-setcap",
 			"--edit-global", "--start-edit-global",

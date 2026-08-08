@@ -15,16 +15,10 @@ import (
 	"time"
 )
 
-// BackupEnv creates a timestamped backup of the environment files.
-func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error {
-	composeFolder := filepath.Dir(envFile)
-
-	// Check if we should backup at all
-	hasEnv := false
-	if _, err := os.Stat(envFile); err == nil {
-		hasEnv = true
-	}
-
+// ResolveDockerVolumeConfig reads DOCKER_CONFIG_FOLDER and DOCKER_VOLUME_CONFIG
+// from envFile (falling back to each variable's template default when unset)
+// and returns DOCKER_VOLUME_CONFIG fully expanded to an absolute path.
+func ResolveDockerVolumeConfig(ctx context.Context, envFile string, conf config.AppConfig) (string, error) {
 	// 1. Get DOCKER_CONFIG_FOLDER
 	dockerConfigFolder, _ := Get("DOCKER_CONFIG_FOLDER", envFile)
 	if dockerConfigFolder == "" {
@@ -53,7 +47,7 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	}
 
 	if dockerVolumeConfig == "" {
-		return fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set.")
+		return "", fmt.Errorf("Variable '{{|Var|}}DOCKER_VOLUME_CONFIG{{[-]}}' is not set.")
 	}
 
 	// Sanitize/Expand DOCKER_VOLUME_CONFIG
@@ -67,7 +61,25 @@ func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error
 	expandedVolumeConfig = filepath.Clean(expandedVolumeConfig)
 
 	if expandedVolumeConfig == "" {
-		return fmt.Errorf("DOCKER_VOLUME_CONFIG is not set and could not be determined.")
+		return "", fmt.Errorf("DOCKER_VOLUME_CONFIG is not set and could not be determined.")
+	}
+
+	return expandedVolumeConfig, nil
+}
+
+// BackupEnv creates a timestamped backup of the environment files.
+func BackupEnv(ctx context.Context, envFile string, conf config.AppConfig) error {
+	composeFolder := filepath.Dir(envFile)
+
+	// Check if we should backup at all
+	hasEnv := false
+	if _, err := os.Stat(envFile); err == nil {
+		hasEnv = true
+	}
+
+	expandedVolumeConfig, err := ResolveDockerVolumeConfig(ctx, envFile, conf)
+	if err != nil {
+		return err
 	}
 
 	// info "Taking ownership of '${C["Folder"]}${DOCKER_VOLUME_CONFIG}${NC}' (non-recursive)."
