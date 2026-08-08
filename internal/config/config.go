@@ -477,7 +477,6 @@ func LoadAppConfig() AppConfig {
 		if reflect.DeepEqual(migrated, baseline) {
 			// Unchanged from pristine defaults -- keep the file's comments.
 			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
-			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
 		} else if merged, err := toml.Marshal(migrated); err == nil {
 			_ = os.WriteFile(cfgPath, merged, 0600)
 			logNotice(context.Background(), "Writing migrated configuration to '"+console.FormatFilePath(cfgPath)+"'.")
@@ -729,11 +728,11 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 	}
 
 	if val, ok := raw["ConfigFolder"]; ok {
-		v.Paths.ConfigFolder = ExpandVariables(val)
+		v.Paths.ConfigFolder = migrateLegacyPathValue(val)
 		present["ConfigFolder"] = true
 	}
 	if val, ok := raw["ComposeFolder"]; ok {
-		v.Paths.ComposeFolder = ExpandVariables(val)
+		v.Paths.ComposeFolder = migrateLegacyPathValue(val)
 		present["ComposeFolder"] = true
 	}
 	if val, ok := raw["Theme"]; ok {
@@ -778,6 +777,19 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 	return present, nil
 }
 
+// migrateLegacyPathValue preserves a path value from a legacy DS1 config
+// file exactly as written, except for DS1's own ${ScriptFolder} variable,
+// which DS2 doesn't support going forward -- that gets resolved and
+// rewritten in ${HOME}-relative form instead (script-folder installs are
+// always under $HOME).
+func migrateLegacyPathValue(val string) string {
+	normalized := strings.ReplaceAll(val, "${ScriptFolder?}", "${ScriptFolder}")
+	if !strings.Contains(normalized, "${ScriptFolder}") {
+		return val
+	}
+	return CollapseVariables(paths.ResolvePath(normalized))
+}
+
 // MigrateFromLegacy always starts from the embedded defaults, overlays a
 // legacy DS1 config if found, resolves the compose folder, and overlays the
 // theme's suggested defaults for fields not already set. foundLegacy and
@@ -803,8 +815,15 @@ func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, f
 			if unmarshalErr != nil || len(present) == 0 {
 				continue // Try next file
 			}
-			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
-			heading := "Configuration options in legacy config file '" + console.FormatFilePath(path) + "':"
+			// ShowAppConfigWithTitleAndPresent reads RawPaths/ConfigDir/ComposeDir
+			// (normally populated by LoadAppConfig's finalize step), not Paths
+			// directly -- probe never goes through that step, so populate them
+			// here or the Config/Compose Folder rows render blank.
+			probe.RawPaths = probe.Paths
+			probe.ConfigDir = filepath.Clean(ExpandVariables(probe.Paths.ConfigFolder))
+			probe.ComposeDir = filepath.Clean(ExpandVariables(probe.Paths.ComposeFolder))
+			logNotice(ctx, "Detected legacy {{|ApplicationName|}}DockSTARTer{{[-]}} config file at '"+console.FormatFilePath(path)+"'.")
+			heading := "Configuration options in legacy {{|ApplicationName|}}DockSTARTer{{[-]}} config file '" + console.FormatFilePath(path) + "':"
 			logNotice(ctx, " ")
 			ShowAppConfigWithTitleAndPresent(ctx, &probe, heading, present)
 			logNotice(ctx, " ")
@@ -812,16 +831,16 @@ func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, f
 
 			// Apply to the actual merged config (defaults already unmarshalled above)
 			legacyPresent, _ = UnmarshalRobust(data, &conf)
-			conf.Paths.ConfigFolder = ExpandVariables(conf.Paths.ConfigFolder)
-			conf.Paths.ComposeFolder = ExpandVariables(conf.Paths.ComposeFolder)
+			conf.Paths.ConfigFolder = migrateLegacyPathValue(conf.Paths.ConfigFolder)
+			conf.Paths.ComposeFolder = migrateLegacyPathValue(conf.Paths.ComposeFolder)
 			foundLegacy = true
 			break // STOP after the first successful migration source is processed
 		}
 
 		raw := ReadLegacyMap(data)
 		if len(raw) > 0 {
-			logNotice(ctx, "Detected legacy config file at '"+console.FormatFilePath(path)+"'.")
-			heading := "Configuration options in legacy config file '" + console.FormatFilePath(path) + "':"
+			logNotice(ctx, "Detected legacy {{|ApplicationName|}}DockSTARTer{{[-]}} config file at '"+console.FormatFilePath(path)+"'.")
+			heading := "Configuration options in legacy {{|ApplicationName|}}DockSTARTer{{[-]}} config file '" + console.FormatFilePath(path) + "':"
 			logNotice(ctx, " ")
 
 			headers := []string{
@@ -885,8 +904,12 @@ func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, f
 		}
 	}
 
+	// Skip detection/prompting entirely when the legacy file already defined
+	// compose_folder explicitly -- that value is authoritative.
 	before := conf.Paths.ComposeFolder
-	ResolveComposeFolder(ctx, &conf, logNotice)
+	if !legacyPresent["ComposeFolder"] {
+		ResolveComposeFolder(ctx, &conf, logNotice)
+	}
 	foundCompose = conf.Paths.ComposeFolder != before
 
 	if ThemeDefaultsOverlayHook != nil {
@@ -1063,7 +1086,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		title = "Configuration options stored in '" + console.FormatFilePath(paths.GetConfigFilePath()) + "':"
 	}
 
-	if val, ok := ctx.Value("migration_mode").(bool); ok && val {
+	if isMigrationMode(ctx) {
 		logNotice(ctx, title)
 		var sb strings.Builder
 		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
