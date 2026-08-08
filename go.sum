@@ -613,6 +613,8 @@ github.com/pelletier/go-toml/v2 v2.4.3 h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdD
 github.com/pelletier/go-toml/v2 v2.4.3/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=
 github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32 h1:6dWdvpLPcMW+FQ4k3K/mrPr+y3M8AgwvNL+jkC0i3iM=
 github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32/go.mod h1:MRxHTJrf9FhdfNQ8Hdeh9gmHevC9RJE/fu8M3JIGjoE=
+github.com/pgavlin/goldmark v1.1.33-0.20260221193742-85adcc7fade4 h1:42cEyeNx3QuCKouRPnWPtSZyl8ZCbdm1VH5JE4Zedrg=
+github.com/pgavlin/goldmark v1.1.33-0.20260221193742-85adcc7fade4/go.mod h1:Tbw+9eqAH3Ig9pKlN54DSS4f1atgYfC4kO4q5PxvwTg=
 github.com/pgavlin/markdown-kit v0.0.0-20260512143711-19b7911a51a5 h1:wLzE4EHwuK7sEzTJ9o14lNITqE/la7icVZwN+9ySnQI=
 github.com/pgavlin/markdown-kit v0.0.0-20260512143711-19b7911a51a5/go.mod h1:Zem0a0lBMwKp+L9oGSAo3Yrmp3eWeJ+D0aynXsPgSeE=
 github.com/pgavlin/svg2 v0.0.0-20210919231505-4ace7308edc1 h1:pZyspNrqK1cqSk3oIUYgwE2/Si20ZYSGypML1Br3zEU=

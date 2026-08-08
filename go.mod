@@ -35,7 +35,7 @@ require (
 	github.com/moby/moby/client v0.5.1
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.4.3
-	github.com/pgavlin/goldmark v1.1.33-0.20210916052350-16f491902b32
+	github.com/pgavlin/goldmark v1.1.33-0.20260221193742-85adcc7fade4
 	github.com/pgavlin/markdown-kit v0.0.0-20260512143711-19b7911a51a5
 	github.com/rivo/uniseg v0.4.7
 	github.com/sergi/go-diff v1.4.0
