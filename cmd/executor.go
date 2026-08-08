@@ -255,6 +255,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-R", "--reset":
 				ranCommand = true
 				return commands.HandleReset(subCtx)
+			case "--uninstall":
+				ranCommand = true
+				return commands.HandleUninstall(subCtx, &state)
 			case "--theme-table":
 				ranCommand = true
 				return commands.HandleThemeTable(subCtx)

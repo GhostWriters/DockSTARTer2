@@ -61,6 +61,20 @@ func GetTemplatesDir() string {
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
+// GetLegacyStateDir returns the state folder for the legacy DockSTARTer
+// install -- the parent of GetTemplatesDir(), which is shared with that
+// install, so it shouldn't be removed while it's still present.
+func GetLegacyStateDir() string {
+	return filepath.Join(xdg.StateHome, constants.LegacyApplicationName)
+}
+
+// GetLegacyConfigDir returns the config folder for the legacy DockSTARTer
+// install (holding dockstarter.toml) -- never touched by DS2, only
+// referenced for display when reporting what's being left alone.
+func GetLegacyConfigDir() string {
+	return filepath.Join(xdg.ConfigHome, constants.LegacyApplicationName)
+}
+
 // InvalidateTemplatesVersionCache forces the next GetTemplatesVersion call to
 // re-read the repository instead of returning a cached value up to 60
 // seconds stale. Callers that just changed the templates repo's HEAD (e.g.

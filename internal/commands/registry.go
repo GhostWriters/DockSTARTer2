@@ -103,6 +103,7 @@ var Registry = map[string]Def{
 	"--update-templates":         {Title: "Update Templates", ConsoleSafe: true, AppsChanging: true},
 	"-R":                         {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"--reset":                    {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
+	"--uninstall":                {Title: "Uninstall", ConsoleBlocked: true},
 	"-S":                         {Title: "Select Applications", ConsoleSafe: true},   // launches TUI; edit lock handles conflicts
 	"--select":                   {Title: "Select Applications", ConsoleSafe: true},   // launches TUI; edit lock handles conflicts
 	"-M":                         {Title: "Menu", ConsoleSafe: true},                  // launches TUI; edit lock handles conflicts

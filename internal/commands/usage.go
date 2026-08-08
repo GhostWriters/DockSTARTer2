@@ -299,6 +299,13 @@ func GetUsage(target string, noHeading bool) string {
 			"	This is usually not needed unless you have modified application templates yourself.",
 		)
 	}
+
+	if match("--uninstall") {
+		printStr(
+			"{{|UsageCommand|}}--uninstall{{[-]}}",
+			fmt.Sprintf("	Uninstall {{|ApplicationName|}}%s", appName),
+		)
+	}
 	if match("--server", "--disconnect") {
 		printStr(
 			"{{|UsageCommand|}}--server{{[-]}}",
