@@ -176,7 +176,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			if tab.spec.IsGlobal {
 				targetFile = envPath
 			} else {
-				targetFile = filepath.Join(cfg.ComposeDir, constants.AppEnvFileNamePrefix+tab.spec.App)
+				targetFile = appenv.GetAppEnvFile(tab.spec.App, cfg)
 			}
 			updates = append(updates, tabUpdate{
 				file:        targetFile,
