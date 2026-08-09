@@ -136,7 +136,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if displayengine.ButtonIDMatches(msg.ID, displayengine.IDBackButton) {
 			if msg.Button == tea.MouseLeft {
 				m.focus = envFocusButtons
-				m.btnIdx = m.buttonIndex("Back")
+				m.btnIdx = m.buttonIndex("Cancel")
 				if m.hasChanges() {
 					return m, m.btnRow.SetProcessing(displayengine.IDBackButton, m.promptUnsavedChanges(m.onClose))
 				}
@@ -153,7 +153,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.BlurTitleBar()
 				pressCmd := m.PressWidgetID(displayengine.IDTitleWidgetClose, msg.ID)
 				m.focus = envFocusButtons
-				m.btnIdx = m.buttonIndex("Back")
+				m.btnIdx = m.buttonIndex("Cancel")
 				closeAction := m.onClose
 				if m.hasChanges() {
 					closeAction = m.promptUnsavedChanges(m.onClose)
@@ -403,7 +403,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case msg.String() == "esc":
 			m.focus = envFocusButtons
-			m.btnIdx = m.buttonIndex("Back")
+			m.btnIdx = m.buttonIndex("Cancel")
 			return m, m.btnRow.SetProcessing(displayengine.IDBackButton, m.EscapeAction())
 		case key.Matches(msg, displayengine.Keys.EnvNextTab): // Next Tab
 			if m.focus == envFocusEditor && m.activeTab < len(m.tabs)-1 {
@@ -475,7 +475,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "enter":
 				if m.btnIdx >= 0 && m.btnIdx < len(m.buttons) {
-					zoneByName := map[string]string{"Save": displayengine.IDSaveButton, "Refresh": displayengine.IDRefreshButton, "Back": displayengine.IDBackButton, "Exit": displayengine.IDExitButton}
+					zoneByName := map[string]string{"Save": displayengine.IDSaveButton, "Refresh": displayengine.IDRefreshButton, "Cancel": displayengine.IDBackButton, "Exit": displayengine.IDExitButton}
 					btnName := m.buttons[m.btnIdx]
 					switch btnName {
 					case "Save":
@@ -491,7 +491,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, m.btnRow.SetProcessing(zoneByName[btnName], m.saveEnv())
 					case "Refresh":
 						return m, m.btnRow.SetProcessing(zoneByName[btnName], func() tea.Msg { return envRefreshMsg{} })
-					case "Back":
+					case "Cancel":
 						if m.hasChanges() {
 							return m, m.btnRow.SetProcessing(zoneByName[btnName], m.promptUnsavedChanges(m.onClose))
 						}
