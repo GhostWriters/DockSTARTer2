@@ -20,7 +20,7 @@ require (
 	github.com/compose-spec/compose-go/v2 v2.14.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
-	github.com/docker/cli v29.7.1+incompatible
+	github.com/docker/cli v29.7.2+incompatible
 	github.com/docker/compose/v5 v5.4.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
