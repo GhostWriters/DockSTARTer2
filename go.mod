@@ -7,7 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/lipgloss/v2 v2.0.5
 	charm.land/log/v2 v2.0.0
-	charm.land/ssh v0.4.2
+	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.3
 	github.com/GhostWriters/semstyle v0.2.16
 	github.com/Masterminds/semver/v3 v3.5.0
