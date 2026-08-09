@@ -340,7 +340,7 @@ func NewAppSelectionScreen(conf config.AppConfig, isRoot bool, connType string) 
 	if backAction != nil {
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Help: "Confirm and execute the selected action."},
-			{Label: "Back", ZoneID: "btn-back", Action: backAction, Help: "Return to the previous screen."},
+			{Label: "Cancel", ZoneID: "btn-back", Action: backAction, Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: "btn-exit", Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	} else {
