@@ -292,7 +292,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		tabs = append(tabs, envTab{spec: spec, editor: editor})
 	}
 
-	buttons := []string{"Save", "Refresh", "Back", "Exit"}
+	buttons := []string{"Save", "Refresh", "Cancel", "Exit"}
 	if !showBack {
 		buttons = []string{"Save", "Refresh", "Exit"}
 	}
@@ -310,9 +310,9 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		stackedRatio:    0.5,
 	}
 	zoneByName := map[string]string{
-		"Save": displayengine.IDSaveButton,
-		"Back": displayengine.IDBackButton,
-		"Exit": displayengine.IDExitButton,
+		"Save":   displayengine.IDSaveButton,
+		"Cancel": displayengine.IDBackButton,
+		"Exit":   displayengine.IDExitButton,
 	}
 	defs := make([]displayengine.ButtonDef, len(buttons))
 	for i, btn := range buttons {
