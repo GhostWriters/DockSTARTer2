@@ -22,6 +22,13 @@ func Update(ctx context.Context, force bool, file string) error {
 	composeEnvFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	configDir := paths.GetConfigDir()
 
+	if err := os.MkdirAll(conf.ComposeDir, 0755); err != nil {
+		logger.FatalWithStack(ctx, []string{
+			"Failed to create folder.",
+			"Failing command: {{|FailingCommand|}}mkdir -p \"" + conf.ComposeDir + "\"{{[-]}}",
+		})
+	}
+
 	// 1. Delete orphaned .env.app.* files (Parity with env_update.sh lines 12-28)
 	// Bash does this at the start of env_update
 	if err := CleanupOrphanedEnvFiles(ctx, conf); err != nil {

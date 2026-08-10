@@ -196,4 +196,6 @@ if [ "$SUCCESS" -ne 1 ]; then
     exit 1
 fi
 
+"$FINAL_DEST" --config-show --version || true
+
 exit 0
