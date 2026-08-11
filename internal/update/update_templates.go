@@ -48,11 +48,21 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 			if head.Name().IsBranch() {
 				requestedBranch = head.Name().Short()
 			} else {
-				// Detached HEAD: pinned to a specific tag/version rather
-				// than tracking a branch. Re-resolve that same tag/version
-				// on the next fetch instead of defaulting to main, which
-				// this install was never actually tracking.
-				requestedBranch = paths.GetTemplatesVersion()
+				// Detached HEAD: pinned to a tag rather than tracking a
+				// branch -- the normal state after this function's own
+				// "prefer latest tag reachable from main" policy below,
+				// not necessarily a deliberate pin. Re-target the branch
+				// that tag was cut from (almost always "main") so a newer
+				// tag can still be found on the next check. Falls back to
+				// the tag itself if it isn't reachable from main (e.g. a
+				// genuinely orphaned pin).
+				requestedBranch = "main"
+				mainRef, mainErr := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/main"), true)
+				if mainErr != nil {
+					requestedBranch = paths.GetTemplatesVersion()
+				} else if ok, err := isAncestorOrEqual(repo, head, mainRef); err != nil || !ok {
+					requestedBranch = paths.GetTemplatesVersion()
+				}
 			}
 		} else {
 			requestedBranch = "main"
