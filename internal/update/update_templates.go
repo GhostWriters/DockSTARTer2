@@ -51,18 +51,12 @@ func CheckTemplatesUpdate(ctx context.Context, force bool, requestedBranch strin
 				// Detached HEAD: pinned to a tag rather than tracking a
 				// branch -- the normal state after this function's own
 				// "prefer latest tag reachable from main" policy below,
-				// not necessarily a deliberate pin. Re-target the branch
-				// that tag was cut from (almost always "main") so a newer
-				// tag can still be found on the next check. Falls back to
-				// the tag itself if it isn't reachable from main (e.g. a
-				// genuinely orphaned pin).
-				requestedBranch = "main"
-				mainRef, mainErr := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/main"), true)
-				if mainErr != nil {
-					requestedBranch = paths.GetTemplatesVersion()
-				} else if ok, err := isAncestorOrEqual(repo, head, mainRef); err != nil || !ok {
-					requestedBranch = paths.GetTemplatesVersion()
-				}
+				// not necessarily a deliberate pin. Re-target whichever
+				// branch that tag was actually cut from (a release can be
+				// triggered from any branch, not just main -- see
+				// DockSTARTer-Templates' release.yml) so a newer tag on
+				// that branch can still be found on the next check.
+				requestedBranch = bestBranchContaining(repo, head)
 			}
 		} else {
 			requestedBranch = "main"
@@ -245,6 +239,45 @@ func isAncestorOrEqual(repo *git.Repository, ancestorRef, descendantRef *plumbin
 		return false, err
 	}
 	return ancestorCommit.IsAncestor(descendantCommit)
+}
+
+// bestBranchContaining finds which remote branch ref belongs to: prioritizes
+// "main" when ref is reachable from multiple branches, otherwise returns the
+// sole containing branch. Falls back to "main" if no remote branch contains
+// ref at all (e.g. a genuinely orphaned pin), rather than getting stuck on
+// the pinned tag forever.
+func bestBranchContaining(repo *git.Repository, ref *plumbing.Reference) string {
+	refs, err := repo.References()
+	if err != nil {
+		return "main"
+	}
+
+	const remotePrefix = "refs/remotes/origin/"
+	var containing []string
+	_ = refs.ForEach(func(r *plumbing.Reference) error {
+		name := r.Name().String()
+		if !strings.HasPrefix(name, remotePrefix) {
+			return nil
+		}
+		branch := strings.TrimPrefix(name, remotePrefix)
+		if branch == "HEAD" {
+			return nil
+		}
+		if ok, err := isAncestorOrEqual(repo, ref, r); err == nil && ok {
+			containing = append(containing, branch)
+		}
+		return nil
+	})
+
+	for _, b := range containing {
+		if b == "main" {
+			return "main"
+		}
+	}
+	if len(containing) == 1 {
+		return containing[0]
+	}
+	return "main"
 }
 
 // ApplyTemplatesUpdate prompts and applies the update described by info.
