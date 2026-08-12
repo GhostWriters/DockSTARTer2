@@ -52,8 +52,12 @@ func ListBuiltinApps() ([]string, error) {
 
 	var builtin []string
 	for _, entry := range entries {
-		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
-			builtin = append(builtin, strings.ToUpper(entry.Name()))
+		if !entry.IsDir() {
+			continue
+		}
+		name := strings.ToUpper(entry.Name())
+		if IsAppNameValid(name) {
+			builtin = append(builtin, name)
 		}
 	}
 
