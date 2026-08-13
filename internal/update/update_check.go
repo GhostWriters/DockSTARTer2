@@ -147,7 +147,7 @@ func CheckUpdates(ctx context.Context) {
 		logger.Warn(ctx, []string{
 			GetTmplVersionDisplay(),
 			fmt.Sprintf("An update to {{|ApplicationName|}}%s{{[-]}} is available.", "DockSTARTer-Templates"),
-			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '%s'.", version.CommandName, TmplVersionLink(LatestTmplVersion)),
+			fmt.Sprintf("Run '{{|UserCommand|}}%s -u{{[-]}}' to update to version '%s'.", version.CommandName, TmplVersionLinkForRepo(LatestTmplVersion, CurrentTemplatesRepoSlug())),
 		})
 	} else {
 		logger.Info(ctx, GetTmplVersionDisplay())
@@ -164,7 +164,21 @@ func versionTag(ver, url string) string {
 
 // AppVersionLink wraps a DockSTARTer2 version string as a link to its GitHub release tag.
 func AppVersionLink(ver string) string {
-	return versionTag(ver, "https://github.com/GhostWriters/DockSTARTer2/releases/tag/"+ver)
+	return versionTag(ver, "https://github.com/"+defaultAppRepo+"/releases/tag/"+ver)
+}
+
+// AppVersionLinkForRepo is AppVersionLink, but for a version being fetched
+// from repoSlug (see ParseRepoAndRef) rather than the canonical DockSTARTer2
+// repo: the link points at repoSlug's own release page, and the display
+// text is prefixed (see repoDisplayPrefix) so a fork version never looks
+// identical to an official one. Falls back to AppVersionLink for an empty
+// or default repoSlug.
+func AppVersionLinkForRepo(ver, repoSlug string) string {
+	if repoSlug == "" || repoSlug == defaultAppRepo {
+		return AppVersionLink(ver)
+	}
+	display := repoDisplayPrefix(repoSlug, appRepoName) + ver
+	return versionTag(display, "https://github.com/"+repoSlug+"/releases/tag/"+ver)
 }
 
 // TmplVersionLink wraps a DockSTARTer-Templates version string as a link to its source on
@@ -172,12 +186,32 @@ func AppVersionLink(ver string) string {
 // links to that commit.
 func TmplVersionLink(ver string) string {
 	if _, hash, ok := strings.Cut(ver, " commit "); ok {
-		return versionTag(ver, "https://github.com/GhostWriters/DockSTARTer-Templates/commit/"+hash)
+		return versionTag(ver, "https://github.com/"+defaultTemplatesRepo+"/commit/"+hash)
 	}
 	if ver == "" || ver == "Unknown Version" {
 		return versionTag(ver, "")
 	}
-	return versionTag(ver, "https://github.com/GhostWriters/DockSTARTer-Templates/releases/tag/"+ver)
+	return versionTag(ver, "https://github.com/"+defaultTemplatesRepo+"/releases/tag/"+ver)
+}
+
+// TmplVersionLinkForRepo is TmplVersionLink, but for a version fetched from
+// repoSlug (see ParseRepoAndRef) rather than the canonical
+// DockSTARTer-Templates repo: links point at repoSlug's own commit/release
+// page, and the display text is prefixed (see repoDisplayPrefix) so a fork
+// version never looks identical to an official one. Falls back to
+// TmplVersionLink for an empty or default repoSlug.
+func TmplVersionLinkForRepo(ver, repoSlug string) string {
+	if repoSlug == "" || repoSlug == defaultTemplatesRepo {
+		return TmplVersionLink(ver)
+	}
+	display := repoDisplayPrefix(repoSlug, templatesRepoName) + ver
+	if _, hash, ok := strings.Cut(ver, " commit "); ok {
+		return versionTag(display, "https://github.com/"+repoSlug+"/commit/"+hash)
+	}
+	if ver == "" || ver == "Unknown Version" {
+		return versionTag(display, "")
+	}
+	return versionTag(display, "https://github.com/"+repoSlug+"/releases/tag/"+ver)
 }
 
 // ComposeSdkVersionLink wraps a Docker Compose SDK version string as a link to its GitHub tag.
@@ -202,12 +236,47 @@ func AppBranchLink(name string) string {
 	if branch == "stable" {
 		branch = "main"
 	}
-	return branchTag(name, "https://github.com/GhostWriters/DockSTARTer2/tree/"+branch)
+	return branchTag(name, "https://github.com/"+defaultAppRepo+"/tree/"+branch)
+}
+
+// AppBranchLinkForRepo is AppBranchLink, but for a channel being checked
+// against repoSlug (see ParseRepoAndRef) rather than the canonical
+// DockSTARTer2 repo: the link points at repoSlug's own branch, and the
+// display text is prefixed (see repoDisplayPrefix) so a fork channel never
+// looks identical to an official one. Falls back to AppBranchLink for an
+// empty or default repoSlug. Assumes the fork mirrors the official repo's
+// "stable" channel is released from "main" convention (a reasonable
+// assumption for a repo that's an actual fork, including its release
+// workflow, but not guaranteed for an unrelated repo reusing this feature).
+func AppBranchLinkForRepo(name, repoSlug string) string {
+	if repoSlug == "" || repoSlug == defaultAppRepo {
+		return AppBranchLink(name)
+	}
+	branch := name
+	if branch == "stable" {
+		branch = "main"
+	}
+	display := repoDisplayPrefix(repoSlug, appRepoName) + name
+	return branchTag(display, "https://github.com/"+repoSlug+"/tree/"+branch)
 }
 
 // TmplBranchLink wraps a DockSTARTer-Templates branch name as a link to that branch on GitHub.
 func TmplBranchLink(name string) string {
-	return branchTag(name, "https://github.com/GhostWriters/DockSTARTer-Templates/tree/"+name)
+	return branchTag(name, "https://github.com/"+defaultTemplatesRepo+"/tree/"+name)
+}
+
+// TmplBranchLinkForRepo is TmplBranchLink, but for a branch tracked from
+// repoSlug (see ParseRepoAndRef) rather than the canonical
+// DockSTARTer-Templates repo: the link points at repoSlug's own branch, and
+// the display text is prefixed (see repoDisplayPrefix) so a fork branch
+// never looks identical to an official one. Falls back to TmplBranchLink
+// for an empty or default repoSlug.
+func TmplBranchLinkForRepo(name, repoSlug string) string {
+	if repoSlug == "" || repoSlug == defaultTemplatesRepo {
+		return TmplBranchLink(name)
+	}
+	display := repoDisplayPrefix(repoSlug, templatesRepoName) + name
+	return branchTag(display, "https://github.com/"+repoSlug+"/tree/"+name)
 }
 
 // GetAppVersionDisplay returns a formatted version string for the application,
@@ -219,7 +288,7 @@ func GetAppVersionDisplay() string {
 // GetTmplVersionDisplay returns a formatted version string for the templates,
 // optionally including an update indicator.
 func GetTmplVersionDisplay() string {
-	return fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", TmplVersionLink(paths.GetTemplatesVersion()))
+	return fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", TmplVersionLinkForRepo(paths.GetTemplatesVersion(), CurrentTemplatesRepoSlug()))
 }
 
 // GetComposeSdkVersionDisplay returns a formatted version string for the Docker Compose SDK.
@@ -297,6 +366,7 @@ func fatalPathsInfo() []string {
 func init() {
 	logger.ExtraSystemInfo = fatalSystemInfo
 	logger.ExtraPathsInfo = fatalPathsInfo
+	logger.CurrentTemplatesRepoSlug = CurrentTemplatesRepoSlug
 }
 
 // dockerStatus always re-probes (and re-caches via StartupCheck), backing
@@ -317,7 +387,7 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 
 	// Quick check using git ls-remote to see if tags for this channel exist.
 	// This avoids hitting the GitHub releases API unnecessarily.
-	channelTags, err := channelTagsDescending(channel)
+	channelTags, err := channelTagsDescending(channel, defaultAppRepo)
 	if err != nil {
 		return false, "", true
 	}
@@ -335,7 +405,7 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 		attempts = maxChannelTagFallbacks
 	}
 	for _, tag := range channelTags[:attempts] {
-		if !assetExistsForTag(ctx, tag) {
+		if !assetExistsForTag(ctx, tag, defaultAppRepo) {
 			continue
 		}
 		if compareVersions(tag, version.Version) > 0 {
@@ -353,10 +423,10 @@ func checkAppUpdate(ctx context.Context) (updateAvailable bool, ver string, hadE
 // rate limits, unlike go-selfupdate's DetectVersion. Asset name must match
 // .goreleaser.yaml's archive name_template
 // ({{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}.tar.gz).
-func assetExistsForTag(ctx context.Context, tag string) bool {
+func assetExistsForTag(ctx context.Context, tag, repoSlug string) bool {
 	assetVersion := strings.TrimPrefix(tag, "v")
 	assetName := fmt.Sprintf("ds2_%s_%s_%s.tar.gz", assetVersion, runtime.GOOS, runtime.GOARCH)
-	url := fmt.Sprintf("https://github.com/GhostWriters/DockSTARTer2/releases/download/%s/%s", tag, assetName)
+	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repoSlug, tag, assetName)
 
 	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -394,12 +464,22 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 		currentBranch = head.Name().Short()
 	}
 
+	// Compare against whatever remote this branch actually tracks (set by a
+	// prior explicit "owner/repo@branch" update, see ApplyTemplatesUpdate),
+	// not always origin -- otherwise a fork-tracking install would either
+	// nag about a nonexistent "update" back to the official repo, or miss
+	// real updates actually available on the fork.
+	remoteName := "origin"
+	if tracked, _, ok := trackedRemoteFor(repo, currentBranch); ok {
+		remoteName = tracked
+	}
+
 	// remoteBranchUnchanged does a cheap ref listing (git ls-remote, not a
 	// fetch -- no objects downloaded) and skips the real fetch below when the
 	// remote branch tip's hash matches what the last real fetch already
-	// cached in refs/remotes/origin/<branch>, since that's the only ref
+	// cached in refs/remotes/<remoteName>/<branch>, since that's the only ref
 	// resolveTemplatesTarget's reachable-tag search can walk from.
-	if unchanged, err := remoteBranchUnchanged(repo, currentBranch); err == nil && unchanged {
+	if unchanged, err := remoteBranchUnchanged(repo, currentBranch, remoteName); err == nil && unchanged {
 		return false, paths.GetTemplatesVersion(), false
 	}
 
@@ -408,7 +488,7 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 	defer cancel()
 
 	err = repo.FetchContext(fetchCtx, &git.FetchOptions{
-		RemoteName: "origin",
+		RemoteName: remoteName,
 		Tags:       git.AllTags,
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
@@ -419,7 +499,7 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 	// resolveTemplatesTarget applies the same main-means-latest-reachable-tag
 	// policy as the real update flow in update_templates.go, so this
 	// indicator never disagrees with it.
-	remoteHead, _, err := resolveTemplatesTarget(repo, head, currentBranch, currentBranch)
+	remoteHead, _, err := resolveTemplatesTarget(repo, head, currentBranch, currentBranch, remoteName)
 	if err != nil {
 		return false, "", false // Remote branch not found — not an error
 	}
@@ -431,25 +511,25 @@ func checkTmplUpdate(_ context.Context) (updateAvailable bool, ver string, hadEr
 	return false, paths.GetTemplatesVersion(), false
 }
 
-// remoteBranchUnchanged reports whether origin/branch's tip AND its tag set
-// on the remote still match local state, via a single git ls-remote-equivalent
+// remoteBranchUnchanged reports whether remoteName/branch's tip AND its tag
+// set on the remote still match local state, via a single git ls-remote-equivalent
 // ref listing (no objects downloaded, unlike FetchContext). Checking tags too
 // (not just the branch tip) matters because a release can add a new tag
 // pointing at a commit that's already the local tip -- e.g. re-releasing
 // unchanged content -- which a branch-hash-only comparison would miss
 // entirely. A cache miss (ref doesn't exist locally yet) or list error is
 // reported as changed/unknown so the caller falls through to a real fetch.
-func remoteBranchUnchanged(repo *git.Repository, branch string) (bool, error) {
-	cachedBranch, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+branch), true)
+func remoteBranchUnchanged(repo *git.Repository, branch, remoteName string) (bool, error) {
+	cachedBranch, err := repo.Reference(plumbing.ReferenceName("refs/remotes/"+remoteName+"/"+branch), true)
 	if err != nil {
 		return false, err
 	}
 
-	remoteURLs, err := remoteURLsFor(repo, "origin")
+	remoteURLs, err := remoteURLsFor(repo, remoteName)
 	if err != nil {
 		return false, err
 	}
-	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{Name: "origin", URLs: remoteURLs})
+	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{Name: remoteName, URLs: remoteURLs})
 	refs, err := remote.List(&git.ListOptions{})
 	if err != nil {
 		return false, err
@@ -588,12 +668,12 @@ func compareVersions(v1, v2 string) int {
 	return 0
 }
 
-
-// channelTagsDescending lists remote tags for the given channel, newest first.
-func channelTagsDescending(channel string) ([]string, error) {
+// channelTagsDescending lists remote tags for the given channel, newest
+// first, from repoSlug ("owner/repo").
+func channelTagsDescending(channel, repoSlug string) ([]string, error) {
 	remote := git.NewRemote(nil, &gitConfig.RemoteConfig{
 		Name: "origin",
-		URLs: []string{"https://github.com/GhostWriters/DockSTARTer2.git"},
+		URLs: []string{"https://github.com/" + repoSlug + ".git"},
 	})
 
 	refs, err := remote.List(&git.ListOptions{})

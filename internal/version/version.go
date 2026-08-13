@@ -19,6 +19,19 @@ var CommandName = "ds2"
 // -ldflags "-X DockSTARTer2/internal/version.Version=v2.YYYYMMDD.N"
 var Version = "v0.0.0-dev"
 
+// SourceRepo is the "owner/repo" slug (see update.ParseRepoAndRef) this
+// binary was actually built from, set at build time from GitHub Actions'
+// GITHUB_REPOSITORY env var -- "GhostWriters/DockSTARTer2" for an official
+// release, or "someuser/DockSTARTer2" for a build produced by someone's
+// fork's own release workflow. Empty for a local/dev build (no ldflags
+// applied). This is the ground truth for "what repo is this binary
+// actually from" -- unlike a config file, it can't go stale from an
+// out-of-band binary replacement (manual download, distro package, local
+// build), since it's baked into whatever binary is actually running.
+// This is intended to be overwritten at build time using:
+// -ldflags "-X DockSTARTer2/internal/version.SourceRepo=owner/repo"
+var SourceRepo = ""
+
 // Commit is the git commit hash of the build.
 var Commit = "none"
 

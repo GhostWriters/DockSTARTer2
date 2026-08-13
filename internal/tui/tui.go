@@ -1277,7 +1277,7 @@ func TriggerUpdate() tea.Cmd {
 
 			templInfo, templErr := update.CheckTemplatesUpdate(ctx, force, "")
 			if templErr == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
-				logger.Warn(ctx, "Skipping template update from '%s' to '%s' while configuration is being edited.", update.TmplVersionLink(templInfo.CurrentDisplay), update.TmplVersionLink(templInfo.RemoteDisplay))
+				logger.Warn(ctx, "Skipping template update from '%s' to '%s' while configuration is being edited.", update.TmplVersionLinkForRepo(templInfo.CurrentDisplay, templInfo.CurrentRepoSlug), update.TmplVersionLinkForRepo(templInfo.RemoteDisplay, templInfo.RemoteRepoSlug))
 			} else if templErr == nil {
 				if err := update.ApplyTemplatesUpdate(ctx, templInfo, yes); err != nil {
 					return err

@@ -77,30 +77,36 @@ var Registry = map[string]Def{
 	"--disconnect":              {Title: "Disconnect Session", ConsoleBlocked: true},
 
 	// ── Session-locked (modifies env files / shared state) ────────────────────
-	"-a":                         {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"--add":                      {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"-r":                         {Title: "Remove Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"--remove":                   {Title: "Remove Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"-e":                         {Title: "Creating Environment Variables", SessionLocked: true, ConsoleSafe: true},
-	"--env":                      {Title: "Creating Environment Variables", SessionLocked: true, ConsoleSafe: true},
-	"--env-set":                  {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
-	"--env-set-lower":            {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
-	"--env-set-literal":          {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
-	"--env-set-lower-literal":    {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
-	"--env-edit":                 {Title: "Edit Variable", SessionLocked: true, ConsoleSafe: true}, // launches TUI editor
-	"--env-edit-lower":           {Title: "Edit Variable", SessionLocked: true, ConsoleSafe: true}, // launches TUI editor
-	"--status-enable":            {Title: "Enable Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"--status-disable":           {Title: "Disable Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
-	"-c":                         {Title: "Docker Compose", SessionLocked: true, ConsoleSafe: true},
-	"--compose":                  {Title: "Docker Compose", SessionLocked: true, ConsoleSafe: true},
-	"-p":                         {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
-	"--prune":                    {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
-	"-i":                         {Title: "Install", ConsoleSafe: true},
-	"--install":                  {Title: "Install", ConsoleSafe: true},
-	"-u":                         {Title: "Update", ConsoleSafe: true, AppsChanging: true},
-	"--update":                   {Title: "Update", ConsoleSafe: true, AppsChanging: true},
-	"--update-app":               {Title: "Update App", ConsoleSafe: true, AppsChanging: true},
-	"--update-templates":         {Title: "Update Templates", ConsoleSafe: true, AppsChanging: true},
+	"-a":                      {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--add":                   {Title: "Add Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"-r":                      {Title: "Remove Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--remove":                {Title: "Remove Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"-e":                      {Title: "Creating Environment Variables", SessionLocked: true, ConsoleSafe: true},
+	"--env":                   {Title: "Creating Environment Variables", SessionLocked: true, ConsoleSafe: true},
+	"--env-set":               {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
+	"--env-set-lower":         {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
+	"--env-set-literal":       {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
+	"--env-set-lower-literal": {Title: "Set Value of Variable", SessionLocked: true, ConsoleSafe: true},
+	"--env-edit":              {Title: "Edit Variable", SessionLocked: true, ConsoleSafe: true}, // launches TUI editor
+	"--env-edit-lower":        {Title: "Edit Variable", SessionLocked: true, ConsoleSafe: true}, // launches TUI editor
+	"--status-enable":         {Title: "Enable Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"--status-disable":        {Title: "Disable Application", SessionLocked: true, ConsoleSafe: true, AppsChanging: true},
+	"-c":                      {Title: "Docker Compose", SessionLocked: true, ConsoleSafe: true},
+	"--compose":               {Title: "Docker Compose", SessionLocked: true, ConsoleSafe: true},
+	"-p":                      {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
+	"--prune":                 {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
+	"-i":                      {Title: "Install", ConsoleSafe: true},
+	"--install":               {Title: "Install", ConsoleSafe: true},
+	// RequiresSudo: an update target can be redirected to an arbitrary
+	// "owner/repo" (see update.ParseRepoAndRef) -- --update-app replaces the
+	// running executable outright, and --update-templates' fetched content
+	// feeds back into compose files, so a low-trust remote Console session
+	// must not be able to point either at attacker-controlled content
+	// without a fresh sudo re-check.
+	"-u":                         {Title: "Update", ConsoleSafe: true, AppsChanging: true, RequiresSudo: true},
+	"--update":                   {Title: "Update", ConsoleSafe: true, AppsChanging: true, RequiresSudo: true},
+	"--update-app":               {Title: "Update App", ConsoleSafe: true, AppsChanging: true, RequiresSudo: true},
+	"--update-templates":         {Title: "Update Templates", ConsoleSafe: true, AppsChanging: true, RequiresSudo: true},
 	"-R":                         {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"--reset":                    {Title: "Reset Actions", SessionLocked: true, ConsoleSafe: true, AppsChanging: true, ConfigChanging: true},
 	"--uninstall":                {Title: "Uninstall", ConsoleBlocked: true},

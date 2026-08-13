@@ -18,6 +18,16 @@ import (
 	"github.com/GhostWriters/semstyle"
 )
 
+// defaultAppRepo/defaultTemplatesRepo mirror the identically-named
+// constants in internal/update/repo_target.go -- duplicated rather than
+// imported to avoid an import cycle (internal/update already depends on
+// logger). Keep in sync if either repo is ever renamed.
+const (
+	defaultAppRepo           = "GhostWriters/DockSTARTer2"
+	defaultTemplatesRepoName = "DockSTARTer-Templates"
+	defaultTemplatesRepo     = "GhostWriters/" + defaultTemplatesRepoName
+)
+
 // ExtraSystemInfo, when set, supplies additional diagnostic lines (e.g.
 // dependency versions) appended to the fatal-crash system info block below
 // the app/templates lines. Packages that already depend on logger (like
@@ -33,18 +43,39 @@ var ExtraSystemInfo func() []string
 // since internal/config already depends on logger.
 var ExtraPathsInfo func() []string
 
+// CurrentTemplatesRepoSlug, when set, returns the "owner/repo" slug the
+// currently checked-out templates branch tracks (see
+// update.CurrentTemplatesRepoSlug), or "" for the official repo. Wired up
+// by internal/update's init(), same import-cycle rationale as
+// ExtraSystemInfo -- lets the fatal-crash report link to a fork's actual
+// commit/release page instead of always assuming the official repo.
+var CurrentTemplatesRepoSlug func() string
+
 func getSystemInfo() []string {
 	var info []string
 
 	// App Info
-	versionLink := console.FormatLink("Version", version.Version, "https://github.com/GhostWriters/DockSTARTer2/releases/tag/"+version.Version)
+	versionLink := console.FormatLink("Version", version.Version, "https://github.com/"+defaultAppRepo+"/releases/tag/"+version.Version)
 	info = append(info, fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} [%s]", version.ApplicationName, versionLink))
 	tmplVer := paths.GetTemplatesVersion()
-	tmplURL := "https://github.com/GhostWriters/DockSTARTer-Templates/releases/tag/" + tmplVer
-	if _, hash, ok := strings.Cut(tmplVer, " commit "); ok {
-		tmplURL = "https://github.com/GhostWriters/DockSTARTer-Templates/commit/" + hash
+	tmplRepo := defaultTemplatesRepo
+	tmplDisplayVer := tmplVer
+	if CurrentTemplatesRepoSlug != nil {
+		if slug := CurrentTemplatesRepoSlug(); slug != "" {
+			tmplRepo = slug
+			owner, name, _ := strings.Cut(slug, "/")
+			if name == defaultTemplatesRepoName {
+				tmplDisplayVer = owner + "@" + tmplVer
+			} else {
+				tmplDisplayVer = slug + "@" + tmplVer
+			}
+		}
 	}
-	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", console.FormatLink("Version", tmplVer, tmplURL)))
+	tmplURL := "https://github.com/" + tmplRepo + "/releases/tag/" + tmplVer
+	if _, hash, ok := strings.Cut(tmplVer, " commit "); ok {
+		tmplURL = "https://github.com/" + tmplRepo + "/commit/" + hash
+	}
+	info = append(info, fmt.Sprintf("{{|ApplicationName|}}DockSTARTer-Templates{{[-]}} [%s]", console.FormatLink("Version", tmplDisplayVer, tmplURL)))
 	if ExtraSystemInfo != nil {
 		info = append(info, ExtraSystemInfo()...)
 	}
