@@ -9,7 +9,48 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
+
+	"github.com/GhostWriters/semstyle"
 )
+
+// wrapIndented word-wraps text (which may contain semstyle "{{|Tag|}}...{{[-]}}"
+// markup) to width goal and returns each line prefixed with a leading tab,
+// so long prose stays indented to match the single-line "\tDescription"
+// convention used elsewhere in this file instead of soft-wrapping
+// unindented at the terminal's own width.
+//
+// Unlike strutil.WordWrapToSlice, this measures each word's *visible*
+// width (via semstyle.StripTags) while keeping its tags intact in the
+// output -- GetUsage's other callers (cmd/usage.go's ToANSI pass,
+// logger.Display, parse.go's error path) all expect raw untranslated tags
+// out of this function, so pre-converting to ANSI here (tempting, since
+// lipgloss/x/ansi's Wordwrap already handles ANSI-aware measurement) would
+// make this the only line in the whole file that skips the usual
+// tags-in/ANSI-out pipeline, and risks a garbled double conversion or
+// leftover escape codes wherever GetUsage's output ends up rendered plain.
+func wrapIndented(text string, goal int) []string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var lines []string
+	currentLine := words[0]
+	currentWidth := len(semstyle.StripTags(words[0]))
+	for _, word := range words[1:] {
+		wordWidth := len(semstyle.StripTags(word))
+		if currentWidth+1+wordWidth > goal {
+			lines = append(lines, "\t"+currentLine)
+			currentLine = word
+			currentWidth = wordWidth
+		} else {
+			currentLine += " " + word
+			currentWidth += 1 + wordWidth
+		}
+	}
+	lines = append(lines, "\t"+currentLine)
+	return lines
+}
 
 // PrintHelp prints usage information.
 // If target is empty, prints global usage.
@@ -432,7 +473,7 @@ func GetUsage(target string, noHeading bool) string {
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {
-		printStr(
+		lines := []string{
 			"{{|UsageCommand|}}-u --update{{[-]}} [{{|UsageBranch|}}<AppVersionOrChannel>{{[-]}} [{{|UsageBranch|}}<TemplateBranch>{{[-]}}]]",
 			fmt.Sprintf("	Update {{|ApplicationName|}}%s{{[-]}} and {{|ApplicationName|}}DockSTARTer-Templates{{[-]}}. Optionally specify version/channel and template branch.", appName),
 			"{{|UsageCommand|}}--update-app{{[-]}} [{{|UsageBranch|}}<AppVersionOrChannel>{{[-]}}]",
@@ -440,10 +481,15 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--update-templates{{[-]}} [{{|UsageBranch|}}<TemplateBranch>{{[-]}}]",
 			"	Update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} only. Optionally specify a branch.",
 			"",
-			"	Any of the above accept {{|UsageBranch|}}<owner>[/<repo>]@<ref>{{[-]}} in place of a bare version/branch to update from a fork instead of the official repo, e.g. '{{|UsageBranch|}}someuser@my-branch{{[-]}}' or '{{|UsageBranch|}}someuser/DockSTARTer-Templates@my-branch{{[-]}}'. A trailing '{{|UsageBranch|}}@{{[-]}}' with nothing after it (e.g. '{{|UsageBranch|}}someuser@{{[-]}}') switches repos while keeping the normal default branch/channel. A leading '{{|UsageBranch|}}@{{[-]}}' with nothing before it (e.g. '{{|UsageBranch|}}@main{{[-]}}', or just '{{|UsageBranch|}}@{{[-]}}' alone) explicitly means the official repo.",
-			"",
-			"	Omitting the argument entirely repeats whichever repo is currently in play -- for {{|UsageCommand|}}--update-templates{{[-]}}, whatever a prior explicit call last switched to; for {{|UsageCommand|}}--update-app{{[-]}}/{{|UsageCommand|}}-u{{[-]}}'s app version, whichever repo the running binary was actually built from. The leading-'@' form above forces back to the official repo either way without having to remember/retype a branch name.",
-		)
+		}
+		lines = append(lines, wrapIndented(
+			"Any of the above accept {{|UsageBranch|}}<owner>[/<repo>]@<ref>{{[-]}} in place of a bare version/branch to update from a fork instead of the official repo, e.g. '{{|UsageBranch|}}someuser@my-branch{{[-]}}' or '{{|UsageBranch|}}someuser/DockSTARTer-Templates@my-branch{{[-]}}'. A trailing '{{|UsageBranch|}}@{{[-]}}' with nothing after it (e.g. '{{|UsageBranch|}}someuser@{{[-]}}') switches repos while keeping the normal default branch/channel. A leading '{{|UsageBranch|}}@{{[-]}}' with nothing before it (e.g. '{{|UsageBranch|}}@main{{[-]}}', or just '{{|UsageBranch|}}@{{[-]}}' alone) explicitly means the official repo.",
+			75)...)
+		lines = append(lines, "")
+		lines = append(lines, wrapIndented(
+			"Omitting the argument entirely repeats whichever repo is currently in play -- for {{|UsageCommand|}}--update-templates{{[-]}}, whatever a prior explicit call last switched to; for {{|UsageCommand|}}--update-app{{[-]}}/{{|UsageCommand|}}-u{{[-]}}'s app version, whichever repo the running binary was actually built from. The leading-'@' form above forces back to the official repo either way without having to remember/retype a branch name.",
+			75)...)
+		printStr(lines...)
 	}
 	if match("--setcap", "--config-setcap", "--config-no-setcap") {
 		printStr(
