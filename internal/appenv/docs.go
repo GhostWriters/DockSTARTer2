@@ -29,7 +29,7 @@ func GetAppMarkdown(ctx context.Context, appName string) (string, error) {
 
 	baseAppLower := strings.ToLower(AppNameToBaseAppName(appUpper))
 	templatesDir := paths.GetTemplatesDir()
-	docPath := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppLower, baseAppLower+".md")
+	docPath := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppLower, "README.md")
 
 	if _, err := os.Stat(docPath); os.IsNotExist(err) {
 		return "", fmt.Errorf("documentation not found for app: %s", appName)
