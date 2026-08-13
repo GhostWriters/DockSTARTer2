@@ -28,8 +28,8 @@ import (
 )
 
 // latestChannelTag returns the most recent tag for the given channel.
-func latestChannelTag(channel string) (string, error) {
-	tags, err := channelTagsDescending(channel)
+func latestChannelTag(channel, repoSlug string) (string, error) {
+	tags, err := channelTagsDescending(channel, repoSlug)
 	if err != nil || len(tags) == 0 {
 		return "", err
 	}
@@ -49,6 +49,9 @@ func getUpdater(_ context.Context, channel string) (*selfupdate.Updater, error) 
 }
 
 // SelfUpdate handles updating the application binary using GitHub Releases.
+// requestedVersion is a version/tag/channel name, optionally prefixed with
+// "<owner>[/<repo>]@" to install from a fork instead of the canonical
+// DockSTARTer2 repo (see ParseRepoAndRef).
 func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion string, restArgs []string) error {
 	// Get current executable path for logging later
 	// We do this early because self-update acts on the running binary (renaming it),
@@ -59,7 +62,26 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		exePath = "unknown"
 	}
 
-	slug := "GhostWriters/DockSTARTer2"
+	requestedSpec := requestedVersion
+	repoSlug, requestedVersion := ParseRepoAndRef(requestedSpec, appRepoName)
+
+	// A fully bare call (nothing typed at all) means "check whatever repo
+	// this binary actually came from" -- version.SourceRepo, baked in at
+	// build time (see .goreleaser.yaml), is ground truth for that: unlike a
+	// persisted "last explicitly requested repo" record, it can't go stale
+	// from a binary swapped in by any means other than this function (a
+	// manual download, a distro package, a local build), since it reflects
+	// whatever binary is actually running right now. Any explicit ref (even
+	// a bare version/channel with no "owner@" prefix) is a deliberate
+	// instruction and always means the official repo.
+	if requestedSpec == "" && version.SourceRepo != "" && version.SourceRepo != defaultAppRepo {
+		repoSlug = version.SourceRepo
+	}
+
+	slug := defaultAppRepo
+	if repoSlug != "" {
+		slug = repoSlug
+	}
 	repo := selfupdate.ParseSlug(slug)
 
 	currentChannel := GetCurrentChannel()
@@ -77,19 +99,19 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	// Quick check using git ls-remote to see if tags for this channel exist.
 	// This avoids hitting the GitHub releases API unnecessarily.
 	if !strings.HasPrefix(requestedVersion, "v") {
-		tag, err := latestChannelTag(requestedVersion)
+		tag, err := latestChannelTag(requestedVersion, slug)
 		if err != nil {
 			logger.Debug(ctx, "Git tag check failed: %v (will fall back to API)", err)
 			tag = requestedVersion // treat as non-empty so we fall through to the API
 		}
 		if err == nil && tag == "" {
 			if switchingChannels {
-				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist on origin.", version.ApplicationName, AppBranchLink(requestedVersion))
+				logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist.", version.ApplicationName, AppBranchLinkForRepo(requestedVersion, slug))
 				return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 			}
 			// No tags at all for this channel — it's genuinely gone.
 			logger.Warn(ctx, []string{
-				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '%s' appears to no longer exist.", version.ApplicationName, AppBranchLink(requestedVersion)),
+				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} channel '%s' appears to no longer exist.", version.ApplicationName, AppBranchLinkForRepo(requestedVersion, slug)),
 				fmt.Sprintf("{{|ApplicationName|}}%s{{[-]}} is currently on version '%s'.", version.ApplicationName, AppVersionLink(version.Version)),
 				fmt.Sprintf("Run '{{|UserCommand|}}%s -u main{{[-]}}' to update to the latest stable release.", version.CommandName),
 			})
@@ -117,7 +139,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		// release yet (the release workflow pushes the tag before
 		// goreleaser finishes building, so there's a window where the
 		// newest tag 404s) -- same fallback checkAppUpdate uses.
-		tags, tagErr := channelTagsDescending(requestedVersion)
+		tags, tagErr := channelTagsDescending(requestedVersion, slug)
 		if tagErr != nil {
 			logger.Debug(ctx, "Channel tag lookup failed: %v (falling back to DetectLatest)", tagErr)
 			latest, found, err = updater.DetectLatest(ctx, repo)
@@ -131,7 +153,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 			for _, tag := range tags[:attempts] {
 				// Skip the real API call (DetectVersion) entirely for tags
 				// that don't even have this platform's asset published yet.
-				if !assetExistsForTag(ctx, tag) {
+				if !assetExistsForTag(ctx, tag, slug) {
 					continue
 				}
 				latest, found, err = updater.DetectVersion(ctx, repo, tag)
@@ -147,11 +169,11 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 	if !found {
 		if switchingChannels {
-			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist on origin.", version.ApplicationName, AppBranchLink(requestedVersion))
+			logger.Error(ctx, "{{|ApplicationName|}}%s{{[-]}} channel '%s' does not exist.", version.ApplicationName, AppBranchLinkForRepo(requestedVersion, slug))
 			return fmt.Errorf("channel '%s' does not exist", requestedVersion)
 		}
 		// None of the attempted tags had a published release.
-		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLinkForRepo(requestedVersion, slug))
 		if requestedVersion != version.Version {
 			logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(version.Version))
 		}
@@ -179,20 +201,20 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 	}
 
 	if compareVersions(currentVersion, remoteVersion) == 0 {
-		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLink(requestedVersion))
+		logger.Notice(ctx, "{{|ApplicationName|}}%s{{[-]}} is already up to date on channel '%s'.", version.ApplicationName, AppBranchLinkForRepo(requestedVersion, slug))
 		if requestedVersion != currentVersion {
 			logger.Notice(ctx, "Current version is '%s'.", AppVersionLink(currentVersion))
 		}
 
 		if force {
 			question = fmt.Sprintf("Would you like to forcefully re-apply {{|ApplicationName|}}%s{{[-]}} update '%s'?", version.ApplicationName, AppVersionLink(currentVersion))
-			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '%s'", version.ApplicationName, AppVersionLink(remoteVersion))
+			initiationNotice = fmt.Sprintf("Forcefully re-applying {{|ApplicationName|}}%s{{[-]}} update '%s'", version.ApplicationName, AppVersionLinkForRepo(remoteVersion, slug))
 		} else {
 			return nil
 		}
 	} else {
-		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s' now?", version.ApplicationName, AppVersionLink(currentVersion), AppVersionLink(remoteVersion))
-		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s'", version.ApplicationName, AppVersionLink(currentVersion), AppVersionLink(remoteVersion))
+		question = fmt.Sprintf("Would you like to update {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s' now?", version.ApplicationName, AppVersionLink(currentVersion), AppVersionLinkForRepo(remoteVersion, slug))
+		initiationNotice = fmt.Sprintf("Updating {{|ApplicationName|}}%s{{[-]}} from '%s' to '%s'", version.ApplicationName, AppVersionLink(currentVersion), AppVersionLinkForRepo(remoteVersion, slug))
 	}
 
 	// Prompt user
@@ -213,7 +235,7 @@ func SelfUpdate(ctx context.Context, force bool, yes bool, requestedVersion stri
 		return fmt.Errorf("failed to install update: %w", err)
 	}
 
-	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", version.ApplicationName, AppVersionLink(remoteVersion))
+	logger.Notice(ctx, "Updated {{|ApplicationName|}}%s{{[-]}} to '%s'", version.ApplicationName, AppVersionLinkForRepo(remoteVersion, slug))
 
 	if exePath != "unknown" {
 		logger.Info(ctx, "Application location is '"+console.FormatFilePath(exePath)+"'.")
@@ -420,4 +442,3 @@ func installUpdate(ctx context.Context, assetURL string) error {
 
 	return nil
 }
-

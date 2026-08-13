@@ -82,20 +82,26 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 			templBranch = group.Args[1]
 		}
 		templInfo, err := update.CheckTemplatesUpdate(ctx, state.Force, templBranch)
-		if err == nil && templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
+		if err != nil {
+			logger.Error(ctx, "Failed to check for template updates: %v", err)
+		} else if templInfo.HasUpdate && sessionlocks.Sessions.IsEditLocked() {
 			info := sessionlocks.Sessions.ReadEditInfo()
-			closing := fmt.Sprintf("Skipping template update from '%s' to '%s' while configuration is being edited.", update.TmplVersionLink(templInfo.CurrentDisplay), update.TmplVersionLink(templInfo.RemoteDisplay))
+			closing := fmt.Sprintf("Skipping template update from '%s' to '%s' while configuration is being edited.", update.TmplVersionLinkForRepo(templInfo.CurrentDisplay, templInfo.CurrentRepoSlug), update.TmplVersionLinkForRepo(templInfo.RemoteDisplay, templInfo.RemoteRepoSlug))
 			logger.Warn(ctx, sessionlocks.EditLockLines(info, closing))
-		} else if err == nil {
-			_ = update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes)
+		} else if err := update.ApplyTemplatesUpdate(ctx, templInfo, state.Yes); err != nil {
+			logger.Error(ctx, "Failed to apply template update: %v", err)
 		}
-		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
+		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
+			logger.Error(ctx, "Failed to update %s: %v", version.ApplicationName, err)
+		}
 	case "--update-app":
 		appVer := ""
 		if len(group.Args) > 0 {
 			appVer = group.Args[0]
 		}
-		_ = update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs)
+		if err := update.SelfUpdate(ctx, state.Force, state.Yes, appVer, restArgs); err != nil {
+			logger.Error(ctx, "Failed to update %s: %v", version.ApplicationName, err)
+		}
 	case "--update-templates":
 		templBranch := ""
 		if len(group.Args) > 0 {
@@ -104,8 +110,8 @@ func HandleUpdate(ctx context.Context, group *CommandGroup, state *CmdState, res
 		if sessionlocks.Sessions.IsEditLocked() {
 			info := sessionlocks.Sessions.ReadEditInfo()
 			logger.Warn(ctx, sessionlocks.EditLockLines(info, "Skipping template update while configuration is being edited."))
-		} else {
-			_ = update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch)
+		} else if err := update.UpdateTemplates(ctx, state.Force, state.Yes, templBranch); err != nil {
+			logger.Error(ctx, "Failed to update templates: %v", err)
 		}
 	}
 	// Server restart after update is handled by the cmd-layer caller (which has access to serve).

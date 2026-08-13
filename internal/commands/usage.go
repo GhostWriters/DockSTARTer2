@@ -439,6 +439,10 @@ func GetUsage(target string, noHeading bool) string {
 			fmt.Sprintf("	Update {{|ApplicationName|}}%s{{[-]}} only. Optionally specify a version like 'v2.0.0.1' or a channel like 'testing'.", appName),
 			"{{|UsageCommand|}}--update-templates{{[-]}} [{{|UsageBranch|}}<TemplateBranch>{{[-]}}]",
 			"	Update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} only. Optionally specify a branch.",
+			"",
+			"	Any of the above accept {{|UsageBranch|}}<owner>[/<repo>]@<ref>{{[-]}} in place of a bare version/branch to update from a fork instead of the official repo, e.g. '{{|UsageBranch|}}someuser@my-branch{{[-]}}' or '{{|UsageBranch|}}someuser/DockSTARTer-Templates@my-branch{{[-]}}'. A trailing '{{|UsageBranch|}}@{{[-]}}' with nothing after it (e.g. '{{|UsageBranch|}}someuser@{{[-]}}') switches repos while keeping the normal default branch/channel. A leading '{{|UsageBranch|}}@{{[-]}}' with nothing before it (e.g. '{{|UsageBranch|}}@main{{[-]}}', or just '{{|UsageBranch|}}@{{[-]}}' alone) explicitly means the official repo.",
+			"",
+			"	Omitting the argument entirely repeats whichever repo is currently in play -- for {{|UsageCommand|}}--update-templates{{[-]}}, whatever a prior explicit call last switched to; for {{|UsageCommand|}}--update-app{{[-]}}/{{|UsageCommand|}}-u{{[-]}}'s app version, whichever repo the running binary was actually built from. The leading-'@' form above forces back to the official repo either way without having to remember/retype a branch name.",
 		)
 	}
 	if match("--setcap", "--config-setcap", "--config-no-setcap") {

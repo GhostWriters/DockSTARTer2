@@ -23,6 +23,7 @@ builds:
       - -X DockSTARTer2/internal/version.Version={{.Tag}}
       - -X DockSTARTer2/internal/version.Commit={{.Commit}}
       - -X DockSTARTer2/internal/version.BuildDate={{.Date}}
+      - -X DockSTARTer2/internal/version.SourceRepo={{.Env.GITHUB_REPOSITORY}}
 
 archives:
   - formats:
