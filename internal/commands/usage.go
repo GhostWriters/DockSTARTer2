@@ -13,11 +13,19 @@ import (
 	"github.com/GhostWriters/semstyle"
 )
 
-// wrapIndented word-wraps text (which may contain semstyle "{{|Tag|}}...{{[-]}}"
-// markup) to width goal and returns each line prefixed with a leading tab,
-// so long prose stays indented to match the single-line "\tDescription"
-// convention used elsewhere in this file instead of soft-wrapping
-// unindented at the terminal's own width.
+// usageParagraphWidth is the goal visible width (see paragraph) for
+// wrapping a description line in usage output.
+const usageParagraphWidth = 75
+
+// paragraph word-wraps text (which may contain semstyle "{{|Tag|}}...{{[-]}}"
+// markup, and/or a leading tab -- both are ignored by strings.Fields) to
+// usageParagraphWidth and returns each resulting line prefixed with a
+// leading tab, so long prose stays indented to match this file's
+// single-line "\tDescription" convention instead of soft-wrapping
+// unindented at the terminal's own width. A short text that already fits
+// returns as a single line, so this is safe to use unconditionally for
+// every description regardless of length, not just the ones that happen to
+// be long today.
 //
 // Unlike strutil.WordWrapToSlice, this measures each word's *visible*
 // width (via semstyle.StripTags) while keeping its tags intact in the
@@ -28,7 +36,7 @@ import (
 // make this the only line in the whole file that skips the usual
 // tags-in/ANSI-out pipeline, and risks a garbled double conversion or
 // leftover escape codes wherever GetUsage's output ends up rendered plain.
-func wrapIndented(text string, goal int) []string {
+func paragraph(text string) []string {
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return nil
@@ -39,7 +47,7 @@ func wrapIndented(text string, goal int) []string {
 	currentWidth := len(semstyle.StripTags(words[0]))
 	for _, word := range words[1:] {
 		wordWidth := len(semstyle.StripTags(word))
-		if currentWidth+1+wordWidth > goal {
+		if currentWidth+1+wordWidth > usageParagraphWidth {
 			lines = append(lines, "\t"+currentLine)
 			currentLine = word
 			currentWidth = wordWidth
@@ -66,6 +74,26 @@ func GetUsage(target string, noHeading bool) string {
 	var sb strings.Builder
 	printStr := func(lines ...string) {
 		for _, s := range lines {
+			// By convention every plain description line in this file
+			// starts with exactly one tab followed directly by text (flag/
+			// command header lines don't); route those through paragraph()
+			// uniformly so a description that's grown too long to fit on
+			// one line wraps indented instead of falling back to the
+			// terminal's own unindented soft-wrap. A short description
+			// that already fits comes back unchanged. A handful of lines
+			// (e.g. the -M --menu page list) use extra whitespace after
+			// the tab to hand-align a sub-list -- paragraph()'s
+			// strings.Fields-based rebuild would silently collapse that
+			// alignment down to a single tab even when the line is short
+			// enough to never actually need wrapping, so those are left
+			// untouched by requiring the tab be immediately followed by
+			// non-whitespace.
+			if len(s) > 1 && s[0] == '\t' && s[1] != ' ' && s[1] != '\t' {
+				for _, wrapped := range paragraph(s) {
+					sb.WriteString(wrapped + "\n")
+				}
+				continue
+			}
 			sb.WriteString(s + "\n")
 		}
 	}
@@ -177,7 +205,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	Run docker compose commands. If no command is given, it does an '{{|UsageOption|}}update{{[-]}}'.",
 			"	The '{{|UsageOption|}}update{{[-]}}' command is the same as a '{{|UsageOption|}}pull{{[-]}}' followed by an '{{|UsageOption|}}up{{[-]}}'",
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
-			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}} file",
+			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
 		)
 	}
 
@@ -336,7 +364,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("-R", "--reset") {
 		printStr(
 			"{{|UsageCommand|}}-R --reset{{[-]}}",
-			fmt.Sprintf("	Resets {{|ApplicationName|}}%s to always process environment files.", appName),
+			fmt.Sprintf("	Resets {{|ApplicationName|}}%s{{[-]}} to always process environment files.", appName),
 			"	This is usually not needed unless you have modified application templates yourself.",
 		)
 	}
@@ -344,7 +372,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("--uninstall") {
 		printStr(
 			"{{|UsageCommand|}}--uninstall{{[-]}}",
-			fmt.Sprintf("	Uninstall {{|ApplicationName|}}%s", appName),
+			fmt.Sprintf("	Uninstall {{|ApplicationName|}}%s{{[-]}}", appName),
 		)
 	}
 	if match("--server", "--disconnect") {
@@ -473,7 +501,7 @@ func GetUsage(target string, noHeading bool) string {
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {
-		lines := []string{
+		printStr(
 			"{{|UsageCommand|}}-u --update{{[-]}} [{{|UsageBranch|}}<AppVersionOrChannel>{{[-]}} [{{|UsageBranch|}}<TemplateBranch>{{[-]}}]]",
 			fmt.Sprintf("	Update {{|ApplicationName|}}%s{{[-]}} and {{|ApplicationName|}}DockSTARTer-Templates{{[-]}}. Optionally specify version/channel and template branch.", appName),
 			"{{|UsageCommand|}}--update-app{{[-]}} [{{|UsageBranch|}}<AppVersionOrChannel>{{[-]}}]",
@@ -481,15 +509,10 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--update-templates{{[-]}} [{{|UsageBranch|}}<TemplateBranch>{{[-]}}]",
 			"	Update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} only. Optionally specify a branch.",
 			"",
-		}
-		lines = append(lines, wrapIndented(
-			"Any of the above accept {{|UsageBranch|}}<owner>[/<repo>]@<ref>{{[-]}} in place of a bare version/branch to update from a fork instead of the official repo, e.g. '{{|UsageBranch|}}someuser@my-branch{{[-]}}' or '{{|UsageBranch|}}someuser/DockSTARTer-Templates@my-branch{{[-]}}'. A trailing '{{|UsageBranch|}}@{{[-]}}' with nothing after it (e.g. '{{|UsageBranch|}}someuser@{{[-]}}') switches repos while keeping the normal default branch/channel. A leading '{{|UsageBranch|}}@{{[-]}}' with nothing before it (e.g. '{{|UsageBranch|}}@main{{[-]}}', or just '{{|UsageBranch|}}@{{[-]}}' alone) explicitly means the official repo.",
-			75)...)
-		lines = append(lines, "")
-		lines = append(lines, wrapIndented(
-			"Omitting the argument entirely repeats whichever repo is currently in play -- for {{|UsageCommand|}}--update-templates{{[-]}}, whatever a prior explicit call last switched to; for {{|UsageCommand|}}--update-app{{[-]}}/{{|UsageCommand|}}-u{{[-]}}'s app version, whichever repo the running binary was actually built from. The leading-'@' form above forces back to the official repo either way without having to remember/retype a branch name.",
-			75)...)
-		printStr(lines...)
+			"	Any of the above accept {{|UsageBranch|}}<owner>[/<repo>]@<ref>{{[-]}} in place of a bare version/branch to update from a fork instead of the official repo, e.g. '{{|UsageBranch|}}someuser@my-branch{{[-]}}' or '{{|UsageBranch|}}someuser/DockSTARTer-Templates@my-branch{{[-]}}'. A trailing '{{|UsageBranch|}}@{{[-]}}' with nothing after it (e.g. '{{|UsageBranch|}}someuser@{{[-]}}') switches repos while keeping the normal default branch/channel. A leading '{{|UsageBranch|}}@{{[-]}}' with nothing before it (e.g. '{{|UsageBranch|}}@main{{[-]}}', or just '{{|UsageBranch|}}@{{[-]}}' alone) explicitly means the official repo.",
+			"",
+			"	Omitting the argument entirely repeats whichever repo is currently in play -- for {{|UsageCommand|}}--update-templates{{[-]}}, whatever a prior explicit call last switched to; for {{|UsageCommand|}}--update-app{{[-]}}/{{|UsageCommand|}}-u{{[-]}}'s app version, whichever repo the running binary was actually built from. The leading-'@' form above forces back to the official repo either way without having to remember/retype a branch name.",
+		)
 	}
 	if match("--setcap", "--config-setcap", "--config-no-setcap") {
 		printStr(
