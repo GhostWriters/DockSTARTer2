@@ -72,6 +72,8 @@ var Registry = map[string]Def{
 	"--theme-table":             {Title: "List Themes", ConsoleSafe: true},
 	"--theme-extract":           {Title: "Extract Theme", ConsoleSafe: true},
 	"--theme-extract-all":       {Title: "Extract All Themes", ConsoleSafe: true},
+	"--app-template-extract":    {Title: "Extract App Template", ConsoleSafe: true},
+	"--app-template-new":        {Title: "New App Template", ConsoleSafe: true},
 	"--server":                  {Title: "Server Management", ConsoleBlocked: true},
 	"--server-daemon":           {Title: "Server Daemon", ConsoleBlocked: true},
 	"--disconnect":              {Title: "Disconnect Session", ConsoleBlocked: true},

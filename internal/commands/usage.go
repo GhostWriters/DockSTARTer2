@@ -347,6 +347,21 @@ func GetUsage(target string, noHeading bool) string {
 			"	List referenced apps",
 		)
 	}
+	if match("--app-template-extract") {
+		printStr(
+			"{{|UsageCommand|}}--app-template-extract{{[-]}} {{|UsageApp|}}<appname>{{[-]}} {{|UsageOption|}}user:<subfolder>{{[-]}}",
+			"	Extract a bundled app template's folder into the user app templates folder (optional subfolder is purely organizational, auto-suffixed \".d\")",
+			"	A user copy takes precedence over the bundled template while it exists -- useful for drafting/testing changes before a PR",
+			"	Fails if the destination already exists; add {{|UsageOption|}}-f{{[-]}}/{{|UsageOption|}}--force{{[-]}} to wipe and re-extract it",
+		)
+	}
+	if match("--app-template-new") {
+		printStr(
+			"{{|UsageCommand|}}--app-template-new{{[-]}} {{|UsageApp|}}<appname>{{[-]}} {{|UsageOption|}}user:<subfolder>{{[-]}}",
+			"	Scaffold a brand-new app template in the user app templates folder from the .TEMPLATE reference",
+			"	The optional subfolder is purely organizational (its segments are auto-suffixed \".d\"); the app is still identified by its own folder name",
+		)
+	}
 	if match("-p", "--prune") {
 		printStr(
 			"{{|UsageCommand|}}-p --prune{{[-]}}",

@@ -164,9 +164,18 @@ func GetConfigDir() string {
 
 // GetThemesDir returns the absolute path to the user themes directory,
 // under the user-content folder (see constants.UserDirName) alongside
-// other planned user-supplied content (e.g. user app templates).
+// other user-supplied content (see GetUserAppsDir).
 func GetThemesDir() string {
 	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.ThemesDirName)
+}
+
+// GetUserAppsDir returns the absolute path to the user app templates
+// directory, under the user-content folder alongside GetThemesDir. Lets a
+// user add an app template DS2 doesn't ship, or locally override a
+// built-in one, without editing the cloned DockSTARTer-Templates repo
+// directly (see internal/appenv/user_templates.go).
+func GetUserAppsDir() string {
+	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.AppsDirName)
 }
 
 // GetLegacyThemesDir returns the pre-user-folder location of the themes

@@ -40,26 +40,40 @@ func ListAddedApps(ctx context.Context, envFile string) ([]string, error) {
 	return added, nil
 }
 
-// ListBuiltinApps returns a sorted list of all builtin applications.
+// ListBuiltinApps returns a sorted list of all builtin applications,
+// merging the DockSTARTer-Templates repo copy with any user app template
+// override/addition (internal/appenv/user_templates.go) -- a user-only app
+// (no repo counterpart) is included too, not just resolvable once
+// referenced directly.
 func ListBuiltinApps() ([]string, error) {
 	templatesDir := paths.GetTemplatesDir()
 	appsDir := filepath.Join(templatesDir, constants.TemplatesDirName)
 
-	entries, err := os.ReadDir(appsDir)
-	if err != nil {
-		return nil, err
+	seen := make(map[string]bool)
+	var builtin []string
+
+	// Repo-provided apps. A missing/unclonned templates repo isn't fatal
+	// here -- user apps should still list even before EnsureTemplates runs.
+	if entries, err := os.ReadDir(appsDir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			name := strings.ToUpper(entry.Name())
+			if IsAppNameValid(name) && !seen[name] {
+				seen[name] = true
+				builtin = append(builtin, name)
+			}
+		}
 	}
 
-	var builtin []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := strings.ToUpper(entry.Name())
-		if IsAppNameValid(name) {
+	_ = walkUserAppFolders(func(name, _ string) error {
+		if IsAppNameValid(name) && !seen[name] {
+			seen[name] = true
 			builtin = append(builtin, name)
 		}
-	}
+		return nil
+	})
 
 	slices.Sort(builtin)
 	return builtin, nil

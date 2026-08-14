@@ -131,6 +131,8 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.String("theme-tab-layout", "", "Set tab layout for the vars editor (maximized/sidebyside/stacked)")
 	fs.String("theme-extract", "", "Extract a theme to a directory for customization")
 	fs.Bool("theme-extract-all", false, "Extract all embedded themes to a directory")
+	fs.String("app-template-extract", "", "Extract a bundled app template to a directory for customization")
+	fs.String("app-template-new", "", "Scaffold a brand-new app template in the user app templates folder")
 
 	// Testing
 	fs.StringP("test", "t", "", "Run test script")

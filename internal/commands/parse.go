@@ -330,6 +330,17 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
+		case "--app-template-extract", "--app-template-new":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires an app name.", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
 		case "-u", "--update", "--update-app", "--update-templates", "-V", "--version":
 			for count := 0; count < 2; count++ {
 				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {

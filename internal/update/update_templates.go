@@ -632,6 +632,7 @@ func ApplyTemplatesUpdate(ctx context.Context, info *TemplatesUpdateInfo, yes bo
 	if err := appenv.Update(ctx, false, ""); err != nil {
 		logger.Warn(ctx, "Failed to update environment variable files after templates update: %v", err)
 	}
+	appenv.SyncUserAppTemplateReference(ctx)
 
 	return nil
 }
@@ -685,6 +686,11 @@ func EnsureTemplates(ctx context.Context) error {
 	}
 	paths.InvalidateTemplatesVersionCache()
 	logger.Notice(ctx, "Cloned {{|ApplicationName|}}DockSTARTer-Templates{{[-]}} at '%s'.", TmplVersionLink(paths.GetTemplatesVersion()))
+	// Refresh the user apps folder's .TEMPLATE reference copy now, before
+	// any of the early returns below -- ApplyTemplatesUpdate (which also
+	// does this) only runs from here on if an update is actually applied on
+	// top of the fresh clone, but the reference source now exists either way.
+	appenv.SyncUserAppTemplateReference(ctx)
 
 	// Resolves latestReachableTag directly instead of going through
 	// CheckTemplatesUpdate: that function's "already at/past the latest

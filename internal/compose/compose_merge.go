@@ -61,6 +61,7 @@ func MergeYML(ctx context.Context, force bool) error {
 	for _, appName := range enabledApps {
 		appNameLower := strings.ToLower(appName)
 		niceName := appenv.GetNiceName(ctx, appName)
+		appenv.LogAppTemplateOverride(ctx, appName)
 
 		instanceFolder := paths.GetInstanceDir(appNameLower)
 		if !dirExists(instanceFolder) {

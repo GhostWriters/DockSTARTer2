@@ -1,7 +1,8 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"
 	"bytes"
@@ -12,18 +13,37 @@ import (
 	"time"
 )
 
+// LogAppTemplateOverride logs (unconditionally -- callers decide when to
+// call this, not AppInstanceFile itself) that appName's template is
+// currently resolved from a user override rather than the bundled repo
+// copy, if that's the case; a no-op otherwise. AppInstanceFile itself is
+// called many times per app (once per file it resolves: .env,
+// .env.app.*, .meta.toml, .labels.yml, ...), so it doesn't log this on
+// every call -- a caller that performs one user-visible action per app
+// (CreateApp, compose merge, ...) calls this once, at the point where it's
+// already about to announce that action for the app.
+func LogAppTemplateOverride(ctx context.Context, appName string) {
+	baseApp := strings.ToLower(AppNameToBaseAppName(appName))
+	templateFolder, isUserOverride := resolveAppTemplateFolder(baseApp)
+	if !isUserOverride {
+		return
+	}
+	niceName := GetNiceName(ctx, strings.ToUpper(baseApp))
+	logger.Info(ctx, "Using user app template for '{{|App|}}%s{{[-]}}': "+
+		console.FormatUserFolderPath(paths.GetUserAppsDir(), templateFolder), niceName)
+}
+
 // AppInstanceFile handles template processing for app instances.
 // Mirrors app_instance_file.sh with one change: the original template copy is
 // stored as instanceFile+".original" (alongside the instance file) instead of
 // in a separate instances/.apps/ subfolder.
 func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, error) {
-	templatesDir := paths.GetTemplatesDir()
 	instancesDir := paths.GetInstancesDir()
 
 	baseApp := strings.ToLower(AppNameToBaseAppName(appName))
 	instance := AppNameToInstanceName(appName)
 
-	templateFolder := filepath.Join(templatesDir, constants.TemplatesDirName, baseApp)
+	templateFolder, _ := resolveAppTemplateFolder(baseApp)
 	instanceFolder := filepath.Join(instancesDir, strings.ToLower(appName))
 
 	templateFile := filepath.Join(templateFolder, strings.ReplaceAll(fileSuffix, "*", baseApp))
