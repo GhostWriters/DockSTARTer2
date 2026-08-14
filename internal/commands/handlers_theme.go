@@ -95,7 +95,7 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 		_, _ = theme.Load(newTheme, "")
 
 	case "--theme-list":
-		themes, err := theme.List()
+		themes, err := theme.List(config.LoadAppConfig().UI.Theme)
 		if err != nil {
 			return err
 		}
@@ -384,11 +384,11 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 }
 
 func resolveExtractDest(arg string) string {
-	if arg == "user:" {
-		return paths.GetThemesDir()
-	}
 	if arg == "" {
 		return "."
+	}
+	if sub, ok := strings.CutPrefix(arg, "user:"); ok {
+		return filepath.Join(paths.GetThemesDir(), sub)
 	}
 	return arg
 }
@@ -412,11 +412,6 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 			return err
 		}
 
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
-			return err
-		}
-
 		outName := theme.FileStemFromURI(themeName) + ".ds2theme"
 		if len(group.Args) >= 3 {
 			outName = group.Args[2]
@@ -425,11 +420,24 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 			}
 		}
 		outPath := filepath.Join(destDir, outName)
+
+		// filepath.Dir(outPath) collapses to destDir itself when outName has
+		// no subfolder segments (the common case), and to destDir plus the
+		// nested path when it does (a user theme extracted from a subfolder,
+		// see theme.FileStemFromURI) -- one MkdirAll covers both.
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(filepath.Dir(outPath))+"': %v", err)
+			return err
+		}
+
 		if err := os.WriteFile(outPath, data, 0644); err != nil {
 			logger.Error(ctx, "Failed to write theme file: %v", err)
 			return err
 		}
 		logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' extracted to: "+console.FormatFolderPath(outPath), theme.ThemeDisplayName(themeName))
+		if theme.FileStemFromURI(themeName) == ".TEMPLATE" {
+			logger.Notice(ctx, "This is a reference starter theme, not one meant to be used as-is. Rename it and edit the copy.")
+		}
 
 	case "--theme-extract-all":
 		destDir := resolveExtractDest("")
@@ -475,7 +483,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 
 func HandleThemeTable(ctx context.Context) error {
 	headers := []string{"Theme", "Description", "Author"}
-	themes, err := theme.List()
+	themes, err := theme.List(config.LoadAppConfig().UI.Theme)
 	if err != nil {
 		logger.Error(ctx, "Failed to list themes: %v", err)
 		return err

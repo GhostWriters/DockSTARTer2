@@ -5,7 +5,11 @@ import (
 	"strings"
 )
 
-//go:embed all:defaults themes
+// "all:" applies to both patterns here -- without it, go:embed silently
+// excludes dot-prefixed files (e.g. themes/.TEMPLATE.ds2theme) from the
+// build.
+//
+//go:embed all:defaults all:themes
 var embeddedFS embed.FS
 
 // GetDefaultEnv returns the content of the default .env example file.
@@ -24,7 +28,10 @@ func GetTheme(name string) ([]byte, error) {
 	return embeddedFS.ReadFile("themes/" + name + ".ds2theme")
 }
 
-// ListThemes returns all themes found in the embedded filesystem.
+// ListThemes returns all themes found in the embedded filesystem. Dot-prefixed
+// files (e.g. .TEMPLATE.ds2theme, a starter reference copied into the user
+// themes folder at startup -- see main.go) are excluded: they're not meant
+// to be selectable themes.
 func ListThemes() ([]string, error) {
 	entries, err := embeddedFS.ReadDir("themes")
 	if err != nil {
@@ -32,7 +39,7 @@ func ListThemes() ([]string, error) {
 	}
 	var themes []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".ds2theme") {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".ds2theme") && !strings.HasPrefix(e.Name(), ".") {
 			themes = append(themes, strings.TrimSuffix(e.Name(), ".ds2theme"))
 		}
 	}

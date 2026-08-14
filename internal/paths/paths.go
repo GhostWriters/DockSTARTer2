@@ -162,8 +162,18 @@ func GetConfigDir() string {
 	return filepath.Dir(GetConfigFilePath())
 }
 
-// GetThemesDir returns the absolute path to the themes directory in the config folder.
+// GetThemesDir returns the absolute path to the user themes directory,
+// under the user-content folder (see constants.UserDirName) alongside
+// other planned user-supplied content (e.g. user app templates).
 func GetThemesDir() string {
+	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.ThemesDirName)
+}
+
+// GetLegacyThemesDir returns the pre-user-folder location of the themes
+// directory (directly under the config dir, no "user" subfolder) -- kept
+// only so callers can detect and migrate an install that predates
+// GetThemesDir's move into constants.UserDirName.
+func GetLegacyThemesDir() string {
 	return filepath.Join(GetConfigDir(), constants.ThemesDirName)
 }
 
