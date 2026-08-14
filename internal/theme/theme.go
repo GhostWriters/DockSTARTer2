@@ -683,6 +683,8 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	{"EnvPendingDelete", "{{[-:-:DS]}}"},
 	{"FailingCommand", "MarkerInvalid"},
 	{"Yes", "Highlight"},
+	// All 13 bundled themes point No at TitleError, never at Highlight.
+	{"No", "TitleError"},
 	{"URL", "{{[-:-:U]}}"},
 	{"LineComment", "{{[-:-:D]}}"},
 	{"LineNumber", "{{[-:-:D]}}"},
@@ -793,7 +795,9 @@ var statusFallbackTags = []struct{ name, fallback string }{
 // StatusVersion instead) already just aliases each of these directly to
 // Highlight. FailingCommand/Yes/No are deliberately excluded: every bundled
 // theme points them at TitleError/TitleSuccess instead, never at Highlight,
-// so they're a different (unrelated) fallback relationship, not this one.
+// so they're a different (unrelated) fallback relationship, not this one --
+// each has its own compensating entry in derivedFallbackTags instead
+// (FailingCommand -> MarkerInvalid, Yes -> Highlight, No -> TitleError).
 // Automatic console fallback is disabled (see registerTagFallbacks' doc
 // comment), so removing a theme's redundant "= Highlight" line for these
 // exact names resolves to this fallback, not an unrelated console-map

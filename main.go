@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockercheck"
+	dsexec "DockSTARTer2/internal/exec"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/serve"
@@ -232,6 +234,36 @@ func run() (exitCode int) {
 	// Defer cleanup to ensure it runs even if we return early or panic
 	defer cleanup(ctx)
 
+	// Migrate the pre-user-folder themes location (.config/dockstarter2/themes)
+	// to its new home under the user-content folder
+	// (.config/dockstarter2/user/themes) -- only when the new location
+	// doesn't exist yet, so this never overwrites themes a user has already
+	// placed at the new path.
+	if _, err := os.Stat(paths.GetThemesDir()); os.IsNotExist(err) {
+		legacyThemesDir := paths.GetLegacyThemesDir()
+		if _, err := os.Stat(legacyThemesDir); err == nil {
+			userDir := filepath.Dir(paths.GetThemesDir())
+			if err := os.MkdirAll(userDir, 0700); err != nil {
+				logger.FatalWithStack(ctx, []string{
+					"Failed to create folder.",
+					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+				}, userDir)
+			}
+			logger.Notice(ctx, "Moving user themes from '"+console.FormatFolderPath(legacyThemesDir)+"' to '"+console.FormatFolderPath(paths.GetThemesDir())+"'.")
+			logger.Info(ctx, "Running: {{|RunningCommand|}}mv \"%s\" \"%s\"{{[-]}}", legacyThemesDir, paths.GetThemesDir())
+			// Try a plain rename first; fall back to sudo mv on permission
+			// failure, same pattern as installUpdate's binary replace.
+			if err := os.Rename(legacyThemesDir, paths.GetThemesDir()); err != nil {
+				mvCmd, sudoErr := dsexec.SudoCommand(ctx, "mv", legacyThemesDir, paths.GetThemesDir())
+				if sudoErr != nil {
+					logger.Warn(ctx, "Failed to move themes folder to its new location: %v", sudoErr)
+				} else if out, runErr := mvCmd.CombinedOutput(); runErr != nil {
+					logger.Warn(ctx, "Failed to move themes folder to its new location: %s: %v", string(out), runErr)
+				}
+			}
+		}
+	}
+
 	// Ensure user themes directory exists
 	themesDir := paths.GetThemesDir()
 	if _, err := os.Stat(themesDir); os.IsNotExist(err) {
@@ -241,6 +273,30 @@ func run() (exitCode int) {
 				"Failed to create folder.",
 				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
 			}, themesDir)
+		}
+	}
+	// Fix ownership/permissions regardless of which path got us here (fresh
+	// mkdir above, or the migration above it) -- a folder moved via the
+	// sudo-mv fallback keeps its old ownership (mv doesn't chown), and
+	// --theme-extract/--theme-extract-all later write into this folder
+	// directly with no sudo fallback of their own, so it must already be
+	// owned by the current user by the time they run.
+	system.SetPermissions(ctx, themesDir)
+
+	// Keep the user themes folder's .TEMPLATE.ds2theme reference copy in
+	// sync with the embedded one -- write it if missing, or if it's stale
+	// (e.g. after a DS2 update changed the embedded template). Dot-prefixed,
+	// so theme.List skips it in --theme-list/the Appearance menu (see
+	// internal/theme/list.go) unless it's somehow the active selection.
+	if embeddedTemplate, err := assets.GetTheme(".TEMPLATE"); err == nil {
+		templatePath := filepath.Join(themesDir, ".TEMPLATE.ds2theme")
+		existing, readErr := os.ReadFile(templatePath)
+		if readErr != nil || !bytes.Equal(existing, embeddedTemplate) {
+			if err := os.WriteFile(templatePath, embeddedTemplate, 0600); err != nil {
+				logger.Warn(ctx, "Failed to write theme template reference: %v", err)
+			} else {
+				logger.Notice(ctx, "Theme template reference updated: "+console.FormatFolderPath(templatePath))
+			}
 		}
 	}
 

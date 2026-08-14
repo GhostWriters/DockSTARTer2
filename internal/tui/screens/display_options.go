@@ -84,9 +84,9 @@ type displayOptionsAbortMsg struct{}
 // NewDisplayOptionsScreen creates a new consolidated display options screen.
 // isRoot suppresses the Back button when this screen is the entry point.
 func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen {
-	themes, _ := theme.List()
 	cfg := config.LoadAppConfig()
 	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user:MyTheme"
+	themes, _ := theme.List(current)
 
 	s := &DisplayOptionsScreen{
 		isRoot:            isRoot,
