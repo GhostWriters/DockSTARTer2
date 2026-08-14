@@ -61,6 +61,14 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 		}
 
 		newTheme := arg
+		if strings.HasPrefix(newTheme, "user:") {
+			// Normalize away a user-typed ".ds2theme" suffix -- ConfigValue
+			// never includes it (see theme.List), so an unnormalized value
+			// here would never match its own list entry, breaking the
+			// "keep a dot-prefixed active theme visible" exception in
+			// theme.List for any dot-file set with its extension included.
+			newTheme = "user:" + theme.FileStemFromURI(newTheme)
+		}
 		if _, err := theme.EnsureThemeExtracted(newTheme); err != nil {
 			logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found.", theme.ThemeDisplayName(newTheme))
 			return err

@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -148,8 +149,29 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}
 	}
-	// If the configured theme no longer exists on disk, prepend a placeholder so the
-	// user can see what is active and optionally switch away from it.
+	// file: themes point outside the themes folder and are never part of
+	// s.themes (theme.List only enumerates embedded and user: themes), so
+	// foundCurrent is never true for one -- check the file directly instead
+	// of treating "not in the list" as "missing".
+	if !foundCurrent && strings.HasPrefix(s.currentTheme, "file:") {
+		if _, err := os.Stat(strings.TrimPrefix(s.currentTheme, "file:")); err == nil {
+			themeItems = append([]displayengine.MenuItem{{
+				Tag:           "file:" + theme.ThemeDisplayName(s.currentTheme),
+				Desc:          "{{|ItemListUserDefined|}}External theme file",
+				Help:          "Theme loaded directly from a file outside the themes folder.",
+				IsRadioButton: true,
+				Selectable:    true,
+				Checked:       true,
+				IsUserDefined: true,
+				Metadata:      map[string]string{"config_value": s.currentTheme},
+			}}, themeItems...)
+			foundCurrent = true
+		}
+	}
+	// If the configured theme still doesn't match anything (its file was
+	// removed, or it's a user:/embedded reference no longer on disk),
+	// prepend a placeholder so the user can see what is active and
+	// optionally switch away from it.
 	if !foundCurrent && s.currentTheme != "" {
 		shortURI := s.currentTheme
 		if strings.HasPrefix(s.currentTheme, "file:") {
