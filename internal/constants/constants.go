@@ -7,11 +7,12 @@ const (
 	TemplatesDirName  = ".apps"
 	InstancesDirName  = "instances"
 	TimestampsDirName = "timestamps"
-	// UserDirName groups all user-supplied content (themes today, app
-	// templates planned) under one folder in the config dir, distinct from
-	// DS2's own managed folders (.apps, instances, timestamps, etc.).
+	// UserDirName groups all user-supplied content (themes, app templates)
+	// under one folder in the config dir, distinct from DS2's own managed
+	// folders (.apps, instances, timestamps, etc.).
 	UserDirName     = "user"
 	ThemesDirName   = "themes"
+	AppsDirName     = "apps"
 	TempDirName     = "temp"
 	EnvFilesDirName = "env_files"
 )

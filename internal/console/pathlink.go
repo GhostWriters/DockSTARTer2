@@ -148,6 +148,85 @@ func formatPathTag(tag, name, path string, isFolder bool) string {
 	return "{{|" + tag + "::::" + strutil.FileURL(path) + "|}}" + name + "{{[-]}}"
 }
 
+// FormatUserFolderPath returns raw semstyle markup for fullPath expressed
+// as "user:<relative path>" instead of the raw absolute filesystem path --
+// e.g. a user apps folder override at .../user/apps/media.d/plex displays
+// as "user:media.d/plex", and baseDir itself displays as bare "user:".
+// baseDir (e.g. paths.GetUserAppsDir(), paths.GetThemesDir()) is
+// hyperlinked as just the word "user" (the ":" is styled but not part of
+// the link, same as the "/" separators below); each remaining path segment
+// gets its own hyperlink to its own real cumulative path, exactly like
+// FormatFolderPath does for a plain absolute path -- so the whole
+// "user:..." reads as one continuous clickable path, not just a label.
+// Falls back to plain FormatFolderPath(fullPath) if fullPath isn't
+// actually under baseDir.
+func FormatUserFolderPath(baseDir, fullPath string) string {
+	return formatUserPathSegments(baseDir, fullPath, false)
+}
+
+// FormatUserFilePath is FormatUserFolderPath's counterpart for referencing
+// a file rather than a directory -- the final segment is tagged
+// {{|File|}}, matching FormatFilePath.
+func FormatUserFilePath(baseDir, fullPath string) string {
+	return formatUserPathSegments(baseDir, fullPath, true)
+}
+
+func formatUserPathSegments(baseDir, fullPath string, lastIsFile bool) string {
+	rel, err := filepath.Rel(baseDir, fullPath)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		if lastIsFile {
+			return FormatFilePath(fullPath)
+		}
+		return FormatFolderPath(fullPath)
+	}
+	blocked := blocksHyperlink()
+
+	var b strings.Builder
+	if blocked {
+		b.WriteString("{{|Folder|}}user{{[-]}}")
+	} else {
+		b.WriteString("{{|Folder::::" + strutil.FileURL(ensureTrailingSlash(baseDir)) + "|}}user{{[-]}}")
+	}
+	// The ":" is styled to match but never wrapped in the hyperlink -- same
+	// convention as the "/" separators below, only the segment itself
+	// (here, the word "user") is clickable.
+	b.WriteString("{{|Folder|}}:{{[-]}}")
+	if rel == "." {
+		return b.String()
+	}
+
+	segments := strings.Split(filepath.ToSlash(rel), "/")
+	sep := string(filepath.Separator)
+	lastIdx := -1
+	for i, s := range segments {
+		if s != "" {
+			lastIdx = i
+		}
+	}
+	for i, seg := range segments {
+		if seg == "" {
+			continue
+		}
+		tag := "Folder"
+		if lastIsFile && i == lastIdx {
+			tag = "File"
+		}
+		if i > 0 {
+			b.WriteString("{{|" + tag + "|}}" + sep + "{{[-]}}")
+		}
+		if blocked {
+			b.WriteString("{{|" + tag + "|}}" + seg + "{{[-]}}")
+		} else {
+			cumulative := filepath.Join(baseDir, filepath.Join(segments[:i+1]...))
+			if tag == "Folder" {
+				cumulative = ensureTrailingSlash(cumulative)
+			}
+			b.WriteString("{{|" + tag + "::::" + strutil.FileURL(cumulative) + "|}}" + seg + "{{[-]}}")
+		}
+	}
+	return b.String()
+}
+
 // ensureTrailingSlash appends "/" if not already present. Used for folder
 // targets: a trailing slash forces path resolution to require a directory
 // (POSIX open/execve fail with ENOTDIR otherwise), which rules out a

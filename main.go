@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"DockSTARTer2/cmd"
+	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/boot"
 	"DockSTARTer2/internal/config"
@@ -249,7 +250,7 @@ func run() (exitCode int) {
 					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
 				}, userDir)
 			}
-			logger.Notice(ctx, "Moving user themes from '"+console.FormatFolderPath(legacyThemesDir)+"' to '"+console.FormatFolderPath(paths.GetThemesDir())+"'.")
+			logger.Notice(ctx, "Moving user themes from '"+console.FormatFolderPath(legacyThemesDir)+"' to '"+console.FormatUserFolderPath(paths.GetThemesDir(), paths.GetThemesDir())+"'.")
 			logger.Info(ctx, "Running: {{|RunningCommand|}}mv \"%s\" \"%s\"{{[-]}}", legacyThemesDir, paths.GetThemesDir())
 			// Try a plain rename first; fall back to sudo mv on permission
 			// failure, same pattern as installUpdate's binary replace.
@@ -267,7 +268,7 @@ func run() (exitCode int) {
 	// Ensure user themes directory exists
 	themesDir := paths.GetThemesDir()
 	if _, err := os.Stat(themesDir); os.IsNotExist(err) {
-		logger.Info(ctx, "Creating folder '"+console.FormatFolderPath(themesDir)+"'.")
+		logger.Info(ctx, "Creating folder '"+console.FormatUserFolderPath(paths.GetThemesDir(), themesDir)+"'.")
 		if err := os.MkdirAll(themesDir, 0700); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
@@ -295,10 +296,25 @@ func run() (exitCode int) {
 			if err := os.WriteFile(templatePath, embeddedTemplate, 0600); err != nil {
 				logger.Warn(ctx, "Failed to write theme template reference: %v", err)
 			} else {
-				logger.Notice(ctx, "Theme template reference updated: "+console.FormatFolderPath(templatePath))
+				logger.Notice(ctx, "Theme template reference updated: "+console.FormatUserFilePath(paths.GetThemesDir(), templatePath))
 			}
 		}
 	}
+
+	// Ensure user app templates directory exists, alongside the themes
+	// folder -- no legacy location to migrate from, this is a new folder.
+	userAppsDir := paths.GetUserAppsDir()
+	if _, err := os.Stat(userAppsDir); os.IsNotExist(err) {
+		logger.Info(ctx, "Creating folder '"+console.FormatUserFolderPath(paths.GetUserAppsDir(), userAppsDir)+"'.")
+		if err := os.MkdirAll(userAppsDir, 0700); err != nil {
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create folder.",
+				"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
+			}, userAppsDir)
+		}
+	}
+	system.SetPermissions(ctx, userAppsDir)
+	appenv.SyncUserAppTemplateReference(ctx)
 
 	// Ensure lock subdirectories exist (created lazily but do it here too
 	// so they are present from first startup regardless of code path).

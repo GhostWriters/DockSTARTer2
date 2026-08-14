@@ -95,6 +95,7 @@ func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.A
 		}
 
 		logger.Info(ctx, "Creating environment variables for '{{|App|}}%s{{[-]}}'.", niceName)
+		LogAppTemplateOverride(ctx, appName)
 
 		// 1. Get path to Global .env instance file
 		processedGlobalEnv, err := AppInstanceFile(ctx, appName, constants.EnvFileName)

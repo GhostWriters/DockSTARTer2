@@ -434,7 +434,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 		// nested path when it does (a user theme extracted from a subfolder,
 		// see theme.FileStemFromURI) -- one MkdirAll covers both.
 		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-			logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(filepath.Dir(outPath))+"': %v", err)
+			logger.Error(ctx, "Failed to create directory '"+console.FormatUserFolderPath(paths.GetThemesDir(), filepath.Dir(outPath))+"': %v", err)
 			return err
 		}
 
@@ -442,7 +442,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "Failed to write theme file: %v", err)
 			return err
 		}
-		logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' extracted to: "+console.FormatFolderPath(outPath), theme.ThemeDisplayName(themeName))
+		logger.Notice(ctx, "Theme '{{|Theme|}}%s{{[-]}}' extracted to: "+console.FormatUserFilePath(paths.GetThemesDir(), outPath), theme.ThemeDisplayName(themeName))
 		if theme.FileStemFromURI(themeName) == ".TEMPLATE" {
 			logger.Notice(ctx, "This is a reference starter theme, not one meant to be used as-is. Rename it and edit the copy.")
 		}
@@ -465,7 +465,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 		}
 
 		if err := os.MkdirAll(destDir, 0755); err != nil {
-			logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
+			logger.Error(ctx, "Failed to create directory '"+console.FormatUserFolderPath(paths.GetThemesDir(), destDir)+"': %v", err)
 			return err
 		}
 
@@ -478,13 +478,13 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 			}
 			outPath := filepath.Join(destDir, stem+".ds2theme")
 			if err := os.WriteFile(outPath, data, 0644); err != nil {
-				logger.Warn(ctx, "Failed to write '"+console.FormatFolderPath(outPath)+"': %v", err)
+				logger.Warn(ctx, "Failed to write '"+console.FormatUserFilePath(paths.GetThemesDir(), outPath)+"': %v", err)
 				continue
 			}
 			logger.Notice(ctx, "  Extracted: {{|Theme|}}%s{{[-]}}", stem+".ds2theme")
 			extracted++
 		}
-		logger.Notice(ctx, "%d theme(s) extracted to: "+console.FormatFolderPath(destDir), extracted)
+		logger.Notice(ctx, "%d theme(s) extracted to: "+console.FormatUserFolderPath(paths.GetThemesDir(), destDir), extracted)
 	}
 	return nil
 }

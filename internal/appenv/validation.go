@@ -5,7 +5,6 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
 	"os"
@@ -45,13 +44,12 @@ func IsAppNameValid(appName string) bool {
 	return true
 }
 
-// IsAppBuiltIn checks if the application has a corresponding template folder.
+// IsAppBuiltIn checks if the application has a corresponding template
+// folder, either a user override (internal/appenv/user_templates.go) or
+// the bundled DockSTARTer-Templates repo copy.
 func IsAppBuiltIn(appName string) bool {
 	base := AppNameToBaseAppName(appName)
-	base = strings.ToLower(base)
-
-	templatesDir := paths.GetTemplatesDir()
-	appDir := filepath.Join(templatesDir, constants.TemplatesDirName, base)
+	appDir, _ := resolveAppTemplateFolder(base)
 	info, err := os.Stat(appDir)
 	return err == nil && info.IsDir()
 }
@@ -101,8 +99,7 @@ func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
 // IsAppRunnable checks if an app has the required YML template files for the current architecture.
 func IsAppRunnable(appName string, conf config.AppConfig) bool {
 	basename := AppNameToBaseAppName(appName)
-	templatesDir := paths.GetTemplatesDir()
-	templateFolder := filepath.Join(templatesDir, constants.TemplatesDirName, basename)
+	templateFolder, _ := resolveAppTemplateFolder(basename)
 
 	// Check for main.yml
 	mainYml := filepath.Join(templateFolder, basename+".yml")

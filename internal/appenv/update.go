@@ -72,6 +72,7 @@ func Update(ctx context.Context, force bool, file string) error {
 
 		// b) Format app sections in main .env (Parity lines 47-58)
 		for _, appName := range appList {
+			LogAppTemplateOverride(ctx, appName)
 			appVars := AppVarsLines(appName, allLines)
 			tmpAppFile, _ := os.CreateTemp("", "ds2.app_main.*.tmp")
 			if err := os.WriteFile(tmpAppFile.Name(), []byte(strings.Join(appVars, "\n")), 0644); err != nil {
@@ -125,6 +126,7 @@ func Update(ctx context.Context, force bool, file string) error {
 			} else {
 				logger.Notice(ctx, "Updating '"+console.FormatFilePath(appEnvFile)+"'.")
 			}
+			LogAppTemplateOverride(ctx, appName)
 
 			// Only use template for non-user-defined apps (Parity lines 99-101)
 			appDefaultEnvFile := ""

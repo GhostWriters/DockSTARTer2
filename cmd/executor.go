@@ -66,7 +66,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout",
 			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--man":
+			"--theme-extract", "--theme-extract-all", "--app-template-extract", "--app-template-new", "--man":
 			// Skip validation for meta/config commands
 		default:
 			shouldValidate = true
@@ -264,6 +264,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--theme-extract", "--theme-extract-all":
 				ranCommand = true
 				return commands.HandleThemeExtract(subCtx, &group)
+			case "--app-template-extract":
+				ranCommand = true
+				return commands.HandleAppTemplateExtract(subCtx, &group)
+			case "--app-template-new":
+				ranCommand = true
+				return commands.HandleAppTemplateNew(subCtx, &group)
 			case "--config-panel":
 				ranCommand = true
 				return commands.HandleConfigPanel(subCtx, &group)
