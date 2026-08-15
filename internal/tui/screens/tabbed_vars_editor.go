@@ -7,7 +7,6 @@ import (
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"DockSTARTer2/internal/version"
-	"fmt"
 	"strings"
 	"time"
 
@@ -74,11 +73,6 @@ type envSetLayoutMsg struct {
 // LabelWidth which is the max across ALL possible labels: "Original Value: " = 16.
 // Using the maximum keeps values aligned at the same column across all screens.
 const headingLabelW = menuLabelW
-
-// headingLabel right-aligns label to headingLabelW (e.g. "    Variable: ").
-func headingLabel(label string) string {
-	return fmt.Sprintf("%*s", headingLabelW, label)
-}
 
 type EnvTabSpec struct {
 	Title    string
