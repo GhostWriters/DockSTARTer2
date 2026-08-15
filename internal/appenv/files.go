@@ -42,10 +42,10 @@ func AppInstanceFile(ctx context.Context, appName, fileSuffix string) (string, e
 	baseApp := strings.ToLower(AppNameToBaseAppName(appName))
 	instance := AppNameToInstanceName(appName)
 
-	templateFolder, _ := resolveAppTemplateFolder(baseApp)
+	templateFolder := TemplateFolder(baseApp)
 	instanceFolder := filepath.Join(instancesDir, strings.ToLower(appName))
 
-	templateFile := filepath.Join(templateFolder, strings.ReplaceAll(fileSuffix, "*", baseApp))
+	templateFile := TemplateFile(baseApp, fileSuffix)
 	instanceFile := filepath.Join(instanceFolder, strings.ReplaceAll(fileSuffix, "*", strings.ToLower(appName)))
 	// Original template copy stored alongside the instance file (not in a separate .apps folder).
 	originalFile := instanceFile + ".original"

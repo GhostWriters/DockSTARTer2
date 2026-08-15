@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -25,10 +24,8 @@ func GetAppMarkdown(ctx context.Context, appName string) (string, error) {
 		return "", fmt.Errorf("application is not a built-in template: %s", appName)
 	}
 
-	baseAppLower := strings.ToLower(AppNameToBaseAppName(appUpper))
-	LogAppTemplateOverride(ctx, baseAppLower)
-	templateFolder, _ := resolveAppTemplateFolder(baseAppLower)
-	docPath := filepath.Join(templateFolder, "README.md")
+	LogAppTemplateOverride(ctx, appUpper)
+	docPath := TemplateFile(appUpper, "README.md")
 
 	if _, err := os.Stat(docPath); os.IsNotExist(err) {
 		return "", fmt.Errorf("documentation not found for app: %s", appName)

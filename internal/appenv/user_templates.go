@@ -125,6 +125,30 @@ func resolveAppTemplateFolder(base string) (dir string, isUser bool) {
 	return filepath.Join(paths.GetTemplatesDir(), constants.TemplatesDirName, strings.ToLower(base)), false
 }
 
+// TemplateFolder returns the resolved template folder for appName (base or
+// instance-qualified, e.g. "radarr" or "radarr__4k" -- instances don't have
+// their own template, so this always resolves against the base app): a
+// user app template override if one exists, otherwise the bundled
+// DockSTARTer-Templates repo copy. The single entry point every call site
+// that just wants "the folder", not the user/repo distinction itself,
+// should use, rather than hardcoding the repo path directly or calling
+// resolveAppTemplateFolder and discarding its bool.
+func TemplateFolder(appName string) string {
+	base := strings.ToLower(AppNameToBaseAppName(appName))
+	dir, _ := resolveAppTemplateFolder(base)
+	return dir
+}
+
+// TemplateFile returns the resolved path to a specific file within
+// appName's template folder, with "*" in fileSuffix replaced by the base
+// app name -- e.g. TemplateFile("plex", "*.yml") -> ".../plex/plex.yml"
+// -- matching AppInstanceFile's own fileSuffix convention. Pass a literal
+// filename (no "*") for a fixed name like "README.md".
+func TemplateFile(appName, fileSuffix string) string {
+	base := strings.ToLower(AppNameToBaseAppName(appName))
+	return filepath.Join(TemplateFolder(appName), strings.ReplaceAll(fileSuffix, "*", base))
+}
+
 // findUserAppFolder looks for a specific, already-known app name under
 // paths.GetUserAppsDir(), applying the same two-phase precedence as
 // walkUserAppFolders (a bare folder always wins over anything inside a

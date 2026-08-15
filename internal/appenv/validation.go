@@ -48,9 +48,7 @@ func IsAppNameValid(appName string) bool {
 // folder, either a user override (internal/appenv/user_templates.go) or
 // the bundled DockSTARTer-Templates repo copy.
 func IsAppBuiltIn(appName string) bool {
-	base := AppNameToBaseAppName(appName)
-	appDir, _ := resolveAppTemplateFolder(base)
-	info, err := os.Stat(appDir)
+	info, err := os.Stat(TemplateFolder(appName))
 	return err == nil && info.IsDir()
 }
 
@@ -98,18 +96,13 @@ func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
 
 // IsAppRunnable checks if an app has the required YML template files for the current architecture.
 func IsAppRunnable(appName string, conf config.AppConfig) bool {
-	basename := AppNameToBaseAppName(appName)
-	templateFolder, _ := resolveAppTemplateFolder(basename)
-
 	// Check for main.yml
-	mainYml := filepath.Join(templateFolder, basename+".yml")
-	if _, err := os.Stat(mainYml); err != nil {
+	if _, err := os.Stat(TemplateFile(appName, "*.yml")); err != nil {
 		return false
 	}
 
 	// Check for arch-specific yml
-	archYml := filepath.Join(templateFolder, basename+"."+conf.Arch+".yml")
-	if _, err := os.Stat(archYml); err != nil {
+	if _, err := os.Stat(TemplateFile(appName, "*."+conf.Arch+".yml")); err != nil {
 		return false
 	}
 
