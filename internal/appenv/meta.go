@@ -15,11 +15,16 @@ var (
 	appMetaCacheMu sync.RWMutex
 )
 
-// InvalidateAppMetaCache clears the in-memory AppMeta cache (e.g. after a templates update).
+// InvalidateAppMetaCache clears the in-memory AppMeta cache (e.g. after a
+// templates update) along with AppURL's cache -- both are keyed off which
+// template folder an app resolves from, which can change independently of
+// a templates update whenever a user app template override is added,
+// changed, or removed (see HandleAppTemplateExtract/HandleAppTemplateNew).
 func InvalidateAppMetaCache() {
 	appMetaCacheMu.Lock()
 	appMetaCache = make(map[string]*AppMeta)
 	appMetaCacheMu.Unlock()
+	appURLCache.Clear()
 }
 
 // VarMeta holds metadata for a single app-specific variable from a .meta.toml file.

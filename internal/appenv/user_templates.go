@@ -216,6 +216,6 @@ func SyncUserAppTemplateReference(ctx context.Context) {
 	})
 
 	if wroteAny {
-		logger.Notice(ctx, "App template reference updated: "+console.FormatUserFolderPath(paths.GetUserAppsDir(), dstRoot))
+		logger.Notice(ctx, "App template reference updated in '"+console.FormatFolderPath(dstRoot)+"'.")
 	}
 }

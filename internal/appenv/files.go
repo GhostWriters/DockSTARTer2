@@ -28,9 +28,8 @@ func LogAppTemplateOverride(ctx context.Context, appName string) {
 	if !isUserOverride {
 		return
 	}
-	niceName := GetNiceName(ctx, strings.ToUpper(baseApp))
-	logger.Info(ctx, "Using user app template for '{{|App|}}%s{{[-]}}': "+
-		console.FormatUserFolderPath(paths.GetUserAppsDir(), templateFolder), niceName)
+	logger.Info(ctx, "Using user app template for '%s' in '"+
+		console.FormatFolderPath(templateFolder)+"'.", StyledAppName(ctx, baseApp))
 }
 
 // AppInstanceFile handles template processing for app instances.
