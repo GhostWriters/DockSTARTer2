@@ -21,6 +21,7 @@ const (
 	appDeprecatedTag         = " [*DEPRECATED*]"
 	appDisabledTag           = " (Disabled)"
 	appUserDefinedTag        = " (User Defined)"
+	appUserTemplateTag       = " (User Template)"
 	appUserDefinedVarsTag    = " (User Defined Variables)"
 	userDefinedGlobalVarsTag = " (User Defined)"
 )
@@ -60,6 +61,9 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		if appIsUserDefined {
 			headingTitle += appUserDefinedTag
 		} else {
+			if IsUserTemplate(appUpper) {
+				headingTitle += appUserTemplateTag
+			}
 			if IsAppDeprecated(ctx, appUpper) {
 				headingTitle += appDeprecatedTag
 			}

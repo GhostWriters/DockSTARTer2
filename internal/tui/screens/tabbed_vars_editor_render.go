@@ -610,12 +610,15 @@ func subtitleWrapLines(text string, maxWidth int) int {
 
 // renderSubtitleForTab renders the heading subtitle for one tab, padded to
 // width. height == 0 means no subtitle to render (see calcSubtitleHeightForTab).
+// Delegates the actual heading content (labels, tags, word-wrap) to
+// FormatMenuHeading, the same helper the F1 help panel uses, so a tag like
+// (User Template) only needs adding in one place, not duplicated per screen.
 func (m *TabbedVarsEditorModel) renderSubtitleForTab(tab *envTab, width, height int) string {
 	if height == 0 {
 		return ""
 	}
-	ctx := displayengine.GetActiveContext()
-	bgStyle := ctx.Dialog
+	dCtx := displayengine.GetActiveContext()
+	bgStyle := dCtx.Dialog
 
 	renderLine := func(raw string) string {
 		processed := theme.ToANSI(raw, "")
@@ -624,56 +627,34 @@ func (m *TabbedVarsEditorModel) renderSubtitleForTab(tab *envTab, width, height 
 		return displayengine.MaintainBackground(bgStyle.Render(padded), bgStyle)
 	}
 
-	var lines []string
-
-	if tab.niceName == "" {
-		// Global: show file path
-		lines = append(lines, renderLine(headingLabel("File: ")+"{{|HeadingValue|}}"+tab.envFilePath+"{{[-]}}"))
-	} else {
-		// App: "Application: AppName" on first line
-		appLine := headingLabel("Application: ") + "{{|HeadingValue|}}" + tab.niceName + "{{[-]}}"
-		lines = append(lines, renderLine(appLine))
-
-		// Word-wrap description onto continuation lines, indented to align with value
-		if tab.description != "" {
-			indent := strutil.Repeat(" ", headingLabelW)
-			valueW := width - headingLabelW
-			if valueW < 10 {
-				valueW = 10
-			}
-			for _, dl := range subtitleWrapText(displayengine.GetPlainText(tab.description), valueW) {
-				lines = append(lines, renderLine(indent+"{{|HeadingAppDescription|}}"+dl+"{{[-]}}"))
-			}
+	params := MenuHeadingParams{
+		AppName:        tab.niceName,
+		AppDescription: tab.description,
+		FilePath:       tab.envFilePath, // only shown by FormatMenuHeading when AppName == "" (global tab)
+	}
+	if tab.niceName != "" {
+		if tab.spec.App != "" {
+			ctx := context.Background()
+			appUpper := strings.ToUpper(tab.spec.App)
+			// Read state from the live editor buffer (same source as
+			// checkEnabledChanged), not disk, so the tags reflect an
+			// unsaved __ENABLED add/edit/delete immediately after a refresh.
+			// "absent" (no __ENABLED key) means User Defined, matching
+			// IsAppUserDefinedFromLines; only "disabled" means Disabled.
+			state := m.enabledStateForApp(appUpper)
+			params.AppIsUserDefined = state == "absent"
+			params.AppIsUserTemplate = appenv.IsUserTemplate(tab.spec.App)
+			params.AppIsDeprecated = appenv.IsAppDeprecated(ctx, appenv.AppNameToBaseAppName(tab.spec.App))
+			params.AppIsDisabled = state == "disabled"
 		}
+		params.FilePath = "" // app tabs show "Application:", not "File:"
 	}
 
+	var lines []string
+	for _, l := range strings.Split(FormatMenuHeading(params, width), "\n") {
+		lines = append(lines, renderLine(l))
+	}
 	return strings.Join(lines, "\n")
-}
-
-// subtitleWrapText word-wraps text to maxWidth, returning a slice of lines.
-func subtitleWrapText(text string, maxWidth int) []string {
-	if maxWidth <= 0 || text == "" {
-		return nil
-	}
-	words := strings.Fields(text)
-	var lines []string
-	var cur strings.Builder
-	for _, w := range words {
-		if cur.Len() == 0 {
-			cur.WriteString(w)
-		} else if cur.Len()+1+len(w) > maxWidth {
-			lines = append(lines, cur.String())
-			cur.Reset()
-			cur.WriteString(w)
-		} else {
-			cur.WriteByte(' ')
-			cur.WriteString(w)
-		}
-	}
-	if cur.Len() > 0 {
-		lines = append(lines, cur.String())
-	}
-	return lines
 }
 
 // HelpContext implements displayengine.HelpContextProvider.
@@ -742,6 +723,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) displayengine.Help
 
 // getVariableHelpContext builds a help context for a specific variable in a tab.
 func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *displayengine.HelpContext {
+	ctx := context.Background()
 	legend := "| " +
 		"{{|MarkerAdded|}}+{{[-]}} Added | " +
 		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
@@ -760,15 +742,26 @@ func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envT
 		varIsUserDefined = meta.IsUserDefined && tab.niceName == ""
 	}
 
+	// Read state from the live editor buffer, same as renderSubtitleForTab:
+	// "absent" (no __ENABLED key) means User Defined, matching
+	// IsAppUserDefinedFromLines; only "disabled" means Disabled.
+	appEnabledState := ""
+	if tab.spec.App != "" {
+		appEnabledState = m.enabledStateForApp(strings.ToUpper(tab.spec.App))
+	}
+
 	params := MenuHeadingParams{
-		AppName:          tab.niceName,
-		AppDescription:   tab.description,
-		AppIsUserDefined: ok && meta.IsUserDefined && tab.niceName != "",
-		FilePath:         tab.envFilePath,
-		VarName:          varName,
-		VarIsUserDefined: varIsUserDefined,
-		OriginalValue:    originalValue,
-		CurrentValue:     currentValue,
+		AppName:           tab.niceName,
+		AppDescription:    tab.description,
+		AppIsUserDefined:  (ok && meta.IsUserDefined && tab.niceName != "") || appEnabledState == "absent",
+		AppIsUserTemplate: tab.spec.App != "" && appenv.IsUserTemplate(tab.spec.App),
+		AppIsDeprecated:   tab.spec.App != "" && appenv.IsAppDeprecated(ctx, appenv.AppNameToBaseAppName(tab.spec.App)),
+		AppIsDisabled:     appEnabledState == "disabled",
+		FilePath:          tab.envFilePath,
+		VarName:           varName,
+		VarIsUserDefined:  varIsUserDefined,
+		OriginalValue:     originalValue,
+		CurrentValue:      currentValue,
 	}
 
 	itemText := FormatMenuHeading(params, contentWidth)

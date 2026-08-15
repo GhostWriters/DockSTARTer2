@@ -12,11 +12,12 @@ import (
 // instead of the bash :AppName / AppName: string conventions.
 type MenuHeadingParams struct {
 	// Application block (omitted when AppName is empty)
-	AppName          string
-	AppDescription   string // Word-wrapped to contentWidth - labelW
-	AppIsDeprecated  bool
-	AppIsDisabled    bool
-	AppIsUserDefined bool
+	AppName           string
+	AppDescription    string // Word-wrapped to contentWidth - labelW
+	AppIsDeprecated   bool
+	AppIsDisabled     bool
+	AppIsUserDefined  bool
+	AppIsUserTemplate bool
 
 	// File line (omitted when FilePath is empty)
 	FilePath string
@@ -82,14 +83,21 @@ func FormatMenuHeading(p MenuHeadingParams, contentWidth int) string {
 		sb.WriteString(colorFor("AppName"))
 		sb.WriteString(p.AppName)
 		sb.WriteString("{{[-]}}")
-		if p.AppIsDeprecated {
-			sb.WriteString(" {{|HeadingTag|}}[*DEPRECATED*]{{[-]}}")
-		}
-		if p.AppIsDisabled {
-			sb.WriteString(" {{|HeadingTag|}}(Disabled){{[-]}}")
-		}
+		// Mutually exclusive, same order as appenv/format.go's file-comment
+		// heading: User Defined (no template at all) wins outright; only
+		// once that's ruled out do User Template/Deprecated/Disabled apply.
 		if p.AppIsUserDefined {
 			sb.WriteString(" {{|HeadingTag|}}(User Defined){{[-]}}")
+		} else {
+			if p.AppIsUserTemplate {
+				sb.WriteString(" {{|HeadingTag|}}(User Template){{[-]}}")
+			}
+			if p.AppIsDeprecated {
+				sb.WriteString(" {{|HeadingTag|}}[*DEPRECATED*]{{[-]}}")
+			}
+			if p.AppIsDisabled {
+				sb.WriteString(" {{|HeadingTag|}}(Disabled){{[-]}}")
+			}
 		}
 		sb.WriteString("\n")
 
