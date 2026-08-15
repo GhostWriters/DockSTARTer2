@@ -17,17 +17,23 @@ import (
 // appURLCache caches AppURL results: app name → url string, or "" if not built-in.
 var appURLCache sync.Map
 
-// AppURL returns the dockstarter.com docs page for a built-in app, or "" if
-// appName isn't a known built-in app (e.g. user-defined). Shared by compose/
-// prune output styling and any UI that wants to link an app name to its docs.
+// AppURL returns the dockstarter.com docs page for an app resolved from the
+// bundled DockSTARTer-Templates repo, or "" if appName isn't a known
+// built-in app (e.g. user-defined) or is a user app template override --
+// dockstarter.com only documents the repo's own copy, which may not match
+// (or may not even exist for) a user's local override/addition, so linking
+// there would be misleading. Shared by compose/prune output styling and
+// any UI that wants to link an app name to its docs.
 func AppURL(appName string) string {
 	if v, ok := appURLCache.Load(appName); ok {
 		return v.(string)
 	}
+	base := strings.ToLower(AppNameToBaseAppName(appName))
 	url := ""
-	if IsAppBuiltIn(appName) {
-		base := strings.ToLower(AppNameToBaseAppName(appName))
-		url = "https://dockstarter.com/apps/" + base + "/"
+	if dir, isUser := resolveAppTemplateFolder(base); !isUser {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			url = "https://dockstarter.com/apps/" + base + "/"
+		}
 	}
 	appURLCache.Store(appName, url)
 	return url

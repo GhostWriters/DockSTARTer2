@@ -59,7 +59,7 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 
 	srcDir := filepath.Join(paths.GetTemplatesDir(), constants.TemplatesDirName, appName)
 	if info, err := os.Stat(srcDir); err != nil || !info.IsDir() {
-		logger.Error(ctx, "App template '{{|App|}}%s{{[-]}}' not found.", appName)
+		logger.Error(ctx, "App template '%s' not found.", appenv.StyledAppName(ctx, appName))
 		return fmt.Errorf("app template not found: %s", appName)
 	}
 
@@ -76,7 +76,7 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 
 	if _, statErr := os.Stat(destDir); statErr == nil {
 		if !console.GlobalForce {
-			logger.Error(ctx, "'"+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+
+			logger.Error(ctx, "'"+console.FormatFolderPath(destDir)+
 				"' already exists. Use {{|UserCommand|}}-f{{[-]}}/{{|UserCommand|}}--force{{[-]}} to overwrite it.")
 			return fmt.Errorf("destination already exists: %s", destDir)
 		}
@@ -84,13 +84,13 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 		// a file that existed in an old extraction but no longer exists in
 		// the current source doesn't linger behind.
 		if err := os.RemoveAll(destDir); err != nil {
-			logger.Error(ctx, "Failed to remove existing '"+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+"': %v", err)
+			logger.Error(ctx, "Failed to remove existing '"+console.FormatFolderPath(destDir)+"': %v", err)
 			return err
 		}
 	}
 
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		logger.Error(ctx, "Failed to create directory '"+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+"': %v", err)
+		logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
 		return err
 	}
 
@@ -122,7 +122,7 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	logger.Notice(ctx, "App template '{{|App|}}%s{{[-]}}' extracted to: "+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+" (%d %s)", appName, copied, fileWord(copied))
+	logger.Notice(ctx, "App template '%s' extracted to '"+console.FormatFolderPath(destDir)+"' (%d %s).", appenv.StyledAppName(ctx, appName), copied, fileWord(copied))
 	if appName == ".template" {
 		logger.Notice(ctx, "This is a reference starter template, not one meant to be used as-is. Rename it and edit the copy.")
 	} else {
@@ -155,7 +155,7 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 	}
 	lower := strings.ToLower(group.Args[0])
 	if !appenv.IsAppNameValid(strings.ToUpper(lower)) {
-		logger.Error(ctx, "'{{|App|}}%s{{[-]}}' is not a valid app name.", lower)
+		logger.Error(ctx, "'%s' is not a valid app name.", appenv.StyledAppName(ctx, lower))
 		return fmt.Errorf("invalid app name: %s", lower)
 	}
 	upper := strings.ToUpper(lower)
@@ -194,11 +194,11 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 	}
 	destDir := filepath.Join(destBase, lower)
 	if _, err := os.Stat(destDir); err == nil {
-		logger.Error(ctx, "'"+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+"' already exists.")
+		logger.Error(ctx, "'"+console.FormatFolderPath(destDir)+"' already exists.")
 		return fmt.Errorf("destination already exists: %s", destDir)
 	}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		logger.Error(ctx, "Failed to create directory '"+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+"': %v", err)
+		logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
 		return err
 	}
 
@@ -243,8 +243,9 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	logger.Notice(ctx, "New app template '{{|App|}}%s{{[-]}}' created at: "+console.FormatUserFolderPath(paths.GetUserAppsDir(), destDir)+" (%d %s)", lower, copied, fileWord(copied))
-	logger.Notice(ctx, "Fill in the compose snippet and defaults, then enable '{{|App|}}%s{{[-]}}' to test it.", upper)
+	logger.Notice(ctx, "New app template '%s' created in '"+console.FormatFolderPath(destDir)+"' (%d %s).", appenv.StyledAppName(ctx, lower), copied, fileWord(copied))
+	logger.Notice(ctx, "Fill in the compose snippet and defaults, then enable '%s' to test it.",
+		console.FormatLink(appenv.AppStyleTag(lower), upper, appenv.AppURL(lower)))
 	appenv.InvalidateAppMetaCache()
 	return nil
 }

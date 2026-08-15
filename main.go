@@ -305,7 +305,7 @@ func run() (exitCode int) {
 	// folder -- no legacy location to migrate from, this is a new folder.
 	userAppsDir := paths.GetUserAppsDir()
 	if _, err := os.Stat(userAppsDir); os.IsNotExist(err) {
-		logger.Info(ctx, "Creating folder '"+console.FormatUserFolderPath(paths.GetUserAppsDir(), userAppsDir)+"'.")
+		logger.Info(ctx, "Creating folder '"+console.FormatFolderPath(userAppsDir)+"'.")
 		if err := os.MkdirAll(userAppsDir, 0700); err != nil {
 			logger.FatalWithStack(ctx, []string{
 				"Failed to create folder.",
