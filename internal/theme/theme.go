@@ -8,12 +8,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	semstyle "github.com/GhostWriters/semstyle/lg"
-	semtheme "github.com/GhostWriters/semstyle/theme"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	semstyle "github.com/GhostWriters/semstyle/lg"
+	semtheme "github.com/GhostWriters/semstyle/theme"
 
 	"charm.land/lipgloss/v2"
 	"github.com/go-viper/mapstructure/v2"
@@ -621,7 +622,7 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	{"TagSpinner", "Tag"},
 	{"ItemList", "Item"},
 	{"ItemListUserDefined", "Item"},
-	{"ItemListUserTemplate", "{{|Item:::U|}}"},
+	{"ItemListUserTemplate", "{{|ItemList:::U|}}"},
 	{"ButtonKeyActive", "ButtonActive"},
 	{"ButtonKeyInactive", "ButtonInactive"},
 	{"ButtonSpinner", "ButtonActive"},
@@ -901,7 +902,7 @@ var titleFallbackTags = []struct{ name, fallback string }{
 var itemListFallbackTags = []struct{ name, fallback string }{
 	{"ItemListFocused", "ItemFocused"},
 	{"ItemListUserDefinedFocused", "ItemFocused"},
-	{"ItemListUserTemplateFocused", "{{|ItemFocused:::U|}}"},
+	{"ItemListUserTemplateFocused", "{{|ItemListFocused:::U|}}"},
 	{"ItemListDeprecated", "ItemListUserDefined"},
 	{"ItemListDeprecatedFocused", "ItemListUserDefinedFocused"},
 }
