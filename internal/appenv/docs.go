@@ -1,8 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
 	"os"
@@ -28,8 +26,9 @@ func GetAppMarkdown(ctx context.Context, appName string) (string, error) {
 	}
 
 	baseAppLower := strings.ToLower(AppNameToBaseAppName(appUpper))
-	templatesDir := paths.GetTemplatesDir()
-	docPath := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppLower, "README.md")
+	LogAppTemplateOverride(ctx, baseAppLower)
+	templateFolder, _ := resolveAppTemplateFolder(baseAppLower)
+	docPath := filepath.Join(templateFolder, "README.md")
 
 	if _, err := os.Stat(docPath); os.IsNotExist(err) {
 		return "", fmt.Errorf("documentation not found for app: %s", appName)
