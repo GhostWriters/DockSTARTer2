@@ -125,6 +125,33 @@ func resolveAppTemplateFolder(base string) (dir string, isUser bool) {
 	return filepath.Join(paths.GetTemplatesDir(), constants.TemplatesDirName, strings.ToLower(base)), false
 }
 
+// IsUserTemplate reports whether appName currently resolves via a user app
+// template override, as opposed to the bundled DockSTARTer-Templates repo
+// copy or not being a recognized app template at all. Unlike IsAppBuiltIn
+// (which answers "is there a template folder at all, from either source")
+// this distinguishes the source -- e.g. for UI styling that wants to mark
+// a user-overridden app differently from a genuine repo-bundled one.
+// findUserAppFolder only reports a match after confirming the folder
+// exists, so no separate os.Stat is needed here the way IsRepoTemplate
+// needs one for its own (unconditional) fallback path.
+func IsUserTemplate(appName string) bool {
+	_, isUser := resolveAppTemplateFolder(strings.ToLower(AppNameToBaseAppName(appName)))
+	return isUser
+}
+
+// IsRepoTemplate reports whether appName currently resolves via the
+// bundled DockSTARTer-Templates repo copy (not a user override). See
+// IsUserTemplate; together IsUserTemplate(appName) || IsRepoTemplate(appName)
+// is equivalent to IsAppBuiltIn(appName).
+func IsRepoTemplate(appName string) bool {
+	dir, isUser := resolveAppTemplateFolder(strings.ToLower(AppNameToBaseAppName(appName)))
+	if isUser {
+		return false
+	}
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
+}
+
 // TemplateFolder returns the resolved template folder for appName (base or
 // instance-qualified, e.g. "radarr" or "radarr__4k" -- instances don't have
 // their own template, so this always resolves against the base app): a

@@ -28,12 +28,10 @@ func AppURL(appName string) string {
 	if v, ok := appURLCache.Load(appName); ok {
 		return v.(string)
 	}
-	base := strings.ToLower(AppNameToBaseAppName(appName))
 	url := ""
-	if dir, isUser := resolveAppTemplateFolder(base); !isUser {
-		if info, err := os.Stat(dir); err == nil && info.IsDir() {
-			url = "https://dockstarter.com/apps/" + base + "/"
-		}
+	if IsRepoTemplate(appName) {
+		base := strings.ToLower(AppNameToBaseAppName(appName))
+		url = "https://dockstarter.com/apps/" + base + "/"
 	}
 	appURLCache.Store(appName, url)
 	return url
