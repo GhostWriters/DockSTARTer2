@@ -152,8 +152,11 @@ func (s *AppSelectionScreen) applyLoadedItems(data appSelectLoadedMsg) {
 		niceName := appenv.GetNiceName(ctx, base)
 		desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 		descTag := "{{|ItemList|}}"
-		if appenv.IsAppDeprecated(ctx, base) {
+		switch {
+		case appenv.IsAppDeprecated(ctx, base):
 			descTag = "{{|ItemListDeprecated|}}"
+		case appenv.IsUserTemplate(base):
+			descTag = "{{|ItemListUserTemplate|}}"
 		}
 
 		instances := addedByBase[base]
@@ -300,8 +303,11 @@ func (s *AppSelectionScreen) expandGroup(baseApp string) {
 	niceName := appenv.GetNiceName(ctx, baseApp)
 	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, baseApp, envFile))
 	descTag := "{{|ItemList|}}"
-	if appenv.IsAppDeprecated(ctx, baseApp) {
+	switch {
+	case appenv.IsAppDeprecated(ctx, baseApp):
 		descTag = "{{|ItemListDeprecated|}}"
+	case appenv.IsUserTemplate(baseApp):
+		descTag = "{{|ItemListUserTemplate|}}"
 	}
 	groupHeader := displayengine.MenuItem{
 		Tag:           niceName,
@@ -393,8 +399,11 @@ func (s *AppSelectionScreen) collapseGroupIfNeeded(items []displayengine.MenuIte
 	niceName := appenv.GetNiceName(ctx, base)
 	desc := displayengine.GetPlainText(appenv.GetDescriptionFromTemplate(ctx, base, envFile))
 	descTag := "{{|ItemList|}}"
-	if appenv.IsAppDeprecated(ctx, base) {
+	switch {
+	case appenv.IsAppDeprecated(ctx, base):
 		descTag = "{{|ItemListDeprecated|}}"
+	case appenv.IsUserTemplate(base):
+		descTag = "{{|ItemListUserTemplate|}}"
 	}
 	simpleRow := displayengine.MenuItem{
 		Tag:               niceName,

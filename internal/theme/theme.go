@@ -621,6 +621,7 @@ var derivedFallbackTags = []struct{ name, fallback string }{
 	{"TagSpinner", "Tag"},
 	{"ItemList", "Item"},
 	{"ItemListUserDefined", "Item"},
+	{"ItemListUserTemplate", "{{|Item:::U|}}"},
 	{"ButtonKeyActive", "ButtonActive"},
 	{"ButtonKeyInactive", "ButtonInactive"},
 	{"ButtonSpinner", "ButtonActive"},
@@ -892,14 +893,15 @@ var titleFallbackTags = []struct{ name, fallback string }{
 // unstyled" choice, not an oversight), and GetRawTagCode can't distinguish
 // an explicit "" from "not defined" -- adding a fallback for it would
 // silently reintroduce an Item-derived color into every one of those
-// themes. ItemListUserDefinedFocused/ItemListDeprecatedFocused already
-// vary legitimately per theme (some derive from their own base tag with
-// Bold instead of the generic ItemFocused), so this only supplies a
-// fallback for when a theme skips them entirely, never overriding an
-// existing per-theme definition.
+// themes. ItemListUserDefinedFocused/ItemListUserTemplateFocused/
+// ItemListDeprecatedFocused already vary legitimately per theme (some
+// derive from their own base tag with Bold instead of the generic
+// ItemFocused), so this only supplies a fallback for when a theme skips
+// them entirely, never overriding an existing per-theme definition.
 var itemListFallbackTags = []struct{ name, fallback string }{
 	{"ItemListFocused", "ItemFocused"},
 	{"ItemListUserDefinedFocused", "ItemFocused"},
+	{"ItemListUserTemplateFocused", "{{|ItemFocused:::U|}}"},
 	{"ItemListDeprecated", "ItemListUserDefined"},
 	{"ItemListDeprecatedFocused", "ItemListUserDefinedFocused"},
 }

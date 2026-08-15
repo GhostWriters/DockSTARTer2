@@ -73,6 +73,8 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 			descText = "{{|ItemListUserDefined|}}" + descText
 		case appenv.IsAppDeprecated(ctx, appenv.AppNameToBaseAppName(appName)):
 			descText = "{{|ItemListDeprecated|}}" + descText
+		case appenv.IsUserTemplate(appenv.AppNameToBaseAppName(appName)):
+			descText = "{{|ItemListUserTemplate|}}" + descText
 		default:
 			descText = "{{|ItemList|}}" + descText
 		}
