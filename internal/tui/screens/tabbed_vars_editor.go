@@ -202,11 +202,11 @@ type TabbedVarsEditorModel struct {
 
 // envButtonLabels overrides the displayed text for a button whose internal
 // name (used as the lookup key everywhere else -- zone IDs, help text,
-// buttonIndex) stays "Cancel". "Back" reads clearer here: it's already
-// mapped to IDBackButton, and "Cancel" was easy to mistake for a no-op
-// when it's actually how you leave the screen (prompting to confirm if
-// there are unsaved changes).
-var envButtonLabels = map[string]string{"Cancel": "Back"}
+// buttonIndex) stays "Cancel". "Close" reads clearer than "Back": in the
+// Full Setup wizard this same action is a stack pop that reveals the next
+// wizard step rather than a previous screen, so "Back" describes the code's
+// navigation mechanism but not what the user sees happen.
+var envButtonLabels = map[string]string{"Cancel": "Close"}
 
 func envButtonLabel(name string) string {
 	if label, ok := envButtonLabels[name]; ok {

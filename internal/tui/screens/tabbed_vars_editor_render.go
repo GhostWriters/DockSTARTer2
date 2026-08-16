@@ -245,7 +245,7 @@ func (m *TabbedVarsEditorModel) getButtonSpecs() []displayengine.ButtonSpec {
 	helpByName := map[string]string{
 		"Save":    "Save all changes in all tabs to the environment file.",
 		"Refresh": "Reformat and re-stage all tabs (same as pressing F5).",
-		"Cancel":  "Discard all changes and return (prompts if unsaved changes exist).",
+		"Cancel":  "Close (prompts to discard first if unsaved changes exist).",
 		"Exit":    "Discard all changes and exit the application.",
 	}
 	var specs []displayengine.ButtonSpec
