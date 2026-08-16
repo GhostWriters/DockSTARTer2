@@ -1,0 +1,403 @@
+# .FALLBACKS.ds2theme -- every optional-tag fallback rule DS2 defines, as a
+# real theme file (parsed the same way as any bundled .ds2theme, only its
+# [styles] table is used). These are structural relationships in DS2's own
+# tag-naming scheme (e.g. "a Radio tag falls back to its Checkbox
+# equivalent") that hold regardless of which theme is loaded -- edit this
+# file to change a default, no code changes needed. Registered once via
+# semstyle.RegisterFallback (see registerTagFallbacks in internal/theme/theme.go);
+# resolution itself happens lazily at the point something actually resolves
+# the tag, so declaration order in this file doesn't matter -- a name can
+# reference another name defined later below.
+#
+# Every value is either a raw semstyle code ({{[fg:bg:flags]}}) or an
+# explicit tag reference ({{|Name|}}, optionally {{|Name:::Modifier|}}) --
+# never a bare unwrapped name -- matching the bundled themes' own [styles]
+# convention. An empty "" value means deliberately unstyled, not a
+# reference.
+
+[styles]
+
+## Base anchors
+# Every foundational tag that no other fallback rule anchors to (the tags
+# every other chain in this file ultimately bottoms out at) gets a literal
+# default here, so a theme that defines nothing at all in its own [styles]
+# still renders usably instead of leaving these -- and therefore everything
+# that chains to them -- unstyled. Each value uses only "-" (terminal-
+# default) colors plus B/U/R/D modifiers, deliberately never a named color,
+# since there's no theme palette to draw a color choice from. Base/inactive
+# states are plain; focused/active/pressed states use reverse video (R) so
+# the two remain visually distinguishable even with no color support at
+# all. These are judgment calls, not derived from anything -- review before
+# relying on them beyond proving out a theme with an empty [styles] table.
+Screen         = "{{[-:-:-]}}"
+Dialog         = "{{[-:-:R]}}"
+StatusBar      = "{{[-:-:R]}}"
+Tag            = "{{[-:-:-]}}"
+Item           = "{{[-:-:-]}}"
+Title          = "{{[-:-:UB]}}"
+ButtonInactive = "{{[-:-:-]}}"
+ButtonActive   = "{{[-:-:R]}}"
+IconInactive   = ""
+IconFocused    = "{{[-:-:R]}}"
+IconPressed    = "{{[-:-:RB]}}"
+Highlight      = "{{[-:-:B]}}"
+MarkerInvalid  = "{{[-:-:R]}}"
+
+## Derived tags
+# Every remaining tag anchored to the closest base-anchor entry above (or
+# another derived tag) -- a name relationship, not a hardcoded value. Only
+# a handful get their own literal because no existing anchor fits:
+#
+#   ProgramBox: a literal hard reset, not a name reference -- ProgramBox is
+#   the actual console/log output area, so it should mimic a real terminal
+#   by deferring entirely to the user's own terminal colors rather than
+#   guessing a convention (even a plausible one like white-on-black).
+#   Requires semstyle v0.2.9+.
+#
+#   Shadow: a name reference with a flags-only modifier -- every theme
+#   authors Shadow as Screen dimmed (Screen:::D), so anchor to that instead
+#   of an approximating literal. Requires semstyle v0.2.11+.
+#
+#   StatusFields/StatusFlagsBrackets: literal resets, not name references --
+#   both render within the header bar, where the ambient background is
+#   always StatusBar already.
+#
+#   Prompt/PromptShell/PromptSudo: style a command-line-style input's own
+#   leading prompt glyph. Plain input keeps the ambient text color (no
+#   fallback needed); a shell command gets Highlight; one that will run
+#   under sudo gets the more alarming MarkerInvalid.
+#
+#   ResizeLine: styles the tabbed env editor's split-gutter line while
+#   actively being dragged/keyboard-resized -- a solid reverse-video block
+#   reads as a stronger "actively grabbed" affordance than plain emphasized
+#   text.
+#
+#   No: points at TitleError, not Highlight -- a rejection reads as an
+#   error state, not just emphasis.
+#
+#   Border/Border2: aren't referenced via a literal "{{|Border|}}" tag or a
+#   literal SemanticRawStyle("Border") call anywhere -- ResolveThemeOverrides
+#   looks them up through a variable tag name. Border's raw code also feeds
+#   semstyle.CodeToFlags for the border-drawing flags, not just color, so
+#   leaving it unresolved corrupts more than just the border's color.
+ItemFocused                = "{{[-:-:R]}}"
+TagFocused                 = "{{[-:-:R]}}"
+TagKey                     = "{{[-:-:B]}}"
+TagKeyFocused              = "{{|TagFocused|}}"
+TagBrackets                = "{{|Dialog|}}"
+TagSpinner                 = "{{|Tag|}}"
+ItemList                   = "{{|Item|}}"
+ItemListUserDefined        = "{{|Item|}}"
+ItemListUserTemplate       = "{{|ItemList:::U|}}"
+ButtonKeyActive            = "{{|ButtonActive|}}"
+ButtonKeyInactive          = "{{|ButtonInactive|}}"
+ButtonSpinner              = "{{|ButtonActive|}}"
+LargeButtonSpinner         = "{{|ButtonSpinner|}}"
+CommandLine                = "{{|Dialog|}}"
+Subtitle                   = "{{|Dialog|}}"
+ProgramBox                 = "{{[~]}}"
+Shadow                     = "{{|Screen:::D|}}"
+OptionValue                = "{{|Dialog|}}"
+OptionValueFocused         = "{{|TagFocused|}}"
+LargeTitle                 = "{{|Title|}}"
+LargeTitleArea             = "{{|StatusBar|}}"
+StatusFields               = "{{[-]}}"
+StatusFlagsBrackets        = "{{[-]}}"
+StatusUpdate               = "{{|Highlight|}}"
+StatusVersionFocused       = "{{|TagFocused|}}"
+Heading                    = "{{|Title|}}"
+HeadingTag                 = "{{|Heading|}}"
+HeadingValue               = "{{|Heading|}}"
+HeadingAppDescription      = "{{|Heading|}}"
+MarkerLocked               = "{{|MarkerInvalid|}}"
+Prompt                     = ""
+PromptShell                = "{{|Highlight|}}"
+PromptSudo                 = "{{|MarkerInvalid|}}"
+ResizeLine                 = "{{|ItemFocused|}}"
+MarkerAdded                = "{{|Highlight|}}"
+MarkerDeleted              = "{{|MarkerInvalid|}}"
+MarkerModified             = "{{|Highlight|}}"
+ModifiedText               = "{{|Highlight|}}"
+EnvInvalid                 = "{{|MarkerInvalid|}}"
+EnvDuplicate               = "{{|Highlight|}}"
+EnvBuiltin                 = "{{[-:-:D]}}"
+EnvReadOnly                = "{{[-:-:D]}}"
+EnvPendingDelete           = "{{[-:-:DS]}}"
+FailingCommand             = "{{|MarkerInvalid|}}"
+Yes                        = "{{|Highlight|}}"
+No                         = "{{|TitleError|}}"
+URL                        = "{{[-:-:U]}}"
+LineComment                = "{{[-:-:D]}}"
+LineNumber                 = "{{[-:-:D]}}"
+LineNumberBrackets         = "{{|LineNumber|}}"
+LineNumberFocused          = "{{|TagFocused|}}"
+LineNumberModified         = "{{|Highlight|}}"
+LineNumberModifiedFocused  = "{{|LineNumberModified|}}"
+Scrollbar                  = "{{[-:-:D]}}"
+ScrollbarThumb             = "{{|Scrollbar|}}"
+ScrollbarArrows            = "{{|Scrollbar|}}"
+KeyCap                     = "{{[-:-:R]}}"
+ProgressWaiting            = "{{[-:-:D]}}"
+ProgressInProgress         = "{{|Highlight|}}"
+ProgressCompleted          = "{{|Highlight|}}"
+TextCursor                 = "{{[-:-:R]}}"
+TitleCheckbox              = ""
+TitleCheckboxFocused       = "{{|TitleFocused|}}"
+TitleFocusIndicator        = "{{|Highlight|}}"
+TitleUnfocusedIndicator    = ""
+PanelTitle                 = "{{|PanelBorder|}}"
+PanelTitleChangedIndicator = "{{|Highlight|}}"
+LargeIconFocused           = "{{|IconFocused|}}"
+LargeIconPressed           = "{{|IconPressed|}}"
+Border                     = "{{|Dialog|}}"
+Border2                    = "{{|Border|}}"
+
+## Titles
+# Optional Title-variant tags that fall back to another tag when the
+# active theme doesn't define them. *Focused variants of each title state
+# aren't queried by any call site today (only SubMenu currently has a
+# distinct focused look), but a theme designer may want a dialog type's
+# title to look different while focused, so these are wired up ready for
+# that in advance.
+#
+# LargeTitleArea variants are distinct from the LargeTitle family above
+# (background-area coloring for the large-titlebar row, not the title text
+# itself). They fall back to the base LargeTitleArea by default; a theme
+# wanting a distinct per-state color there can still override each
+# individually.
+TitleHelp                    = "{{|Title|}}"
+LargeTitleHelp               = "{{|LargeTitle|}}"
+TitleNotice                  = "{{|Title|}}"
+TitleWarn                    = "{{|Title|}}"
+TitleWarning                 = "{{|Title|}}"
+TitleError                   = "{{|Title|}}"
+TitleSuccess                 = "{{|Title|}}"
+TitleQuestion                = "{{|Title|}}"
+TitleSubMenu                 = "{{|Title|}}"
+TitleFocused                 = "{{|Title|}}"
+TitleSubMenuFocused          = "{{|TitleFocused|}}"
+TitleHelpFocused             = "{{|TitleFocused|}}"
+TitleNoticeFocused           = "{{|TitleFocused|}}"
+TitleWarnFocused             = "{{|TitleFocused|}}"
+TitleWarningFocused          = "{{|TitleFocused|}}"
+TitleErrorFocused            = "{{|TitleFocused|}}"
+TitleSuccessFocused          = "{{|TitleFocused|}}"
+TitleQuestionFocused         = "{{|TitleFocused|}}"
+LargeTitleNotice             = "{{|TitleNotice|}}"
+LargeTitleWarn               = "{{|TitleWarn|}}"
+LargeTitleWarning            = "{{|TitleWarning|}}"
+LargeTitleError              = "{{|TitleError|}}"
+LargeTitleSuccess            = "{{|TitleSuccess|}}"
+LargeTitleQuestion           = "{{|TitleQuestion|}}"
+LargeTitleSubMenu            = "{{|TitleSubMenu|}}"
+LargeTitleSubMenuFocused     = "{{|TitleSubMenuFocused|}}"
+LargeTitleHelpFocused        = "{{|TitleHelpFocused|}}"
+LargeTitleNoticeFocused      = "{{|TitleNoticeFocused|}}"
+LargeTitleWarnFocused        = "{{|TitleWarnFocused|}}"
+LargeTitleWarningFocused     = "{{|TitleWarningFocused|}}"
+LargeTitleErrorFocused       = "{{|TitleErrorFocused|}}"
+LargeTitleSuccessFocused     = "{{|TitleSuccessFocused|}}"
+LargeTitleQuestionFocused    = "{{|TitleQuestionFocused|}}"
+LargeTitleAreaHelp           = "{{|LargeTitleArea|}}"
+LargeTitleAreaNotice         = "{{|LargeTitleArea|}}"
+LargeTitleAreaWarn           = "{{|LargeTitleArea|}}"
+LargeTitleAreaWarning        = "{{|LargeTitleArea|}}"
+LargeTitleAreaError          = "{{|LargeTitleArea|}}"
+LargeTitleAreaSuccess        = "{{|LargeTitleArea|}}"
+LargeTitleAreaQuestion       = "{{|LargeTitleArea|}}"
+LargeTitleFocusIndicator     = "{{|TitleFocusIndicator|}}"
+LargeTitleUnfocusedIndicator = "{{|TitleUnfocusedIndicator|}}"
+
+## Item list
+# Optional ItemList-variant tags that fall back to another tag when the
+# active theme doesn't define them. The bare ItemList tag itself is
+# deliberately not included here: a theme may legitimately want it to
+# render unstyled (""), and GetRawTagCode can't distinguish an explicit
+# "" from "not defined" -- adding a fallback for it would silently
+# reintroduce an Item-derived color for any theme making that choice.
+# ItemListUserDefinedFocused/ItemListUserTemplateFocused/
+# ItemListDeprecatedFocused may legitimately vary per theme (some derive
+# from their own base tag with Bold instead of the generic ItemFocused),
+# so their entries below only supply a fallback for when a theme skips
+# them entirely, never overriding an existing per-theme definition.
+ItemListFocused             = "{{|ItemFocused|}}"
+ItemListUserDefinedFocused  = "{{|ItemFocused|}}"
+ItemListUserTemplateFocused = "{{|ItemListFocused:::U|}}"
+ItemListDeprecated          = "{{|ItemListUserDefined|}}"
+ItemListDeprecatedFocused   = "{{|ItemListUserDefinedFocused|}}"
+
+## Icons
+# For every title-bar/pane-layout widget with its own optional
+# Icon<Name><State>/LargeIcon<Name><State> tag family -- Help/Refresh/Exit,
+# ResizeUp/ResizeDn (panel resize widgets), and Maximize/SideBySide/
+# Stacked (the tabbed vars editor's pane layout widgets) -- its Inactive/
+# Focused/Pressed and LargeIcon* fallback rules: IconWidgetFocused/
+# Pressed fall back to the generic IconFocused/IconPressed;
+# IconWidgetInactive falls back to the generic IconInactive;
+# LargeIconWidgetFocused/Pressed fall back to the generic
+# LargeIconFocused/LargeIconPressed; LargeIconWidgetInactive falls back
+# to the small IconWidgetInactive tag (itself already fallback-resolved)
+# rather than a generic LargeIconInactive, since none exists.
+#
+# IconResizeUpInactive/IconResizeDnInactive are the one exception: a
+# literal reset, not the generic IconInactive. panel_render.go renders
+# these via RenderThemeText(iconStr, baseStyle) where baseStyle derives
+# from PanelBorder, so a bare reset resolves equivalently to a theme's
+# PanelBorder color -- used instead of the named tag so this stays
+# correct if these icon tags are ever reused somewhere with a different
+# base style (e.g. a dialog), where PanelBorder specifically wouldn't
+# apply but a reset to the surrounding context still would.
+IconHelpInactive            = "{{|IconInactive|}}"
+IconHelpFocused             = "{{|IconFocused|}}"
+IconHelpPressed             = "{{|IconPressed|}}"
+LargeIconHelpInactive       = "{{|IconHelpInactive|}}"
+LargeIconHelpFocused        = "{{|LargeIconFocused|}}"
+LargeIconHelpPressed        = "{{|LargeIconPressed|}}"
+IconRefreshInactive         = "{{|IconInactive|}}"
+IconRefreshFocused          = "{{|IconFocused|}}"
+IconRefreshPressed          = "{{|IconPressed|}}"
+LargeIconRefreshInactive    = "{{|IconRefreshInactive|}}"
+LargeIconRefreshFocused     = "{{|LargeIconFocused|}}"
+LargeIconRefreshPressed     = "{{|LargeIconPressed|}}"
+IconExitInactive            = "{{|IconInactive|}}"
+IconExitFocused             = "{{|IconFocused|}}"
+IconExitPressed             = "{{|IconPressed|}}"
+LargeIconExitInactive       = "{{|IconExitInactive|}}"
+LargeIconExitFocused        = "{{|LargeIconFocused|}}"
+LargeIconExitPressed        = "{{|LargeIconPressed|}}"
+IconResizeUpInactive        = "{{[-]}}"
+IconResizeUpFocused         = "{{|IconFocused|}}"
+IconResizeUpPressed         = "{{|IconPressed|}}"
+LargeIconResizeUpInactive   = "{{|IconResizeUpInactive|}}"
+LargeIconResizeUpFocused    = "{{|LargeIconFocused|}}"
+LargeIconResizeUpPressed    = "{{|LargeIconPressed|}}"
+IconResizeDnInactive        = "{{[-]}}"
+IconResizeDnFocused         = "{{|IconFocused|}}"
+IconResizeDnPressed         = "{{|IconPressed|}}"
+LargeIconResizeDnInactive   = "{{|IconResizeDnInactive|}}"
+LargeIconResizeDnFocused    = "{{|LargeIconFocused|}}"
+LargeIconResizeDnPressed    = "{{|LargeIconPressed|}}"
+IconMaximizeInactive        = "{{|IconInactive|}}"
+IconMaximizeFocused         = "{{|IconFocused|}}"
+IconMaximizePressed         = "{{|IconPressed|}}"
+LargeIconMaximizeInactive   = "{{|IconMaximizeInactive|}}"
+LargeIconMaximizeFocused    = "{{|LargeIconFocused|}}"
+LargeIconMaximizePressed    = "{{|LargeIconPressed|}}"
+IconSideBySideInactive      = "{{|IconInactive|}}"
+IconSideBySideFocused       = "{{|IconFocused|}}"
+IconSideBySidePressed       = "{{|IconPressed|}}"
+LargeIconSideBySideInactive = "{{|IconSideBySideInactive|}}"
+LargeIconSideBySideFocused  = "{{|LargeIconFocused|}}"
+LargeIconSideBySidePressed  = "{{|LargeIconPressed|}}"
+IconStackedInactive         = "{{|IconInactive|}}"
+IconStackedFocused          = "{{|IconFocused|}}"
+IconStackedPressed          = "{{|IconPressed|}}"
+LargeIconStackedInactive    = "{{|IconStackedInactive|}}"
+LargeIconStackedFocused     = "{{|LargeIconFocused|}}"
+LargeIconStackedPressed     = "{{|LargeIconPressed|}}"
+
+## Checkboxes
+# Fallback targets for the Checkbox/Radio tag family produced by
+# checkboxStylePair (internal/displayengine/classic/menu_render.go):
+# Checkbox|Radio + Brackets? + On|Off + Focused?. Radio tags fall back to
+# their Checkbox equivalent, and Checkbox*Focused falls back to the
+# generic TagFocused -- except CheckboxOnFocused, which anchors to
+# TagKeyFocused instead, giving the "on" state a stronger, key-like
+# highlight than the generic focused tag.
+CheckboxOff                = "{{|Dialog|}}"
+CheckboxOn                 = "{{|TagKey|}}"
+CheckboxBracketsOff        = "{{|Dialog|}}"
+CheckboxBracketsOn         = "{{|Dialog|}}"
+RadioOn                    = "{{|CheckboxOn|}}"
+RadioOnFocused             = "{{|CheckboxOnFocused|}}"
+RadioOff                   = "{{|CheckboxOff|}}"
+RadioOffFocused            = "{{|CheckboxOffFocused|}}"
+RadioBracketsOn            = "{{|CheckboxBracketsOn|}}"
+RadioBracketsOnFocused     = "{{|CheckboxBracketsOnFocused|}}"
+RadioBracketsOff           = "{{|CheckboxBracketsOff|}}"
+RadioBracketsOffFocused    = "{{|CheckboxBracketsOffFocused|}}"
+CheckboxOnFocused          = "{{|TagKeyFocused|}}"
+CheckboxOffFocused         = "{{|TagFocused|}}"
+CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
+CheckboxBracketsOffFocused = "{{|TagFocused|}}"
+
+## Highlight
+# Inline-text-highlight tags that fall back to the generic Highlight tag
+# when the active theme doesn't define them. FailingCommand/Yes/No are
+# deliberately excluded: those follow a different (unrelated) fallback
+# relationship -- each has its own compensating entry in the derived-tags
+# section instead (FailingCommand -> MarkerInvalid, Yes -> Highlight,
+# No -> TitleError). Automatic console fallback is disabled (see
+# registerTagFallbacks' doc comment in theme.go), so a theme that skips
+# one of these tags entirely resolves to this fallback, not an unrelated
+# console-map default.
+ApplicationName = "{{|Highlight|}}"
+RunningCommand  = "{{|Highlight|}}"
+UserCommand     = "{{|Highlight|}}"
+Branch          = "{{|Highlight|}}"
+Version         = "{{|Highlight|}}"
+MenuPage        = "{{|Highlight|}}"
+File            = "{{|Highlight|}}"
+Folder          = "{{|Highlight|}}"
+App             = "{{|Highlight|}}"
+UserApp         = "{{|Highlight|}}"
+IPAddress       = "{{|Highlight|}}"
+Var             = "{{|Highlight|}}"
+User            = "{{|Highlight|}}"
+Theme           = "{{|Highlight|}}"
+
+## Status bar
+# Optional header-bar (Status*) tags that fall back to another tag when
+# the active theme doesn't define them, anchored to DockSTARTer.ds2theme's
+# own pattern as the canonical default -- other bundled themes that
+# deviate (an added :::B/:::R modifier, a different target tag, or a
+# fully custom direct color) keep their own explicit definition as an
+# override, whether or not they happen to coincide with each other.
+# StatusFlagsBrackets is deliberately excluded: DockSTARTer itself uses a
+# fully custom direct color there, not a tag reference, so there's no
+# canonical pattern to anchor a fallback rule to.
+#
+# StatusVersionSpace/StatusFlags fall back to a literal reset rather than
+# a named tag: both render within the header bar, where the ambient
+# background is always StatusBar already, and StatusVersionSpace in
+# particular is never rendered anywhere its only use doesn't immediately
+# re-establish "{{|StatusBar|}}" right after it -- using the literal
+# "{{[-]}}" (DockSTARTer's own exact authored value) keeps that
+# equivalence exact even if StatusBar's own definition ever changes.
+#
+# Helpline/PanelBorder are conceptually part of the same backdrop
+# grouping as StatusBar/StatusBarBorder, hence living in this section
+# despite the name. PanelBorder falls back to Helpline; Helpline itself
+# commonly matches Dialog, but StatusBar and Dialog usually resolve to
+# the same value anyway, so StatusBar is the more direct backdrop-family
+# anchor for a theme that wants to skip defining Helpline separately.
+StatusBarBorder       = "{{|StatusBar|}}"
+StatusVersion         = "{{|StatusFields|}}"
+StatusVersionBrackets = "{{|StatusFields|}}"
+StatusHostname        = "{{|StatusFields|}}"
+StatusUpdateMarker    = "{{|StatusUpdate|}}"
+StatusBarFocused      = "{{|TagFocused|}}"
+StatusName            = "{{|StatusFields|}}"
+StatusFlags           = "{{[-]}}"
+StatusVersionSpace    = "{{[-]}}"
+StatusFlagsSpace      = "{{|StatusVersionSpace|}}"
+StatusUpdateBrackets  = "{{|StatusVersionBrackets|}}"
+Helpline              = "{{|StatusBar|}}"
+PanelBorder           = "{{|Helpline|}}"
+
+## Help
+HelpTag  = "{{|Tag|}}"
+HelpItem = "{{|Dialog|}}"
+
+## Markers
+# Button lock-marker tags that fall back to another tag when the active
+# theme doesn't define them. ButtonLockedMarker falls back to the
+# generic MarkerLocked (also used for the session-active input prompt
+# and menu lock markers, see the derived-tags section); LargeButtonLockedMarker
+# falls back to ButtonLockedMarker, so a theme need only override
+# MarkerLocked to affect every locked marker at once, or override
+# ButtonLockedMarker/LargeButtonLockedMarker individually for
+# button-specific styling.
+ButtonLockedMarker      = "{{|MarkerLocked|}}"
+LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
+
