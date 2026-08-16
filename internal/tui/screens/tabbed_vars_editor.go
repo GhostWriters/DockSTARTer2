@@ -200,6 +200,21 @@ type TabbedVarsEditorModel struct {
 	btnRow *displayengine.ButtonRow
 }
 
+// envButtonLabels overrides the displayed text for a button whose internal
+// name (used as the lookup key everywhere else -- zone IDs, help text,
+// buttonIndex) stays "Cancel". "Back" reads clearer here: it's already
+// mapped to IDBackButton, and "Cancel" was easy to mistake for a no-op
+// when it's actually how you leave the screen (prompting to confirm if
+// there are unsaved changes).
+var envButtonLabels = map[string]string{"Cancel": "Back"}
+
+func envButtonLabel(name string) string {
+	if label, ok := envButtonLabels[name]; ok {
+		return label
+	}
+	return name
+}
+
 // ClearProcessingState clears any in-flight button spinner. Called by
 // AppModel when a dialog closes and returns focus to this screen (e.g. the
 // Exit or Back confirm dialog resolving) -- without this, a button's
@@ -310,7 +325,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	}
 	defs := make([]displayengine.ButtonDef, len(buttons))
 	for i, btn := range buttons {
-		defs[i] = displayengine.ButtonDef{Label: btn, ZoneID: zoneByName[btn]}
+		defs[i] = displayengine.ButtonDef{Label: envButtonLabel(btn), ZoneID: zoneByName[btn]}
 	}
 	m.btnRow = displayengine.NewButtonRow(defs)
 	// Maximize/Side-by-side/Stacked live on the pane's own (submenu-style)
