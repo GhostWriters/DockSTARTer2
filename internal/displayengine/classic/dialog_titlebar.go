@@ -25,9 +25,10 @@ type WidgetDef struct {
 	// IconHelpInactive/IconHelpFocused/IconHelpPressed and their Large*
 	// counterparts). Fallback to the generic Icon{Inactive,Focused,Pressed}
 	// tag when the theme doesn't define a widget-specific one is handled by
-	// semstyle itself (see theme.iconFallbackTags, registered once per theme
-	// load) -- buildDialogTitleWidgets/buildLargeTitleBarWidgets just
-	// reference "IconHelpInactive" etc. directly and trust it to resolve.
+	// semstyle itself (see the Icons section of .FALLBACKS.ds2theme,
+	// registered once per process) -- buildDialogTitleWidgets/
+	// buildLargeTitleBarWidgets just reference "IconHelpInactive" etc.
+	// directly and trust it to resolve.
 	IconName string
 	Action   func() tea.Cmd // nil = no action; caller supplies closeCmd for Close widget
 }
