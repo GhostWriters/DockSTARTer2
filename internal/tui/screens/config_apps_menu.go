@@ -91,14 +91,16 @@ func buildConfigAppItems(ctx context.Context, apps []string, envFile string, con
 		})
 	}
 
-	// Add an item to add a new application
-	items = append(items, displayengine.MenuItem{
-		Tag:           "<ADD APPLICATION>",
-		Desc:          "Add a new application to configure",
-		Help:          "Add a new application",
-		IsDestructive: true,
-		Action:        nil,
-	})
+	// <ADD APPLICATION> was never wired up when this screen was ported from
+	// DS1 (Action is nil). Commented out rather than deleted in case it gets
+	// implemented later.
+	// items = append(items, displayengine.MenuItem{
+	// 	Tag:           "<ADD APPLICATION>",
+	// 	Desc:          "Add a new application to configure",
+	// 	Help:          "Add a new application",
+	// 	IsDestructive: true,
+	// 	Action:        nil,
+	// })
 	return items
 }
 
