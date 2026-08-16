@@ -110,7 +110,7 @@ accent    = "cyan"
 
 ## Headings
   Heading               = "{{[-]}}{{[::R]}}"       # = "{{|Title|}}"
-  HeadingTag            = "{{[-]}}{{[white::R]}}"  # = "{{|Heading|}}"
+  HeadingTag            = "{{[blue:white:-B]}}"    # = "{{|Heading|}}"
   HeadingValue          = "{{[-]}}{{[::BR]}}"      # = "{{|Heading|}}"
   HeadingAppDescription = "{{[-]}}{{[::B]}}"       # = "{{|Heading|}}"
 
