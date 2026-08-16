@@ -140,8 +140,8 @@ accent    = "cyan"
 # HelpItem = "{{|Dialog|}}"
 
 ## Checkboxes
-  CheckboxOffFocused         = "{{|TagKeyFocused|}}" # = "{{|TagFocused|}}"
-  CheckboxOnFocused          = "{{|TagKeyFocused|}}" # = "{{|TagFocused|}}"
+# CheckboxOffFocused         = "{{|TagFocused|}}"
+# CheckboxOnFocused          = "{{|TagKeyFocused|}}"
 # CheckboxBracketsOffFocused = "{{|TagFocused|}}"
 # CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
 # CheckboxOff                = "{{|Dialog|}}"

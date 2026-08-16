@@ -151,7 +151,7 @@ secondary = "black"
 
 ## Checkboxes
 # CheckboxOffFocused         = "{{|TagFocused|}}"
-# CheckboxOnFocused          = "{{|TagFocused|}}"
+# CheckboxOnFocused          = "{{|TagKeyFocused|}}"
 # CheckboxBracketsOffFocused = "{{|TagFocused|}}"
 # CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
 # CheckboxOff                = "{{|Dialog|}}"

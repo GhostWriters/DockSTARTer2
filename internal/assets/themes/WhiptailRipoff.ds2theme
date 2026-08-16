@@ -134,7 +134,7 @@ direct_suffix   = "]}}"
 
 ## Checkboxes
 # CheckboxOffFocused         = "{{|TagFocused|}}"
-# CheckboxOnFocused          = "{{|TagFocused|}}"
+# CheckboxOnFocused          = "{{|TagKeyFocused|}}"
 # CheckboxBracketsOffFocused = "{{|TagFocused|}}"
 # CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
 # CheckboxOff                = "{{|Dialog|}}"
