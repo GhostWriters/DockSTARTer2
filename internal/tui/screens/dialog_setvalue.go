@@ -106,7 +106,7 @@ func newSetValueDialog(
 		onCancel:    onCancel,
 	}
 	m.buttons = displayengine.NewButtonRow([]displayengine.ButtonDef{
-		{Label: "Save", ZoneID: "Save"},
+		{Label: "Done", ZoneID: "Save"},
 		{Label: "Cancel", ZoneID: "Cancel"},
 		{Label: "Exit", ZoneID: "Exit"},
 	})
@@ -462,7 +462,7 @@ func (m *setValueDialogModel) HelpContext(maxWidth int) displayengine.HelpContex
 			h.ItemText = "Selected: " + m.opts[m.cursor].Display + "\n\n" + m.opts[m.cursor].Help
 		}
 	case setValueFocusSave:
-		h.ItemTitle = "Save"
+		h.ItemTitle = "Done"
 		h.ItemText = "Save the current value and return."
 	case setValueFocusCancel:
 		h.ItemTitle = "Cancel"
@@ -528,7 +528,7 @@ func (m *setValueDialogModel) recalc() {
 	currentValueH := 3
 
 	// Buttons height
-	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Save"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Done"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
 
 	// Total overhead:
 	// - outer dialog border top + bottom: 2
@@ -671,7 +671,7 @@ func (m *setValueDialogModel) ViewString() string {
 
 	// Button row — rendered before presets so we can derive the presets height budget.
 	svBtnSpecs := m.buttons.ApplySpinner([]displayengine.ButtonSpec{
-		{Text: "Save", Active: m.focus == setValueFocusSave || m.buttons.IsProcessingID("Save"), ZoneID: "Save"},
+		{Text: "Done", Active: m.focus == setValueFocusSave || m.buttons.IsProcessingID("Save"), ZoneID: "Save"},
 		{Text: "Cancel", Active: m.focus == setValueFocusCancel || m.buttons.IsProcessingID("Cancel"), ZoneID: "Cancel"},
 		{Text: "Exit", Active: m.focus == setValueFocusExit || m.buttons.IsProcessingID("Exit"), ZoneID: "Exit"},
 	})
@@ -749,7 +749,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []displayengin
 	}, contentW)
 	headingH := lipgloss.Height(ctx.Dialog.Padding(1, 2).Width(contentW).Render(theme.ToANSI(headingRaw, "")))
 	currentValueH := 3
-	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Save"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+	btnH := displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Done"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
 
 	// Matches ViewString's titleBudget2/DecideLargeTitleBar call exactly, so a
 	// budget too tight to afford a large title bar downgrades identically
@@ -865,7 +865,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []displayengin
 	})
 
 	// buttons are at the bottom: outer border(1) + content fills to m.height-2, bottom border at m.height-1
-	btnH = displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Save"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
+	btnH = displayengine.ButtonRowHeight(contentW, 0, displayengine.ButtonSpec{Text: "Done"}, displayengine.ButtonSpec{Text: "Cancel"}, displayengine.ButtonSpec{Text: "Exit"})
 	buttonY := m.height - 1 - btnH
 	regions = append(regions, displayengine.HitRegion{
 		ID:     "setvalue_buttons",
@@ -892,7 +892,7 @@ func (m *setValueDialogModel) GetHitRegions(offsetX, offsetY int) []displayengin
 			DocAppName:  m.docAppName,
 		},
 		"setvalue_dialog", offsetX+1, offsetY+buttonY, contentW, displayengine.ZDialog+20,
-		displayengine.ButtonSpec{Text: "Save", ZoneID: "Save", Help: "Save the current value and return."},
+		displayengine.ButtonSpec{Text: "Done", ZoneID: "Save", Help: "Save the current value and return."},
 		displayengine.ButtonSpec{Text: "Cancel", ZoneID: "Cancel", Help: "Cancel and return to the editor."},
 		displayengine.ButtonSpec{Text: "Exit", ZoneID: "Exit", Help: "Close the editor and return to the main menu."},
 	)...)

@@ -252,7 +252,7 @@ func (m *TabbedVarsEditorModel) getButtonSpecs() []displayengine.ButtonSpec {
 	for i, btn := range m.buttons {
 		zoneID := zoneByName[btn]
 		specs = append(specs, displayengine.ButtonSpec{
-			Text:   btn,
+			Text:   envButtonLabel(btn),
 			Active: (m.focus == envFocusButtons && m.btnIdx == i) || m.btnRow.IsProcessingID(zoneID),
 			ZoneID: zoneID,
 			Help:   helpByName[btn],
