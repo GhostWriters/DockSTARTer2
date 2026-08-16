@@ -557,7 +557,7 @@ func registerTagFallbacks() {
 	for _, tf := range iconFallbackTags() {
 		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
-	for _, tf := range checkboxFallbackTags() {
+	for _, tf := range checkboxFallbackTags {
 		semstyle.RegisterFallback(tf.name, true, tf.fallback)
 	}
 	for _, tf := range highlightFallbackTags {
@@ -950,39 +950,33 @@ func iconFallbackTags() []struct{ name, fallback string } {
 	return tags
 }
 
-// checkboxBaseFallbackTags lists the base (unfocused) Checkbox tags'
-// fallback targets, anchored to DockSTARTer's own pattern: CheckboxOff/
+// checkboxFallbackTags lists fallback targets for the Checkbox/Radio tag
+// family produced by checkboxStylePair (internal/displayengine/classic/
+// menu_render.go): Checkbox|Radio + Brackets? + On|Off + Focused?. Every
+// bundled theme already either duplicates or explicitly aliases Radio's
+// tags to Checkbox's, and Checkbox*Focused to the generic TagFocused --
+// except CheckboxOnFocused, which anchors to TagKeyFocused instead,
+// matching DockSTARTer's own pattern of giving the "on" state a stronger,
+// key-like highlight than the generic focused tag. CheckboxOff/
 // CheckboxBracketsOff/CheckboxBracketsOn are identical in all 13 bundled
 // themes; CheckboxOn matches in 12 of 13 (ZenFocus customizes it).
-var checkboxBaseFallbackTags = []struct{ name, fallback string }{
+var checkboxFallbackTags = []struct{ name, fallback string }{
 	{"CheckboxOff", "Dialog"},
 	{"CheckboxOn", "TagKey"},
 	{"CheckboxBracketsOff", "Dialog"},
 	{"CheckboxBracketsOn", "Dialog"},
-}
-
-// checkboxFallbackTags returns checkboxBaseFallbackTags plus the generated
-// Radio*->Checkbox* and Checkbox*Focused/Radio*Focused->TagFocused fallback
-// rules matching checkboxStylePair (internal/displayengine/classic/
-// menu_render.go)'s tag-name construction: Checkbox|Radio + Brackets? +
-// On|Off + Focused?. Every bundled theme already either duplicates or
-// explicitly aliases Radio's tags to Checkbox's, and Checkbox*Focused to
-// the generic TagFocused.
-func checkboxFallbackTags() []struct{ name, fallback string } {
-	tags := append([]struct{ name, fallback string }{}, checkboxBaseFallbackTags...)
-	for _, brackets := range []string{"", "Brackets"} {
-		for _, state := range []string{"On", "Off"} {
-			for _, suffix := range []string{"", "Focused"} {
-				checkboxTag := "Checkbox" + brackets + state + suffix
-				radioTag := "Radio" + brackets + state + suffix
-				tags = append(tags, struct{ name, fallback string }{radioTag, checkboxTag})
-				if suffix == "Focused" {
-					tags = append(tags, struct{ name, fallback string }{checkboxTag, "TagFocused"})
-				}
-			}
-		}
-	}
-	return tags
+	{"RadioOn", "CheckboxOn"},
+	{"RadioOnFocused", "CheckboxOnFocused"},
+	{"RadioOff", "CheckboxOff"},
+	{"RadioOffFocused", "CheckboxOffFocused"},
+	{"RadioBracketsOn", "CheckboxBracketsOn"},
+	{"RadioBracketsOnFocused", "CheckboxBracketsOnFocused"},
+	{"RadioBracketsOff", "CheckboxBracketsOff"},
+	{"RadioBracketsOffFocused", "CheckboxBracketsOffFocused"},
+	{"CheckboxOnFocused", "TagKeyFocused"},
+	{"CheckboxOffFocused", "TagFocused"},
+	{"CheckboxBracketsOnFocused", "TagFocused"},
+	{"CheckboxBracketsOffFocused", "TagFocused"},
 }
 
 var (
