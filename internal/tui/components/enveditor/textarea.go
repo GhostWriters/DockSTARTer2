@@ -1026,8 +1026,15 @@ func (m Model) activeStyle() *StyleState {
 // Focus sets the focus state on the model. When the model is in focus it can
 // receive keyboard input and the cursor will be hidden.
 func (m *Model) Focus() tea.Cmd {
+	// Only reset blinkAnchor on an actual transition into focus, not a
+	// redundant re-affirmation -- renderPane calls Focus() on every render
+	// of the focused pane to keep its focus state in sync (see its own doc
+	// comment), and resetting the anchor every render would keep the
+	// cursor permanently at phase 0 (visible), never blinking.
+	if !m.focus {
+		m.blinkAnchor = time.Now()
+	}
 	m.focus = true
-	m.blinkAnchor = time.Now()
 	return m.virtualCursor.Focus()
 }
 
@@ -2037,7 +2044,24 @@ func (m *Model) view() string {
 			}
 			if m.row == l && lineInfo.RowOffset == wl {
 				s.WriteString(m.renderRunes(wrappedLine[:lineInfo.ColumnOffset], l, charIndex, style))
-				if lineInfo.ColumnOffset < len(wrappedLine) {
+				if m.useVirtualCursor && !m.isEditableAtCursor() {
+					// The virtual cursor can only really fake a bar (blink)
+					// or block (reverse) shape -- neither reads as "you
+					// can't type here" the way a native terminal's
+					// underline cursor shape does (see GetInputCursor's
+					// CursorUnderline case). Recoloring the character to
+					// the TextCursor style's own color, plus underline,
+					// borrows from the same theme accent the blink/static
+					// states already use without fully hiding the
+					// character or implying overwrite mode.
+					charStyle := style.Foreground(m.styles.Cursor.Color).Underline(true)
+					if lineInfo.ColumnOffset < len(wrappedLine) {
+						s.WriteString(charStyle.Render(string(wrappedLine[lineInfo.ColumnOffset])))
+						s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, style))
+					} else {
+						s.WriteString(charStyle.Render(" "))
+					}
+				} else if lineInfo.ColumnOffset < len(wrappedLine) {
 					m.virtualCursor.SetChar(string(wrappedLine[lineInfo.ColumnOffset]))
 					s.WriteString(style.Render(m.virtualCursor.View()))
 					s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, style))
