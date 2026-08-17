@@ -304,10 +304,10 @@ LargeIconStackedPressed     = "{{|LargeIconPressed|}}"
 # generic TagFocused -- except CheckboxOnFocused, which anchors to
 # TagKeyFocused instead, giving the "on" state a stronger, key-like
 # highlight than the generic focused tag.
-CheckboxOff                = "{{|Dialog|}}"
+CheckboxOff                = "{{|Tag|}}"
 CheckboxOn                 = "{{|TagKey|}}"
-CheckboxBracketsOff        = "{{|Dialog|}}"
-CheckboxBracketsOn         = "{{|Dialog|}}"
+CheckboxBracketsOff        = "{{|Tag|}}"
+CheckboxBracketsOn         = "{{|Tag|}}"
 RadioOn                    = "{{|CheckboxOn|}}"
 RadioOnFocused             = "{{|CheckboxOnFocused|}}"
 RadioOff                   = "{{|CheckboxOff|}}"
