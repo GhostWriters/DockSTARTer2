@@ -141,10 +141,10 @@ bg = "black"
 # CheckboxOnFocused          = "{{|TagKeyFocused|}}"
 # CheckboxBracketsOffFocused = "{{|TagFocused|}}"
 # CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
-# CheckboxOff                = "{{|Dialog|}}"
+# CheckboxOff                = "{{|Tag|}}"
 # CheckboxOn                 = "{{|TagKey|}}"
-# CheckboxBracketsOff        = "{{|Dialog|}}"
-# CheckboxBracketsOn         = "{{|Dialog|}}"
+# CheckboxBracketsOff        = "{{|Tag|}}"
+# CheckboxBracketsOn         = "{{|Tag|}}"
 
 ## Radio buttons
 # RadioOff                = "{{|CheckboxOff|}}"

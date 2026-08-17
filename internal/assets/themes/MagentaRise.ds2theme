@@ -137,14 +137,14 @@ secondary = "black"
   HelpItem = "{{[$secondary:$primary]}}"  # = "{{|Dialog|}}"
 
 ## Checkboxes
-# CheckboxOff                = "{{|Dialog|}}"
+# CheckboxOffFocused         = "{{|TagFocused|}}"
+# CheckboxOnFocused          = "{{|TagKeyFocused|}}"
+# CheckboxBracketsOffFocused = "{{|TagFocused|}}"
+# CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
+# CheckboxOff                = "{{|Tag|}}"
 # CheckboxOn                 = "{{|TagKey|}}"
-# CheckboxBracketsOff        = "{{|Dialog|}}"
-# CheckboxBracketsOn         = "{{|Dialog|}}"
-  CheckboxOnFocused          = "{{[$secondary:$primary]}}"  # = "{{|TagKeyFocused|}}"
-  CheckboxOffFocused         = "{{[$secondary:$primary]}}"  # = "{{|TagFocused|}}"
-  CheckboxBracketsOnFocused  = "{{[$secondary:$primary]}}"  # = "{{|TagFocused|}}"
-  CheckboxBracketsOffFocused = "{{[$secondary:$primary]}}"  # = "{{|TagFocused|}}"
+# CheckboxBracketsOff        = "{{|Tag|}}"
+# CheckboxBracketsOn         = "{{|Tag|}}"
 
 ## Radio buttons
 # RadioOff                = "{{|CheckboxOff|}}"

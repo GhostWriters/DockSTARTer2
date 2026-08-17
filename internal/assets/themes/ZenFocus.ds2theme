@@ -139,14 +139,14 @@ accent    = "$highlight"
   HelpItem = "{{|Helpline|}}"  # = "{{|Dialog|}}"
 
 ## Checkboxes
-# CheckboxOff                = "{{|Dialog|}}"
-  CheckboxOn                 = "{{[$accent:$secondary:B]}}"  # = "{{|TagKey|}}"
-# CheckboxBracketsOff        = "{{|Dialog|}}"
-# CheckboxBracketsOn         = "{{|Dialog|}}"
-  CheckboxOnFocused          = "{{[$secondary:$accent:-]}}"  # = "{{|TagKeyFocused|}}"
-  CheckboxOffFocused         = "{{[$secondary:$accent:-]}}"  # = "{{|TagFocused|}}"
-  CheckboxBracketsOnFocused  = "{{[$secondary:$accent:-]}}"  # = "{{|TagFocused|}}"
-  CheckboxBracketsOffFocused = "{{[$secondary:$accent:-]}}"  # = "{{|TagFocused|}}"
+# CheckboxOffFocused         = "{{|TagFocused|}}"
+# CheckboxOnFocused          = "{{|TagKeyFocused|}}"
+# CheckboxBracketsOffFocused = "{{|TagFocused|}}"
+# CheckboxBracketsOnFocused  = "{{|TagFocused|}}"
+# CheckboxOff                = "{{|Tag|}}"
+# CheckboxOn                 = "{{|TagKey|}}"
+# CheckboxBracketsOff        = "{{|Tag|}}"
+# CheckboxBracketsOn         = "{{|Tag|}}"
 
 ## Radio buttons
 # RadioOff                = "{{|CheckboxOff|}}"
