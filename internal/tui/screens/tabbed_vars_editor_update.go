@@ -723,6 +723,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.EnvLoadDoneMsg:
 		m.loading = false
 		m.titleSpinner.Stop()
+		var loadCmds []tea.Cmd
 		for _, data := range msg.Tabs {
 			i := data.Index
 			if i < 0 || i >= len(m.tabs) {
@@ -738,7 +739,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Parse content into editor (resets value + lineMeta, invalidates cache)
 			m.tabs[i].editor.ParseEnv(data.Content, data.DefaultFunc, data.ReadOnlyVars)
 			if m.focused && m.activeTab == i && m.focus == envFocusEditor {
-				m.tabs[i].editor.Focus()
+				loadCmds = append(loadCmds, m.tabs[i].editor.Focus())
 			} else {
 				m.tabs[i].editor.Blur()
 			}
@@ -805,7 +806,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.SetSize(m.width, m.height)
-		return m, nil
+		return m, tea.Batch(loadCmds...)
 	case tea.WindowSizeMsg:
 		m.SetSize(msg.Width, msg.Height)
 	}

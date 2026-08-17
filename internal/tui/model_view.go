@@ -367,7 +367,13 @@ func (m *AppModel) View() (v tea.View) {
 					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
 					c := tea.NewCursor(lx+rx, ly+ry)
 					c.Shape = shape
-					c.Blink = true
+					// Only the bar (ready to type) blinks; block (overwrite)
+					// and underline (uneditable position) stay steady --
+					// mirrors the virtual cursor's insert-blinks/overwrite-
+					// static distinction, which stands in for shape there
+					// since a virtual cursor can't draw a bar at all.
+					c.Blink = shape == tea.CursorBar
+					c.Color = displayengine.TextCursorColor()
 					v.Cursor = c
 				}
 			}
@@ -381,7 +387,8 @@ func (m *AppModel) View() (v tea.View) {
 			if show {
 				c := tea.NewCursor(lastScreenX+rx, lastScreenY+ry)
 				c.Shape = shape
-				c.Blink = true
+				c.Blink = shape == tea.CursorBar
+				c.Color = displayengine.TextCursorColor()
 				v.Cursor = c
 			}
 		}
@@ -395,7 +402,8 @@ func (m *AppModel) View() (v tea.View) {
 				logY := m.height - m.panel.Height()
 				c := tea.NewCursor(rx, logY+ry)
 				c.Shape = shape
-				c.Blink = true
+				c.Blink = shape == tea.CursorBar
+				c.Color = displayengine.TextCursorColor()
 				v.Cursor = c
 			}
 		}
