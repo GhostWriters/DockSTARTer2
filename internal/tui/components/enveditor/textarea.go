@@ -47,6 +47,20 @@ type (
 	pasteErrMsg struct{ error }
 )
 
+// blinkTickMsg drives the virtual cursor's periodic redraw while idle --
+// see blinkAnchor and blinkTicking.
+type blinkTickMsg struct{}
+
+// blinkTickInterval is how often the virtual cursor's blink phase is
+// re-rendered while idle. Deliberately finer than any theme's BlinkSpeed so
+// the on/off transition itself never lags visibly behind blinkAnchor.
+const blinkTickInterval = 100 * time.Millisecond
+
+// blinkTick schedules the next blinkTickMsg.
+func blinkTick() tea.Cmd {
+	return tea.Tick(blinkTickInterval, func(time.Time) tea.Msg { return blinkTickMsg{} })
+}
+
 // KeyMap is the key bindings for different actions within the textarea.
 type KeyMap struct {
 	CharacterBackward       key.Binding
@@ -332,6 +346,28 @@ type Model struct {
 	// virtualCursor manages the virtual cursor.
 	virtualCursor cursor.Model
 
+	// blinkAnchor is the wall-clock reference point the virtual cursor's
+	// blink phase is computed from at render time (see view()): elapsed
+	// time since blinkAnchor, modulo twice the blink speed, determines
+	// whether the cursor is currently shown or hidden. This is level-
+	// triggered -- "what is the state right now" -- rather than relying on
+	// cursor.Model's own async BlinkMsg chain (id/tag-matched messages that
+	// have to round-trip through this component, the screen, and back), a
+	// chain that's easy to silently break by triggering a Focus()/Blink()
+	// call from an unrelated code path in between. Reset to time.Now()
+	// whenever the cursor should appear solid/visible right away: real
+	// interaction (movement, click), gaining focus, or entering a blink-
+	// eligible state.
+	blinkAnchor time.Time
+
+	// blinkTicking is true while the periodic redraw tick (blinkTick,
+	// driven by blinkTickMsg) is scheduled -- so Update starts it at most
+	// once rather than spawning a new parallel self-perpetuating chain on
+	// every message. The tick's only job is causing periodic re-renders so
+	// blinkAnchor's computed phase is actually redrawn while idle; it stops
+	// rescheduling itself once blinking is no longer needed.
+	blinkTicking bool
+
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
 	CharLimit int
@@ -605,8 +641,14 @@ func (m *Model) SetVirtualCursor(v bool) {
 	m.updateVirtualCursorStyle()
 }
 
-// updateVirtualCursorStyle sets styling on the virtual cursor based on the
-// textarea's style settings.
+// updateVirtualCursorStyle sets styling and blink mode on the virtual
+// cursor based on the textarea's style settings and current Overwrite
+// state. Resets blinkAnchor so entering a new state (e.g. leaving
+// overwrite mode) shows the cursor solid/visible immediately rather than
+// wherever the blink phase happened to be. No Cmd is needed here: view()
+// computes the blink phase fresh from blinkAnchor on every render, so the
+// very next render (which bubbletea triggers after any Update call
+// regardless) already reflects the new state.
 func (m *Model) updateVirtualCursorStyle() {
 	if !m.useVirtualCursor {
 		m.virtualCursor.SetMode(cursor.CursorHide)
@@ -614,6 +656,17 @@ func (m *Model) updateVirtualCursorStyle() {
 	}
 
 	m.virtualCursor.Style = lipgloss.NewStyle().Foreground(m.styles.Cursor.Color)
+	m.blinkAnchor = time.Now()
+
+	// Overwrite mode gets a solid, non-blinking cursor. The virtual cursor
+	// has no way to represent a bar-vs-block shape difference the way a
+	// native terminal cursor can, so blink-vs-static stands in for it
+	// instead: insert mode blinks (matching a bar cursor's usual behavior),
+	// overwrite mode stays solid.
+	if m.Overwrite {
+		m.virtualCursor.SetMode(cursor.CursorStatic)
+		return
+	}
 
 	// By default, the blink speed of the cursor is set to a default
 	// internally.
@@ -974,6 +1027,7 @@ func (m Model) activeStyle() *StyleState {
 // receive keyboard input and the cursor will be hidden.
 func (m *Model) Focus() tea.Cmd {
 	m.focus = true
+	m.blinkAnchor = time.Now()
 	return m.virtualCursor.Focus()
 }
 
@@ -1493,6 +1547,7 @@ func (m *Model) SetHeight(h int) {
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.focus {
 		m.virtualCursor.Blur()
+		m.blinkTicking = false
 		return m, nil
 	}
 
@@ -1762,6 +1817,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.PageDown()
 		case key.Matches(msg, m.KeyMap.ToggleInsert):
 			m.Overwrite = !m.Overwrite
+			m.updateVirtualCursorStyle()
 
 		default:
 			if !m.isEditableAtCursor() {
@@ -1826,6 +1882,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case pasteErrMsg:
 		m.Err = msg
+
+	case blinkTickMsg:
+		if m.useVirtualCursor && m.focus && m.virtualCursor.Mode() == cursor.CursorBlink {
+			cmds = append(cmds, blinkTick())
+		} else {
+			m.blinkTicking = false
+		}
 	}
 
 	// Handle viewport update without resetting content here.
@@ -1839,16 +1902,25 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	if m.useVirtualCursor {
-		m.virtualCursor, cmd = m.virtualCursor.Update(msg)
-
-		// If the cursor has moved, reset the blink state. This is a small UX
-		// nuance that makes cursor movement obvious and feel snappy.
+		// The blink phase itself is computed fresh from blinkAnchor at
+		// render time (see view()), not driven by cursor.Model's own
+		// BlinkMsg chain -- so all that's needed here is resetting the
+		// anchor on real interaction (the cursor moved, or the message is
+		// a click that might not move it, e.g. clicking the same
+		// character), so movement/clicking always shows the cursor solid
+		// immediately instead of wherever the blink phase happened to be.
 		newRow, newCol := m.cursorLineNumber(), m.col
-		if (newRow != oldRow || newCol != oldCol) && m.virtualCursor.Mode() == cursor.CursorBlink {
-			m.virtualCursor.IsBlinked = false
-			cmd = m.virtualCursor.Blink()
+		_, isClick := msg.(tea.MouseClickMsg)
+		if newRow != oldRow || newCol != oldCol || isClick {
+			m.blinkAnchor = time.Now()
 		}
-		cmds = append(cmds, cmd)
+		// Start the periodic redraw tick if it isn't already running -- it
+		// self-perpetuates via the blinkTickMsg case below and stops itself
+		// once blinking is no longer needed, so this only (re)starts it.
+		if m.virtualCursor.Mode() == cursor.CursorBlink && !m.blinkTicking {
+			m.blinkTicking = true
+			cmds = append(cmds, blinkTick())
+		}
 	}
 
 	// If the scrollbar moved the viewport, constrain the cursor so it remains on screen.
@@ -1863,6 +1935,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func (m *Model) view() string {
+	// Compute the virtual cursor's blink phase fresh from blinkAnchor --
+	// what is the state right now -- rather than trusting cursor.Model's
+	// own IsBlinked field, which only updates via its BlinkMsg chain (see
+	// blinkAnchor's doc comment for why that chain is fragile here).
+	if m.useVirtualCursor && m.virtualCursor.Mode() == cursor.CursorBlink {
+		phase := time.Since(m.blinkAnchor) / m.virtualCursor.BlinkSpeed
+		m.virtualCursor.IsBlinked = phase%2 == 1
+	}
+
 	// Pre-calculate duplicates for rendering
 	m.duplicateKeys = make(map[string]int)
 	for _, lineRunes := range m.value {
