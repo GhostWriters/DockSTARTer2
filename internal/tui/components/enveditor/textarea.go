@@ -1938,10 +1938,20 @@ func (m *Model) view() string {
 	// Compute the virtual cursor's blink phase fresh from blinkAnchor --
 	// what is the state right now -- rather than trusting cursor.Model's
 	// own IsBlinked field, which only updates via its BlinkMsg chain (see
-	// blinkAnchor's doc comment for why that chain is fragile here).
-	if m.useVirtualCursor && m.virtualCursor.Mode() == cursor.CursorBlink {
-		phase := time.Since(m.blinkAnchor) / m.virtualCursor.BlinkSpeed
-		m.virtualCursor.IsBlinked = phase%2 == 1
+	// blinkAnchor's doc comment for why that chain is fragile here). Only
+	// when actually focused: an unfocused editor (e.g. the inactive pane
+	// in split mode, or this one after focus moved to the button row)
+	// still renders its own cursor position marker below regardless of
+	// focus, so IsBlinked must be forced to the permanently-hidden state
+	// here -- matching cursor.Model.Blur()'s own intent -- or every open
+	// pane would show a cursor at once.
+	if m.useVirtualCursor {
+		if m.focus && m.virtualCursor.Mode() == cursor.CursorBlink {
+			phase := time.Since(m.blinkAnchor) / m.virtualCursor.BlinkSpeed
+			m.virtualCursor.IsBlinked = phase%2 == 1
+		} else if !m.focus {
+			m.virtualCursor.IsBlinked = true
+		}
 	}
 
 	// Pre-calculate duplicates for rendering

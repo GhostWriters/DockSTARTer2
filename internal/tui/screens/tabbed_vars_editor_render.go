@@ -27,8 +27,8 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 
 	var body string
 	if m.splitMode {
-		pane0 := m.renderPane(0, m.activeTab == 0)
-		pane1 := m.renderPane(1, m.activeTab == 1)
+		pane0 := m.renderPane(0, m.activeTab == 0 && m.focus == envFocusEditor)
+		pane1 := m.renderPane(1, m.activeTab == 1 && m.focus == envFocusEditor)
 		if m.layoutMode == envLayoutSideBySide {
 			gutter := m.gutterFill(ctx, true, lipgloss.Height(pane0))
 			body = lipgloss.JoinHorizontal(lipgloss.Top, pane0, gutter, pane1)
@@ -162,6 +162,21 @@ func endCappedLine(length int, start, end, fill string) []string {
 func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	tab := m.tabs[idx]
 	editor := tab.editor
+	// Sync this render-local copy's focus to what's actually being
+	// rendered, rather than trusting m.tabs[idx].editor's own focus flag --
+	// several focus-transition sites (Save/Refresh/Cancel/Exit buttons,
+	// title-widget clicks) move the screen's own focus to envFocusButtons
+	// without also calling editor.Blur(), which the native/hardware cursor
+	// path tolerates (GetInputCursor checks the screen-level focus state
+	// directly) but the virtual cursor doesn't -- it only renders based on
+	// this Model's own internal focus, so a stale true here would show a
+	// cursor in every open pane regardless of which one, if any, is
+	// actually focused.
+	if focused {
+		editor.Focus()
+	} else {
+		editor.Blur()
+	}
 	editorView := editor.View()
 	ctx := displayengine.GetActiveContext()
 

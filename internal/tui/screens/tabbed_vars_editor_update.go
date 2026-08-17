@@ -219,7 +219,18 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Forward the click itself, not just the focus switch --
 					// this region covers the whole pane box including its
 					// scrollbar, so one click both focuses and acts on it.
+					// But only when it actually landed within the content/
+					// scrollbar area: this same region also covers the
+					// pane's border, and a border click's coordinates would
+					// otherwise clamp to some edge position, moving the
+					// cursor instead of just focusing and restoring it
+					// where it was.
+					layout := displayengine.GetLayout()
 					relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
+					editorW := m.paneContentWidth[idx] - layout.BorderWidth()
+					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[idx] || relX >= editorW {
+						return m, nil
+					}
 					var cmd tea.Cmd
 					m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 						X:      relX,
