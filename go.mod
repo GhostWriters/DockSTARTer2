@@ -21,7 +21,7 @@ require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/docker/cli v29.7.2+incompatible
-	github.com/docker/compose/v5 v5.4.0
+	github.com/docker/compose/v5 v5.5.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/fsnotify/fsnotify v1.10.1
@@ -30,7 +30,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
-	github.com/mattn/go-runewidth v0.0.27
+	github.com/mattn/go-runewidth v0.0.28
 	github.com/mattn/go-sixel v0.0.12
 	github.com/moby/moby/client v0.5.1
 	github.com/muesli/termenv v0.16.0
@@ -100,7 +100,7 @@ require (
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
-	github.com/docker/buildx v0.36.0 // indirect
+	github.com/docker/buildx v0.36.1 // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect
 	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203 // indirect
@@ -181,9 +181,9 @@ require (
 	github.com/mattn/go-shellwords v1.0.14 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
-	github.com/moby/buildkit v0.32.1 // indirect
+	github.com/moby/buildkit v0.32.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/go-archive v0.3.2 // indirect
+	github.com/moby/go-archive v0.3.3 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/moby/api v1.55.0 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
@@ -281,7 +281,7 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
