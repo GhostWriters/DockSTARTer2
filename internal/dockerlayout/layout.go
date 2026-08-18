@@ -103,12 +103,58 @@ func imageRefURL(name string) string {
 	return "https://hub.docker.com/_/" + bare
 }
 
+// imageTagURL builds a browser URL for a specific tag of a Docker image
+// reference, when the registry's web UI supports deep-linking to one.
+// Returns "" only when it genuinely can't -- imageRefURL redirects
+// LinuxServer/hotio images to their doc pages (general image docs, not
+// tag browsers) for the name link, but both still publish real,
+// tag-linkable images elsewhere: LinuxServer to Docker Hub under the same
+// name (linuxserver/<rest>), hotio to ghcr.io/lscr.io/quay.io (it moved
+// off Docker Hub entirely -- verified a hotio image 404s there, so that
+// specific case still returns "").
+//
+// GHCR-family registries (ghcr.io, lscr.io as a generic mirror, quay.io,
+// mcr.microsoft.com, registry.k8s.io) all resolve through GitHub's
+// container package page, which reads a "tag" query param client-side to
+// jump to that tag -- unofficial (GitHub doesn't document it) but
+// confirmed working. Docker Hub's tag list page supports the same idea
+// via its own "name" filter param instead.
+func imageTagURL(name, tag string) string {
+	if rest, ok := strings.CutPrefix(name, "lscr.io/linuxserver/"); ok {
+		return "https://hub.docker.com/r/linuxserver/" + rest + "/tags?name=" + tag
+	}
+	// Hotio moved off Docker Hub entirely (verified: a hotio image 404s
+	// there) but does publish to ghcr.io/lscr.io/quay.io, which -- unlike
+	// the name link's redirect to hotio.dev's general docs -- can still
+	// deep-link a tag on whichever of those the image actually came from.
+	bare := strings.TrimPrefix(name, "docker.io/")
+	for _, registry := range []string{"ghcr.io/", "lscr.io/", "quay.io/"} {
+		if strings.HasPrefix(bare, registry+"hotio/") {
+			return "https://" + bare + "?tag=" + tag
+		}
+	}
+	if strings.HasPrefix(bare, "hotio/") {
+		return ""
+	}
+	for _, registry := range []string{"ghcr.io/", "lscr.io/", "mcr.microsoft.com/", "quay.io/", "registry.k8s.io/"} {
+		if strings.HasPrefix(name, registry) {
+			return "https://" + name + "?tag=" + tag
+		}
+	}
+	if strings.Contains(bare, "/") {
+		return "https://hub.docker.com/r/" + bare + "/tags?name=" + tag
+	}
+	return "https://hub.docker.com/_/" + bare + "/tags?name=" + tag
+}
+
 // StyleImageRef styles an image reference with DockerImage/DockerTag tags,
 // returning a semstyle tag string (callers convert to ANSI with
 // semstyle.ToANSI when ready to output). When the terminal supports
-// hyperlinks, the image name becomes a clickable link to its registry page.
-// Handles three forms:
-//   - "registry/name:tag" → name styled as DockerImage (linked), ":tag" as DockerTag
+// hyperlinks, the image name becomes a clickable link to its registry
+// page, and the tag (when the registry supports deep-linking to one --
+// see imageTagURL) becomes a clickable link to that specific tag. Handles
+// three forms:
+//   - "registry/name:tag" → name styled as DockerImage (linked), ":tag" as DockerTag (linked if possible)
 //   - "sha256:digest"     → "sha256:" as DockerTag (dim), digest as DockerImage (no link)
 //   - "name" (no colon)   → entire string as DockerImage (linked)
 func StyleImageRef(ref string) string {
@@ -117,8 +163,13 @@ func StyleImageRef(ref string) string {
 	}
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
 		name, tag := ref[:idx], ref[idx+1:]
-		url := imageRefURL(name)
-		return console.FormatLink("DockerImage", name, url) + "{{|DockerColon|}}:{{[-]}}{{|DockerTag|}}" + tag + "{{[-]}}"
+		nameURL := imageRefURL(name)
+		nameLink := console.FormatLink("DockerImage", name, nameURL)
+		tagText := "{{|DockerTag|}}" + tag + "{{[-]}}"
+		if tagURL := imageTagURL(name, tag); tagURL != "" {
+			tagText = console.FormatLink("DockerTag", tag, tagURL)
+		}
+		return nameLink + "{{|DockerColon|}}:{{[-]}}" + tagText
 	}
 	url := imageRefURL(ref)
 	return console.FormatLink("DockerImage", ref, url)
