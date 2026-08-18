@@ -119,12 +119,13 @@ func imageRefURL(name string) string {
 // jump to that tag -- unofficial (GitHub doesn't document it) but
 // confirmed working. Docker Hub's own "layers" page (also undocumented)
 // is even more direct: it's normally shown with a "/images/sha256-<digest>"
-// suffix for the tag's current manifest, but the digest-less URL still
-// resolves the same page client-side, so no registry lookup is needed to
-// build it -- just owner/image/tag, same as everything else here.
+// suffix for the tag's current manifest, but the plain "/layers/<owner>/
+// <image>/<tag>" URL still resolves the same page client-side, so no
+// registry lookup is needed to build it -- just owner/image/tag, same as
+// everything else here.
 func imageTagURL(name, tag string) string {
 	if rest, ok := strings.CutPrefix(name, "lscr.io/linuxserver/"); ok {
-		return "https://hub.docker.com/layers/linuxserver/" + rest + "/" + tag + "/images/"
+		return "https://hub.docker.com/layers/linuxserver/" + rest + "/" + tag
 	}
 	// Hotio moved off Docker Hub entirely (verified: a hotio image 404s
 	// there) but does publish to ghcr.io/lscr.io/quay.io, which -- unlike
@@ -145,9 +146,9 @@ func imageTagURL(name, tag string) string {
 		}
 	}
 	if strings.Contains(bare, "/") {
-		return "https://hub.docker.com/layers/" + bare + "/" + tag + "/images/"
+		return "https://hub.docker.com/layers/" + bare + "/" + tag
 	}
-	return "https://hub.docker.com/layers/library/" + bare + "/" + tag + "/images/"
+	return "https://hub.docker.com/layers/library/" + bare + "/" + tag
 }
 
 // StyleImageRef styles an image reference with DockerImage/DockerTag tags,
