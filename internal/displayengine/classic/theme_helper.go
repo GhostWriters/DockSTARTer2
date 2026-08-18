@@ -65,6 +65,23 @@ func TextCursorColor() color.Color {
 	return SemanticRawStyle("TextCursor").GetForeground()
 }
 
+// TextCursorStyle returns the full style (fg, bg, and attributes) defined
+// by the TextCursor theme entry. Used for the virtual cursor's solid /
+// blink-visible phase, where -- unlike TextCursorColor -- more than just
+// the foreground should carry through.
+func TextCursorStyle() lipgloss.Style {
+	return SemanticRawStyle("TextCursor")
+}
+
+// TextCursorFlashStyle returns the full style defined by the
+// TextCursorFlash theme entry (falls back to TextCursor with Reverse
+// toggled on -- see .FALLBACKS.ds2theme). Used for the virtual cursor's
+// blink-hidden phase so it stays visibly distinct instead of fading to
+// plain text.
+func TextCursorFlashStyle() lipgloss.Style {
+	return SemanticRawStyle("TextCursorFlash")
+}
+
 // TagBracketGlyphs returns the open/close glyphs used for focused-row bracket
 // indicators (App Select, Menu Brackets, and now line-number brackets),
 // following the active ui.line_characters setting.

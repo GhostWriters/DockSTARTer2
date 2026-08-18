@@ -345,6 +345,8 @@ var (
 	SplitWidth                     = classic.SplitWidth
 	TagBracketGlyphs               = classic.TagBracketGlyphs
 	TextCursorColor                = classic.TextCursorColor
+	TextCursorStyle                = classic.TextCursorStyle
+	TextCursorFlashStyle           = classic.TextCursorFlashStyle
 	TitleBarWidgetRegions          = classic.TitleBarWidgetRegions
 	TitleBarHitRegionsFor          = classic.TitleBarHitRegionsFor
 	TitleBarWidgetY                = classic.TitleBarWidgetY

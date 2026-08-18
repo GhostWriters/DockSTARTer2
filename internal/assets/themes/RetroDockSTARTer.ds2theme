@@ -249,7 +249,8 @@ accent    = "$screen_bg"
 # Prompt                  = ""
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
-  TextCursor              = "{{[magenta:yellow:B]}}"    # = "{{[-:-:R]}}"
+  TextCursor              = "{{[magenta::B]}}"    # = "{{[-:-:R]}}"
+# TextCursorFlash         = "{{|TextCursor:::R|}}"
 
 ## Scrollbar
   Scrollbar       = "{{|Border2|}}"  # = "{{[-:-:D]}}"

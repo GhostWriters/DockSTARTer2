@@ -294,13 +294,14 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
 		editor.LineNumberBrackets = displayengine.GetActiveContext().LineNumberBrackets
 		editor.LineNumberBracketOpen, editor.LineNumberBracketClose = displayengine.TagBracketGlyphs()
-		// The native/hardware cursor looks and blinks better on a real
-		// terminal, but its color comes from an OSC 12 escape sequence the
-		// web frontend's browser terminal doesn't honor -- it always shows
-		// its own fixed cursor color there, invisible against some themes.
-		// The virtual (drawn) cursor is just styled text, so it always
-		// reflects the theme correctly regardless of frontend.
-		editor.SetVirtualCursor(connType == "web")
+		// The native/hardware cursor's color comes from the terminal
+		// emulator's own theme, not DS2's -- on some terminals (e.g.
+		// WezTerm) that can end up invisible against a given DS2 theme, and
+		// the web frontend's browser terminal doesn't honor cursor-color
+		// escapes at all. The virtual (drawn) cursor is just styled text,
+		// so it always reflects the active theme correctly regardless of
+		// frontend.
+		editor.SetVirtualCursor(true)
 		editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
 			return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 		}

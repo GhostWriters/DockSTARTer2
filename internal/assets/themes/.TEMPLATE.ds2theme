@@ -261,6 +261,7 @@ secondary = "black"
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
 # TextCursor              = "{{[-:-:R]}}"
+# TextCursorFlash         = "{{|TextCursor:::R|}}"
 
 ## Scrollbar
 # Scrollbar       = "{{[-:-:D]}}"

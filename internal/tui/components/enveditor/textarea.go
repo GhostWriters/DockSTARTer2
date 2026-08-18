@@ -183,6 +183,20 @@ type CursorStyle struct {
 	// cursor color.
 	Color color.Color
 
+	// Style is the full style (fg, bg, and attributes) used to render the
+	// virtual cursor's solid / blink-visible phase. Unlike Color, this is
+	// not reduced to a single foreground -- a theme's TextCursor entry may
+	// also set a background or attributes (e.g. Bold), and those should
+	// carry through rather than being discarded.
+	Style lipgloss.Style
+
+	// FlashStyle is the full style used for the virtual cursor's
+	// blink-hidden phase. Deliberately a second theme-defined style rather
+	// than derived from the character underneath: the cursor should look
+	// the same regardless of what it's sitting on top of (selected text,
+	// a comment, etc.), same as a native terminal cursor does.
+	FlashStyle lipgloss.Style
+
 	// Shape is the cursor shape. The following shapes are available:
 	//
 	// - tea.CursorBlock
@@ -2044,30 +2058,53 @@ func (m *Model) view() string {
 			}
 			if m.row == l && lineInfo.RowOffset == wl {
 				s.WriteString(m.renderRunes(wrappedLine[:lineInfo.ColumnOffset], l, charIndex, style))
-				if m.useVirtualCursor && !m.isEditableAtCursor() {
+				hasChar := lineInfo.ColumnOffset < len(wrappedLine)
+				cursorChar := " "
+				if hasChar {
+					cursorChar = string(wrappedLine[lineInfo.ColumnOffset])
+				}
+				switch {
+				case !m.useVirtualCursor:
+					// Hardware cursor is active -- render exactly like any
+					// other character (selection, validation, etc. all
+					// still apply via renderRunes) since the terminal's own
+					// cursor is what marks this position, not this text.
+					s.WriteString(m.renderRunes([]rune(cursorChar), l, charIndex+lineInfo.ColumnOffset, style))
+				case !m.isEditableAtCursor():
 					// The virtual cursor can only really fake a bar (blink)
 					// or block (reverse) shape -- neither reads as "you
 					// can't type here" the way a native terminal's
 					// underline cursor shape does (see GetInputCursor's
-					// CursorUnderline case). Recoloring the character to
-					// the TextCursor style's own color, plus underline,
-					// borrows from the same theme accent the blink/static
-					// states already use without fully hiding the
-					// character or implying overwrite mode.
-					charStyle := style.Foreground(m.styles.Cursor.Color).Underline(true)
-					if lineInfo.ColumnOffset < len(wrappedLine) {
-						s.WriteString(charStyle.Render(string(wrappedLine[lineInfo.ColumnOffset])))
-						s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, style))
-					} else {
-						s.WriteString(charStyle.Render(" "))
-					}
-				} else if lineInfo.ColumnOffset < len(wrappedLine) {
-					m.virtualCursor.SetChar(string(wrappedLine[lineInfo.ColumnOffset]))
-					s.WriteString(style.Render(m.virtualCursor.View()))
+					// CursorUnderline case). Underlining the cursor's own
+					// solid style borrows the same theme accent the other
+					// virtual-cursor states use, without implying overwrite
+					// mode.
+					s.WriteString(m.styles.Cursor.Style.Underline(true).Render(cursorChar))
+				case m.virtualCursor.Mode() == cursor.CursorStatic:
+					// Solid (non-blinking, e.g. overwrite mode): the
+					// TextCursorFlash style reads as a more solid block
+					// than plain TextCursor, which is what "solid" should
+					// look like.
+					s.WriteString(m.styles.Cursor.FlashStyle.Render(cursorChar))
+				case m.virtualCursor.Mode() == cursor.CursorBlink && m.virtualCursor.IsBlinked:
+					// Blink-hidden phase: the theme's TextCursorFlash style
+					// (defaults to TextCursor with Reverse toggled on -- see
+					// .FALLBACKS.ds2theme) rather than plain text, so the
+					// cursor position stays visible through both blink
+					// phases instead of disappearing for half of each
+					// cycle.
+					s.WriteString(m.styles.Cursor.FlashStyle.Render(cursorChar))
+				default:
+					// Blink-visible phase: the theme's own TextCursor
+					// style, full stop -- not derived from whatever
+					// character/style happens to be underneath (selection,
+					// comment, etc.), same as a native terminal's cursor
+					// always looks the same regardless of what it's
+					// sitting on top of.
+					s.WriteString(m.styles.Cursor.Style.Render(cursorChar))
+				}
+				if hasChar {
 					s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, style))
-				} else {
-					m.virtualCursor.SetChar(" ")
-					s.WriteString(m.virtualCursor.View())
 				}
 			} else {
 				s.WriteString(m.renderRunes(wrappedLine, l, charIndex, style))
