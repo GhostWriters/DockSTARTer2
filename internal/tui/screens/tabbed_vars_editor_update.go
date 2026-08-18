@@ -780,6 +780,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			editorStyles.Focused.GutterModified = displayengine.SemanticRawStyle("MarkerModified")
 			editorStyles.Focused.GutterInvalid = displayengine.SemanticRawStyle("MarkerInvalid")
 			editorStyles.Cursor.Color = displayengine.TextCursorColor()
+			editorStyles.Cursor.Style = displayengine.TextCursorStyle()
+			editorStyles.Cursor.FlashStyle = displayengine.TextCursorFlashStyle()
 
 			editorStyles.Blurred.LineNumber = displayengine.SemanticRawStyle("LineNumber")
 			editorStyles.Blurred.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")

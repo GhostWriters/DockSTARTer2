@@ -249,6 +249,7 @@ accent    = "white"
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
   TextCursor              = "{{[:white:]}}"                # = "{{[-:-:R]}}"
+# TextCursorFlash         = "{{|TextCursor:::R|}}"
 
 ## Scrollbar
   Scrollbar       = "{{|Border2|}}"  # = "{{[-:-:D]}}"
