@@ -321,6 +321,32 @@ func resolveThemeColors(tf ThemeFile) (map[string]string, error) {
 	return semtheme.ResolveColors(tf)
 }
 
+// defaultPalette holds fallback values for $palette variables a theme
+// references but doesn't define itself. Unlike style-tag fallbacks (see
+// registerTagFallbacks), a palette entry can't fall back to "whatever
+// another theme picked" -- there's no other theme to inherit a color
+// choice from -- so this is a literal baseline rather than a reference
+// chain. white/black covers the common case of a theme using $primary/
+// $secondary purely as light/dark text-on-background roles without
+// needing to state the obvious.
+var defaultPalette = map[string]string{
+	"primary":   "white",
+	"secondary": "black",
+}
+
+// applyPaletteDefaults fills in any defaultPalette entries tf.Palette
+// doesn't already define, without overwriting the theme's own choices.
+func applyPaletteDefaults(tf *ThemeFile) {
+	if tf.Palette == nil {
+		tf.Palette = make(map[string]string, len(defaultPalette))
+	}
+	for name, value := range defaultPalette {
+		if _, ok := tf.Palette[name]; !ok {
+			tf.Palette[name] = value
+		}
+	}
+}
+
 func GetThemeFile(themeName string) (ThemeFile, error) {
 	data, err := resolveThemeData(themeName)
 	if err != nil {
@@ -330,6 +356,7 @@ func GetThemeFile(themeName string) (ThemeFile, error) {
 	if err := toml.Unmarshal(data, &tf); err != nil {
 		return ThemeFile{}, err
 	}
+	applyPaletteDefaults(&tf)
 	if _, err := resolveThemeColors(tf); err != nil {
 		return tf, err
 	}
@@ -511,11 +538,38 @@ func parseThemeTOMLData(data []byte, prefix string) (*ThemeDefaults, error) {
 	if prefix == "" {
 		registerTagFallbacksOnce.Do(registerTagFallbacks)
 	}
-	rawDefaults, err := semtheme.RegisterInto(data, prefix)
+	rawDefaults, err := registerThemeData(data, prefix)
 	if err != nil {
 		return nil, err
 	}
 	return decodeThemeDefaults(rawDefaults)
+}
+
+// registerThemeData mirrors semtheme.RegisterInto (parse -> resolve ->
+// register into the semstyle tag registry) but is reimplemented locally so
+// applyPaletteDefaults can run between parsing and resolving -- RegisterInto
+// does its own independent parse internally and has no hook point for this.
+// This is the actual live-rendering path (parseThemeTOMLData's only caller,
+// for both the main theme and the Appearance Settings preview's prefixed
+// namespace); GetThemeFile's own applyPaletteDefaults call is a separate
+// code path (theme inspection/migration) that doesn't cover it.
+func registerThemeData(data []byte, prefix string) (map[string]any, error) {
+	tf, err := semtheme.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	applyPaletteDefaults(&tf)
+	resolved, err := semtheme.ResolveColors(tf)
+	if err != nil {
+		return nil, err
+	}
+	for key, styleValue := range resolved {
+		semstyle.RegisterThemeTagRaw(semtheme.PrefixTag(prefix, key), styleValue)
+	}
+	if prefix == "" {
+		semstyle.BuildColorMap()
+	}
+	return tf.Defaults, nil
 }
 
 // registerTagFallbacksOnce guards registerTagFallbacks so it runs exactly

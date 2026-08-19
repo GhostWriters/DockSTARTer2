@@ -9,7 +9,9 @@
 # (currently just Marker) are left active since a theme must define them.
 #
 # [palette] entries are free-form -- name them whatever you like, or skip
-# the section entirely and write literal colors in [styles] instead.
+# the section entirely and write literal colors in [styles] instead. Two
+# names have built-in fallback values if you use them without defining
+# them yourself: $primary (white) and $secondary (black).
 
 [metadata]
 name        = "My Theme"
@@ -23,8 +25,8 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary   = "white"
-secondary = "black"
+# primary   = "white"
+# secondary = "black"
 
 [styles]
 ## Backdrop

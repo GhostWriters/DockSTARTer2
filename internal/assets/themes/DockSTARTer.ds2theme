@@ -10,8 +10,8 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-primary   = "black"
-secondary = "white"
+primary   = "black"  # = "white"
+secondary = "white"  # = "black"
 screen_fg = "$primary"
 screen_bg = "$secondary"
 accent    = "cyan"
