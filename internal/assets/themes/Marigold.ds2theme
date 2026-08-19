@@ -10,8 +10,10 @@ direct_prefix   = "{{["
 direct_suffix   = "]}}"
 
 [palette]
-fg = "yellow"
-bg = "black"
+primary = "yellow"
+secondary = "black"
+fg = "$primary"
+bg = "$secondary"
 
 [styles]
 ## Backdrop
@@ -247,7 +249,7 @@ bg = "black"
 # Prompt                  = ""
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
-  TextCursor              = "{{[:white:]}}"             # = "{{[-:-:R]}}"
+  TextCursor              = "{{[$primary:$secondary:-B]}}"                # = "{{[-:-:R]}}"
 # TextCursorFlash         = "{{|TextCursor:::R|}}"
 
 ## Scrollbar
