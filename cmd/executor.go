@@ -7,6 +7,7 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
@@ -158,7 +159,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				return commands.HandlePrintTemplatesVersion()
 			case "--man":
 				ranCommand = true
-				return commands.HandleMan(subCtx, &group)
+				// A bare CLI invocation owns stdin/stdout outright (no
+				// Bubble Tea Program running yet), so it can safely run a
+				// real capability query instead of falling back to a
+				// connType guess.
+				canDisplayGraphics := graphics.QuerySixelSupport(int(os.Stdin.Fd()), os.Stdin, os.Stdout, graphics.DefaultQueryTimeout)
+				return commands.HandleMan(subCtx, &group, canDisplayGraphics)
 			case "-i", "--install":
 				ranCommand = true
 				return commands.HandleInstall(subCtx, &group, &state)

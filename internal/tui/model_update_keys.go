@@ -521,8 +521,9 @@ func (m *AppModel) showHelpCmd(capturedCtx *displayengine.HelpContext, screenLev
 		contextInfo.DocAppName = ""
 	}
 
+	graphicsSupported := m.connType == "web" || m.graphicsSupported
 	return func() tea.Msg {
-		return displayengine.ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo)}
+		return displayengine.ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo, graphicsSupported)}
 	}
 }
 

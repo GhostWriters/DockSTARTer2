@@ -63,9 +63,10 @@ type HelpDialogModel struct {
 
 	focused bool // tracks global focus
 
-	keyMap        help.KeyMap
-	contextInfo   displayengine.HelpContext // structured help info
-	contextOffset int                       // scroll offset for item context text
+	keyMap            help.KeyMap
+	contextInfo       displayengine.HelpContext // structured help info
+	contextOffset     int                       // scroll offset for item context text
+	graphicsSupported bool                      // resolved capability -- gates markdown graphics rendering
 
 	// Paged mode: cycles through context page and/or multiple binding column pages.
 	paged        bool
@@ -95,16 +96,19 @@ func NewHelpDialogModel() *HelpDialogModel {
 }
 
 func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
-	return NewHelpDialogWithContext(km, displayengine.HelpContext{})
+	return NewHelpDialogWithContext(km, displayengine.HelpContext{}, false)
 }
 
 // NewHelpDialogWithContext creates a help dialog that shows contextInfo
 // (e.g. current variable info) above the standard key bindings.
 // Pass an empty displayengine.HelpContext to show only the key bindings.
-func NewHelpDialogWithContext(km help.KeyMap, info displayengine.HelpContext) *HelpDialogModel {
+// graphicsSupported gates whether the doc page's markdown attempts graphics
+// rendering -- the caller resolves this from AppModel.graphicsSupported /
+// connType == "web" (see showHelpCmd).
+func NewHelpDialogWithContext(km help.KeyMap, info displayengine.HelpContext, graphicsSupported bool) *HelpDialogModel {
 	h := help.New()
 	h.ShowAll = true
-	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info, Scroll: displayengine.Scrollbar{ID: "help-dialog"}}
+	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info, graphicsSupported: graphicsSupported, Scroll: displayengine.Scrollbar{ID: "help-dialog"}}
 }
 
 func (m *HelpDialogModel) Init() tea.Cmd { return nil }

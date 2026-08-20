@@ -44,8 +44,12 @@ func SetUIProvider(p UIProvider) {
 // clientIP, connType, and sessionKey identify the owning session (not the
 // server daemon process) for edit-lock re-entry and "Resource Busy"
 // attribution -- see sessionlocks.SessionManager.localSessionKey and
-// sessionlocks.SessionLabel. Returns the exit code (0 = success).
-func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, sessionKey string) int {
+// sessionlocks.SessionLabel. graphicsSupported is the owning session's
+// already-resolved terminal graphics capability (see PanelModel.
+// GraphicsSupported), used by --man instead of re-querying the terminal --
+// a Bubble Tea Program already owns input/output here, so a second reader
+// would race it. Returns the exit code (0 = success).
+func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, sessionKey string, graphicsSupported bool) int {
 	// Ensure globals are reset on exit so console flags don't leak into the TUI.
 	defer func() {
 		console.GlobalYes = false
@@ -174,7 +178,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			case "--sysinfo":
 				return HandleSysInfo(innerCtx)
 			case "--man":
-				return HandleMan(innerCtx, &group)
+				return HandleMan(innerCtx, &group, graphicsSupported)
 			case "-i", "--install":
 				return HandleInstall(innerCtx, &group, &state)
 			case "-u", "--update", "--update-app", "--update-templates":

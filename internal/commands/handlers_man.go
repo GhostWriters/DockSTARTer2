@@ -22,7 +22,7 @@ import (
 	"github.com/pgavlin/markdown-kit/styles"
 )
 
-func HandleMan(ctx context.Context, group *CommandGroup) error {
+func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool) error {
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires an application name.", group.Command)
 		return fmt.Errorf("no application name provided")
@@ -40,8 +40,6 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 		width = w
 	}
 
-	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
-	canDisplay := graphics.CanDisplayGraphics()
 	encoder := graphics.SixelGraphicsEncoder()
 
 	// Use markdown-kit renderer with auto-detected theme
@@ -49,7 +47,7 @@ func HandleMan(ctx context.Context, group *CommandGroup) error {
 		kit_renderer.WithTheme(styles.AutoTheme()),
 		kit_renderer.WithWordWrap(width),
 		kit_renderer.WithSoftBreak(width != 0),
-		kit_renderer.WithImages(canDisplay, 0, ""),
+		kit_renderer.WithImages(canDisplayGraphics, 0, ""),
 		kit_renderer.WithImageEncoder(encoder),
 		kit_renderer.WithHyperlinks(true),
 	)
