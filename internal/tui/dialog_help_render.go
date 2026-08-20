@@ -41,7 +41,7 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	source := []byte(m.contextInfo.DocMarkdown)
 
 	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
-	canDisplay := graphics.CanDisplayGraphics()
+	canDisplay := m.graphicsSupported
 	// Use Sixel encoder for high-fidelity web terminal support
 	encoder := graphics.SixelGraphicsEncoder()
 

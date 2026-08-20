@@ -432,7 +432,7 @@ func (m *PanelModel) runDS2Groups(cmdStr string, groups []commands.CommandGroup)
 			logger.Notice(cmdCtx, "Console command: '{{|UserCommand|}}%s{{[-]}}'", cmdStr)
 		}
 
-		commands.Execute(cmdCtx, groups, m.clientIP, m.connType, m.sessionKey)
+		commands.Execute(cmdCtx, groups, m.clientIP, m.connType, m.sessionKey, m.graphicsSupported)
 		pw.Close()
 	}()
 

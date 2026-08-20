@@ -20,6 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.8/lib/addon-unicode11.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18/lib/addon-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-image@0.9/lib/addon-image.min.js"></script>
 
   <script>
     const DS2_DISPLAY_KEY = 'ds2_display';
@@ -102,6 +103,11 @@
 
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
+
+    // Sixel image support -- matches the server's graphics.CanDisplayGraphics
+    // detection path for local terminals; this is the browser-side half.
+    term.loadAddon(new ImageAddon.ImageAddon());
+
     term.open(document.getElementById('terminal'));
 
     // Use the WebGL renderer for pixel-accurate box-drawing character rendering.

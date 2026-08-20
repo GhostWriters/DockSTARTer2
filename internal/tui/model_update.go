@@ -10,6 +10,7 @@ import (
 	"DockSTARTer2/internal/version"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/input"
 )
 
 // Update implements tea.Model
@@ -23,6 +24,21 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.FatalWithStackSkip(m.ctx, 2, "TUI Update Panic: %v", r)
 		}
 	}()
+
+	// The terminal's reply to the Init()-time DA1 query (see model.go's
+	// graphicsSupported doc comment). Handled before the !m.ready gate below
+	// since the reply can arrive before the first WindowSizeMsg; doesn't
+	// affect anything currently on screen, so no re-render is needed.
+	if da1, ok := msg.(input.PrimaryDeviceAttributesEvent); ok {
+		for _, p := range da1 {
+			if p == 4 {
+				m.graphicsSupported = true
+				m.panel.SetGraphicsSupported(true)
+				break
+			}
+		}
+		return m, nil
+	}
 
 	var cmds []tea.Cmd
 

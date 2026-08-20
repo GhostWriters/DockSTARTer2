@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ScreenType identifies different screens in the TUI
@@ -235,6 +236,17 @@ type AppModel struct {
 	connType   string
 	sessionKey string // identifies this session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 
+	// graphicsSupported reports whether this session's terminal has
+	// confirmed Sixel graphics support, via a Primary Device Attributes
+	// (DA1) query sent from Init(). Starts false and flips true if/when the
+	// terminal answers (see model_update.go's input.PrimaryDeviceAttributesEvent
+	// case) -- most terminals respond within a frame or two of startup, but
+	// an unsupported one may never respond, so false is also the permanent
+	// answer in that case. "web" sessions skip the query entirely and are
+	// always treated as supported (the browser frontend's xterm.js loads
+	// @xterm/addon-image, which decodes Sixel unconditionally).
+	graphicsSupported bool
+
 	// program is this session's own *tea.Program, set via SetProgram once it
 	// exists (AppModel is constructed before NewProgram(model, ...) returns
 	// it, so this can't be captured at construction time -- same two-phase
@@ -425,6 +437,11 @@ func (m *AppModel) Init() tea.Cmd {
 	}
 	if m.dialog != nil {
 		cmds = append(cmds, m.dialog.Init())
+	}
+	if m.connType == "local" || m.connType == "ssh" {
+		// "web" is already trusted (see graphicsSupported's doc comment);
+		// querying it too would be harmless but pointless.
+		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes))
 	}
 	return logger.BatchRecoverTUI(m.ctx, cmds...)
 }
