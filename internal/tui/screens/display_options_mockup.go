@@ -559,7 +559,7 @@ func previewNaturalHeight(mockupMenu *displayengine.MenuModel) int {
 // Prefers foreground (for shade chars), falls back to background
 func getPreviewShadowColor() color.Color {
 	shadowStyle := displayengine.SemanticRawStyleWithPrefix("Shadow", "Preview_")
-	if fg := shadowStyle.GetForeground(); fg != nil {
+	if fg := shadowStyle.GetForeground(); fg != (lipgloss.NoColor{}) {
 		return fg
 	}
 	return shadowStyle.GetBackground()

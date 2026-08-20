@@ -652,7 +652,7 @@ func InitStyles(cfg config.AppConfig) {
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
 	shadowDef := SemanticRawStyle("Shadow")
 	CurrentStyles.ShadowColor = shadowDef.GetForeground()
-	if CurrentStyles.ShadowColor == nil {
+	if CurrentStyles.ShadowColor == (lipgloss.NoColor{}) {
 		CurrentStyles.ShadowColor = shadowDef.GetBackground()
 	}
 	CurrentStyles.Shadow = shadowDef.UnsetBackground()

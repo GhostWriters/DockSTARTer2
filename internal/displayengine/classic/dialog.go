@@ -13,11 +13,7 @@ import (
 // We detect this by direct type assertion, since NoColor{}.RGBA() returns full alpha (0xFFFF)
 // making alpha-based detection unreliable.
 func hasExplicitBackground(s lipgloss.Style) bool {
-	bg := s.GetBackground()
-	if bg == nil {
-		return false
-	}
-	_, isNoColor := bg.(lipgloss.NoColor)
+	_, isNoColor := s.GetBackground().(lipgloss.NoColor)
 	return !isNoColor
 }
 

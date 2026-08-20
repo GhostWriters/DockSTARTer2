@@ -232,7 +232,7 @@ func AddShadowCtx(content string, ctx StyleContext) string {
 	// Use screen background; fall back to dialog background if screen has no explicit color
 	// (avoids 2-cell "black" artifact at corners of the shadow composite when Screen bg is nil).
 	baseBG := ctx.Screen.GetBackground()
-	if baseBG == nil {
+	if baseBG == (lipgloss.NoColor{}) {
 		baseBG = ctx.Dialog.GetBackground()
 	}
 	base := lipgloss.NewStyle().
