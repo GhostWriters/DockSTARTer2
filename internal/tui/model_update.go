@@ -4,6 +4,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
@@ -30,12 +31,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// since the reply can arrive before the first WindowSizeMsg; doesn't
 	// affect anything currently on screen, so no re-render is needed.
 	if da1, ok := msg.(input.PrimaryDeviceAttributesEvent); ok {
-		for _, p := range da1 {
-			if p == 4 {
-				m.graphicsSupported = true
-				m.panel.SetGraphicsSupported(true)
-				break
-			}
+		if graphics.HasSixelSupport(da1) {
+			m.graphicsSupported = true
+			m.panel.SetGraphicsSupported(true)
 		}
 		return m, nil
 	}

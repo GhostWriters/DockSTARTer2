@@ -104,8 +104,9 @@
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
 
-    // Sixel image support -- matches the server's graphics.CanDisplayGraphics
-    // detection path for local terminals; this is the browser-side half.
+    // Sixel/Kitty image support -- the server trusts "web" sessions to have
+    // this unconditionally (see graphics.QuerySixelSupport's doc comment),
+    // so this addon is what actually has to be present for that to be true.
     term.loadAddon(new ImageAddon.ImageAddon());
 
     term.open(document.getElementById('terminal'));

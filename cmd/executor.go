@@ -163,7 +163,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				// Bubble Tea Program running yet), so it can safely run a
 				// real capability query instead of falling back to a
 				// connType guess.
-				canDisplayGraphics := graphics.QuerySixelSupport(int(os.Stdin.Fd()), os.Stdin, os.Stdout)
+				canDisplayGraphics := graphics.QuerySixelSupport(int(os.Stdin.Fd()), os.Stdin, os.Stdout, graphics.DefaultQueryTimeout)
 				return commands.HandleMan(subCtx, &group, canDisplayGraphics)
 			case "-i", "--install":
 				ranCommand = true
