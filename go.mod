@@ -1,6 +1,6 @@
 module DockSTARTer2
 
-go 1.26.6
+go 1.27.0
 
 require (
 	charm.land/bubbles/v2 v2.1.1
@@ -9,7 +9,7 @@ require (
 	charm.land/log/v2 v2.0.0
 	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.3
-	github.com/GhostWriters/semstyle v0.2.16
+	github.com/GhostWriters/semstyle v0.2.17
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
