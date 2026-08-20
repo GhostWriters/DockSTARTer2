@@ -49,7 +49,7 @@ func CreateAll(ctx context.Context, force bool, conf config.AppConfig) error {
 	if len(added) == 0 {
 		logger.Notice(ctx, "File '"+console.FormatFilePath(envFile)+"' does not contain any added apps.")
 	} else {
-		logger.Notice(ctx, "Creating environment variables for added apps. Please be patient, this can take a while.")
+		logger.Notice(ctx, "Creating environment variables for added apps.")
 
 		for _, appNameUpper := range added {
 			if err := CreateApp(ctx, appNameUpper, force, conf); err != nil {

@@ -42,7 +42,7 @@ func MergeYML(ctx context.Context, force bool) error {
 		return nil
 	}
 
-	logger.Notice(ctx, "Adding enabled app templates to merge '"+console.FormatFilePath(composeFile)+"'. Please be patient, this can take a while.")
+	logger.Notice(ctx, "Adding enabled app templates to merge '"+console.FormatFilePath(composeFile)+"'.")
 
 	envFile := filepath.Join(conf.ComposeDir, ".env")
 	enabledApps, err := appenv.ListEnabledApps(conf)
