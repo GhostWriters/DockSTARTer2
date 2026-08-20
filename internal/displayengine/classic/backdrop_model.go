@@ -143,11 +143,11 @@ func (m *BackdropModel) renderHeader() string {
 	focused := m.Header.GetFocus() != HeaderFocusNone
 
 	borderFG := styles.StatusBarBorder.GetForeground()
-	if borderFG == nil {
+	if borderFG == (lipgloss.NoColor{}) {
 		borderFG = styles.StatusBar.GetForeground()
 	}
 	borderBG := styles.StatusBarBorder.GetBackground()
-	if borderBG == nil {
+	if borderBG == (lipgloss.NoColor{}) {
 		borderBG = styles.StatusBar.GetBackground()
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderFG).Background(borderBG)
