@@ -267,6 +267,11 @@ type deleteVarMsg struct {
 	VarName string
 }
 
+// cutSelectionMsg is dispatched by the context menu's "Cut Selection" item
+// (clipboard write already happened synchronously in the menu action) to
+// delete the active editor's current text selection.
+type cutSelectionMsg struct{}
+
 // restoreVarMsg is dispatched by the context menu or keyboard shortcut to undelete a pending-delete line.
 type restoreVarMsg struct {
 	VarName string

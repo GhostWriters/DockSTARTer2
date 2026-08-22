@@ -470,16 +470,20 @@ func (m *Model) SetVariableValue(varName, newValue string) bool {
 
 // GetSelectedText returns the currently selected text, or "" if no selection is active.
 func (m *Model) GetSelectedText() string {
-	if !m.selActive || m.selRow < 0 || m.selRow >= len(m.value) {
-		return ""
+	return m.SelectedText()
+}
+
+// DeleteSelection deletes the active text selection (see deleteSelectionDS2
+// for the read-only-line/lineMeta-sync policy), pushing its own undo
+// snapshot. No-op if there's no selection -- callers that already have the
+// text (e.g. the context menu's Cut action, which writes the clipboard
+// itself) call this purely for the deletion side.
+func (m *Model) DeleteSelection() {
+	if !m.HasSelection() {
+		return
 	}
-	line := m.value[m.selRow]
-	s := clamp(m.selStartCol, 0, len(line))
-	e := clamp(m.selEndCol, 0, len(line))
-	if s >= e {
-		return ""
-	}
-	return string(line[s:e])
+	m.pushUndoSnapshot()
+	m.deleteSelectionDS2()
 }
 
 // GetVariableValue returns everything after '=' for varName (raw, including any surrounding quotes), or "" if not found.
@@ -619,8 +623,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 	msg.Y -= styles.Base.GetMarginTop() + styles.Base.GetPaddingTop() + styles.Base.GetBorderTopSize()
 
 	// Every left-click clears any prior text selection.
-	m.selActive = false
-	m.isSelecting = false
+	m.ClearSelection()
 
 	// Gutter width (prompts + line numbers)
 	gutterWidth := lipgloss.Width(m.promptView(0, -1)) + lipgloss.Width(m.lineNumberView(0, false, -1))
@@ -775,12 +778,8 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 				// Double-click: select the word at cursor ('=' is a boundary).
 				s, e := wordBoundsAt(lineRunes, m.col)
 				if s < e {
-					m.selRow = m.row
-					m.selStartCol = s
-					m.selEndCol = e
-					m.selAnchorCol = s
-					m.selActive = true
-					m.isSelecting = false // selection complete
+					m.selectFrom(Position{Row: m.row, Col: s}, Position{Row: m.row, Col: e})
+					m.selecting = false // selection complete
 				}
 			case 3:
 				// Triple-click on value side: select entire value (after '=').
@@ -793,30 +792,19 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) {
 					}
 				}
 				if eqIdx >= 0 && m.col > eqIdx {
-					m.selRow = m.row
-					m.selStartCol = eqIdx + 1
-					m.selEndCol = len(lineRunes)
-					m.selAnchorCol = eqIdx + 1
-					m.selActive = m.selStartCol < m.selEndCol
-					m.isSelecting = false
+					m.selectFrom(Position{Row: m.row, Col: eqIdx + 1}, Position{Row: m.row, Col: len(lineRunes)})
+					m.selecting = false
 				}
 				// On key side: selection stays as-is from double-click.
 			default: // 1 or 4+
 				if m.clickCount >= 4 {
 					// Four clicks: select entire line.
-					m.selRow = m.row
-					m.selStartCol = 0
-					m.selEndCol = len(lineRunes)
-					m.selAnchorCol = 0
-					m.selActive = m.selStartCol < m.selEndCol
-					m.isSelecting = false
+					m.selectFrom(Position{Row: m.row, Col: 0}, Position{Row: m.row, Col: len(lineRunes)})
+					m.selecting = false
 				} else {
 					// Single click: just set anchor for potential drag.
-					m.isSelecting = true
-					m.selRow = m.row
-					m.selAnchorCol = m.col
-					m.selStartCol = m.col
-					m.selEndCol = m.col
+					m.selecting = true
+					m.selectFrom(Position{Row: m.row, Col: m.col}, Position{Row: m.row, Col: m.col})
 				}
 			}
 
@@ -881,37 +869,11 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 		return
 	}
 
-	if m.isSelecting {
-		gutterWidth := lipgloss.Width(m.promptView(0, -1)) + lipgloss.Width(m.lineNumberView(0, false, -1))
-		targetViewLine := msg.Y + m.viewport.YOffset()
-		targetColX := msg.X - gutterWidth
-		currViewLine := 0
-		for l, lineRunes := range m.value {
-			wrappedLines := m.memoizedWrap(lineRunes, m.width)
-			numWrapped := len(wrappedLines)
-			if targetViewLine >= currViewLine && targetViewLine < currViewLine+numWrapped {
-				if l == m.selRow { // single-row selection only
-					wrappedLineIdx := targetViewLine - currViewLine
-					charIdx := 0
-					for i := 0; i < wrappedLineIdx; i++ {
-						charIdx += len(wrappedLines[i])
-					}
-					curCol := charIdx + clamp(targetColX, 0, len(wrappedLines[wrappedLineIdx]))
-					if curCol > len(lineRunes) {
-						curCol = len(lineRunes)
-					}
-					start, end := m.selAnchorCol, curCol
-					if start > end {
-						start, end = end, start
-					}
-					m.selStartCol = start
-					m.selEndCol = end
-					m.selActive = start < end
-				}
-				return
-			}
-			currViewLine += numWrapped
-		}
+	if m.selecting {
+		// PositionAt (see selection.go) does the same wrap-aware row/col
+		// resolution this used to hand-roll here, but isn't limited to the
+		// anchor's own row -- a drag can now extend across multiple lines.
+		m.ExtendSelection(msg.X, msg.Y)
 		return
 	}
 
@@ -957,13 +919,13 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) {
 func (m *Model) handleMouseRelease(_ tea.MouseReleaseMsg) {
 	m.isDragging = false
 	m.isScrollbarDragging = false
-	m.isSelecting = false
-	// selActive persists — selection remains visible until the next left-click.
+	m.EndSelection()
+	// hasSelection persists — selection remains visible until the next left-click.
 }
 
 // IsDragging returns true if the user is currently dragging a line, scrollbar, or text selection.
 func (m Model) IsDragging() bool {
-	return m.isDragging || m.isScrollbarDragging || m.isSelecting
+	return m.isDragging || m.isScrollbarDragging || m.selecting
 }
 
 // IsScrollbarDragging reports whether the scrollbar thumb is currently being dragged.
@@ -1116,11 +1078,25 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 	duplicateStyle := styles.DuplicateText.Inherit(baseStyle)
 	builtinKeyStyle := styles.BuiltinText.Inherit(baseStyle).Inline(true)
 
+	// Selection bounds for this logical line, computed once rather than
+	// per-rune. selRowFrom/selRowTo are only meaningful when selOnLine.
+	selStart, selEnd, selOK := m.Selection()
+	selOnLine := selOK && l >= selStart.Row && l <= selEnd.Row
+	selRowFrom, selRowTo := 0, len(m.value[l])
+	if selOnLine {
+		if l == selStart.Row {
+			selRowFrom = selStart.Col
+		}
+		if l == selEnd.Row {
+			selRowTo = selEnd.Col
+		}
+	}
+
 	for i, r := range runes {
 		fullIdx := startIdx + i
 
 		// Selection highlight takes priority over other styles.
-		if m.selActive && l == m.selRow && fullIdx >= m.selStartCol && fullIdx < m.selEndCol {
+		if selOnLine && fullIdx >= selRowFrom && fullIdx < selRowTo {
 			b.WriteString(m.activeStyle().SelectionText.Inherit(baseStyle).Render(string(r)))
 			continue
 		}
@@ -1425,6 +1401,32 @@ func (m *Model) reclassifyCurrentLine() {
 	}
 }
 
+// syncLineMetaAfterMultilinePaste keeps lineMeta aligned with m.value after
+// insertRunes' upstream multi-line-splitting logic grows the value grid --
+// see its call site's comment for why this is needed. Inserts numExtraLines
+// fresh entries right after startRow (matching where insertRunes put the
+// new rows), then classifies every row the paste touched -- from the
+// original cursor row through the last new one -- the same way typing a
+// line does (reclassifyCurrentLine), so pasted KEY=VALUE lines are
+// recognized as variables (duplicate/validity detection, etc.) instead of
+// silently reading whatever metadata used to belong to a different row.
+func (m *Model) syncLineMetaAfterMultilinePaste(startRow, numExtraLines int) {
+	if startRow+1 <= len(m.lineMeta) {
+		fresh := make([]Line, numExtraLines)
+		for i := range fresh {
+			fresh[i] = Line{IsNewLine: true}
+		}
+		m.lineMeta = slices.Insert(m.lineMeta, startRow+1, fresh...)
+	}
+
+	savedRow := m.row
+	for row := startRow; row <= startRow+numExtraLines && row < len(m.value); row++ {
+		m.row = row
+		m.reclassifyCurrentLine()
+	}
+	m.row = savedRow
+}
+
 // wordBoundsAt returns the start (inclusive) and end (exclusive) column indices
 // of the word at col within line. '=' is treated as a word separator.
 func wordBoundsAt(line []rune, col int) (start, end int) {
@@ -1495,6 +1497,89 @@ func (m *Model) mergeLineAbove(row int) {
 	// And, remove the last line
 	if len(m.value) > 0 {
 		m.value = m.value[:len(m.value)-1]
+	}
+}
+
+// deleteSelectionDS2 removes the active selection and clears it. Callers are
+// responsible for their own pushUndoSnapshot() beforehand -- this is a
+// building block for several key handlers (Cut, Delete/Backspace-over-
+// selection, typing-replace), not itself the single undo boundary for all
+// of them. No-op if there's no selection.
+//
+// A single-row selection is a normal splice, like deleting any other
+// range on one line. A multi-row selection (already snapped to whole-line
+// boundaries by selectFrom/ExtendSelection) is handled per-row instead:
+// read-only lines in range are left in place, everything else is removed
+// -- filtering m.value and m.lineMeta together in the same pass is what
+// keeps them aligned, rather than upstream's plain splice which only
+// touches m.value and would leave every row after the deletion point
+// reading the wrong metadata. If every line in range is read-only, this
+// is a no-op (selection still clears).
+func (m *Model) deleteSelectionDS2() {
+	start, end, ok := m.Selection()
+	if !ok {
+		return
+	}
+	m.diffCache = make(map[int][]bool)
+
+	if start.Row == end.Row {
+		if start.Row < len(m.lineMeta) && m.lineMeta[start.Row].ReadOnly {
+			m.ClearSelection()
+			return
+		}
+		line := m.value[start.Row]
+		s := clamp(start.Col, 0, len(line))
+		e := clamp(end.Col, 0, len(line))
+		m.value[start.Row] = append(line[:s:s], line[e:]...)
+		m.row = start.Row
+		m.SetCursorColumn(s)
+		m.reclassifyCurrentLine()
+		m.ClearSelection()
+		return
+	}
+
+	newValue := make([][]rune, 0, len(m.value))
+	newMeta := make([]Line, 0, len(m.lineMeta))
+	newValue = append(newValue, m.value[:start.Row]...)
+	newMeta = append(newMeta, m.lineMeta[:start.Row]...)
+	for row := start.Row; row <= end.Row; row++ {
+		if row < len(m.lineMeta) && m.lineMeta[row].ReadOnly {
+			newValue = append(newValue, m.value[row])
+			newMeta = append(newMeta, m.lineMeta[row])
+		}
+	}
+	newValue = append(newValue, m.value[end.Row+1:]...)
+	newMeta = append(newMeta, m.lineMeta[end.Row+1:]...)
+	m.value = newValue
+	m.lineMeta = newMeta
+
+	m.row = clamp(start.Row, 0, max(0, len(m.value)-1))
+	m.SetCursorColumn(0)
+	m.InvalidateCache()
+	m.ClearSelection()
+}
+
+// replaceSelectionForInsert is deleteSelectionDS2's companion for typing and
+// paste: if a selection is active, removes it (read-only lines skipped, as
+// usual) and leaves the cursor ready to receive the incoming text. For a
+// single-line selection that's just the same splice deleteSelectionDS2
+// already does -- the caller's normal insert lands in the gap. For a
+// multi-line selection, splicing the incoming text into whatever survives
+// at the collapse point (e.g. a read-only line that was skipped) would be
+// the same kind of fragment-fusion cross-line delete already avoids, so a
+// fresh blank line is inserted at the collapse point instead, via the same
+// insertVariableAt used for Enter-adds-a-line -- the caller's insert then
+// lands in that new, empty, fully-editable line. No-op if there's no
+// selection.
+func (m *Model) replaceSelectionForInsert() {
+	start, end, ok := m.Selection()
+	if !ok {
+		return
+	}
+	multiLine := start.Row != end.Row
+	m.deleteSelectionDS2()
+	if multiLine {
+		m.insertVariableAt(m.row, "", "")
 	}
 }
 

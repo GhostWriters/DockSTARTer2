@@ -24,6 +24,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/input"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -76,11 +77,20 @@ type KeyMap struct {
 	// Copy selection or value to clipboard
 	Copy key.Binding
 
+	// Cut copies the selection (see Copy) then deletes it (see
+	// deleteSelectionDS2 -- read-only lines within the selection are kept).
+	Cut key.Binding
+
 	// Keyboard text selection (shift+arrow)
-	SelectLeft  key.Binding
-	SelectRight key.Binding
-	SelectHome  key.Binding
-	SelectEnd   key.Binding
+	SelectLeft         key.Binding
+	SelectRight        key.Binding
+	SelectHome         key.Binding
+	SelectEnd          key.Binding
+	SelectWordForward  key.Binding
+	SelectWordBackward key.Binding
+	SelectLineUp       key.Binding
+	SelectLineDown     key.Binding
+	SelectAll          key.Binding
 
 	// ToggleInsert switches between insert and overwrite mode.
 	ToggleInsert key.Binding
@@ -115,11 +125,17 @@ func DefaultKeyMap() KeyMap {
 		Undo:         key.NewBinding(key.WithKeys("ctrl+z", "alt+z", "ctrl+alt+z"), key.WithHelp("alt+z", "undo")),
 		Redo:         key.NewBinding(key.WithKeys("ctrl+y", "alt+y", "ctrl+alt+y"), key.WithHelp("alt+y", "redo")),
 		Copy:         key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
-		SelectLeft:   key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
-		SelectRight:  key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
-		SelectHome:   key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
-		SelectEnd:    key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
-		ToggleInsert: key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
+		Cut:          key.NewBinding(key.WithKeys("ctrl+x", "alt+x", "ctrl+alt+x"), key.WithHelp("alt+x", "cut")),
+		SelectLeft:         key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
+		SelectRight:        key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
+		SelectHome:         key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
+		SelectEnd:          key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "select to end")),
+		SelectWordForward:  key.NewBinding(key.WithKeys("ctrl+shift+right", "alt+shift+right", "alt+shift+f"), key.WithHelp("alt+shift+right", "select word forward")),
+		SelectWordBackward: key.NewBinding(key.WithKeys("ctrl+shift+left", "alt+shift+left", "alt+shift+b"), key.WithHelp("alt+shift+left", "select word backward")),
+		SelectLineUp:       key.NewBinding(key.WithKeys("shift+up"), key.WithHelp("shift+up", "select line up")),
+		SelectLineDown:     key.NewBinding(key.WithKeys("shift+down"), key.WithHelp("shift+down", "select line down")),
+		SelectAll:          key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "select all")),
+		ToggleInsert:       key.NewBinding(key.WithKeys("insert"), key.WithHelp("insert", "toggle insert/overwrite")),
 	}
 }
 
@@ -447,13 +463,13 @@ type Model struct {
 	// value (not just ''), that value is automatically inserted after '='.
 	DefaultValueFunc func(varName string) string
 
-	// Text selection state (single-row, left-click drag)
-	isSelecting  bool // mouse button held, tracking drag selection
-	selActive    bool // a selection region is active
-	selRow       int  // logical row of selection
-	selAnchorCol int  // col where mouse-down occurred
-	selStartCol  int  // inclusive start col (always <= selEndCol)
-	selEndCol    int  // exclusive end col
+	// Text selection state (multi-row; see selection.go). selecting tracks
+	// an in-progress mouse drag; selAnchor/selHead/hasSelection are the
+	// selection itself.
+	selecting    bool
+	selAnchor    Position
+	selHead      Position
+	hasSelection bool
 
 	// Multi-click tracking (double/triple/quad click selection)
 	lastClickTime time.Time
@@ -809,6 +825,7 @@ func (m *Model) insertRunes(runes []rune, literal bool) {
 	copy(tail, m.value[m.row][m.col:])
 
 	// Paste the first line at the current cursor position.
+	pasteStartRow := m.row
 	m.value[m.row] = append(m.value[m.row][:m.col], lines[0]...)
 	m.col += len(lines[0])
 
@@ -834,6 +851,15 @@ func (m *Model) insertRunes(runes []rune, literal bool) {
 			m.value[m.row] = l
 			m.col = len(l)
 		}
+
+		// This splitting logic is upstream's own (no lineMeta concept
+		// there) -- DS2's lineMeta array is index-aligned with m.value by
+		// row and must grow in lockstep, or every row after the paste
+		// point reads another line's metadata (breaks duplicate/variable/
+		// read-only detection for the rest of the buffer). Insert a fresh
+		// entry per new row, then classify each one from its actual pasted
+		// content the same way typing a line does.
+		m.syncLineMetaAfterMultilinePaste(pasteStartRow, numExtraLines)
 	}
 
 	// Finally add the tail at the end of the last line inserted.
@@ -1225,7 +1251,7 @@ func (m *Model) characterLeft(insideLine bool) {
 // wordLeft moves the cursor one word to the left. Returns whether or not the
 // cursor blink should be reset. If input is masked, move input to the start
 // so as not to reveal word breaks in the masked input.
-func (m *Model) wordLeft() { //nolint:unused
+func (m *Model) wordLeft() {
 	for {
 		m.characterLeft(true /* insideLine */)
 		if m.col < len(m.value[m.row]) && !unicode.IsSpace(m.value[m.row][m.col]) {
@@ -1244,11 +1270,11 @@ func (m *Model) wordLeft() { //nolint:unused
 // wordRight moves the cursor one word to the right. Returns whether or not the
 // cursor blink should be reset. If the input is masked, move input to the end
 // so as not to reveal word breaks in the masked input.
-func (m *Model) wordRight() { //nolint:unused
+func (m *Model) wordRight() {
 	m.doWordRight(func(int, int) { /* nothing */ })
 }
 
-func (m *Model) doWordRight(fn func(charIdx int, pos int)) { //nolint:unused
+func (m *Model) doWordRight(fn func(charIdx int, pos int)) {
 	// Skip spaces forward.
 	for m.col >= len(m.value[m.row]) || unicode.IsSpace(m.value[m.row][m.col]) {
 		if m.row == len(m.value)-1 && m.col == len(m.value[m.row]) {
@@ -1517,6 +1543,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			break
 		}
 		m.pushUndoSnapshot()
+		m.replaceSelectionForInsert()
 		m.insertRunes([]rune(msg.Content), true)
 		m.reclassifyCurrentLine()
 	case tea.KeyPressMsg:
@@ -1526,90 +1553,73 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.KeyMap.Redo):
 			m.Redo()
 		case key.Matches(msg, m.KeyMap.Copy):
-			if m.selActive {
-				_ = clipboard.WriteAll(m.GetSelectedText())
+			if m.HasSelection() {
+				cmds = append(cmds, copyToClipboard(m.SelectedText()))
 			} else if m.row >= 0 && m.row < len(m.value) {
 				lineStr := string(m.value[m.row])
 				if eqIdx := strings.Index(lineStr, "="); eqIdx >= 0 {
-					_ = clipboard.WriteAll(lineStr[eqIdx+1:])
+					cmds = append(cmds, copyToClipboard(lineStr[eqIdx+1:]))
 				} else {
-					_ = clipboard.WriteAll(lineStr)
+					cmds = append(cmds, copyToClipboard(lineStr))
 				}
+			}
+		case key.Matches(msg, m.KeyMap.Cut):
+			if m.HasSelection() {
+				cmds = append(cmds, copyToClipboard(m.SelectedText()))
+				m.DeleteSelection()
 			}
 		case key.Matches(msg, m.KeyMap.SelectRight):
-			if !m.selActive || m.selRow != m.row {
-				m.selRow = m.row
-				m.selAnchorCol = m.col
-			}
-			if m.row == m.selRow && m.col < len(m.value[m.row]) {
+			m.startKeyboardSelection()
+			if m.col < len(m.value[m.row]) {
 				m.col++
 			}
-			if m.row == m.selRow {
-				start, end := m.selAnchorCol, m.col
-				if start > end {
-					start, end = end, start
-				}
-				m.selStartCol = start
-				m.selEndCol = end
-				m.selActive = start < end
-			}
+			m.updateKeyboardSelection()
 		case key.Matches(msg, m.KeyMap.SelectLeft):
-			if !m.selActive || m.selRow != m.row {
-				m.selRow = m.row
-				m.selAnchorCol = m.col
-			}
-			if m.row == m.selRow && m.col > 0 {
+			m.startKeyboardSelection()
+			if m.col > 0 {
 				m.col--
 			}
-			if m.row == m.selRow {
-				start, end := m.selAnchorCol, m.col
-				if start > end {
-					start, end = end, start
-				}
-				m.selStartCol = start
-				m.selEndCol = end
-				m.selActive = start < end
-			}
+			m.updateKeyboardSelection()
+		case key.Matches(msg, m.KeyMap.SelectWordForward):
+			m.startKeyboardSelection()
+			m.wordRight()
+			m.updateKeyboardSelection()
+		case key.Matches(msg, m.KeyMap.SelectWordBackward):
+			m.startKeyboardSelection()
+			m.wordLeft()
+			m.updateKeyboardSelection()
+		case key.Matches(msg, m.KeyMap.SelectLineUp):
+			m.startKeyboardSelection()
+			m.CursorUp()
+			m.updateKeyboardSelection()
+		case key.Matches(msg, m.KeyMap.SelectLineDown):
+			m.startKeyboardSelection()
+			m.CursorDown()
+			m.updateKeyboardSelection()
 		case key.Matches(msg, m.KeyMap.SelectEnd):
-			if !m.selActive || m.selRow != m.row {
-				m.selRow = m.row
-				m.selAnchorCol = m.col
-			}
-			if m.row == m.selRow {
-				m.col = len(m.value[m.row])
-				start, end := m.selAnchorCol, m.col
-				if start > end {
-					start, end = end, start
-				}
-				m.selStartCol = start
-				m.selEndCol = end
-				m.selActive = start < end
-			}
+			m.startKeyboardSelection()
+			m.col = len(m.value[m.row])
+			m.updateKeyboardSelection()
 		case key.Matches(msg, m.KeyMap.SelectHome):
-			if !m.selActive || m.selRow != m.row {
-				m.selRow = m.row
-				m.selAnchorCol = m.col
+			m.startKeyboardSelection()
+			editStart := 0
+			if m.row < len(m.lineMeta) {
+				editStart = m.lineMeta[m.row].EditableStartCol
 			}
-			if m.row == m.selRow {
-				editStart := 0
-				if m.row < len(m.lineMeta) {
-					editStart = m.lineMeta[m.row].EditableStartCol
-				}
-				m.col = editStart
-				start, end := m.selAnchorCol, m.col
-				if start > end {
-					start, end = end, start
-				}
-				m.selStartCol = start
-				m.selEndCol = end
-				m.selActive = start < end
-			}
+			m.col = editStart
+			m.updateKeyboardSelection()
+		case key.Matches(msg, m.KeyMap.SelectAll):
+			m.SelectAll()
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			if !m.isEditableAtCursor() {
 				break
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			m.pushUndoSnapshot()
+			if m.HasSelection() {
+				m.deleteSelectionDS2()
+				break
+			}
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
 				break
@@ -1621,6 +1631,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			m.pushUndoSnapshot()
+			if m.HasSelection() {
+				m.deleteSelectionDS2()
+				break
+			}
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
 				break
@@ -1632,6 +1646,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			m.pushUndoSnapshot()
+			if m.HasSelection() {
+				m.deleteSelectionDS2()
+				break
+			}
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
 				break
@@ -1661,7 +1679,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !m.isEditableAtCursor() {
 				break
 			}
-			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
+			if m.HasSelection() {
+				m.pushUndoSnapshot()
+				m.deleteSelectionDS2()
+			} else if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
 				m.pushUndoSnapshot()
 				m.invalidateDiffCache(m.row)
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
@@ -1719,36 +1740,36 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.pushUndoSnapshot()
 			m.insertVariableAt(m.row+1, "", "")
 		case key.Matches(msg, m.KeyMap.LineEnd):
-			m.selActive = false
+			m.ClearSelection()
 			m.CursorEnd()
 		case key.Matches(msg, m.KeyMap.LineStart):
-			m.selActive = false
+			m.ClearSelection()
 			m.CursorStart()
 		case key.Matches(msg, m.KeyMap.CharacterForward):
-			m.selActive = false
+			m.ClearSelection()
 			m.characterRight()
 		case key.Matches(msg, m.KeyMap.LineNext):
-			m.selActive = false
+			m.ClearSelection()
 			m.CursorDown()
 		case key.Matches(msg, m.KeyMap.Paste):
 			return m, Paste
 		case key.Matches(msg, m.KeyMap.CharacterBackward):
-			m.selActive = false
+			m.ClearSelection()
 			m.characterLeft(false /* insideLine */)
 		case key.Matches(msg, m.KeyMap.LinePrevious):
-			m.selActive = false
+			m.ClearSelection()
 			m.CursorUp()
 		case key.Matches(msg, m.KeyMap.InputBegin):
-			m.selActive = false
+			m.ClearSelection()
 			m.MoveToBegin()
 		case key.Matches(msg, m.KeyMap.InputEnd):
-			m.selActive = false
+			m.ClearSelection()
 			m.MoveToEnd()
 		case key.Matches(msg, m.KeyMap.PageUp):
-			m.selActive = false
+			m.ClearSelection()
 			m.PageUp()
 		case key.Matches(msg, m.KeyMap.PageDown):
-			m.selActive = false
+			m.ClearSelection()
 			m.PageDown()
 		case key.Matches(msg, m.KeyMap.ToggleInsert):
 			m.Overwrite = !m.Overwrite
@@ -1759,8 +1780,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			m.pushUndoSnapshot()
-			// In overwrite mode, replace the character at cursor before inserting.
-			if m.Overwrite && msg.Text != "" && m.col < len(m.value[m.row]) {
+			if m.HasSelection() {
+				// Typing over a selection replaces it -- takes priority over
+				// Overwrite mode, which only applies to a bare cursor.
+				m.replaceSelectionForInsert()
+			} else if m.Overwrite && msg.Text != "" && m.col < len(m.value[m.row]) {
+				// In overwrite mode, replace the character at cursor before inserting.
 				m.invalidateDiffCache(m.row)
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 				m.reclassifyCurrentLine()
@@ -1813,10 +1838,26 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			break
 		}
 		m.pushUndoSnapshot()
+		m.replaceSelectionForInsert()
 		m.insertRunes([]rune(msg), true)
 
 	case pasteErrMsg:
+		// The exec-based read (atotto/clipboard, needs local X11/Wayland)
+		// failed -- most commonly because this is an SSH session to a
+		// headless host with no display at all. Fall back to asking the
+		// local terminal itself via OSC52; see copyToClipboard's doc
+		// comment for why this covers that case. The reply comes back
+		// asynchronously as input.ClipboardEvent, handled below.
 		m.Err = msg
+		cmds = append(cmds, tea.Raw(ansi.RequestSystemClipboard))
+
+	case input.ClipboardEvent:
+		if !m.isEditableAtCursor() || msg.Content == "" {
+			break
+		}
+		m.pushUndoSnapshot()
+		m.replaceSelectionForInsert()
+		m.insertRunes([]rune(msg.Content), true)
 
 	case blinkTickMsg:
 		if m.useVirtualCursor && m.focus && m.virtualCursor.Mode() == cursor.CursorBlink {
@@ -2408,6 +2449,20 @@ func (m Model) cursorLineNumber() int {
 	}
 	line += m.LineInfo().RowOffset
 	return line
+}
+
+// copyToClipboard writes text to the clipboard via both the local exec-based
+// mechanism (atotto/clipboard -- works when the session has real X11/Wayland
+// access) and OSC52 (works over SSH regardless of whether the remote host
+// has a display at all, since it asks the local terminal itself to set its
+// own clipboard -- same tea.Raw-through-the-input-loop mechanism as the DA1
+// graphics-capability query in internal/graphics/query.go). A terminal that
+// doesn't understand OSC52 just ignores the sequence, so sending both is
+// harmless -- there's no reliable way to know in advance which one (if
+// either) will actually work.
+func copyToClipboard(text string) tea.Cmd {
+	_ = clipboard.WriteAll(text)
+	return tea.Raw(ansi.SetSystemClipboard(text))
 }
 
 // Paste is a command for pasting from the clipboard into the text input.
