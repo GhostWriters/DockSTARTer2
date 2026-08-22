@@ -390,7 +390,7 @@ func (m *TabbedVarsEditorModel) showContextMenuForClick(x, y int) tea.Cmd {
 				Action: func() tea.Msg {
 					_ = clipboard.WriteAll(ct)
 					if hasSelection {
-						return displayengine.CloseDialogMsg{}
+						return displayengine.CloseDialogMsg{Result: cutSelectionMsg{}}
 					}
 					return displayengine.CloseDialogMsg{Result: deleteVarMsg{VarName: cutVarName}}
 				},

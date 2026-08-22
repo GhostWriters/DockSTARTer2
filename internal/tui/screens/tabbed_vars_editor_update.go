@@ -642,6 +642,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[m.activeTab].editor.DeleteVariableByName(msg.VarName)
 		}
 		return m, m.checkEnabledChangedForKey(msg.VarName)
+	case cutSelectionMsg:
+		if len(m.tabs) > 0 {
+			m.tabs[m.activeTab].editor.DeleteSelection()
+		}
+		return m, nil
 	case restoreVarMsg:
 		if len(m.tabs) > 0 {
 			m.tabs[m.activeTab].editor.UndeleteVariableByName(msg.VarName)
