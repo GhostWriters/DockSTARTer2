@@ -47,20 +47,6 @@ type (
 	pasteErrMsg struct{ error }
 )
 
-// blinkTickMsg drives the virtual cursor's periodic redraw while idle --
-// see blinkAnchor and blinkTicking.
-type blinkTickMsg struct{}
-
-// blinkTickInterval is how often the virtual cursor's blink phase is
-// re-rendered while idle. Deliberately finer than any theme's BlinkSpeed so
-// the on/off transition itself never lags visibly behind blinkAnchor.
-const blinkTickInterval = 100 * time.Millisecond
-
-// blinkTick schedules the next blinkTickMsg.
-func blinkTick() tea.Cmd {
-	return tea.Tick(blinkTickInterval, func(time.Time) tea.Msg { return blinkTickMsg{} })
-}
-
 // KeyMap is the key bindings for different actions within the textarea.
 type KeyMap struct {
 	CharacterBackward       key.Binding
@@ -265,34 +251,12 @@ func (s StyleState) computedCursorLine() lipgloss.Style {
 	return s.CursorLine.Inherit(s.Base).Inline(true)
 }
 
-func (s StyleState) computedLineNumberFocused() lipgloss.Style {
-	return s.LineNumberFocused.
-		Inherit(s.CursorLine).
-		Inherit(s.Base).
-		Inline(true)
-}
-
-func (s StyleState) computedLineNumberModified() lipgloss.Style {
-	return s.LineNumberModified.Inherit(s.Base).Inline(true)
-}
-
-func (s StyleState) computedLineNumberModifiedFocused() lipgloss.Style {
-	return s.LineNumberModifiedFocused.
-		Inherit(s.CursorLine).
-		Inherit(s.Base).
-		Inline(true)
-}
-
 func (s StyleState) computedEndOfBuffer() lipgloss.Style {
 	return s.EndOfBuffer.Inherit(s.Base).Inline(true)
 }
 
 func (s StyleState) computedLineNumber() lipgloss.Style {
 	return s.LineNumber.Inherit(s.Base).Inline(true)
-}
-
-func (s StyleState) computedLineNumberBrackets() lipgloss.Style {
-	return s.LineNumberBrackets.Inherit(s.Base).Inline(true)
 }
 
 func (s StyleState) computedPlaceholder() lipgloss.Style {
@@ -908,13 +872,6 @@ func (m *Model) LineCount() int {
 	return len(m.value)
 }
 
-// TotalDisplayLines returns the total rendered rows including soft wraps --
-// the same figure the scrollbar is sized against. Compare this to Height(),
-// not LineCount, when deciding whether to show a scroll-percent indicator.
-func (m Model) TotalDisplayLines() int {
-	return m.totalDisplayLines()
-}
-
 // Line returns the 0-indexed row position of the cursor.
 func (m Model) Line() int {
 	return m.row
@@ -1069,49 +1026,6 @@ func (m *Model) Reset() {
 	m.viewport.GotoTop()
 	m.SetCursorColumn(0)
 	m.InvalidateCache()
-}
-
-// ResetCurrentVariable restores the DefaultValue if the line is a built-in variable
-func (m *Model) ResetCurrentVariable() bool {
-	if m.row >= len(m.lineMeta) || m.lineMeta[m.row].ReadOnly || m.lineMeta[m.row].DefaultValue == "" {
-		return false
-	}
-	meta := &m.lineMeta[m.row]
-	prefix := string(m.value[m.row][:meta.EditableStartCol])
-	m.value[m.row] = []rune(prefix + meta.DefaultValue)
-	m.repositionView()
-	m.InvalidateCache()
-	return true
-}
-
-// LineMetaAt returns the metadata for any row by absolute index.
-// Unlike CurrentLineMeta, this does not require the cursor to be on that row.
-// Returns (Line{}, false) if row is out of range.
-func (m *Model) LineMetaAt(row int) (Line, bool) {
-	if row >= 0 && row < len(m.lineMeta) {
-		return m.lineMeta[row], true
-	}
-	return Line{}, false
-}
-
-// YOffset returns the viewport's current vertical scroll offset (first visible line index).
-func (m *Model) YOffset() int {
-	return m.viewport.YOffset()
-}
-
-// VisualRowToLogical converts a visual (screen) row index to the corresponding
-// logical line index, accounting for wrapped lines. Returns -1 if out of range.
-func (m *Model) VisualRowToLogical(visualRow int) int {
-	curr := 0
-	for l, lineRunes := range m.value {
-		wrapped := m.memoizedWrap(lineRunes, m.width)
-		n := len(wrapped)
-		if visualRow >= curr && visualRow < curr+n {
-			return l
-		}
-		curr += n
-	}
-	return -1
 }
 
 // Word returns the word at the cursor position.
