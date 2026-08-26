@@ -1253,7 +1253,17 @@ func (m *Model) characterLeft(insideLine bool) {
 // so as not to reveal word breaks in the masked input.
 func (m *Model) wordLeft() {
 	for {
+		oldRow, oldCol := m.row, m.col
 		m.characterLeft(true /* insideLine */)
+		if m.row == oldRow && m.col == oldCol {
+			// characterLeft is a no-op at the buffer start (or inside a
+			// leading-whitespace-only prefix, where the cursor still
+			// reaches (0, 0) mid-loop) -- without this check the loop
+			// below never finds a non-space rune to stop at and spins
+			// forever, freezing the whole Bubble Tea event loop, not just
+			// this editor. See charmbracelet/bubbles#1036.
+			return
+		}
 		if m.col < len(m.value[m.row]) && !unicode.IsSpace(m.value[m.row][m.col]) {
 			break
 		}
