@@ -203,6 +203,20 @@ func TemplateAppVarFileSuffixes(baseApp string) []string {
 	return patterns
 }
 
+// AppNameToVarFilePattern is the inverse of substituting "*" in
+// TemplateAppVarFileSuffixes's patterns: given a full appName that may
+// carry an instance and/or a service suffix (e.g. "IMMICH-DATABASE",
+// "IMMICH__MYINSTANCE___POSTGRES"), it returns the AppInstanceFile-style
+// ".env.app.*..." pattern for that exact file, with only the base app name
+// portion replaced by "*" -- ready to pass straight to AppInstanceFile so
+// it resolves against the matching template file instead of always the
+// plain one.
+func AppNameToVarFilePattern(appName string) string {
+	baseApp := strings.ToLower(AppNameToBaseAppName(appName))
+	lowerAppName := strings.ToLower(appName)
+	return constants.AppEnvFileNamePrefix + strings.Replace(lowerAppName, baseApp, "*", 1)
+}
+
 // TemplateFile returns the resolved path to a specific file within
 // appName's template folder, with "*" in fileSuffix replaced by the base
 // app name -- e.g. TemplateFile("plex", "*.yml") -> ".../plex/plex.yml"

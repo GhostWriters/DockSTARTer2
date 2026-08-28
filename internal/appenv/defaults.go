@@ -83,7 +83,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 		}
 
 	case varTypeAppEnv:
-		defFile, _ := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
+		defFile, _ := AppInstanceFile(ctx, appName, AppNameToVarFilePattern(appName))
 		if defFile != "" {
 			exists, _ := EnvVarExists(ctx, cleanVarName, defFile)
 			if exists {
