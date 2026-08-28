@@ -12,12 +12,38 @@ func TestAppNameToBaseAppName(t *testing.T) {
 		{"RADARR", "RADARR"},
 		{"RADARR__4K", "RADARR"},
 		{"SONARR__ANIME", "SONARR"},
+
+		// Multi-service var-file markers
+		{"IMMICH___POSTGRES", "IMMICH"},
+		{"IMMICH__MYINSTANCE___POSTGRES", "IMMICH"},
+		{"IMMICH-DATABASE", "IMMICH"},
+		{"IMMICH__MYINSTANCE-DATABASE", "IMMICH"}, // base app name only -- instance and shared-file suffix both stripped
 	}
 
 	for _, test := range tests {
 		result := AppNameToBaseAppName(test.input)
 		if result != test.expected {
 			t.Errorf("AppNameToBaseAppName(%q) = %q; want %q", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestAppNameToServiceName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"RADARR", ""},
+		{"RADARR__4K", ""},
+		{"IMMICH___POSTGRES", "POSTGRES"},
+		{"IMMICH__MYINSTANCE___POSTGRES", "POSTGRES"},
+		{"IMMICH-DATABASE", "DATABASE"},
+	}
+
+	for _, test := range tests {
+		result := AppNameToServiceName(test.input)
+		if result != test.expected {
+			t.Errorf("AppNameToServiceName(%q) = %q; want %q", test.input, result, test.expected)
 		}
 	}
 }
@@ -49,6 +75,12 @@ func TestVarNameToAppName(t *testing.T) {
 		{"WATCHTOWER:WATCHTOWER_CLEANUP", "WATCHTOWER"},
 		{"SONARR:PORT_8989", "SONARR"},
 		{"PLEX__4K:PLEX_CLAIM", "PLEX__4K"},
+
+		// Multi-service scheme: APP[__INST]___SERVICE__VAR must return the
+		// full identity including the service segment, not silently drop it.
+		{"IMMICH___POSTGRES__CONTAINER_NAME", "IMMICH___POSTGRES"},
+		{"IMMICH__MYINSTANCE___POSTGRES__CONTAINER_NAME", "IMMICH__MYINSTANCE___POSTGRES"},
+		{"IMMICH__MYINSTANCE__CONTAINER_NAME", "IMMICH__MYINSTANCE"}, // no service: unaffected regression check
 	}
 
 	for _, test := range tests {
@@ -68,6 +100,11 @@ func TestAppNameToInstanceName(t *testing.T) {
 		{"RADARR__4K", "4K"},
 		{"RADARR__4K__EXTRA", "4K__EXTRA"}, // Everything after first __
 		{"SONARR__ANIME", "ANIME"},
+
+		// Multi-service var-file markers must not leak into the instance name
+		{"IMMICH___POSTGRES", ""},
+		{"IMMICH__MYINSTANCE___POSTGRES", "MYINSTANCE"},
+		{"IMMICH-DATABASE", ""},
 	}
 
 	for _, test := range tests {

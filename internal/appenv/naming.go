@@ -44,8 +44,27 @@ type LabelsFile struct {
 	} `yaml:"services"`
 }
 
+// stripServiceSuffix removes a multi-service var-file marker from appName,
+// if present, before any instance splitting: either a "___service" marker
+// (a real per-service file, e.g. "immich___postgres") or a "-suffix" marker
+// (a shared/virtual file, e.g. "immich-database"). Neither marker is ever
+// part of a real base app name (app names are restricted to [A-Za-z0-9_],
+// see IsAppNameValid), so stripping from the first occurrence of either is
+// safe. The two forms are never combined in one name -- see
+// project_multiservice_appvar_naming session notes.
+func stripServiceSuffix(appName string) string {
+	if idx := strings.Index(appName, "___"); idx >= 0 {
+		return appName[:idx]
+	}
+	if idx := strings.Index(appName, "-"); idx >= 0 {
+		return appName[:idx]
+	}
+	return appName
+}
+
 // AppNameToBaseAppName extracts the base application name.
 func AppNameToBaseAppName(appName string) string {
+	appName = stripServiceSuffix(appName)
 	if strings.Contains(appName, "__") {
 		parts := strings.Split(appName, "__")
 		return parts[0]
@@ -55,9 +74,24 @@ func AppNameToBaseAppName(appName string) string {
 
 // AppNameToInstanceName extracts the instance suffix from an app name.
 func AppNameToInstanceName(appName string) string {
+	appName = stripServiceSuffix(appName)
 	if strings.Contains(appName, "__") {
 		parts := strings.SplitN(appName, "__", 2)
 		return parts[1]
+	}
+	return ""
+}
+
+// AppNameToServiceName extracts the service/shared-file suffix from an app
+// name, if present -- either a "___service" marker (a real per-service
+// file) or a "-suffix" marker (a shared/virtual file, e.g. "-database").
+// Returns "" if appName has neither.
+func AppNameToServiceName(appName string) string {
+	if idx := strings.Index(appName, "___"); idx >= 0 {
+		return appName[idx+3:]
+	}
+	if idx := strings.Index(appName, "-"); idx >= 0 {
+		return appName[idx+1:]
 	}
 	return ""
 }
@@ -78,6 +112,23 @@ func VarNameToAppName(varName string) string {
 	// __: The separator
 	// Group 2: The starting character of the variable name (can be _ or alphanumeric)
 	// followed by the rest.
+	// 0. Try to match APP[__INST]___SERVICE__VAR first (most specific --
+	// must be tried before re3, which would otherwise partially match a
+	// service-bearing name and silently drop the service segment: its
+	// instance group excludes "_", so a leading "_" from a triple-underscore
+	// marker gets absorbed into re3's var-name group instead of being
+	// recognized as a service marker).
+	reService := regexp.MustCompile(`^([A-Z][A-Z0-9]*)(?:__([A-Z0-9]+))?___([A-Z0-9]+)__([A-Za-z0-9_].*)`)
+	mService := reService.FindStringSubmatch(varName)
+	if len(mService) > 4 {
+		result := mService[1]
+		if mService[2] != "" {
+			result += "__" + mService[2]
+		}
+		result += "___" + mService[3]
+		return result
+	}
+
 	// 1. Try to match APP__INST__VAR
 	re3 := regexp.MustCompile(`^([A-Z][A-Z0-9]*)__([A-Z0-9]+)__([A-Za-z0-9_].*)`)
 	m3 := re3.FindStringSubmatch(varName)

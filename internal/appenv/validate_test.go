@@ -95,3 +95,73 @@ services:
 		ValidateComposeOverrideStrict(context.Background(), conf)
 	})
 }
+
+// TestIsAppReferenced_ServiceFileOnly is the regression test for the
+// multi-service bug this session found: an app with only a service-scoped
+// or shared/virtual .env.app.* file (no plain .env.app.appname at all)
+// must still be recognized as referenced -- otherwise CleanupOrphanedEnvFiles
+// would delete the file on the very next update.
+func TestIsAppReferenced_ServiceFileOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	conf := config.AppConfig{ComposeDir: tmpDir}
+
+	envFile := filepath.Join(tmpDir, constants.EnvFileName)
+	if err := os.WriteFile(envFile, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("real per-service file (___service)", func(t *testing.T) {
+		serviceFile := filepath.Join(tmpDir, constants.AppEnvFileNamePrefix+"immich___postgres")
+		if err := os.WriteFile(serviceFile, []byte("POSTGRES_DB='immich'\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if !IsAppReferenced(context.Background(), "IMMICH", conf) {
+			t.Error("IsAppReferenced(IMMICH) = false; want true (service-scoped file has content)")
+		}
+	})
+
+	t.Run("shared/virtual file (-suffix)", func(t *testing.T) {
+		tmpDir2 := t.TempDir()
+		conf2 := config.AppConfig{ComposeDir: tmpDir2}
+		if err := os.WriteFile(filepath.Join(tmpDir2, constants.EnvFileName), []byte(""), 0644); err != nil {
+			t.Fatal(err)
+		}
+		sharedFile := filepath.Join(tmpDir2, constants.AppEnvFileNamePrefix+"immich-database")
+		if err := os.WriteFile(sharedFile, []byte("DB_PASSWORD=''\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if !IsAppReferenced(context.Background(), "IMMICH", conf2) {
+			t.Error("IsAppReferenced(IMMICH) = false; want true (shared-file has content)")
+		}
+	})
+
+	t.Run("unrelated app not referenced", func(t *testing.T) {
+		if IsAppReferenced(context.Background(), "SONARR", conf) {
+			t.Error("IsAppReferenced(SONARR) = true; want false (no files belong to it)")
+		}
+	})
+}
+
+// TestIsAppReferenced_OverrideServiceFile checks the override-file check
+// specifically recognizes a service-qualified env_file reference, not just
+// the exact plain filename.
+func TestIsAppReferenced_OverrideServiceFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	conf := config.AppConfig{ComposeDir: tmpDir}
+
+	if err := os.WriteFile(filepath.Join(tmpDir, constants.EnvFileName), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	overrideContent := `services:
+  immich-postgres:
+    env_file:
+      - .env.app.immich___postgres
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, constants.ComposeOverrideFileName), []byte(overrideContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !IsAppReferenced(context.Background(), "IMMICH", conf) {
+		t.Error("IsAppReferenced(IMMICH) = false; want true (override references a service-qualified file)")
+	}
+}
