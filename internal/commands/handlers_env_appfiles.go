@@ -7,6 +7,7 @@ import (
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 )
 
@@ -37,9 +38,11 @@ func HandleEnvAppFiles(ctx context.Context, group *CommandGroup) error {
 	// captured directly by a script, e.g. `for f in $(ds2 --env-appfiles
 	// immich); do ...; done`. The notice above still shows on a real
 	// terminal (stderr and stdout both render there) but doesn't pollute
-	// what a script captures from stdout.
+	// what a script captures from stdout. console.Println (not a bare
+	// fmt.Println) clears/redraws the spinner line around the write, since
+	// bypassing that leaves a stray spinner glyph prepended to the output.
 	for _, name := range names {
-		fmt.Println(name)
+		console.Println(name)
 	}
 	return nil
 }
