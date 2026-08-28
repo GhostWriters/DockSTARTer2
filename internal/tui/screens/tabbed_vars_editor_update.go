@@ -687,13 +687,14 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// IsAppUserDefinedFromLines instead of the disk-based IsAppUserDefined).
 			var capturedDefaultLines []string
 			if capturedApp != "" && !appenv.IsAppUserDefinedFromLines(ctx, capturedApp, capturedEnvLines) {
-				var fileSuffix string
+				var instanceApp, fileSuffix string
 				if tab.spec.IsGlobal {
-					fileSuffix = ".env"
+					instanceApp, fileSuffix = capturedApp, ".env"
 				} else {
-					fileSuffix = ".env.app.*"
+					instanceApp = tab.spec.fileApp()
+					fileSuffix = appenv.AppNameToVarFilePattern(instanceApp)
 				}
-				if defaultFilePath, err := appenv.AppInstanceFile(ctx, capturedApp, fileSuffix); err == nil {
+				if defaultFilePath, err := appenv.AppInstanceFile(ctx, instanceApp, fileSuffix); err == nil {
 					capturedDefaultLines = appenv.ReadDefaultLines(defaultFilePath)
 				}
 			} else if capturedApp == "" {

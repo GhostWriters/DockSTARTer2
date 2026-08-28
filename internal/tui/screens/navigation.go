@@ -2,7 +2,6 @@ package screens
 
 import (
 	"context"
-	"strings"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
@@ -38,10 +37,7 @@ func navigateToConfigApps(connType string) tea.Cmd {
 func navigateToAppConfigEditorWithRefresh(appName string, connType string) tea.Cmd {
 	return func() tea.Msg {
 		tui.CurrentEditorApp = appName
-		specs := []EnvTabSpec{
-			{Title: ".env", App: appName, IsGlobal: true},
-			{Title: ".env.app." + strings.ToLower(appName), App: appName, IsGlobal: false},
-		}
+		specs := buildAppEditorSpecs(appName)
 		return tui.NavigateMsg{Screen: NewTabbedVarsEditorScreen(navigateBackWithRefresh(), "Configure "+appenv.GetNiceName(context.Background(), appName), specs, true, connType)}
 	}
 }

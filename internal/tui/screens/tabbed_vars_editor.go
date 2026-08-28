@@ -3,6 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
@@ -78,6 +79,53 @@ type EnvTabSpec struct {
 	Title    string
 	App      string // Empty string for global vars, app name for app-specific vars
 	IsGlobal bool   // Indicates if this tab edits the global .env file (potentially filtered by App)
+	// FileApp is the appenv-qualified name identifying which physical
+	// .env.app.* file this tab targets -- e.g. "immich-database" or
+	// "immich___postgres" for a multi-service app's per-service or
+	// shared/virtual files. Empty for the plain file and for global tabs,
+	// where App alone already identifies the target.
+	FileApp string
+}
+
+// fileApp returns the qualified name identifying which .env.app.* file this
+// spec targets: FileApp when set, App otherwise (the plain-file case).
+func (s EnvTabSpec) fileApp() string {
+	if s.FileApp != "" {
+		return s.FileApp
+	}
+	return s.App
+}
+
+// buildAppEditorSpecs returns the tab specs for editing appName: the
+// global-vars tab (filtered to appName) plus one tab per .env.app.* file
+// appName currently has on disk -- the plain file, and for a multi-service
+// app, any per-service or shared/virtual files alongside it. Falls back to
+// a single plain-file tab if no files are found on disk yet (e.g. an app
+// whose vars haven't been created).
+func buildAppEditorSpecs(appName string) []EnvTabSpec {
+	specs := []EnvTabSpec{
+		{Title: ".env", App: appName, IsGlobal: true},
+	}
+
+	conf := config.LoadAppConfig()
+	files := appenv.AppVarFileNames(appName, conf)
+	if len(files) == 0 {
+		specs = append(specs, EnvTabSpec{
+			Title: ".env.app." + strings.ToLower(appName),
+			App:   appName,
+		})
+		return specs
+	}
+
+	for _, name := range files {
+		fileApp := strings.TrimPrefix(name, constants.AppEnvFileNamePrefix)
+		specs = append(specs, EnvTabSpec{
+			Title:   name,
+			App:     appName,
+			FileApp: fileApp,
+		})
+	}
+	return specs
 }
 
 type envTab struct {

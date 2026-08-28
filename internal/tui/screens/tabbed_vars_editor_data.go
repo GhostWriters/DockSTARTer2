@@ -51,9 +51,10 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 				defaultFilePath = defaultGlobalEnvPath
 			}
 		} else {
-			currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App+":", cfg)
+			fileApp := tab.spec.fileApp()
+			currentLines, _ = appenv.ListAppVarLines(ctx, fileApp+":", cfg)
 			if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
-				defaultFilePath, _ = appenv.AppInstanceFile(ctx, tab.spec.App, ".env.app.*")
+				defaultFilePath, _ = appenv.AppInstanceFile(ctx, fileApp, appenv.AppNameToVarFilePattern(fileApp))
 			}
 		}
 
@@ -68,7 +69,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		}
 
 		capturedCfg := cfg
-		capturedApp := strings.ToUpper(tab.spec.App)
+		capturedApp := strings.ToUpper(tab.spec.fileApp())
 		var defaultFunc func(string) string
 		if !tab.spec.IsGlobal {
 			// For app-env tabs (.env.app.appname), pass APPNAME:VARNAME so
@@ -102,17 +103,21 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		if tab.spec.IsGlobal {
 			envFilePath = envPath
 		} else {
-			envFilePath = appenv.GetAppEnvFile(tab.spec.App, cfg)
+			envFilePath = appenv.GetAppEnvFile(tab.spec.fileApp(), cfg)
 		}
 
 		addPrefix, validationType, validationApp := "", "", ""
 		if tab.spec.App != "" {
-			addPrefix = tab.spec.App + "__"
-			validationType = tab.spec.App
+			validationTarget := tab.spec.App
+			if !tab.spec.IsGlobal {
+				validationTarget = tab.spec.fileApp()
+			}
+			addPrefix = validationTarget + "__"
+			validationType = validationTarget
 			if !tab.spec.IsGlobal {
 				validationType += ":"
 			}
-			validationApp = tab.spec.App
+			validationApp = validationTarget
 		} else if tab.spec.IsGlobal {
 			validationType = "_GLOBAL_"
 		}
@@ -176,7 +181,7 @@ func (m *TabbedVarsEditorModel) saveEnv() tea.Cmd {
 			if tab.spec.IsGlobal {
 				targetFile = envPath
 			} else {
-				targetFile = appenv.GetAppEnvFile(tab.spec.App, cfg)
+				targetFile = appenv.GetAppEnvFile(tab.spec.fileApp(), cfg)
 			}
 			updates = append(updates, tabUpdate{
 				file:        targetFile,
