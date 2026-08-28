@@ -58,7 +58,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		}
 
 		defaultLines := appenv.ReadDefaultLines(defaultFilePath)
-		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath)
+		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, "")
 
 		content := strings.Join(formattedLines, "\n")
 

@@ -33,7 +33,11 @@ const (
 // When envLines is nil, composeEnvFile is read from disk instead (non-editor callers).
 // For the global .env tab, pass currentLines as envLines.
 // For the .env.app.appname tab, pass the global tab's staged lines as envLines.
-func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string) []string {
+// fileLabel, when non-empty, replaces the heading block's opening blank
+// "###" separator with "### <fileLabel>" -- distinguishes a multi-service
+// app's several .env.app.* files (e.g. ".env.app.immich-database") from
+// each other, since they'd otherwise share an identical heading.
+func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string) []string {
 	appUpper := strings.ToUpper(appName)
 
 	var formattedEnvLines []string
@@ -74,7 +78,12 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 
 		// Parity lines 46-55: Adds ### wrapping including before/after descriptions.
 		// Description is only shown for built-in apps (not user-defined).
-		formattedEnvLines = append(formattedEnvLines, "###")
+		if fileLabel != "" {
+			formattedEnvLines = append(formattedEnvLines, "### "+fileLabel)
+			formattedEnvLines = append(formattedEnvLines, "")
+		} else {
+			formattedEnvLines = append(formattedEnvLines, "###")
+		}
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
 		if appDescription != "" {
@@ -218,7 +227,7 @@ func ReadDefaultLines(defaultEnvFile string) []string {
 
 // FormatLines processes environment variable lines to match DockSTARTer formatting.
 // Matches env_format_lines.sh exactly. Reads files from disk and delegates to FormatLinesCore.
-func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string) ([]string, error) {
+func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string, fileLabel string) ([]string, error) {
 	var currentLines []string
 	if currentEnvFile != "" {
 		var err error
@@ -228,7 +237,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 	}
 	defaultLines := ReadDefaultLines(defaultEnvFile)
-	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile), nil
+	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel), nil
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.
