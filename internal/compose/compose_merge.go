@@ -222,6 +222,13 @@ func MergeYML(ctx context.Context, force bool) error {
 		options.SetProjectName(projectName, override)
 		options.SkipInterpolation = false
 		options.SkipValidation = true
+		// Match `docker compose config`'s own CLI behavior (and DS1's
+		// output, which shells out to that CLI): drop top-level
+		// networks/volumes/secrets/configs/models that no active service
+		// actually references, rather than leaving orphaned declarations
+		// (e.g. a named volume block for a mount a service defines as a
+		// bind mount instead) in the merged docker-compose.yml.
+		options.PruneUnnecessaryResources = true
 	})
 	if err != nil {
 		logger.Error(ctx, "Failed to load compose configurations: %v", err)
