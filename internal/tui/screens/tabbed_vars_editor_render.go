@@ -27,9 +27,10 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 
 	var body string
 	if m.splitMode {
-		panes := make([]string, len(m.tabs))
-		for i := range m.tabs {
-			panes[i] = m.renderPane(i, i == m.activeTab && m.focus == envFocusEditor)
+		openIdx := m.openTabIndices()
+		panes := make([]string, len(openIdx))
+		for slot, i := range openIdx {
+			panes[slot] = m.renderPane(i, i == m.activeTab && m.focus == envFocusEditor)
 		}
 		if m.layoutMode == envLayoutSideBySide {
 			parts := make([]string, 0, len(panes)*2-1)
@@ -226,17 +227,19 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	editorView := editor.View()
 	ctx := displayengine.GetActiveContext()
+	slot, _ := m.paneSlotFor(idx) // renderPane is only ever called with a rendered idx (active tab in Maximized, or one of openTabIndices() when tiled), so this always resolves when it matters below.
 
 	// Maximized mode's single pane carries the layout-control widgets on
 	// its own border, via the same TitleBarState/rightWidget mechanism the
 	// outer dialog's [?]/[x] use (see paneLayoutWidgets). When tiled, those
-	// widgets live on the middle "tab list" box instead (see ViewString) --
-	// showing them again on every individual pane would be redundant
-	// clutter. Computed before tabRow below, since fitting the title needs
-	// to know how much room these reserve too.
+	// widgets live on the middle "tab list" box instead (see ViewString);
+	// each pane instead gets just its own Close, when there's more than
+	// one open pane to close down to.
 	var widgets []displayengine.WidgetDef
 	if !m.splitMode {
 		widgets = m.paneLayoutWidgets()
+	} else if m.openCount() > 1 {
+		widgets = []displayengine.WidgetDef{closeWidget()}
 	}
 	paneTBS := displayengine.TitleBarState{Show: len(widgets) > 0, Widgets: widgets}
 	if focused && m.paneTitleFocused {
@@ -261,7 +264,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 		// budget directly (same math RenderBorderedBoxCtx uses internally
 		// to decide whether it needs to grow), so truncating to it here
 		// guarantees growth never triggers.
-		target := m.paneContentWidth[idx] - 2
+		target := m.paneContentWidth[slot] - 2
 		maxTitle := displayengine.MaxRawTitleWidth(target, true, ctx.SubmenuTitleAlign, widgets, ctx)
 		title := displayengine.TruncateRight(tab.spec.Title, maxTitle)
 		tabRow = displayengine.RenderTitleSegmentCtx(title, focused, focused, true, styleTag, ctx)
@@ -272,8 +275,8 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	innerBox := displayengine.RenderBorderedBoxCtx(
 		tabRow,
 		editorView,
-		m.paneContentWidth[idx]-2,
-		m.paneEditorHeight[idx]+2,
+		m.paneContentWidth[slot]-2,
+		m.paneEditorHeight[slot]+2,
 		focused,
 		false, // No focus indicators here
 		true,  // Rounded corners to match submenu style
@@ -294,7 +297,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {
-		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[idx], modeLabel, scrollLabel, focused, ctx)
+		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[slot], modeLabel, scrollLabel, focused, ctx)
 		innerBox = strings.Join(lines, "\n")
 	}
 
@@ -518,22 +521,28 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		m.fullContentWidth = 1
 	}
 
-	n := len(m.tabs)
-	if len(m.paneContentWidth) != n {
-		m.paneContentWidth = make([]int, n)
-		m.paneEditorHeight = make([]int, n)
+	// Geometry arrays are sized to the *open* tab count, indexed by
+	// position within openTabIndices() ("pane slot"), not raw tab index --
+	// see paneSlotFor. Exactly one open tab falls straight into the
+	// existing !splitMode (Maximized-style) rendering path below with no
+	// extra logic needed, satisfying "one open pane never gets a middle
+	// box" -- wantTiled is already gated on openN, not total tab count.
+	openN := m.openCount()
+	if len(m.paneContentWidth) != openN {
+		m.paneContentWidth = make([]int, openN)
+		m.paneEditorHeight = make([]int, openN)
 	}
-	if len(m.sideBySideShares) != n {
+	if len(m.sideBySideShares) != openN {
 		m.resetSharesToEqual()
 	}
 
-	wantTiled := n >= 2 && m.layoutMode != envLayoutMaximized
+	wantTiled := openN >= 2 && m.layoutMode != envLayoutMaximized
 	m.splitMode = false
 	for i := range m.paneContentWidth {
 		m.paneContentWidth[i] = m.fullContentWidth
 	}
-	m.paneOffsetXs = make([]int, n)
-	m.paneOffsetYs = make([]int, n)
+	m.paneOffsetXs = make([]int, openN)
+	m.paneOffsetYs = make([]int, openN)
 
 	// When tiled, the panes render inside a second, middle border -- the
 	// "tab list" box, titled with the shared tab strip -- nested between
@@ -621,7 +630,10 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	if m.splitMode {
 		m.tiledTabStripHeight = provisionalTabStrip
 	}
-	if m.paneEditorHeight[m.activeTab] < 3 && m.buttonHeight == 3 && !m.splitMode {
+	if len(m.paneEditorHeight) > 0 && m.paneEditorHeight[0] < 3 && m.buttonHeight == 3 && !m.splitMode {
+		// All entries are equal here (not split -- single-pane/Maximized-
+		// style height applied uniformly above), so slot 0 stands in for
+		// whichever tab is actually active.
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
 		overhead := layout.BorderHeight() + largeTitleOverhead + 1 + m.subtitleHeight + layout.BorderHeight()
@@ -642,18 +654,18 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		m.resizingGutter = false
 		m.gutterDrag.StopDrag()
 	}
-	if m.activeGutter > n-2 {
+	if m.activeGutter > openN-2 {
 		m.activeGutter = 0
 	}
 
-	for i := range m.tabs {
+	for slot, i := range m.openTabIndices() {
 		// Editor content width accounts for inner box borders.
-		editorWidth := m.paneContentWidth[i] - layout.BorderWidth()
+		editorWidth := m.paneContentWidth[slot] - layout.BorderWidth()
 		if editorWidth < 10 {
 			editorWidth = 10
 		}
 		m.tabs[i].editor.SetWidth(editorWidth)
-		m.tabs[i].editor.SetHeight(m.paneEditorHeight[i])
+		m.tabs[i].editor.SetHeight(m.paneEditorHeight[slot])
 	}
 }
 

@@ -44,12 +44,20 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			// Left click (or other) switches tabs
+			// Left click (or other) switches tabs -- opening one first if
+			// it's currently closed (clicking a closed tab in the strip is
+			// how a mouse user brings it back into the tiled view; unlike
+			// Ctrl+Left/Right, which can select a closed tab without
+			// opening it, a click always both opens and focuses).
 			tabIdxStr := strings.TrimPrefix(msg.ID, "tabbed_vars.tab-")
 			if idx, err := strconv.Atoi(tabIdxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
 				m.focus = envFocusEditor
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.Blur()
+				}
+				if !m.tabs[idx].open {
+					m.tabs[idx].open = true
+					m.resetSharesToEqual()
 				}
 				m.activeTab = idx
 				if len(m.tabs) > 0 {
@@ -71,10 +79,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			gIdxStr := strings.TrimPrefix(msg.ID, "tabbed_vars.gutter-")
 			gIdx, err := strconv.Atoi(gIdxStr)
-			if err != nil || gIdx < 0 || gIdx+1 >= len(m.tabs) {
+			shares := m.activeSplitShares()
+			if err != nil || gIdx < 0 || gIdx+1 >= len(shares) {
 				return m, nil
 			}
-			shares := m.activeSplitShares()
 			if m.layoutMode == envLayoutSideBySide {
 				m.gutterDrag.StartDrag(gIdx, msg.X, shares[gIdx], shares[gIdx+1])
 			} else {
@@ -205,10 +213,11 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		} else if strings.HasPrefix(msg.ID, "tabbed_vars.pane") && strings.Contains(msg.ID, ".title_widget_") {
-			// Per-pane layout widget: "tabbed_vars.paneN.title_widget_*" --
-			// whichever pane the click landed on becomes the active/focused
-			// tab (matches the pane-background click-to-focus behavior),
-			// regardless of which widget was clicked.
+			// Per-pane widget: "tabbed_vars.paneN.title_widget_*" -- Close
+			// (tiled) hides that pane without touching which tab is active
+			// (unless it was the one closed); Maximize/Side-by-side/Stacked
+			// (Maximized mode's single pane) make the clicked pane active
+			// first, matching the pane-background click-to-focus behavior.
 			if msg.Button == tea.MouseLeft {
 				rest := strings.TrimPrefix(msg.ID, "tabbed_vars.pane")
 				dot := strings.IndexByte(rest, '.')
@@ -216,6 +225,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					idxStr, widgetID := rest[:dot], rest[dot+1:]
 					if idx, err := strconv.Atoi(idxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
 						pressCmd := m.PressWidgetID(widgetID, msg.ID)
+						if widgetID == displayengine.IDTitleWidgetClose {
+							return m, tea.Batch(pressCmd, m.closePane(idx))
+						}
 						m.focus = envFocusEditor
 						m.tabs[m.activeTab].editor.Blur()
 						m.activeTab = idx
@@ -252,8 +264,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// where it was.
 					layout := displayengine.GetLayout()
 					relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-					editorW := m.paneContentWidth[idx] - layout.BorderWidth()
-					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[idx] || relX >= editorW {
+					slot, _ := m.paneSlotFor(idx)
+					editorW := m.paneContentWidth[slot] - layout.BorderWidth()
+					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[slot] || relX >= editorW {
 						return m, nil
 					}
 					var cmd tea.Cmd
@@ -283,8 +296,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			layout := displayengine.GetLayout()
 			relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-			editorW := m.paneContentWidth[idx] - layout.BorderWidth()
-			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[idx] && relX < editorW {
+			slot, _ := m.paneSlotFor(idx)
+			editorW := m.paneContentWidth[slot] - layout.BorderWidth()
+			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[slot] && relX < editorW {
 				var cmd tea.Cmd
 				m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 					X:      relX,
@@ -471,6 +485,22 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
+		case key.Matches(msg, displayengine.Keys.EnvClosePane): // Ctrl+Q
+			if m.focus == envFocusEditor && m.splitMode {
+				return m, m.closePane(m.activeTab)
+			}
+			return m, nil
+		case msg.String() == "space" && m.focus == envFocusEditor && m.splitMode && !m.tabs[m.activeTab].open:
+			// Ctrl+Left/Right can select a closed tab (m.activeTab) without
+			// opening it -- Space opens whichever one is currently
+			// selected. Only intercepted while the active tab actually is
+			// closed, so normal space-key text input into an open tab's
+			// editor is completely unaffected.
+			m.tabs[m.activeTab].open = true
+			m.resetSharesToEqual()
+			m.tabs[m.activeTab].editor.Focus()
+			m.SetSize(m.width, m.height)
+			return m, nil
 		case key.Matches(msg, displayengine.Keys.EnvCycleLayout): // Cycle Maximized -> Side-by-side -> Stacked -> Maximized
 			if len(m.tabs) >= 2 {
 				switch m.layoutMode {

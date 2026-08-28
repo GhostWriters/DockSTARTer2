@@ -49,7 +49,8 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		if m.splitMode {
 			innerContentW = m.fullContentWidth - layout.BorderWidth()
 		} else {
-			innerContentW = m.paneContentWidth[m.activeTab] - layout.BorderWidth()
+			activeSlot, _ := m.paneSlotFor(m.activeTab) // uniform array when !splitMode -- see SetSize
+			innerContentW = m.paneContentWidth[activeSlot] - layout.BorderWidth()
 		}
 		if innerContentW < 1 {
 			innerContentW = 1
@@ -92,36 +93,43 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	// Editor hit region (active pane only -- every other visible pane, when
 	// tiled, is covered by its own click-to-focus background region below
 	// instead). Editor content is inside nesting (outer border + margin +
-	// inner border).
-	regions = append(regions, displayengine.HitRegion{
-		ID:     "tabbed_vars.editor",
-		X:      m.lastOffsetX + layout.NestedLeftOffset(),
-		Y:      m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
-		Width:  m.paneContentWidth[m.activeTab] - layout.BorderWidth(), // inner box content width
-		Height: m.paneEditorHeight[m.activeTab],
-		ZOrder: displayengine.ZDialog + 5,
-		Label:  "Variables Editor",
-		Help: &displayengine.HelpContext{
-			ScreenName: m.title,
-			PageTitle:  "Variables Editor",
-			PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
-		},
-	})
+	// inner border). Skipped entirely if the active tab is a Ctrl+Left/
+	// Right-selected-but-still-closed one (tiled mode only) -- nothing is
+	// rendered there to click until Space opens it.
+	if activeSlot, ok := m.paneSlotFor(m.activeTab); ok || !m.splitMode {
+		if !ok {
+			activeSlot = 0 // uniform array when !splitMode -- see SetSize
+		}
+		regions = append(regions, displayengine.HitRegion{
+			ID:     "tabbed_vars.editor",
+			X:      m.lastOffsetX + layout.NestedLeftOffset(),
+			Y:      m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
+			Width:  m.paneContentWidth[activeSlot] - layout.BorderWidth(), // inner box content width
+			Height: m.paneEditorHeight[activeSlot],
+			ZOrder: displayengine.ZDialog + 5,
+			Label:  "Variables Editor",
+			Help: &displayengine.HelpContext{
+				ScreenName: m.title,
+				PageTitle:  "Variables Editor",
+				PageText:   "Grouped environment variable editor. Right-click any row for specific options.",
+			},
+		})
 
-	// INS/OVR hit region — bottom-left of the inner editor box border.
-	// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
-	// (NestedTopOffset already accounts for outer border + inner top border/tab row)
-	insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[m.activeTab]
-	regions = append(regions, displayengine.HitRegion{
-		ID:     "tabbed_vars." + displayengine.IDInsOvr,
-		X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
-		Y:      insOvrY,
-		Width:  3,
-		Height: 1,
-		ZOrder: displayengine.ZDialog + 15,
-		Label:  "INS/OVR",
-		Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
-	})
+		// INS/OVR hit region — bottom-left of the inner editor box border.
+		// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
+		// (NestedTopOffset already accounts for outer border + inner top border/tab row)
+		insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[activeSlot]
+		regions = append(regions, displayengine.HitRegion{
+			ID:     "tabbed_vars." + displayengine.IDInsOvr,
+			X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
+			Y:      insOvrY,
+			Width:  3,
+			Height: 1,
+			ZOrder: displayengine.ZDialog + 15,
+			Label:  "INS/OVR",
+			Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+		})
+	}
 
 	// Click-to-focus background for every visible-but-unfocused pane, when
 	// tiled -- a click anywhere in one switches which tab is active (see
@@ -132,17 +140,17 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	if m.splitMode {
 		paneLeft := m.paneBoxLeft(offsetX)
 		paneTop := m.paneBoxTop(offsetY)
-		for i := range m.tabs {
+		for slot, i := range m.openTabIndices() {
 			if i == m.activeTab {
 				continue
 			}
 			offX, offY := m.paneOffsetFor(i)
-			paneHeight := m.paneEditorHeight[i] + layout.BorderHeight()
+			paneHeight := m.paneEditorHeight[slot] + layout.BorderHeight()
 			regions = append(regions, displayengine.HitRegion{
 				ID:     "tabbed_vars.pane-" + strconv.Itoa(i),
 				X:      paneLeft + offX,
 				Y:      paneTop + offY,
-				Width:  m.paneContentWidth[i],
+				Width:  m.paneContentWidth[slot],
 				Height: paneHeight,
 				ZOrder: displayengine.ZDialog - 1,
 				Label:  m.tabs[i].spec.Title,
@@ -162,17 +170,18 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	if m.splitMode {
 		paneLeft := m.paneBoxLeft(offsetX)
 		boxTop := m.paneBoxTop(offsetY)
+		openIdx := m.openTabIndices()
 		gutterHelp := &displayengine.HelpContext{
 			ScreenName: m.title,
 			PageTitle:  "Resize Split",
 			PageText:   "Drag to resize, or press Ctrl+S (Alt+S) then Tab to pick a boundary and use arrow keys. Space resets all panes to equal size.",
 		}
-		for g := 0; g < len(m.tabs)-1; g++ {
+		for g := 0; g < len(openIdx)-1; g++ {
 			// The boundary sits flush against pane g+1's own offset --
 			// exactly the 1-col/1-row visual gutter, no padding into the
 			// neighboring panes, since their own border is its own click
 			// target and must not be stolen by the resize handle.
-			nextOffX, nextOffY := m.paneOffsetFor(g + 1)
+			nextOffX, nextOffY := m.paneOffsetFor(openIdx[g+1])
 			if m.layoutMode == envLayoutSideBySide {
 				boxHeight := m.paneEditorHeight[0] + layout.BorderHeight()
 				regions = append(regions, displayengine.HitRegion{
@@ -200,12 +209,10 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		}
 	}
 
-	// Per-pane layout widgets, from the same widget set renderPane draws so
-	// the click target matches what's shown. Only the active pane renders in
-	// Maximized mode's single pane carries these on its own border; when
-	// tiled they live on the middle "tab list" box instead (see below), not
-	// repeated per-pane. Appended after the pane-background region above so
-	// they win at their narrow spot on every other pane's border too.
+	// Layout-control widgets. Maximized mode's single pane carries them on
+	// its own border; when tiled they live on the middle "tab list" box
+	// instead (see paneLayoutWidgets), and each pane instead gets its own
+	// Close (see closeWidget), when there's more than one open pane.
 	widgets := m.paneLayoutWidgets()
 	if m.splitMode {
 		boxX := m.paneBoxLeft(offsetX)
@@ -215,16 +222,27 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 			"tabbed_vars.middle", boxX, boxY, middleContentWidth, false,
 			widgets, displayengine.ZDialog,
 		)...)
-	}
-	for _, idx := range []int{m.activeTab} {
-		if len(widgets) == 0 || m.splitMode {
-			continue
+
+		if m.openCount() > 1 {
+			closeWidgets := []displayengine.WidgetDef{closeWidget()}
+			paneLeft := m.paneBoxLeft(offsetX)
+			paneTop := m.paneBoxTop(offsetY)
+			for slot, i := range m.openTabIndices() {
+				offX, offY := m.paneOffsetFor(i)
+				regions = append(regions, displayengine.TitleBarHitRegionsFor(
+					"tabbed_vars.pane"+strconv.Itoa(i), paneLeft+offX, paneTop+offY, m.paneContentWidth[slot], false,
+					closeWidgets, displayengine.ZDialog,
+				)...)
+			}
 		}
+	} else if len(widgets) > 0 {
+		idx := m.activeTab
+		slot, _ := m.paneSlotFor(idx) // uniform array when !splitMode -- see SetSize
 		paneOffX, paneOffY := m.paneOffsetFor(idx)
 		boxX := offsetX + paneOffX + 1 + layout.ContentSideMargin
 		boxY := m.paneBoxTop(offsetY) + paneOffY
 		regions = append(regions, displayengine.TitleBarHitRegionsFor(
-			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.paneContentWidth[idx], false,
+			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.paneContentWidth[slot], false,
 			widgets, displayengine.ZDialog,
 		)...)
 	}

@@ -66,6 +66,7 @@ type KeyMap struct {
 	EnvPrevTab     key.Binding
 	EnvCycleLayout key.Binding
 	EnvResizeSplit key.Binding
+	EnvClosePane   key.Binding
 
 	// Program-wide context menu (keyboard equiv of right-click)
 	ContextMenu key.Binding
@@ -241,6 +242,10 @@ var Keys = KeyMap{
 	EnvResizeSplit: key.NewBinding(
 		key.WithKeys("f8", "ctrl+s", "alt+s", "ctrl+alt+s"),
 		key.WithHelp("F8/alt+s", "resize split"),
+	),
+	EnvClosePane: key.NewBinding(
+		key.WithKeys("ctrl+q", "alt+q", "ctrl+alt+q"),
+		key.WithHelp("ctrl+q", "close pane"),
 	),
 	ContextMenu: key.NewBinding(
 		key.WithKeys("f3", "ctrl+space", "alt+space", "ctrl+alt+space", "shift+F10", "alt+enter", "ctrl+enter", "ctrl+alt+enter", "menu"),

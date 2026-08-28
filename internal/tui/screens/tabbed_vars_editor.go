@@ -147,6 +147,12 @@ type envTab struct {
 	description      string          // App description (empty for global tabs or if unavailable)
 	appMeta          *appenv.AppMeta // Optional metadata from appname.meta.toml (nil if not present)
 	lastEnabledState string          // "active", "disabled", or "absent" — triggers auto-refresh on change
+	// open is whether this tab currently renders as a tiled pane. Closing
+	// only hides it -- the editor buffer, cursor, and any unsaved edits
+	// stay intact; Save still covers it regardless. Ignored entirely in
+	// Maximized mode, which always shows exactly one tab (open or not) by
+	// tab-strip/Ctrl+Left/Right switching, independent of tiling.
+	open bool
 }
 
 // defaultVal returns the computed default for any variable name via DefaultValueFunc
@@ -376,7 +382,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
 			return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 		}
-		tabs = append(tabs, envTab{spec: spec, editor: editor})
+		tabs = append(tabs, envTab{spec: spec, editor: editor, open: true})
 	}
 
 	buttons := []string{"Save", "Refresh", "Cancel", "Exit"}
@@ -455,6 +461,26 @@ func maximizeWidget() displayengine.WidgetDef {
 	return envLayoutWidget(displayengine.IDTitleWidgetMaximize, "Maximize", "Show only this tab, full size.", "□", "+", "Maximize", envLayoutMaximized)
 }
 
+// closeWidget builds the per-pane Close icon shown when tiled with 2+ tabs
+// open -- hides that specific pane (see envTab.open); its own edits stay
+// intact for reopening via the shared tab strip, Ctrl+Left/Right + Space,
+// or Ctrl+Q. Reuses IDTitleWidgetClose (the outer dialog's own close
+// button ID) the same way maximizeWidget reuses IDTitleWidgetMaximize --
+// Update recovers which pane from the "tabbed_vars.paneN." ID prefix.
+// Action is nil: closing needs the pane's own tab index, which envSetLayoutMsg's
+// shape doesn't carry, so Update's widget-click handler applies it directly
+// instead of dispatching a message.
+func closeWidget() displayengine.WidgetDef {
+	return displayengine.WidgetDef{
+		ID:         displayengine.IDTitleWidgetClose,
+		Label:      "Close",
+		HelpText:   "Close this pane (its edits are kept -- reopen it from the tab strip, Ctrl+←/→ then Space, or Ctrl+Q).",
+		Glyph:      "×",
+		GlyphAscii: "x",
+		IconName:   "Close",
+	}
+}
+
 // paneLayoutWidgets returns the layout-control widgets shown on every pane's
 // border -- only meaningful with 2+ tabs open; nil otherwise. Maximize
 // is last (rightmost, matching Close's convention) and omitted in Maximized
@@ -502,10 +528,55 @@ func (m *TabbedVarsEditorModel) paneBoxLeft(offsetX int) int {
 // paneOffsetFor returns pane idx's top-left offset relative to pane 0 --
 // (0,0) unless tiled, from SetSize's cached paneOffsetXs/Ys.
 func (m *TabbedVarsEditorModel) paneOffsetFor(idx int) (x, y int) {
-	if !m.splitMode || idx < 0 || idx >= len(m.paneOffsetXs) {
+	slot, ok := m.paneSlotFor(idx)
+	if !m.splitMode || !ok || slot >= len(m.paneOffsetXs) {
 		return 0, 0
 	}
-	return m.paneOffsetXs[idx], m.paneOffsetYs[idx]
+	return m.paneOffsetXs[slot], m.paneOffsetYs[slot]
+}
+
+// openTabIndices returns the real tab index of every currently open tab, in
+// tab order -- the geometry arrays (paneContentWidth, paneEditorHeight,
+// paneOffsetXs/Ys, sideBySideShares, stackedShares) are indexed by position
+// within this slice ("pane slot"), not by raw tab index, since a closed tab
+// in between two open ones would otherwise leave a gap.
+func (m *TabbedVarsEditorModel) openTabIndices() []int {
+	var open []int
+	for i := range m.tabs {
+		if m.tabs[i].open {
+			open = append(open, i)
+		}
+	}
+	return open
+}
+
+// openCount returns how many tabs are currently open (rendered as tiled
+// panes, or the single Maximized pane if exactly one).
+func (m *TabbedVarsEditorModel) openCount() int {
+	n := 0
+	for i := range m.tabs {
+		if m.tabs[i].open {
+			n++
+		}
+	}
+	return n
+}
+
+// paneSlotFor resolves a real tab index to its position within
+// openTabIndices() -- the index every pane-geometry array actually uses.
+// ok is false if tabIdx is out of range or currently closed (nothing
+// rendered to have geometry for).
+func (m *TabbedVarsEditorModel) paneSlotFor(tabIdx int) (slot int, ok bool) {
+	if tabIdx < 0 || tabIdx >= len(m.tabs) || !m.tabs[tabIdx].open {
+		return 0, false
+	}
+	slot = 0
+	for i := 0; i < tabIdx; i++ {
+		if m.tabs[i].open {
+			slot++
+		}
+	}
+	return slot, true
 }
 
 // activeSplitShares returns whichever of sideBySideShares/stackedShares
@@ -521,10 +592,11 @@ func (m *TabbedVarsEditorModel) activeSplitShares() []float64 {
 }
 
 // resetSharesToEqual resets every pane's share in both layouts' share
-// slices to 1/N, matching the tab count -- called whenever the tab count
-// changes and by the keyboard resize mode's Space key.
+// slices to 1/N, matching the open tab count -- called whenever the open
+// tab count changes (including a pane opening/closing) and by the keyboard
+// resize mode's Space key.
 func (m *TabbedVarsEditorModel) resetSharesToEqual() {
-	n := len(m.tabs)
+	n := m.openCount()
 	if n == 0 {
 		m.sideBySideShares, m.stackedShares = nil, nil
 		return
@@ -548,11 +620,12 @@ func (m *TabbedVarsEditorModel) paneBoxAt(x, y int) (idx int, ok bool) {
 	layout := displayengine.GetLayout()
 	boxLeft := m.paneBoxLeft(m.dialogOffsetX)
 	boxTop := m.paneBoxTop(m.dialogOffsetY)
-	for i := 0; i < len(m.tabs); i++ {
+	for _, i := range m.openTabIndices() {
+		slot, _ := m.paneSlotFor(i)
 		offX, offY := m.paneOffsetFor(i)
 		bx, by := boxLeft+offX, boxTop+offY
-		boxHeight := m.paneEditorHeight[i] + layout.BorderHeight()
-		if x >= bx && x < bx+m.paneContentWidth[i] && y >= by && y < by+boxHeight {
+		boxHeight := m.paneEditorHeight[slot] + layout.BorderHeight()
+		if x >= bx && x < bx+m.paneContentWidth[slot] && y >= by && y < by+boxHeight {
 			return i, true
 		}
 	}
@@ -581,6 +654,36 @@ func (m *TabbedVarsEditorModel) focusPane(idx int) {
 	m.tabs[m.activeTab].editor.Blur()
 	m.activeTab = idx
 	m.SetSize(m.width, m.height)
+}
+
+// closePane hides tab idx (its editor buffer, cursor, and any unsaved edits
+// stay intact -- see envTab.open) -- the shared core of the per-pane Close
+// widget click and EnvClosePane (Ctrl+Q). A no-op if idx is already closed
+// or it's the last open tab (Close isn't offered in that case, but this
+// stays safe to call regardless). If idx was active, moves focus to the
+// next open tab (wrapping), matching Ctrl+Right's own wrap-free linear
+// order as closely as a "skip closed tabs" search can.
+func (m *TabbedVarsEditorModel) closePane(idx int) tea.Cmd {
+	if idx < 0 || idx >= len(m.tabs) || !m.tabs[idx].open || m.openCount() <= 1 {
+		return nil
+	}
+	m.tabs[idx].open = false
+	if idx == m.activeTab {
+		m.tabs[m.activeTab].editor.Blur()
+		for offset := 1; offset < len(m.tabs); offset++ {
+			next := (idx + offset) % len(m.tabs)
+			if m.tabs[next].open {
+				m.activeTab = next
+				break
+			}
+		}
+		if m.focus == envFocusEditor {
+			m.tabs[m.activeTab].editor.Focus()
+		}
+	}
+	m.resetSharesToEqual()
+	m.SetSize(m.width, m.height)
+	return nil
 }
 
 // CyclePaneTitleFocus implements displayengine.PaneTitleBarFocusable --
@@ -790,6 +893,12 @@ func (m *TabbedVarsEditorModel) HasDialog() bool {
 // allowing AppModel.View() to position the terminal cursor over the active editor.
 func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
+		return 0, 0, tea.CursorBar, false
+	}
+	// A Ctrl+Left/Right-selected-but-still-closed tab (tiled mode only --
+	// Maximized always shows whichever tab is active) has no rendered pane
+	// to point a cursor at until Space opens it.
+	if m.splitMode && !m.tabs[m.activeTab].open {
 		return 0, 0, tea.CursorBar, false
 	}
 	editor := m.tabs[m.activeTab].editor
