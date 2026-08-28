@@ -109,14 +109,18 @@ func EnvMigrate(ctx context.Context, fromVar, toVar string, conf config.AppConfi
 	}
 
 	for _, matchedKey := range matchedKeys {
+		// A source variable's mere presence -- not its value -- is what
+		// makes it eligible to migrate, mirroring env_rename.sh/env_copy.sh
+		// (grep -o -P by name only). An empty value ("") is still a real,
+		// intentional assignment and must migrate like any other.
 		val, err := Get(matchedKey, fromFile)
-		if err != nil || val == "" {
+		if err != nil {
 			continue
 		}
 
-		// Check if target already exists
-		toVal, _ := Get(toVarResolved, toFile)
-		if toVal != "" {
+		// Check if target already exists -- by presence, not by having a
+		// non-empty value, matching env_var_exists.sh.
+		if targetKeys, _ := FindMatchingKeys(regexp.QuoteMeta(toVarResolved), toFile); len(targetKeys) > 0 {
 			logger.Debug(ctx, "Migration target %s already exists, skipping.", toVar)
 			continue
 		}

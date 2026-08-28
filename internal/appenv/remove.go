@@ -93,8 +93,7 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 
 	// Every one of the app's .env.app.* files -- the plain file, plus (for
 	// a multi-service app) any per-service or shared/virtual files -- each
-	// diffed against its own template defaults, same as CreateApp creates
-	// them all instead of just the plain one.
+	// diffed against its own template defaults.
 	baseApp := strings.ToLower(AppNameToBaseAppName(appUpper))
 	var appRemovals []appFileRemoval
 	totalAppVars := 0

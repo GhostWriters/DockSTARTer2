@@ -53,10 +53,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		for _, appName := range allAdded {
 			// Check every one of the app's .env.app.* files -- the plain
 			// file, plus (for a multi-service app) any per-service or
-			// shared/virtual files alongside it. A change to just one of
-			// those (e.g. a per-service file) must still trigger a
-			// re-sync, not go unnoticed because only the plain file was
-			// checked.
+			// shared/virtual files alongside it.
 			baseAppName := strings.ToLower(AppNameToBaseAppName(appName))
 			for _, pattern := range TemplateAppVarFileSuffixes(baseAppName) {
 				appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", strings.ToLower(appName)))

@@ -29,10 +29,10 @@ func TestEnvMigrate_PlainName(t *testing.T) {
 	}
 }
 
-// TestEnvMigrate_PipeAlternation is the regression test for the bug this
-// session found: fromVar can be a real regex (e.g. an "A|B" alternation,
-// as used throughout DockSTARTer-Templates' .migrate files, mirroring DS1's
-// env_migrate.sh grep -P behavior), not just a literal variable name.
+// TestEnvMigrate_PipeAlternation covers fromVar as a real regex (e.g. an
+// "A|B" alternation, as used throughout DockSTARTer-Templates' .migrate
+// files, mirroring DS1's env_migrate.sh grep -P behavior), not just a
+// literal variable name.
 func TestEnvMigrate_PipeAlternation(t *testing.T) {
 	tmpDir := t.TempDir()
 	envFile := filepath.Join(tmpDir, ".env")
@@ -78,15 +78,11 @@ func TestEnvMigrate_SkipsIfTargetAlreadySet(t *testing.T) {
 	}
 }
 
-// TestEnvMigrate_AppFilePrefix is the regression test for a bug found
-// alongside the multi-service work: an "appname:VAR" fromVar/toVar targets
-// the app's .env.app.<appname> file (as every .migrate file in
-// DockSTARTer-Templates actually assumes), not the global .env -- but
-// EnvMigrate was resolving the prefix via AppInstanceFile(ctx, appname,
-// ".env"), which always pointed at the global .env instance file no matter
-// what appname was. This also covers a multi-service per-service file
-// (e.g. "immich-database:VAR"), which has no template of its own to
-// resolve against and must work purely from the literal file name.
+// TestEnvMigrate_AppFilePrefix covers an "appname:VAR" fromVar/toVar,
+// which targets the app's .env.app.<appname> file, never the global .env
+// -- including a multi-service per-service file (e.g. "immich-database:VAR"),
+// which has no template of its own to resolve against and must work
+// purely from the literal file name.
 func TestEnvMigrate_AppFilePrefix(t *testing.T) {
 	tmpDir := t.TempDir()
 	appFile := filepath.Join(tmpDir, ".env.app.immich-database")
@@ -107,11 +103,54 @@ func TestEnvMigrate_AppFilePrefix(t *testing.T) {
 		t.Errorf("OLD_NAME still present with value %q; want unset", oldVal)
 	}
 
-	// The global .env must be untouched -- confirms the migration didn't
-	// silently fall back to it.
+	// The global .env must be untouched.
 	envFile := filepath.Join(tmpDir, ".env")
 	if _, err := os.Stat(envFile); err == nil {
 		t.Errorf(".env was created/written; migration should only have touched .env.app.immich-database")
+	}
+}
+
+// TestEnvMigrate_EmptyValueStillMigrates covers a source variable whose
+// value is the empty string -- still a real, intentional assignment, and
+// migrates like any other value.
+func TestEnvMigrate_EmptyValueStillMigrates(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFile := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envFile, []byte("OLD_NAME=''\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	conf := config.AppConfig{ComposeDir: tmpDir}
+
+	if err := EnvMigrate(context.Background(), "OLD_NAME", "NEW_NAME", conf); err != nil {
+		t.Fatalf("EnvMigrate failed: %v", err)
+	}
+
+	if exists, _ := EnvVarExists(context.Background(), "NEW_NAME", envFile); !exists {
+		t.Errorf("NEW_NAME not present after migration; want it set (even to an empty value)")
+	}
+	if exists, _ := EnvVarExists(context.Background(), "OLD_NAME", envFile); exists {
+		t.Errorf("OLD_NAME still present after migration; want unset")
+	}
+}
+
+// TestEnvMigrate_SkipsIfTargetExistsEvenEmpty covers a target variable that
+// already exists with an empty value -- presence, not a non-empty value,
+// is what counts as "already set."
+func TestEnvMigrate_SkipsIfTargetExistsEvenEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFile := filepath.Join(tmpDir, ".env")
+	content := "OLD_NAME='stale'\nNEW_NAME=''\n"
+	if err := os.WriteFile(envFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	conf := config.AppConfig{ComposeDir: tmpDir}
+
+	if err := EnvMigrate(context.Background(), "OLD_NAME", "NEW_NAME", conf); err != nil {
+		t.Fatalf("EnvMigrate failed: %v", err)
+	}
+
+	if oldVal, _ := Get("OLD_NAME", envFile); oldVal != "stale" {
+		t.Errorf("OLD_NAME = %q; want left as %q since target was already present", oldVal, "stale")
 	}
 }
 
