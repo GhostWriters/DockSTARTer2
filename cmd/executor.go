@@ -67,7 +67,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout",
 			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--app-template-extract", "--app-template-new", "--man":
+			"--theme-extract", "--theme-extract-all", "--app-template-extract", "--app-template-new", "--man",
+			"--env-appfiles":
 			// Skip validation for meta/config commands
 		default:
 			shouldValidate = true
@@ -165,6 +166,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				// connType guess.
 				canDisplayGraphics := graphics.QuerySixelSupport(int(os.Stdin.Fd()), os.Stdin, os.Stdout, graphics.DefaultQueryTimeout)
 				return commands.HandleMan(subCtx, &group, canDisplayGraphics)
+			case "--env-appfiles":
+				ranCommand = true
+				return commands.HandleEnvAppFiles(subCtx, &group)
 			case "-i", "--install":
 				ranCommand = true
 				return commands.HandleInstall(subCtx, &group, &state)

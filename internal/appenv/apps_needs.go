@@ -2,7 +2,6 @@ package appenv
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,14 +51,18 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		// Check if any added app's template or env file has changed
 		templatesDir := paths.GetTemplatesDir()
 		for _, appName := range allAdded {
-			// Check app-specific env file
-			appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-			if fileChanged(appEnvFile) {
-				return true
+			// Check every one of the app's .env.app.* files -- the plain
+			// file, plus (for a multi-service app) any per-service or
+			// shared/virtual files alongside it.
+			baseAppName := strings.ToLower(AppNameToBaseAppName(appName))
+			for _, pattern := range TemplateAppVarFileSuffixes(baseAppName) {
+				appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", strings.ToLower(appName)))
+				if fileChanged(appEnvFile) {
+					return true
+				}
 			}
 
 			// Check app-specific template directory
-			baseAppName := strings.ToLower(AppNameToBaseAppName(appName))
 			appTemplateDir := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppName)
 			if IsAnyFileNewer(appTemplateDir, sentinelTime) {
 				return true
@@ -77,9 +80,12 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 			return true
 		}
 
-		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
-		if fileChanged(appEnvFile) {
-			return true
+		baseAppName := strings.ToLower(AppNameToBaseAppName(appName))
+		for _, pattern := range TemplateAppVarFileSuffixes(baseAppName) {
+			appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", strings.ToLower(appName)))
+			if fileChanged(appEnvFile) {
+				return true
+			}
 		}
 
 		// Implement NewestSentinel logic
@@ -102,7 +108,6 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		}
 
 		// Scan app-specific template folder
-		baseAppName := strings.ToLower(AppNameToBaseAppName(appName))
 		appTemplateDir := filepath.Join(paths.GetTemplatesDir(), constants.TemplatesDirName, baseAppName)
 		if IsAnyFileNewer(appTemplateDir, newestSentinelTime) {
 			return true
@@ -152,9 +157,15 @@ func UnsetNeedsCreateApp(ctx context.Context, appNameRaw string, conf config.App
 		f.Close()
 	}
 
-	// 2. Record app-specific .env state
-	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, appLower))
-	recordFileState(appEnvFile)
+	// 2. Record state for every one of the app's .env.app.* files -- the
+	// plain file, plus (for a multi-service app) any per-service or
+	// shared/virtual files -- so fileChanged sees a baseline for each,
+	// matching what NeedsCreateAll now checks.
+	baseAppName := strings.ToLower(AppNameToBaseAppName(appUpper))
+	for _, pattern := range TemplateAppVarFileSuffixes(baseAppName) {
+		appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", appLower))
+		recordFileState(appEnvFile)
+	}
 }
 
 func fileChanged(path string) bool {

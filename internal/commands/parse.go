@@ -227,7 +227,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 		case "-t", "--test", "--man", "--config-pm", "--config-folder", "--config-compose-folder", "--theme-border-color",
 			"--theme-spinner-speed", "--theme-refresh-rate",
 			"--edit-app", "--start-edit-app",
-			"--env-edit", "--env-edit-lower":
+			"--env-edit", "--env-edit-lower", "--env-appfiles":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires an argument.", cmd)}
 			}

@@ -3,6 +3,7 @@ package screens
 import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
@@ -38,6 +39,11 @@ const (
 	minPaneEditorHeight = 4
 )
 
+// doubleClickWindow is how close together two clicks on the same target
+// (a pane's border, or a tab strip entry) have to land to count as a
+// double-click-to-maximize, matching enveditor's own multi-click timing.
+const doubleClickWindow = 400 * time.Millisecond
+
 // GutterDragState tracks a mouse drag on the split gutter between the two
 // panes. Modeled on displayengine/classic's ScrollbarDragState, but without
 // its PendingDragY/LastDragY/DragPending throttle fields -- that gate is a
@@ -46,16 +52,21 @@ const (
 // a fresh drag implementation shouldn't reintroduce it. Every motion event
 // applies its resulting ratio directly.
 type GutterDragState struct {
-	Dragging   bool
-	StartMouse int     // absolute mouse X (side-by-side) or Y (stacked) when drag started
-	StartRatio float64 // splitRatio when drag started
+	Dragging    bool
+	GutterIndex int     // which of the N-1 gutter boundaries is being dragged
+	StartMouse  int     // absolute mouse X (side-by-side) or Y (stacked) when drag started
+	StartShareA float64 // share of the pane left/above the dragged gutter, when drag started
+	StartShareB float64 // share of the pane right/below the dragged gutter, when drag started
 }
 
-// StartDrag records the starting mouse position and ratio for a new drag.
-func (g *GutterDragState) StartDrag(mouse int, ratio float64) {
+// StartDrag records the starting mouse position and the two adjacent panes'
+// shares for a new drag on the given gutter boundary.
+func (g *GutterDragState) StartDrag(gutterIndex, mouse int, shareA, shareB float64) {
 	g.Dragging = true
+	g.GutterIndex = gutterIndex
 	g.StartMouse = mouse
-	g.StartRatio = ratio
+	g.StartShareA = shareA
+	g.StartShareB = shareB
 }
 
 // StopDrag ends the drag.
@@ -78,6 +89,53 @@ type EnvTabSpec struct {
 	Title    string
 	App      string // Empty string for global vars, app name for app-specific vars
 	IsGlobal bool   // Indicates if this tab edits the global .env file (potentially filtered by App)
+	// FileApp is the appenv-qualified name identifying which physical
+	// .env.app.* file this tab targets -- e.g. "immich-database" or
+	// "immich___postgres" for a multi-service app's per-service or
+	// shared/virtual files. Empty for the plain file and for global tabs,
+	// where App alone already identifies the target.
+	FileApp string
+}
+
+// fileApp returns the qualified name identifying which .env.app.* file this
+// spec targets: FileApp when set, App otherwise (the plain-file case).
+func (s EnvTabSpec) fileApp() string {
+	if s.FileApp != "" {
+		return s.FileApp
+	}
+	return s.App
+}
+
+// buildAppEditorSpecs returns the tab specs for editing appName: the
+// global-vars tab (filtered to appName) plus one tab per .env.app.* file
+// appName currently has on disk -- the plain file, and for a multi-service
+// app, any per-service or shared/virtual files alongside it. Falls back to
+// a single plain-file tab if no files are found on disk yet (e.g. an app
+// whose vars haven't been created).
+func buildAppEditorSpecs(appName string) []EnvTabSpec {
+	specs := []EnvTabSpec{
+		{Title: ".env", App: appName, IsGlobal: true},
+	}
+
+	conf := config.LoadAppConfig()
+	files := appenv.AppVarFileNames(appName, conf)
+	if len(files) == 0 {
+		specs = append(specs, EnvTabSpec{
+			Title: ".env.app." + strings.ToLower(appName),
+			App:   appName,
+		})
+		return specs
+	}
+
+	for _, name := range files {
+		fileApp := strings.TrimPrefix(name, constants.AppEnvFileNamePrefix)
+		specs = append(specs, EnvTabSpec{
+			Title:   name,
+			App:     appName,
+			FileApp: fileApp,
+		})
+	}
+	return specs
 }
 
 type envTab struct {
@@ -94,6 +152,12 @@ type envTab struct {
 	description      string          // App description (empty for global tabs or if unavailable)
 	appMeta          *appenv.AppMeta // Optional metadata from appname.meta.toml (nil if not present)
 	lastEnabledState string          // "active", "disabled", or "absent" — triggers auto-refresh on change
+	// open is whether this tab currently renders as a tiled pane. Closing
+	// only hides it -- the editor buffer, cursor, and any unsaved edits
+	// stay intact; Save still covers it regardless. Ignored entirely in
+	// Maximized mode, which always shows exactly one tab (open or not) by
+	// tab-strip/Ctrl+Left/Right switching, independent of tiling.
+	open bool
 }
 
 // defaultVal returns the computed default for any variable name via DefaultValueFunc
@@ -121,52 +185,72 @@ type TabbedVarsEditorModel struct {
 	buttonHeight       int
 	subtitleHeight     int
 	largeTitleOverhead int
-	// paneEditorHeight/paneContentWidth are indexed by pane (0 or 1, same
-	// index as m.tabs when split). Side-by-side splits width but shares
-	// height across both panes; stacked splits height but shares width --
-	// see SetSize. Before splitRatio existed both panes were always exactly
-	// equal, so a single shared field was correct; an adjustable ratio
-	// means each pane can now be a different size, so both dimensions must
-	// be tracked per pane even though only one axis actually varies at a
-	// time for a given layoutMode.
-	paneEditorHeight [2]int
-	paneContentWidth [2]int
-	fullContentWidth int // full dialog content width, spans both panes when split -- used by buttons/outer border
+	// paneEditorHeight/paneContentWidth are indexed by pane *slot* (position
+	// within openTabIndices(), not raw tab index -- see paneSlotFor),
+	// resized to openCount() in SetSize. Side-by-side splits width but
+	// shares height across all panes; stacked splits height but shares
+	// width -- see SetSize. In Maximized mode (or when tiling has collapsed
+	// for lack of room) every entry holds the same full-content value, so
+	// slot 0 is always a safe stand-in regardless of which tab is active.
+	paneEditorHeight []int
+	paneContentWidth []int
+	fullContentWidth int // full dialog content width, spans all panes when tiled -- used by buttons/outer border
 	focused          bool
 
 	// layoutMode is the user's chosen view (Maximize/Side-by-side/Stacked);
 	// splitMode is SetSize's actual per-render decision, which falls back to
 	// false when the current size is too small for the chosen split, same
 	// collapse-and-spring-back as the Appearance Settings preview panel.
+	// "splitMode" now means "tiled" (2 or more panes), not just exactly 2.
 	layoutMode envLayoutMode
 	splitMode  bool
 
-	// sideBySideRatio/stackedRatio are pane 0's share (0.0-1.0) of the split
-	// budget -- width for side-by-side, height for stacked -- tracked
-	// separately per layout so resizing one doesn't bleed into the other's
-	// proportions when EnvCycleLayout switches between them. Not persisted
-	// -- both reset to 0.5 each time the editor opens. SetSize clamps
-	// whichever is active to a range that keeps both panes at/above their
-	// minPaneContentWidth/minPaneEditorHeight floor before using it, so a
-	// drag or keyboard nudge can never push a pane below its floor.
-	sideBySideRatio float64
-	stackedRatio    float64
+	// sideBySideShares/stackedShares hold each pane's share (0.0-1.0,
+	// summing to 1.0) of the split budget -- width for side-by-side, height
+	// for stacked -- one entry per tab, tracked separately per layout so
+	// resizing one doesn't bleed into the other's proportions when
+	// EnvCycleLayout switches between them. Resized/reset to 1/N each
+	// whenever the tab count changes (not persisted -- always reset to
+	// equal shares when the editor opens). SetSize clamps every pane to a
+	// floor of minPaneContentWidth/minPaneEditorHeight before using these,
+	// so a drag or keyboard nudge can never push a pane below its floor.
+	sideBySideShares []float64
+	stackedShares    []float64
 
 	// resizingGutter is keyboard resize mode (Ctrl+S/Alt+S toggles it);
-	// gutterDrag is the mouse-drag equivalent. Both feed splitRatio and
-	// both are read by ViewString to show the arrow-tipped resize line
-	// instead of the normal blank gutter.
+	// gutterDrag is the mouse-drag equivalent. Both feed into
+	// sideBySideShares/stackedShares and both are read by ViewString to
+	// show the arrow-tipped resize line on the active gutter instead of a
+	// normal blank one. activeGutter is which of the N-1 boundaries
+	// keyboard resize mode is currently adjusting (Tab/Shift+Tab cycles
+	// it); reset to 0 whenever resizingGutter turns on.
 	resizingGutter bool
+	activeGutter   int
 	gutterDrag     GutterDragState
 
-	// pane1OffsetX/Y is where tabs[1]'s pane starts, relative to tabs[0]'s.
-	// activePaneOffsetX/Y is that offset when tab 1 is active, else (0,0) --
-	// folded into lastOffsetX/Y by GetHitRegions so existing single-pane
-	// cursor/click/context-menu math keeps working unmodified.
-	pane1OffsetX      int
-	pane1OffsetY      int
+	// paneOffsetXs/Ys hold each pane's top-left offset relative to pane 0's,
+	// recomputed by SetSize alongside paneContentWidth/paneEditorHeight.
+	// activePaneOffsetX/Y is paneOffsetFor(m.activeTab), PLUS -- when tiled
+	// -- the middle "tab list" box's own left border column and top
+	// border/title row (paneOffsetFor only knows about offsets between
+	// sibling panes, not that outer wrapping box), so it's folded into
+	// lastOffsetX/Y by GetHitRegions and every click/cursor formula that
+	// combines it with layout.NestedLeftOffset()/NestedTopOffset() (a
+	// constant sized for exactly two border layers: dialog -> pane) lands
+	// on the right cell in both Maximized and tiled mode. See SetSize's
+	// assignment for the exact computation.
+	paneOffsetXs      []int
+	paneOffsetYs      []int
 	activePaneOffsetX int
 	activePaneOffsetY int
+
+	// tiledTabStripHeight is 1 when tiled (m.splitMode) -- the shared tab
+	// strip renders as its own row above all panes in that mode (each pane
+	// keeps its own small title segment too; see renderPane), rather than
+	// living in a single pane's own top border like Maximized mode. 0
+	// otherwise. Added at every pane-box-top calculation that already adds
+	// largeTitleOverhead + subtitleHeight -- see paneBoxTop.
+	tiledTabStripHeight int
 
 	// dialogOffsetX/Y is the dialog's raw screen origin (unshifted by any
 	// pane offset), for raw mouse events (drag clicks, wheel) that carry
@@ -179,6 +263,24 @@ type TabbedVarsEditorModel struct {
 	// cycled by CyclePaneTitleFocus (F9/Ctrl+T).
 	paneTitleFocused bool
 	paneActiveWidget string
+
+	// lastBorderClickIdx/Time and lastTabClickIdx/Time each track
+	// double-click-to-maximize for their own target kind -- a pane's own
+	// border (Update's "tabbed_vars.pane-" border-click branch) and a tab
+	// strip entry ("tabbed_vars.tab-") respectively -- kept separate so a
+	// border double-click and a tab-strip double-click on the same tab
+	// index in quick succession don't cross-pair as one. -1 when no click
+	// of that kind is pending pairing. Separate from enveditor's own
+	// multi-click tracking (word/value/line select), which only applies
+	// inside a pane's content area.
+	lastBorderClickIdx  int
+	lastBorderClickTime time.Time
+	lastTabClickIdx     int
+	lastTabClickTime    time.Time
+
+	// tabScrollOffset is which m.tabs index the shared tab strip's visible
+	// window currently starts from -- see tabStripFit/scrollTabIntoView.
+	tabScrollOffset int
 
 	// Callbacks
 	onClose tea.Cmd
@@ -310,7 +412,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 		editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
 			return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 		}
-		tabs = append(tabs, envTab{spec: spec, editor: editor})
+		tabs = append(tabs, envTab{spec: spec, editor: editor, open: true})
 	}
 
 	buttons := []string{"Save", "Refresh", "Cancel", "Exit"}
@@ -319,17 +421,18 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	}
 
 	m := &TabbedVarsEditorModel{
-		tabs:            tabs,
-		activeTab:       0,
-		title:           title,
-		buttons:         buttons,
-		btnIdx:          0,
-		focus:           envFocusEditor,
-		onClose:         onClose,
-		connType:        connType,
-		sideBySideRatio: 0.5,
-		stackedRatio:    0.5,
+		tabs:               tabs,
+		activeTab:          0,
+		title:              title,
+		buttons:            buttons,
+		btnIdx:             0,
+		focus:              envFocusEditor,
+		onClose:            onClose,
+		connType:           connType,
+		lastBorderClickIdx: -1,
+		lastTabClickIdx:    -1,
 	}
+	m.resetSharesToEqual()
 	zoneByName := map[string]string{
 		"Save":   displayengine.IDSaveButton,
 		"Cancel": displayengine.IDBackButton,
@@ -345,7 +448,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	// title bar only ever gets the standard Refresh/Help/Close set.
 	m.ConfigureWidgets(displayengine.WidgetRefresh, displayengine.WidgetHelp, displayengine.WidgetClose)
 
-	if len(tabs) == 2 {
+	if len(tabs) >= 2 {
 		switch config.LoadAppConfig().UI.TabLayout {
 		case "sidebyside":
 			m.layoutMode = envLayoutSideBySide
@@ -390,14 +493,34 @@ func maximizeWidget() displayengine.WidgetDef {
 	return envLayoutWidget(displayengine.IDTitleWidgetMaximize, "Maximize", "Show only this tab, full size.", "□", "+", "Maximize", envLayoutMaximized)
 }
 
-// paneLayoutWidgets returns the layout-control widgets shown on both panes'
-// borders -- only meaningful with exactly 2 tabs open; nil otherwise. Maximize
+// closeWidget builds the per-pane Close icon shown when tiled with 2+ tabs
+// open -- hides that specific pane (see envTab.open); its own edits stay
+// intact for reopening via the shared tab strip, Ctrl+Left/Right + Space,
+// or Ctrl+Q. Reuses IDTitleWidgetClose (the outer dialog's own close
+// button ID) the same way maximizeWidget reuses IDTitleWidgetMaximize --
+// Update recovers which pane from the "tabbed_vars.paneN." ID prefix.
+// Action is nil: closing needs the pane's own tab index, which envSetLayoutMsg's
+// shape doesn't carry, so Update's widget-click handler applies it directly
+// instead of dispatching a message.
+func closeWidget() displayengine.WidgetDef {
+	return displayengine.WidgetDef{
+		ID:         displayengine.IDTitleWidgetClose,
+		Label:      "Close",
+		HelpText:   "Close this pane (its edits are kept -- reopen it from the tab strip, Ctrl+←/→ then Space, or Ctrl+Q).",
+		Glyph:      "×",
+		GlyphAscii: "x",
+		IconName:   "Close",
+	}
+}
+
+// paneLayoutWidgets returns the layout-control widgets shown on every pane's
+// border -- only meaningful with 2+ tabs open; nil otherwise. Maximize
 // is last (rightmost, matching Close's convention) and omitted in Maximized
 // mode. Only offers the split direction not already active. Keyed off
 // layoutMode, not splitMode, so the icons stay consistent with what's
 // actually selected even while temporarily auto-collapsed (see SetSize).
 func (m *TabbedVarsEditorModel) paneLayoutWidgets() []displayengine.WidgetDef {
-	if len(m.tabs) != 2 {
+	if len(m.tabs) < 2 {
 		return nil
 	}
 	sideBySide := envLayoutWidget(displayengine.IDTitleWidgetSideBySide, "Side by side", "Show both open tabs side by side.", "▥", "|", "SideBySide", envLayoutSideBySide)
@@ -412,25 +535,259 @@ func (m *TabbedVarsEditorModel) paneLayoutWidgets() []displayengine.WidgetDef {
 	}
 }
 
-// paneOffsetFor returns pane idx's top-left offset relative to pane 0 --
-// (0,0) unless split and idx is the second pane.
-func (m *TabbedVarsEditorModel) paneOffsetFor(idx int) (x, y int) {
-	if idx == 1 && m.splitMode {
-		return m.pane1OffsetX, m.pane1OffsetY
-	}
-	return 0, 0
+// paneBoxTop returns the Y coordinate where every pane's own outer box
+// begins, given the dialog's screen-relative Y origin -- outer border, large
+// titlebar rows, the shared subtitle, and (when tiled) the middle "tab
+// list" box's own top/title row, all common to every pane regardless of
+// which one.
+func (m *TabbedVarsEditorModel) paneBoxTop(offsetY int) int {
+	return offsetY + 1 + m.largeTitleOverhead + m.subtitleHeight + m.tiledTabStripHeight
 }
 
-// activeSplitRatio returns a pointer to whichever of
-// sideBySideRatio/stackedRatio applies to m.layoutMode, so callers can
-// read or write "the current layout's ratio" without duplicating the
-// switch at every call site. Defaults to sideBySideRatio when maximized
-// (there's no split to ratio in that mode, so the choice is arbitrary).
-func (m *TabbedVarsEditorModel) activeSplitRatio() *float64 {
-	if m.layoutMode == envLayoutStacked {
-		return &m.stackedRatio
+// paneBoxLeft returns the X coordinate where every pane's own outer box
+// begins, given the dialog's screen-relative X origin -- outer border,
+// content margin, and (when tiled) the middle "tab list" box's own left
+// border column.
+func (m *TabbedVarsEditorModel) paneBoxLeft(offsetX int) int {
+	layout := displayengine.GetLayout()
+	left := offsetX + 1 + layout.ContentSideMargin
+	if m.splitMode {
+		left += layout.BorderWidth() / 2
 	}
-	return &m.sideBySideRatio
+	return left
+}
+
+// tabStripAvailWidth returns the width available to the shared tab strip --
+// the middle "tab list" box's own content width when tiled, or the single
+// active pane's content width in Maximized mode. The single source every
+// caller (renderTabs, GetHitRegions' tab-region block, scrollTabIntoView)
+// uses, so they can never compute a different width from one another.
+func (m *TabbedVarsEditorModel) tabStripAvailWidth() int {
+	layout := displayengine.GetLayout()
+	ctx := displayengine.GetActiveContext()
+	widgets := m.paneLayoutWidgets()
+	if m.splitMode {
+		middleContentWidth := m.fullContentWidth - layout.BorderWidth()
+		if middleContentWidth < 1 {
+			middleContentWidth = 1
+		}
+		return displayengine.MaxRawTitleWidth(middleContentWidth, false, ctx.SubmenuTitleAlign, widgets, ctx)
+	}
+	if len(m.paneContentWidth) == 0 {
+		return m.fullContentWidth
+	}
+	slot, _ := m.paneSlotFor(m.activeTab) // uniform array when !splitMode -- see SetSize
+	target := m.paneContentWidth[slot] - 2
+	if target < 1 {
+		target = 1
+	}
+	return displayengine.MaxRawTitleWidth(target, false, ctx.SubmenuTitleAlign, widgets, ctx)
+}
+
+// tabStripLayout describes which tabs are currently visible in the shared
+// tab strip and where. Computed once by tabStripFit, consumed identically
+// by renderTabs and GetHitRegions' tab-region block so what's drawn and
+// what's clickable never drift apart.
+type tabStripLayout struct {
+	first, last                   int // inclusive range of m.tabs indices currently shown
+	showLeftArrow, showRightArrow bool
+	tabX                          []int // each visible tab's X offset from the strip's own start (past any left arrow), one per index in [first, last]
+	arrowWidth                    int   // column width of one arrow glyph
+}
+
+// tabStripFit computes the widest whole-tab window that fits in availWidth
+// while still containing m.tabScrollOffset -- expanding both forward AND
+// backward from that anchor as far as space allows, so growing availWidth
+// (e.g. maximizing the terminal) always pulls more tabs into view around
+// wherever we're currently scrolled/focused, rather than only growing
+// forward or requiring a full reset to see the extra room. m.tabScrollOffset
+// itself is normalized to the resulting window's left edge, so the next
+// fit (or arrow click) continues from there. Never a partially-cut-off
+// title at either edge.
+func (m *TabbedVarsEditorModel) tabStripFit(availWidth int) tabStripLayout {
+	const arrowWidth = 1
+	n := len(m.tabs)
+	if n == 0 {
+		return tabStripLayout{arrowWidth: arrowWidth}
+	}
+	ctx := displayengine.GetActiveContext()
+	widths := make([]int, n)
+	for i, tab := range m.tabs {
+		widths[i] = displayengine.WidthOfTitleSegment(tab.spec.Title, true, ctx)
+	}
+
+	anchor := m.tabScrollOffset
+	if anchor < 0 {
+		anchor = 0
+	}
+	if anchor >= n {
+		anchor = n - 1
+	}
+
+	// rangeWidth is the strip's total rendered width for showing exactly
+	// [lo, hi], including whichever arrows that range still needs.
+	rangeWidth := func(lo, hi int) int {
+		w := 0
+		for i := lo; i <= hi; i++ {
+			w += widths[i]
+		}
+		if lo > 0 {
+			w += arrowWidth
+		}
+		if hi < n-1 {
+			w += arrowWidth
+		}
+		return w
+	}
+
+	lo, hi := anchor, anchor
+	for {
+		progress := false
+		if hi+1 < n && rangeWidth(lo, hi+1) <= availWidth {
+			hi++
+			progress = true
+		}
+		if lo-1 >= 0 && rangeWidth(lo-1, hi) <= availWidth {
+			lo--
+			progress = true
+		}
+		if !progress {
+			break
+		}
+	}
+	m.tabScrollOffset = lo
+
+	showLeft := lo > 0
+	x := 0
+	if showLeft {
+		x = arrowWidth
+	}
+	tabX := make([]int, 0, hi-lo+1)
+	for i := lo; i <= hi; i++ {
+		tabX = append(tabX, x)
+		x += widths[i]
+	}
+
+	return tabStripLayout{
+		first:          lo,
+		last:           hi,
+		showLeftArrow:  showLeft,
+		showRightArrow: hi < n-1,
+		tabX:           tabX,
+		arrowWidth:     arrowWidth,
+	}
+}
+
+// scrollTabIntoView adjusts m.tabScrollOffset minimally (not necessarily to
+// 0) so m.activeTab falls within the tab strip's currently visible window,
+// at the strip's current available width. Called once at the end of
+// SetSize, which already re-runs after every activeTab-changing action in
+// this codebase, rather than repeating a call at each of those sites.
+func (m *TabbedVarsEditorModel) scrollTabIntoView() {
+	if len(m.tabs) == 0 {
+		return
+	}
+	layout := m.tabStripFit(m.tabStripAvailWidth())
+	if m.activeTab < layout.first {
+		m.tabScrollOffset = m.activeTab
+		return
+	}
+	if m.activeTab > layout.last {
+		// Shift right one tab at a time until activeTab is the new last --
+		// tabStripFit's own greedy width-fit (not a fixed tab count) decides
+		// how many additional tabs that pulls into view on the left side.
+		for m.tabScrollOffset < m.activeTab {
+			m.tabScrollOffset++
+			layout = m.tabStripFit(m.tabStripAvailWidth())
+			if m.activeTab <= layout.last {
+				break
+			}
+		}
+	}
+}
+
+// paneOffsetFor returns pane idx's top-left offset relative to pane 0 --
+// (0,0) unless tiled, from SetSize's cached paneOffsetXs/Ys.
+func (m *TabbedVarsEditorModel) paneOffsetFor(idx int) (x, y int) {
+	slot, ok := m.paneSlotFor(idx)
+	if !m.splitMode || !ok || slot >= len(m.paneOffsetXs) {
+		return 0, 0
+	}
+	return m.paneOffsetXs[slot], m.paneOffsetYs[slot]
+}
+
+// openTabIndices returns the real tab index of every currently open tab, in
+// tab order -- the geometry arrays (paneContentWidth, paneEditorHeight,
+// paneOffsetXs/Ys, sideBySideShares, stackedShares) are indexed by position
+// within this slice ("pane slot"), not by raw tab index, since a closed tab
+// in between two open ones would otherwise leave a gap.
+func (m *TabbedVarsEditorModel) openTabIndices() []int {
+	var open []int
+	for i := range m.tabs {
+		if m.tabs[i].open {
+			open = append(open, i)
+		}
+	}
+	return open
+}
+
+// openCount returns how many tabs are currently open (rendered as tiled
+// panes, or the single Maximized pane if exactly one).
+func (m *TabbedVarsEditorModel) openCount() int {
+	n := 0
+	for i := range m.tabs {
+		if m.tabs[i].open {
+			n++
+		}
+	}
+	return n
+}
+
+// paneSlotFor resolves a real tab index to its position within
+// openTabIndices() -- the index every pane-geometry array actually uses.
+// ok is false if tabIdx is out of range or currently closed (nothing
+// rendered to have geometry for).
+func (m *TabbedVarsEditorModel) paneSlotFor(tabIdx int) (slot int, ok bool) {
+	if tabIdx < 0 || tabIdx >= len(m.tabs) || !m.tabs[tabIdx].open {
+		return 0, false
+	}
+	slot = 0
+	for i := 0; i < tabIdx; i++ {
+		if m.tabs[i].open {
+			slot++
+		}
+	}
+	return slot, true
+}
+
+// activeSplitShares returns whichever of sideBySideShares/stackedShares
+// applies to m.layoutMode, so callers can read or write "the current
+// layout's shares" without duplicating the switch at every call site.
+// Defaults to sideBySideShares when maximized (there's nothing to share in
+// that mode, so the choice is arbitrary).
+func (m *TabbedVarsEditorModel) activeSplitShares() []float64 {
+	if m.layoutMode == envLayoutStacked {
+		return m.stackedShares
+	}
+	return m.sideBySideShares
+}
+
+// resetSharesToEqual resets every pane's share in both layouts' share
+// slices to 1/N, matching the open tab count -- called whenever the open
+// tab count changes (including a pane opening/closing) and by the keyboard
+// resize mode's Space key.
+func (m *TabbedVarsEditorModel) resetSharesToEqual() {
+	n := m.openCount()
+	if n == 0 {
+		m.sideBySideShares, m.stackedShares = nil, nil
+		return
+	}
+	equal := make([]float64, n)
+	for i := range equal {
+		equal[i] = 1.0 / float64(n)
+	}
+	m.sideBySideShares = append([]float64(nil), equal...)
+	m.stackedShares = append([]float64(nil), equal...)
 }
 
 // paneBoxAt returns which pane's box contains the given absolute screen
@@ -442,12 +799,14 @@ func (m *TabbedVarsEditorModel) paneBoxAt(x, y int) (idx int, ok bool) {
 		return m.activeTab, true
 	}
 	layout := displayengine.GetLayout()
-	boxTop := m.dialogOffsetY + 1 + m.largeTitleOverhead + m.subtitleHeight
-	for i := 0; i < 2; i++ {
+	boxLeft := m.paneBoxLeft(m.dialogOffsetX)
+	boxTop := m.paneBoxTop(m.dialogOffsetY)
+	for _, i := range m.openTabIndices() {
+		slot, _ := m.paneSlotFor(i)
 		offX, offY := m.paneOffsetFor(i)
-		bx, by := m.dialogOffsetX+offX, boxTop+offY
-		boxHeight := m.paneEditorHeight[i] + layout.BorderHeight()
-		if x >= bx && x < bx+m.paneContentWidth[i] && y >= by && y < by+boxHeight {
+		bx, by := boxLeft+offX, boxTop+offY
+		boxHeight := m.paneEditorHeight[slot] + layout.BorderHeight()
+		if x >= bx && x < bx+m.paneContentWidth[slot] && y >= by && y < by+boxHeight {
 			return i, true
 		}
 	}
@@ -461,6 +820,13 @@ func (m *TabbedVarsEditorModel) paneBoxAt(x, y int) (idx int, ok bool) {
 func (m *TabbedVarsEditorModel) editorRelCoords(idx, x, y int) (relX, relY int) {
 	layout := displayengine.GetLayout()
 	offX, offY := m.paneOffsetFor(idx)
+	if m.splitMode {
+		// paneOffsetFor is relative to sibling panes only -- add the middle
+		// "tab list" box's own left border column and top border/title row,
+		// same as SetSize does for m.activePaneOffsetX/Y (see its comment).
+		offX += layout.BorderWidth() / 2
+		offY += m.tiledTabStripHeight
+	}
 	relX = x - (m.dialogOffsetX + offX + layout.NestedLeftOffset())
 	relY = y - (m.dialogOffsetY + offY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 	return
@@ -476,6 +842,36 @@ func (m *TabbedVarsEditorModel) focusPane(idx int) {
 	m.tabs[m.activeTab].editor.Blur()
 	m.activeTab = idx
 	m.SetSize(m.width, m.height)
+}
+
+// closePane hides tab idx (its editor buffer, cursor, and any unsaved edits
+// stay intact -- see envTab.open) -- the shared core of the per-pane Close
+// widget click and EnvClosePane (Ctrl+Q). A no-op if idx is already closed
+// or it's the last open tab (Close isn't offered in that case, but this
+// stays safe to call regardless). If idx was active, moves focus to the
+// next open tab (wrapping), matching Ctrl+Right's own wrap-free linear
+// order as closely as a "skip closed tabs" search can.
+func (m *TabbedVarsEditorModel) closePane(idx int) tea.Cmd {
+	if idx < 0 || idx >= len(m.tabs) || !m.tabs[idx].open || m.openCount() <= 1 {
+		return nil
+	}
+	m.tabs[idx].open = false
+	if idx == m.activeTab {
+		m.tabs[m.activeTab].editor.Blur()
+		for offset := 1; offset < len(m.tabs); offset++ {
+			next := (idx + offset) % len(m.tabs)
+			if m.tabs[next].open {
+				m.activeTab = next
+				break
+			}
+		}
+		if m.focus == envFocusEditor {
+			m.tabs[m.activeTab].editor.Focus()
+		}
+	}
+	m.resetSharesToEqual()
+	m.SetSize(m.width, m.height)
+	return nil
 }
 
 // CyclePaneTitleFocus implements displayengine.PaneTitleBarFocusable --
@@ -685,6 +1081,12 @@ func (m *TabbedVarsEditorModel) HasDialog() bool {
 // allowing AppModel.View() to position the terminal cursor over the active editor.
 func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
 	if m.focus != envFocusEditor || len(m.tabs) == 0 {
+		return 0, 0, tea.CursorBar, false
+	}
+	// A Ctrl+Left/Right-selected-but-still-closed tab (tiled mode only --
+	// Maximized always shows whichever tab is active) has no rendered pane
+	// to point a cursor at until Space opens it.
+	if m.splitMode && !m.tabs[m.activeTab].open {
 		return 0, 0, tea.CursorBar, false
 	}
 	editor := m.tabs[m.activeTab].editor

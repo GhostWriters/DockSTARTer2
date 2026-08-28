@@ -310,9 +310,11 @@ func BuildLabeledBottomBorderCtx(totalWidth int, label string, focused bool, ctx
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, leftPart, leftConnector, labelStyle.Render(label), rightConnector, rightPart)
 }
 
-// BuildDualLabelBottomBorderCtx constructs a bottom border line with a label on the LEFT
-// (e.g. "INS"/"OVR") and an optional label on the RIGHT (e.g. "42%").
-// Pass an empty string for rightLabel when no right label is needed.
+// BuildDualLabelBottomBorderCtx constructs a bottom border line with an
+// optional label on the LEFT (e.g. "INS"/"OVR") and an optional label on the
+// RIGHT (e.g. "42%"). Pass an empty string for either one when that side
+// isn't needed -- e.g. a tiled pane's own bottom border carries only the
+// scroll % (leftLabel "") once INS/OVR moves to the shared middle box.
 // Uses rounded borders (for editor inner boxes, not confirm-style slanted borders).
 func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string, focused bool, ctx StyleContext) string {
 	var border lipgloss.Border
@@ -354,9 +356,13 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 		Background(ctx.Dialog.GetBackground())
 	labelStyle := ctx.TagKey.Bold(true)
 
-	// Left segment: BottomLeft + 1×bottom + leftT + leftLabel + rightT
-	leftLabelW := lipgloss.Width(leftLabel)
-	leftSegW := 1 + 1 + 1 + leftLabelW + 1 // BottomLeft(1) + bottom(1) + leftT(1) + label + rightT(1)
+	// Left segment (optional, symmetric with the right segment below):
+	// BottomLeft + 1×bottom + leftT + leftLabel + rightT, or just
+	// BottomLeft + 1×bottom when there's no left label at all.
+	leftSegW := 1 + 1 // BottomLeft(1) + bottom(1)
+	if leftLabel != "" {
+		leftSegW += 1 + lipgloss.Width(leftLabel) + 1 // leftT(1) + label + rightT(1)
+	}
 
 	// Right segment (optional): leftT + rightLabel + rightT + 1×bottom + BottomRight
 	rightLabelW := 0
@@ -374,12 +380,19 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 		middleW = 0
 	}
 
-	parts := []string{
-		borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, 1)),
-		borderStyle.Render(leftT),
-		labelStyle.Render(leftLabel),
-		borderStyle.Render(rightT),
-		borderStyle.Render(strutil.Repeat(border.Bottom, max(0, middleW))),
+	var parts []string
+	if leftLabel != "" {
+		parts = []string{
+			borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, 1)),
+			borderStyle.Render(leftT),
+			labelStyle.Render(leftLabel),
+			borderStyle.Render(rightT),
+			borderStyle.Render(strutil.Repeat(border.Bottom, max(0, middleW))),
+		}
+	} else {
+		parts = []string{
+			borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, 1+max(0, middleW))),
+		}
 	}
 	if rightLabel != "" {
 		parts = append(parts,

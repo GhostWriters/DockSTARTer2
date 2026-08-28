@@ -96,3 +96,61 @@ services:
 		t.Errorf("Expected 0 referenced apps, got: %v", apps)
 	}
 }
+
+// TestListReferencedApps_ServiceScopedFile is the regression test for the
+// bug this session found: a service-scoped or shared/virtual .env.app.*
+// file's discovery must credit the base app it belongs to, not be silently
+// dropped by the final IsAppNameValid filter.
+func TestListReferencedApps_ServiceScopedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	serviceFile := filepath.Join(tmpDir, ".env.app.immich___postgres")
+	if err := os.WriteFile(serviceFile, []byte("POSTGRES_DB='immich'\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	conf := config.AppConfig{ComposeDir: tmpDir}
+	apps, err := ListReferencedApps(context.Background(), conf)
+	if err != nil {
+		t.Fatalf("ListReferencedApps failed: %v", err)
+	}
+
+	if !slices.Contains(apps, "IMMICH") {
+		t.Errorf("Expected IMMICH in referenced apps (via service-scoped file), got: %v", apps)
+	}
+	if slices.Contains(apps, "IMMICH___POSTGRES") {
+		t.Errorf("IMMICH___POSTGRES should never appear as its own app entry, got: %v", apps)
+	}
+}
+
+// TestListReferencedApps_OverrideServiceScopedFile is the same regression,
+// but via the override-file scan (step 3) instead of the direct file scan
+// (step 2) -- a separate code path with the same bug.
+func TestListReferencedApps_OverrideServiceScopedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	overrideContent := `services:
+  immich-postgres:
+    env_file:
+      - .env.app.immich___postgres
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "docker-compose.override.yml"), []byte(overrideContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	conf := config.AppConfig{ComposeDir: tmpDir}
+	apps, err := ListReferencedApps(context.Background(), conf)
+	if err != nil {
+		t.Fatalf("ListReferencedApps failed: %v", err)
+	}
+
+	if !slices.Contains(apps, "IMMICH") {
+		t.Errorf("Expected IMMICH in referenced apps (via override reference), got: %v", apps)
+	}
+}

@@ -18,6 +18,34 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
+// AppVarFileNames returns the base filenames (not full paths, e.g.
+// ".env.app.immich___postgres") of every ".env.app.*" file in
+// conf.ComposeDir that belongs to app -- the plain file, any real
+// per-service file ("___service"), and any shared/virtual file
+// ("-suffix"). app may itself be instance-qualified (e.g.
+// "IMMICH__MYINSTANCE"); only that exact app+instance's files match, not a
+// different instance of the same app. Matching strips only a service/shared
+// marker from each candidate (via stripServiceSuffix), never an instance,
+// so this stays a narrower, more precise match than AppNameToBaseAppName.
+func AppVarFileNames(app string, conf config.AppConfig) []string {
+	entries, err := os.ReadDir(conf.ComposeDir)
+	if err != nil {
+		return nil
+	}
+	appUpper := strings.ToUpper(app)
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
+			continue
+		}
+		suffix := strings.ToUpper(strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix))
+		if stripServiceSuffix(suffix) == appUpper {
+			names = append(names, entry.Name())
+		}
+	}
+	return names
+}
+
 // ListAddedApps returns a sorted list of all added applications (those with __ENABLED variables).
 func ListAddedApps(ctx context.Context, envFile string) ([]string, error) {
 	vars, err := ListVars(envFile)
@@ -152,15 +180,19 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 		}
 	}
 
-	// 2. Scan for app-specific env files with variables
+	// 2. Scan for app-specific env files with variables. A file's suffix
+	// may itself be service/shared-qualified (e.g. "immich___postgres",
+	// "immich-database") -- strip that marker so the discovery credits the
+	// app the file actually belongs to, not the raw qualified string
+	// (which would just fail IsAppNameValid below and be dropped silently).
 	entries, _ := os.ReadDir(conf.ComposeDir)
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
-			appName := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
-			appUpper := strings.ToUpper(appName)
-			// Check if it has any variables
-			appSpecificVars, _ := ListAppVars(ctx, appUpper+":", conf)
-			if len(appSpecificVars) > 0 {
+			suffix := strings.ToUpper(strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix))
+			appUpper := stripServiceSuffix(suffix)
+			// Check if the file has any variables
+			vars, _ := ListVars(filepath.Join(conf.ComposeDir, entry.Name()))
+			if len(vars) > 0 {
 				referenced[appUpper] = true
 			}
 		}
@@ -183,16 +215,16 @@ func ListReferencedApps(ctx context.Context, conf config.AppConfig) ([]string, e
 						case string:
 							clean := strings.TrimPrefix(val, "./")
 							if strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
-								appName := strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix)
-								referenced[strings.ToUpper(appName)] = true
+								suffix := strings.ToUpper(strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix))
+								referenced[stripServiceSuffix(suffix)] = true
 							}
 						case []interface{}:
 							for _, item := range val {
 								if s, ok := item.(string); ok {
 									clean := strings.TrimPrefix(s, "./")
 									if strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
-										appName := strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix)
-										referenced[strings.ToUpper(appName)] = true
+										suffix := strings.ToUpper(strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix))
+										referenced[stripServiceSuffix(suffix)] = true
 									}
 								}
 							}

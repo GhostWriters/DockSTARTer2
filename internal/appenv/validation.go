@@ -135,13 +135,19 @@ func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) boo
 		return true
 	}
 
-	// 2. Check for app variables in the .env.app.appname file
-	appSpecificVars, _ := ListAppVars(ctx, app+":", conf)
-	if len(appSpecificVars) > 0 {
-		return true
+	// 2. Check for app variables in any of the app's .env.app.* files --
+	// the plain file, any real per-service file, or any shared/virtual file.
+	for _, name := range AppVarFileNames(app, conf) {
+		vars, _ := ListVars(filepath.Join(conf.ComposeDir, name))
+		if len(vars) > 0 {
+			return true
+		}
 	}
 
-	// 3. Check for an un-commented reference to .env.app.appname in the override file
+	// 3. Check for an un-commented reference to any of the app's .env.app.*
+	// files (plain, per-service, or shared/virtual) in the override file --
+	// matched by name pattern, same as before, not by requiring the file to
+	// already exist (a reference to a not-yet-created file still counts).
 	overrideFile := filepath.Join(conf.ComposeDir, constants.ComposeOverrideFileName)
 	if _, err := os.Stat(overrideFile); err == nil {
 		content, err := os.ReadFile(overrideFile)
@@ -152,20 +158,26 @@ func IsAppReferenced(ctx context.Context, app string, conf config.AppConfig) boo
 				} `yaml:"services"`
 			}
 			if err := yaml.Unmarshal(content, &override); err == nil {
-				targetEnv := constants.AppEnvFileNamePrefix + strings.ToLower(app)
+				matchesApp := func(clean string) bool {
+					if !strings.HasPrefix(clean, constants.AppEnvFileNamePrefix) {
+						return false
+					}
+					suffix := strings.ToUpper(strings.TrimPrefix(clean, constants.AppEnvFileNamePrefix))
+					return stripServiceSuffix(suffix) == app
+				}
 				for _, service := range override.Services {
 					checkEnvFile := func(v interface{}) bool {
 						switch val := v.(type) {
 						case string:
 							clean := strings.TrimPrefix(val, "./")
-							if clean == targetEnv {
+							if matchesApp(clean) {
 								return true
 							}
 						case []interface{}:
 							for _, item := range val {
 								if s, ok := item.(string); ok {
 									clean := strings.TrimPrefix(s, "./")
-									if clean == targetEnv {
+									if matchesApp(clean) {
 										return true
 									}
 								}
@@ -278,7 +290,13 @@ func VarNameIsValid(varName string, varType string) bool {
 			return false
 		}
 		parts := strings.SplitN(varName, ":", 2)
-		return IsAppNameValid(parts[0]) && VarNameIsValid(parts[1], "_BARE_")
+		// The colon prefix may carry a service qualifier (e.g.
+		// "immich-database", "immich___postgres") identifying which
+		// .env.app.* file it targets; IsAppNameValid only recognizes real
+		// app[__instance] names, so validate against the app name with
+		// that qualifier stripped.
+		baseAppPart := stripServiceSuffix(strings.ToUpper(parts[0]))
+		return IsAppNameValid(baseAppPart) && VarNameIsValid(parts[1], "_BARE_")
 	default:
 		if strings.HasSuffix(varType, ":") {
 			if !strings.Contains(varName, ":") {

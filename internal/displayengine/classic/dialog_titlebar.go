@@ -26,7 +26,7 @@ type WidgetDef struct {
 	// counterparts). Fallback to the generic Icon{Inactive,Focused,Pressed}
 	// tag when the theme doesn't define a widget-specific one is handled by
 	// semstyle itself (see the Icons section of .FALLBACKS.ds2theme,
-	// registered once per process) -- buildDialogTitleWidgets/
+	// registered once per process) -- BuildDialogTitleWidgets/
 	// buildLargeTitleBarWidgets just reference "IconHelpInactive" etc.
 	// directly and trust it to resolve.
 	IconName string
@@ -270,7 +270,7 @@ func BuildInactiveTitleWidgetsFor(widgets []WidgetDef, ctx StyleContext) string 
 	if ctx.LargeTitleBars {
 		return buildLargeTitleBarWidgets(false, "", "", widgets, ctx)
 	}
-	return buildDialogTitleWidgets(false, "", "", widgets, ctx)
+	return BuildDialogTitleWidgets(false, "", "", widgets, ctx)
 }
 
 // BuildInactiveLargeTitleWidgets builds the widget string styled for the large titlebar row.
@@ -309,9 +309,9 @@ func buildLargeTitleBarWidgets(focused bool, activeWidget, pressedWidget string,
 	return result
 }
 
-// buildDialogTitleWidgets is the shared renderer for the title bar widgets.
+// BuildDialogTitleWidgets is the shared renderer for the title bar widgets.
 // focused/activeWidget are the title bar state; use "" for always-inactive output.
-func buildDialogTitleWidgets(focused bool, activeWidget, pressedWidget string, widgets []WidgetDef, ctx StyleContext) string {
+func BuildDialogTitleWidgets(focused bool, activeWidget, pressedWidget string, widgets []WidgetDef, ctx StyleContext) string {
 	lineChar := "─"
 	if !ctx.LineCharacters {
 		lineChar = "-"

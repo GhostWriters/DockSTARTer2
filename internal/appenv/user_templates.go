@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -164,6 +165,56 @@ func TemplateFolder(appName string) string {
 	base := strings.ToLower(AppNameToBaseAppName(appName))
 	dir, _ := resolveAppTemplateFolder(base)
 	return dir
+}
+
+// TemplateAppVarFileSuffixes returns an AppInstanceFile-style fileSuffix
+// pattern (base app name replaced with "*", matching TemplateFile's own
+// convention) for every .env.app.* file baseApp's template folder defines --
+// the plain file plus, for a multi-service app, any per-service
+// (".env.app.<base>___service") or shared/virtual (".env.app.<base>-suffix")
+// files alongside it. Passing each pattern through AppInstanceFile resolves
+// and instance-substitutes it the same way the single plain-file case
+// already worked, since TemplateFile only ever substitutes "*" with the
+// base app name, never the instance -- instance qualification happens via
+// AppInstanceFile's own instanceFile naming, unaffected by the service
+// suffix riding along after the "*".
+func TemplateAppVarFileSuffixes(baseApp string) []string {
+	templateFolder := TemplateFolder(baseApp)
+	entries, err := os.ReadDir(templateFolder)
+	if err != nil {
+		return nil
+	}
+
+	baseLower := strings.ToLower(baseApp)
+	baseUpper := strings.ToUpper(baseApp)
+	var patterns []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
+			continue
+		}
+		nameSuffix := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
+		if stripServiceSuffix(strings.ToUpper(nameSuffix)) != baseUpper {
+			continue
+		}
+		pattern := constants.AppEnvFileNamePrefix + strings.Replace(nameSuffix, baseLower, "*", 1)
+		patterns = append(patterns, pattern)
+	}
+	sort.Strings(patterns)
+	return patterns
+}
+
+// AppNameToVarFilePattern is the inverse of substituting "*" in
+// TemplateAppVarFileSuffixes's patterns: given a full appName that may
+// carry an instance and/or a service suffix (e.g. "IMMICH-DATABASE",
+// "IMMICH__MYINSTANCE___POSTGRES"), it returns the AppInstanceFile-style
+// ".env.app.*..." pattern for that exact file, with only the base app name
+// portion replaced by "*" -- ready to pass straight to AppInstanceFile so
+// it resolves against the matching template file instead of always the
+// plain one.
+func AppNameToVarFilePattern(appName string) string {
+	baseApp := strings.ToLower(AppNameToBaseAppName(appName))
+	lowerAppName := strings.ToLower(appName)
+	return constants.AppEnvFileNamePrefix + strings.Replace(lowerAppName, baseApp, "*", 1)
 }
 
 // TemplateFile returns the resolved path to a specific file within

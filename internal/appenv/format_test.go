@@ -35,7 +35,7 @@ func TestFormatLinesCore(t *testing.T) {
 		appName := "audiobookshelf"
 		composeEnvFile := ""
 
-		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile)
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, "")
 
 		expected := []string{
 			"###",
@@ -69,9 +69,44 @@ func TestFormatLinesCore(t *testing.T) {
 		appName := "audiobookshelf"
 		composeEnvFile := ""
 
-		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile)
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, "")
 
 		expected := []string{
+			"###",
+			"### Audiobookshelf",
+			"###",
+			"### ! Missing description !",
+			"###",
+			"###",
+			"### Audiobookshelf (User Defined Variables)",
+			"###",
+			"ALLOW_CORS=1",
+		}
+
+		if len(formatted) != len(expected) {
+			t.Errorf("Expected %d lines, got %d. Lines: %v", len(expected), len(formatted), formatted)
+			return
+		}
+
+		for i, line := range formatted {
+			if line != expected[i] {
+				t.Errorf("At index %d: expected %q, got %q", i, expected[i], line)
+			}
+		}
+	})
+
+	t.Run("fileLabel adds a standalone filename line above an unchanged heading block", func(t *testing.T) {
+		currentLines := []string{"ALLOW_CORS=1"}
+		var defaultLines []string = nil
+		envLines := []string{"AUDIOBOOKSHELF__ENABLED=true"}
+		appName := "audiobookshelf"
+		composeEnvFile := ""
+
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, ".env.app.audiobookshelf-database")
+
+		expected := []string{
+			"### .env.app.audiobookshelf-database",
+			"",
 			"###",
 			"### Audiobookshelf",
 			"###",

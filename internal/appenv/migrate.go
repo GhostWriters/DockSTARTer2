@@ -63,6 +63,18 @@ func MigrateAppVars(ctx context.Context, appName string, conf config.AppConfig) 
 	return scanner.Err()
 }
 
+// appVarFilePath resolves a .migrate file's "appname:" token (e.g. "immich",
+// "immich-database", "immich__myinstance___postgres" -- already fully
+// instance-substituted by the time MigrateAppVars reads the line) directly
+// to its .env.app.* file path. This is a literal suffix, not a template
+// pattern, so no AppInstanceFile/TemplateFile "*" resolution is needed --
+// unlike AppInstanceFile, this doesn't require the file (or its template)
+// to already exist, since a migration source/target may legitimately not
+// exist yet.
+func appVarFilePath(conf config.AppConfig, token string) string {
+	return filepath.Join(conf.ComposeDir, constants.AppEnvFileNamePrefix+strings.ToLower(token))
+}
+
 // EnvMigrate renames a variable while preserving its value. fromVar's key
 // portion (after any "appname:" prefix) may be a regex -- e.g. an
 // "OLD_NAME_A|OLD_NAME_B" alternation -- mirroring env_migrate.sh's
@@ -73,22 +85,16 @@ func EnvMigrate(ctx context.Context, fromVar, toVar string, conf config.AppConfi
 	fromFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if strings.Contains(fromVar, ":") {
 		parts := strings.SplitN(fromVar, ":", 2)
-		f, err := AppInstanceFile(ctx, parts[0], constants.EnvFileName)
-		if err == nil && f != "" {
-			fromFile = f
-			fromVarResolved = parts[1]
-		}
+		fromFile = appVarFilePath(conf, parts[0])
+		fromVarResolved = parts[1]
 	}
 
 	toVarResolved := toVar
 	toFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
 	if strings.Contains(toVar, ":") {
 		parts := strings.SplitN(toVar, ":", 2)
-		f, err := AppInstanceFile(ctx, parts[0], constants.EnvFileName)
-		if err == nil && f != "" {
-			toFile = f
-			toVarResolved = parts[1]
-		}
+		toFile = appVarFilePath(conf, parts[0])
+		toVarResolved = parts[1]
 	}
 
 	// fromVarResolved may be a regex; find every real variable name in
@@ -103,14 +109,18 @@ func EnvMigrate(ctx context.Context, fromVar, toVar string, conf config.AppConfi
 	}
 
 	for _, matchedKey := range matchedKeys {
+		// A source variable's mere presence -- not its value -- is what
+		// makes it eligible to migrate, mirroring env_rename.sh/env_copy.sh
+		// (grep -o -P by name only). An empty value ("") is still a real,
+		// intentional assignment and must migrate like any other.
 		val, err := Get(matchedKey, fromFile)
-		if err != nil || val == "" {
+		if err != nil {
 			continue
 		}
 
-		// Check if target already exists
-		toVal, _ := Get(toVarResolved, toFile)
-		if toVal != "" {
+		// Check if target already exists -- by presence, not by having a
+		// non-empty value, matching env_var_exists.sh.
+		if targetKeys, _ := FindMatchingKeys(regexp.QuoteMeta(toVarResolved), toFile); len(targetKeys) > 0 {
 			logger.Debug(ctx, "Migration target %s already exists, skipping.", toVar)
 			continue
 		}

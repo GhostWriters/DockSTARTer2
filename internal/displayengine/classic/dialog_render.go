@@ -413,6 +413,46 @@ func WidthOfTitleSegment(rawTitle string, showIndicators bool, ctx StyleContext)
 	return 1 + indicatorLen + WidthWithoutZones(RenderThemeTextCtx(rawTitle, ctx)) + indicatorLen + 1
 }
 
+// MaxRawTitleWidth returns the longest raw title text (unstyled character
+// count) that fits inside a "RAW"-titleTag RenderBorderedBoxCtx call of the
+// given contentWidth alongside the given widgets, without triggering that
+// function's fit-the-title/fit-the-widgets growth (see its titleSectionLen
+// and rightWidget handling) -- computed directly from the same widget-width
+// and centering math it uses internally, not by rendering and measuring.
+// Pass the resulting length to strutil/displayengine.TruncateRight on the
+// raw title before wrapping it (e.g. via RenderTitleSegmentCtx) and handing
+// it to RenderBorderedBoxCtx as titleTag "RAW".
+func MaxRawTitleWidth(contentWidth int, showIndicators bool, titleAlign string, widgets []WidgetDef, ctx StyleContext) int {
+	decorationOverhead := WidthOfTitleSegment("", showIndicators, ctx)
+
+	widgetWidth := 0
+	if len(widgets) > 0 {
+		widgetWidth = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", widgets, ctx))
+	}
+	if widgetWidth == 0 {
+		return max(contentWidth-decorationOverhead, 0)
+	}
+
+	// Mirrors the exact "needed := rightWidgetWidth + 1; grow actualWidth
+	// until actualWidth-titleSectionLen-leftPad >= needed" loop below, but
+	// solved for the largest titleSectionLen at a *fixed* contentWidth
+	// (never growing) instead: left-aligned has no pad, so the full
+	// remainder must clear needed; centered splits the remainder roughly in
+	// half (leftPad = remaining/2, integer division), so the widget side
+	// only gets ceil(remaining/2) -- remaining must be at least 2*needed-1
+	// for that ceiling to clear needed.
+	needed := widgetWidth + 1
+	var maxTitleSectionLen int
+	if titleAlign == "left" {
+		maxTitleSectionLen = contentWidth - needed
+	} else {
+		maxTitleSectionLen = contentWidth - (2*needed - 1)
+	}
+	maxTitleSectionLen = max(maxTitleSectionLen, 0)
+
+	return max(maxTitleSectionLen-decorationOverhead, 0)
+}
+
 // RenderBorderedBoxCtx renders a dialog with title and borders using a specific context.
 // Unlike renderDialogWithBorderCtx, this accepts a known contentWidth instead of measuring content.
 func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, tbs ...TitleBarState) string {
@@ -555,7 +595,7 @@ func renderBorderedBoxCtxImpl(rawTitle, content string, contentWidth int, target
 			// Small titlebar: build small-style widgets from tbsState.
 			rightWidget := ""
 			if tbsState.Show {
-				rightWidget = buildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.PressedWidget, tbsState.activeWidgets(), ctx)
+				rightWidget = BuildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.PressedWidget, tbsState.activeWidgets(), ctx)
 			}
 			rightWidgetWidth := WidthWithoutZones(rightWidget)
 			if rightWidget != "" {
@@ -726,7 +766,7 @@ func renderDialogWithBorderCtx(title, content string, border lipgloss.Border, fo
 		// Small titlebar: build small-style widgets from tbs.
 		rightWidget := ""
 		if tbs.Show {
-			rightWidget = buildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget, tbs.activeWidgets(), ctx)
+			rightWidget = BuildDialogTitleWidgets(tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget, tbs.activeWidgets(), ctx)
 		}
 		result.WriteString(borderStyleLight.Render(border.TopLeft))
 		if title == "" {

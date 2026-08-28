@@ -35,20 +35,28 @@ func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppCon
 
 	// Load environment variables for expansion context
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, appName))
 
 	vars, err := ListVars(envFile)
 	if err != nil {
 		logger.Debug(ctx, "Failed to list global vars for expansion: %v", err)
 	}
-	appVars, err := ListVars(appEnvFile)
-	if err != nil {
-		logger.Debug(ctx, "Failed to list app vars for expansion: %v", err)
-	}
 
-	// Combine vars
-	for k, v := range appVars {
-		vars[k] = v
+	// Combine vars from every one of the app's .env.app.* files -- the
+	// plain file, plus (for a multi-service app) any per-service or
+	// shared/virtual files -- so a .folders line referencing a
+	// service-scoped var (e.g. a database path built from a per-service
+	// var) still expands correctly.
+	baseApp := strings.ToLower(AppNameToBaseAppName(strings.ToUpper(appName)))
+	for _, pattern := range TemplateAppVarFileSuffixes(baseApp) {
+		appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", appName))
+		appVars, err := ListVars(appEnvFile)
+		if err != nil {
+			logger.Debug(ctx, "Failed to list app vars for expansion from %s: %v", appEnvFile, err)
+			continue
+		}
+		for k, v := range appVars {
+			vars[k] = v
+		}
 	}
 
 	f, err := os.Open(foldersFile)

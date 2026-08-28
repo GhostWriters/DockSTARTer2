@@ -65,7 +65,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		defer os.Remove(tmpGlobalFile.Name())
 
 		defaultEnvFile := filepath.Join(configDir, constants.EnvExampleFileName)
-		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), defaultEnvFile, "", composeEnvFile)
+		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), defaultEnvFile, "", composeEnvFile, "")
 		if err == nil {
 			updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 		}
@@ -88,7 +88,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				appDefaultGlobalFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), ".env")
 			}
 
-			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile)
+			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile, "")
 			if err == nil {
 				if len(updatedEnvLines) > 0 {
 					updatedEnvLines = append(updatedEnvLines, "")
@@ -119,56 +119,71 @@ func Update(ctx context.Context, force bool, file string) error {
 
 	// 4. Update individual .env.app.* files (Parity with env_update.sh lines 82-121)
 	for _, appName := range appList {
-		appEnvFile := GetAppEnvFile(appName, conf)
-		if NeedsUpdate(ctx, force, appEnvFile) {
-			if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
-				logger.Notice(ctx, "Creating '"+console.FormatFilePath(appEnvFile)+"'.")
-			} else {
-				logger.Notice(ctx, "Updating '"+console.FormatFilePath(appEnvFile)+"'.")
-			}
-			LogAppTemplateOverride(ctx, appName)
+		// Every one of the app's .env.app.* files -- the plain file, plus
+		// (for a multi-service app) any per-service or shared/virtual
+		// files. Falls back to just the plain-file pattern when the
+		// template folder can't be found (e.g. a removed or user-defined
+		// app with no matching template), so an existing app-specific env
+		// file still gets formatted even without a template to diff
+		// against.
+		baseApp := strings.ToLower(AppNameToBaseAppName(strings.ToUpper(appName)))
+		patterns := TemplateAppVarFileSuffixes(baseApp)
+		if len(patterns) == 0 {
+			patterns = []string{fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix)}
+		}
 
-			// Only use template for non-user-defined apps (Parity lines 99-101)
-			appDefaultEnvFile := ""
-			if !IsAppUserDefined(ctx, appName, composeEnvFile) {
-				appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), ".env.app.*")
-			}
-			formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile)
-			if err == nil {
-				finalAppContent := strings.Join(formattedAppFile, "\n")
-				// Ensure trailing newline
-				if len(formattedAppFile) > 0 && !strings.HasSuffix(finalAppContent, "\n") {
-					finalAppContent += "\n"
-				}
-
-				// Parity lines 103-116: uses temp file and copies
-				tmpFile, _ := os.CreateTemp("", "ds2.app_env.*.tmp")
-				if err := os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644); err != nil {
-					logger.FatalWithStack(ctx, []string{
-						"Failed to write temporary '" + console.FormatFileName(".env.app."+appName, tmpFile.Name()) + "' update file.",
-					})
-				}
-				tmpFile.Close()
-				defer os.Remove(tmpFile.Name())
-
-				existing, _ := os.ReadFile(appEnvFile)
-				if bytes.Equal(existing, []byte(finalAppContent)) {
-					system.SetPermissions(ctx, appEnvFile)
-					UnsetNeedsUpdate(ctx, appEnvFile)
-					continue
-				}
-				if err := CopyFile(tmpFile.Name(), appEnvFile); err != nil {
-					logger.FatalWithStack(ctx, []string{
-						"Failed to copy file.",
-						"Failing command: {{|FailingCommand|}}cp -f \"" + tmpFile.Name() + "\" \"" + appEnvFile + "\"{{[-]}}",
-					})
+		for _, pattern := range patterns {
+			appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", strings.ToLower(appName)))
+			if NeedsUpdate(ctx, force, appEnvFile) {
+				if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
+					logger.Notice(ctx, "Creating '"+console.FormatFilePath(appEnvFile)+"'.")
 				} else {
-					system.SetPermissions(ctx, appEnvFile)
-					UnsetNeedsUpdate(ctx, appEnvFile)
+					logger.Notice(ctx, "Updating '"+console.FormatFilePath(appEnvFile)+"'.")
 				}
+				LogAppTemplateOverride(ctx, appName)
+
+				// Only use template for non-user-defined apps (Parity lines 99-101)
+				appDefaultEnvFile := ""
+				if !IsAppUserDefined(ctx, appName, composeEnvFile) {
+					appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), pattern)
+				}
+				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, filepath.Base(appEnvFile))
+				if err == nil {
+					finalAppContent := strings.Join(formattedAppFile, "\n")
+					// Ensure trailing newline
+					if len(formattedAppFile) > 0 && !strings.HasSuffix(finalAppContent, "\n") {
+						finalAppContent += "\n"
+					}
+
+					// Parity lines 103-116: uses temp file and copies
+					tmpFile, _ := os.CreateTemp("", "ds2.app_env.*.tmp")
+					if err := os.WriteFile(tmpFile.Name(), []byte(finalAppContent), 0644); err != nil {
+						logger.FatalWithStack(ctx, []string{
+							"Failed to write temporary '" + console.FormatFileName(filepath.Base(appEnvFile), tmpFile.Name()) + "' update file.",
+						})
+					}
+					tmpFile.Close()
+					defer os.Remove(tmpFile.Name())
+
+					existing, _ := os.ReadFile(appEnvFile)
+					if bytes.Equal(existing, []byte(finalAppContent)) {
+						system.SetPermissions(ctx, appEnvFile)
+						UnsetNeedsUpdate(ctx, appEnvFile)
+						continue
+					}
+					if err := CopyFile(tmpFile.Name(), appEnvFile); err != nil {
+						logger.FatalWithStack(ctx, []string{
+							"Failed to copy file.",
+							"Failing command: {{|FailingCommand|}}cp -f \"" + tmpFile.Name() + "\" \"" + appEnvFile + "\"{{[-]}}",
+						})
+					} else {
+						system.SetPermissions(ctx, appEnvFile)
+						UnsetNeedsUpdate(ctx, appEnvFile)
+					}
+				}
+			} else {
+				logger.Info(ctx, "Environment variable file '"+console.FormatFilePath(appEnvFile)+"' already updated.")
 			}
-		} else {
-			logger.Info(ctx, "Environment variable file '"+console.FormatFilePath(appEnvFile)+"' already updated.")
 		}
 	}
 

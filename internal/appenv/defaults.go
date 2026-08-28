@@ -27,11 +27,19 @@ const (
 func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) string {
 	var appName, cleanVarName, varType string
 
-	derivedAppName := VarNameToAppName(key)
+	// derivedAppName keeps any service/shared qualifier (e.g. "IMMICH___ML")
+	// -- needed below to correctly strip the full "APPNAME___SERVICE__"
+	// prefix off cleanVarName. appName itself is the bare app name, used
+	// wherever we look up or group by the app (template file, nice name).
+	derivedAppName := VarNameToAppNameService(key)
 	if derivedAppName != "" {
-		appName = derivedAppName
+		appName = stripServiceSuffix(derivedAppName)
 		if strings.Contains(key, ":") {
 			varType = varTypeAppEnv
+			// Colon-syntax (.env.app.* vars) targets a specific file, which
+			// may itself be service/shared-qualified -- keep the raw
+			// qualifier here, not the bare app name.
+			appName = derivedAppName
 			parts := strings.SplitN(key, ":", 2)
 			cleanVarName = parts[1]
 		} else {
@@ -54,7 +62,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 			}
 		}
 
-		suffix := strings.TrimPrefix(cleanVarName, appName+"__")
+		suffix := strings.TrimPrefix(cleanVarName, derivedAppName+"__")
 		appNiceName := GetNiceName(ctx, appName)
 		appLower := strings.ToLower(appName)
 
@@ -83,7 +91,7 @@ func VarDefaultValue(ctx context.Context, key string, conf config.AppConfig) str
 		}
 
 	case varTypeAppEnv:
-		defFile, _ := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
+		defFile, _ := AppInstanceFile(ctx, appName, AppNameToVarFilePattern(appName))
 		if defFile != "" {
 			exists, _ := EnvVarExists(ctx, cleanVarName, defFile)
 			if exists {
