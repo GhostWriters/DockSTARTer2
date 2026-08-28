@@ -27,24 +27,70 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 
 	var body string
 	if m.splitMode {
-		pane0 := m.renderPane(0, m.activeTab == 0 && m.focus == envFocusEditor)
-		pane1 := m.renderPane(1, m.activeTab == 1 && m.focus == envFocusEditor)
+		panes := make([]string, len(m.tabs))
+		for i := range m.tabs {
+			panes[i] = m.renderPane(i, i == m.activeTab && m.focus == envFocusEditor)
+		}
 		if m.layoutMode == envLayoutSideBySide {
-			gutter := m.gutterFill(ctx, true, lipgloss.Height(pane0))
-			body = lipgloss.JoinHorizontal(lipgloss.Top, pane0, gutter, pane1)
+			parts := make([]string, 0, len(panes)*2-1)
+			height := lipgloss.Height(panes[0])
+			for i, p := range panes {
+				if i > 0 {
+					parts = append(parts, m.gutterFill(ctx, true, height, i-1))
+				}
+				parts = append(parts, p)
+			}
+			body = lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 		} else {
-			gutter := m.gutterFill(ctx, false, m.fullContentWidth)
-			body = lipgloss.JoinVertical(lipgloss.Left, pane0, gutter, pane1)
+			parts := make([]string, 0, len(panes)*2-1)
+			for i, p := range panes {
+				if i > 0 {
+					parts = append(parts, m.gutterFill(ctx, false, m.fullContentWidth, i-1))
+				}
+				parts = append(parts, p)
+			}
+			body = lipgloss.JoinVertical(lipgloss.Left, parts...)
 		}
 	} else {
 		body = m.renderPane(m.activeTab, m.focus == envFocusEditor)
 	}
 
-	// Render buttons (shared row below both panes, spans the full width)
+	layout := displayengine.GetLayout()
+
+	// When tiled, wrap the joined panes (each already bordered on their
+	// own, see renderPane) in a second, middle border -- the "tab list"
+	// box -- titled with the shared tab strip, nested between the outer
+	// dialog border and every individual pane's border. Clicking a tab in
+	// its title jumps focus to that pane (see GetHitRegions/Update's
+	// "tabbed_vars.tab-" case).
+	if m.splitMode {
+		middleContentWidth := m.fullContentWidth - layout.BorderWidth()
+		if middleContentWidth < 1 {
+			middleContentWidth = 1
+		}
+		widgets := m.paneLayoutWidgets()
+		maxTitle := displayengine.MaxRawTitleWidth(middleContentWidth, false, ctx.SubmenuTitleAlign, widgets, ctx)
+		title := displayengine.TruncateRight(m.renderTabs(), maxTitle)
+		body = displayengine.RenderBorderedBoxCtx(
+			title,
+			body,
+			middleContentWidth,
+			lipgloss.Height(body)+layout.BorderHeight(),
+			m.focus == envFocusEditor,
+			false,
+			true,
+			ctx.SubmenuTitleAlign,
+			"RAW", // m.renderTabs() is already fully rendered per-segment
+			ctx,
+			displayengine.TitleBarState{Show: len(widgets) > 0, Widgets: widgets},
+		)
+	}
+
+	// Render buttons (shared row below all panes, spans the full width)
 	buttons := m.renderButtons(m.fullContentWidth)
 
-	// One shared heading above both panes instead of each pane repeating its
-	// own (redundant when, as usual, both tabs belong to the same app).
+	// One shared heading above all panes instead of each pane repeating its
+	// own (redundant when, as usual, every tab belongs to the same app).
 	parts := []string{}
 	if subtitle := m.renderSubtitleForTab(&m.tabs[m.activeTab], m.fullContentWidth, m.subtitleHeight); subtitle != "" {
 		parts = append(parts, strings.TrimRight(subtitle, "\n"))
@@ -53,7 +99,6 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 	innerContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	// Apply 1-char side margin so inner components are inset from the outer border (matching menu dialogs).
-	layout := displayengine.GetLayout()
 	outerContentWidth := m.fullContentWidth + layout.ContentMarginWidth()
 	fullContent := lipgloss.NewStyle().
 		Background(ctx.Dialog.GetBackground()).
@@ -99,8 +144,10 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 // with a ▴/▲ or ▾/▼-style cap at each end); false for the stacked layout's
 // row gutter (length = its width in columns, line runs left-to-right with
 // ◂/▸ caps).
-func (m *TabbedVarsEditorModel) gutterFill(ctx displayengine.StyleContext, vertical bool, length int) string {
-	if !m.gutterDrag.Dragging && !m.resizingGutter {
+func (m *TabbedVarsEditorModel) gutterFill(ctx displayengine.StyleContext, vertical bool, length, gutterIdx int) string {
+	active := (m.gutterDrag.Dragging && m.gutterDrag.GutterIndex == gutterIdx) ||
+		(m.resizingGutter && m.activeGutter == gutterIdx)
+	if !active {
 		bgStyle := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground())
 		if vertical {
 			return bgStyle.Width(1).Height(length).Render("")
@@ -161,7 +208,6 @@ func endCappedLine(length int, start, end, fill string) []string {
 // clicking the OTHER pane's background switches which tab is active.
 func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	tab := m.tabs[idx]
-	geomIdx := m.paneGeomIdx(idx)
 	editor := tab.editor
 	// Sync this render-local copy's focus to what's actually being
 	// rendered, rather than trusting m.tabs[idx].editor's own focus flag --
@@ -181,33 +227,53 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	editorView := editor.View()
 	ctx := displayengine.GetActiveContext()
 
-	var tabRow string
-	if m.splitMode {
-		styleTag := "TitleSubMenu"
-		if focused {
-			styleTag = "TitleSubMenuFocused"
-		}
-		tabRow = displayengine.RenderTitleSegmentCtx(tab.spec.Title, focused, focused, true, styleTag, ctx)
-	} else {
-		tabRow = m.renderTabs()
+	// Maximized mode's single pane carries the layout-control widgets on
+	// its own border, via the same TitleBarState/rightWidget mechanism the
+	// outer dialog's [?]/[x] use (see paneLayoutWidgets). When tiled, those
+	// widgets live on the middle "tab list" box instead (see ViewString) --
+	// showing them again on every individual pane would be redundant
+	// clutter. Computed before tabRow below, since fitting the title needs
+	// to know how much room these reserve too.
+	var widgets []displayengine.WidgetDef
+	if !m.splitMode {
+		widgets = m.paneLayoutWidgets()
 	}
-
-	// Each pane gets its own layout-control widgets on its border, via the
-	// same TitleBarState/rightWidget mechanism the outer dialog's [?]/[x]
-	// use (see paneLayoutWidgets). Keyboard focus only ever applies to the
-	// active pane.
-	widgets := m.paneLayoutWidgets()
 	paneTBS := displayengine.TitleBarState{Show: len(widgets) > 0, Widgets: widgets}
 	if focused && m.paneTitleFocused {
 		paneTBS.Focused = true
 		paneTBS.ActiveWidget = m.paneActiveWidget
 	}
 
+	var tabRow string
+	if m.splitMode {
+		styleTag := "TitleSubMenu"
+		if focused {
+			styleTag = "TitleSubMenuFocused"
+		}
+		// RenderBorderedBoxCtx's "RAW" title path *grows* the box to fit a
+		// title (plus room for paneTBS's widgets alongside it) wider than
+		// the width it was given, rather than truncating -- with several
+		// narrow tiled panes, a long filename like
+		// ".env.app.immich___postgres" can easily exceed its own pane's
+		// share, ballooning that pane's top border wider than its bottom
+		// border (rebuilt separately, below, at the un-grown width) and
+		// wider than SetSize allocated. MaxRawTitleWidth computes the exact
+		// budget directly (same math RenderBorderedBoxCtx uses internally
+		// to decide whether it needs to grow), so truncating to it here
+		// guarantees growth never triggers.
+		target := m.paneContentWidth[idx] - 2
+		maxTitle := displayengine.MaxRawTitleWidth(target, true, ctx.SubmenuTitleAlign, widgets, ctx)
+		title := displayengine.TruncateRight(tab.spec.Title, maxTitle)
+		tabRow = displayengine.RenderTitleSegmentCtx(title, focused, focused, true, styleTag, ctx)
+	} else {
+		tabRow = m.renderTabs()
+	}
+
 	innerBox := displayengine.RenderBorderedBoxCtx(
 		tabRow,
 		editorView,
-		m.paneContentWidth[geomIdx]-2,
-		m.paneEditorHeight[geomIdx]+2,
+		m.paneContentWidth[idx]-2,
+		m.paneEditorHeight[idx]+2,
 		focused,
 		false, // No focus indicators here
 		true,  // Rounded corners to match submenu style
@@ -228,7 +294,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {
-		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[geomIdx], modeLabel, scrollLabel, focused, ctx)
+		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[idx], modeLabel, scrollLabel, focused, ctx)
 		innerBox = strings.Join(lines, "\n")
 	}
 
@@ -326,7 +392,7 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 	if len(m.tabs) > 1 {
 		editorActions = append(editorActions, displayengine.Keys.EnvNextTab, displayengine.Keys.EnvPrevTab)
 	}
-	if len(m.tabs) == 2 {
+	if len(m.tabs) >= 2 {
 		editorActions = append(editorActions, displayengine.Keys.EnvCycleLayout)
 		if m.splitMode {
 			editorActions = append(editorActions, displayengine.Keys.EnvResizeSplit)
@@ -384,6 +450,60 @@ func (m *TabbedVarsEditorModel) HelpText() string {
 // column (side by side) or 1 row (stacked).
 const splitGutter = 1
 
+// distributePaneSizes splits budget into len(shares) panes proportional to
+// shares (each 0-1, ~summing to 1.0), each at least floor, with a
+// gutter-sized gap between adjacent panes already accounted for. Returns nil
+// if budget can't fit len(shares) panes at floor -- the caller's signal to
+// collapse to Maximized rendering, same as the original 2-pane code's single
+// `budget >= 2*floor` check.
+func distributePaneSizes(budget int, shares []float64, floor, gutter int) []int {
+	n := len(shares)
+	if n == 0 {
+		return nil
+	}
+	effective := budget - (n-1)*gutter
+	if effective < n*floor {
+		return nil
+	}
+	sizes := make([]int, n)
+	total := 0
+	for i, s := range shares {
+		sizes[i] = int(float64(effective) * s)
+		if sizes[i] < floor {
+			sizes[i] = floor
+		}
+		total += sizes[i]
+	}
+	// Give/take the rounding remainder from whichever pane is currently
+	// largest, so it absorbs float truncation without going below floor.
+	if diff := effective - total; diff != 0 {
+		largest := 0
+		for i := 1; i < n; i++ {
+			if sizes[i] > sizes[largest] {
+				largest = i
+			}
+		}
+		sizes[largest] += diff
+		if sizes[largest] < floor {
+			sizes[largest] = floor
+		}
+	}
+	return sizes
+}
+
+// offsetsFromBoxSizes returns each pane's cumulative offset from pane 0,
+// given every pane's own full box size (content + border) along the split
+// axis and the gutter gap between them.
+func offsetsFromBoxSizes(boxSizes []int, gutter int) []int {
+	offs := make([]int, len(boxSizes))
+	acc := 0
+	for i, s := range boxSizes {
+		offs[i] = acc
+		acc += s + gutter
+	}
+	return offs
+}
+
 func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
@@ -398,32 +518,57 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		m.fullContentWidth = 1
 	}
 
-	wantSplit := len(m.tabs) == 2 && m.layoutMode != envLayoutMaximized
+	n := len(m.tabs)
+	if len(m.paneContentWidth) != n {
+		m.paneContentWidth = make([]int, n)
+		m.paneEditorHeight = make([]int, n)
+	}
+	if len(m.sideBySideShares) != n {
+		m.resetSharesToEqual()
+	}
+
+	wantTiled := n >= 2 && m.layoutMode != envLayoutMaximized
 	m.splitMode = false
-	m.paneContentWidth[0] = m.fullContentWidth
-	m.paneContentWidth[1] = m.fullContentWidth
-	m.pane1OffsetX, m.pane1OffsetY = 0, 0
+	for i := range m.paneContentWidth {
+		m.paneContentWidth[i] = m.fullContentWidth
+	}
+	m.paneOffsetXs = make([]int, n)
+	m.paneOffsetYs = make([]int, n)
+
+	// When tiled, the panes render inside a second, middle border -- the
+	// "tab list" box, titled with the shared tab strip -- nested between
+	// the outer dialog border and each individual pane's own border. Its
+	// own left/right border columns and top/bottom border rows (the title
+	// row doubling as the top one) come out of what's left for the panes.
+	// Reserved provisionally whenever tiling is wanted at all, mirroring
+	// how buttonHeight/subtitleHeight below are already committed before
+	// the stacked floor check runs -- if stacked ends up collapsing to
+	// Maximized anyway, m.tiledTabStripHeight/m.splitMode (below) still
+	// zero out for that render, just via a very slightly conservative
+	// paneBudget/paneRegionWidth.
+	provisionalTabStrip := 0
+	tiledRowOverhead := 0
+	paneRegionWidth := m.fullContentWidth
+	if wantTiled {
+		provisionalTabStrip = 1
+		tiledRowOverhead = layout.BorderHeight()
+		paneRegionWidth = m.fullContentWidth - layout.BorderWidth()
+		if paneRegionWidth < 1 {
+			paneRegionWidth = 1
+		}
+	}
+	for i := range m.paneContentWidth {
+		m.paneContentWidth[i] = paneRegionWidth
+	}
 
 	// Stacked's height fit is checked later, once subtitleHeight/buttonHeight/
 	// largeTitleOverhead are known. Auto-collapses to maximized rendering
 	// without touching m.layoutMode, so it springs back once there's room.
-	if wantSplit && m.layoutMode == envLayoutSideBySide {
-		budget := m.fullContentWidth - splitGutter
-		if budget >= 2*minPaneContentWidth {
-			paneW := int(float64(budget) * m.sideBySideRatio)
-			// Clamp so the ratio can never push either pane below its own
-			// floor -- an off-center ratio means pane 2's width
-			// (budget-paneW) isn't automatically >= pane 1's, so both
-			// directions need an explicit check.
-			if paneW < minPaneContentWidth {
-				paneW = minPaneContentWidth
-			} else if paneW > budget-minPaneContentWidth {
-				paneW = budget - minPaneContentWidth
-			}
+	if wantTiled && m.layoutMode == envLayoutSideBySide {
+		if sizes := distributePaneSizes(paneRegionWidth, m.sideBySideShares, minPaneContentWidth, splitGutter); sizes != nil {
 			m.splitMode = true
-			m.paneContentWidth[0] = paneW
-			m.paneContentWidth[1] = budget - paneW
-			m.pane1OffsetX = paneW + splitGutter
+			m.paneContentWidth = sizes
+			m.paneOffsetXs = offsetsFromBoxSizes(sizes, splitGutter)
 		}
 	}
 
@@ -431,7 +576,7 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	// Determine button height based on width availability (bordered=3, flat=1)
 	m.buttonHeight = displayengine.ButtonRowHeight(m.fullContentWidth, 0, specs...)
 
-	// One shared heading above both panes (see ViewString), at the active
+	// One shared heading above all panes (see ViewString), at the active
 	// tab's content and the full dialog width.
 	m.subtitleHeight = calcSubtitleHeightForTab(&m.tabs[m.activeTab], m.fullContentWidth)
 
@@ -444,38 +589,39 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	}
 	m.largeTitleOverhead = largeTitleOverhead
 
-	// Height available to both panes combined -- button row, large titlebar,
-	// and the shared subtitle are all consumed once, not per-pane.
-	paneBudget := m.height - layout.BorderHeight() - largeTitleOverhead - m.buttonHeight - m.subtitleHeight
+	// Height available to all panes combined -- button row, large titlebar,
+	// the shared subtitle, and (provisionally) the tab-list box's own
+	// top+bottom border rows are all consumed once, not per-pane.
+	paneBudget := m.height - layout.BorderHeight() - largeTitleOverhead - m.buttonHeight - m.subtitleHeight - tiledRowOverhead
 
-	if wantSplit && m.layoutMode == envLayoutStacked {
-		budget := paneBudget - splitGutter
+	if wantTiled && m.layoutMode == envLayoutStacked {
 		minPerPane := minPaneEditorHeight + layout.BorderHeight()
-		if budget >= 2*minPerPane {
-			perPane := int(float64(budget) * m.stackedRatio)
-			if perPane < minPerPane {
-				perPane = minPerPane
-			} else if perPane > budget-minPerPane {
-				perPane = budget - minPerPane
-			}
+		if sizes := distributePaneSizes(paneBudget, m.stackedShares, minPerPane, splitGutter); sizes != nil {
 			m.splitMode = true
-			m.paneEditorHeight[0] = perPane - layout.BorderHeight()
-			m.paneEditorHeight[1] = (budget - perPane) - layout.BorderHeight()
-			m.pane1OffsetY = perPane + splitGutter
+			m.paneOffsetYs = offsetsFromBoxSizes(sizes, splitGutter)
+			for i, boxSize := range sizes {
+				m.paneEditorHeight[i] = boxSize - layout.BorderHeight()
+			}
 		}
 	}
 	if !m.splitMode || m.layoutMode != envLayoutStacked {
 		// Maximized or side-by-side: one pane's worth of height, using the
-		// full budget (side-by-side shares height across both panes).
-		m.paneEditorHeight[0] = paneBudget - layout.BorderHeight()
-		m.paneEditorHeight[1] = m.paneEditorHeight[0]
+		// full budget (side-by-side shares height across all panes).
+		h := paneBudget - layout.BorderHeight()
+		for i := range m.paneEditorHeight {
+			m.paneEditorHeight[i] = h
+		}
 	}
 	for i := range m.paneEditorHeight {
 		if m.paneEditorHeight[i] < 1 {
 			m.paneEditorHeight[i] = 1
 		}
 	}
-	if m.paneEditorHeight[m.paneGeomIdx(m.activeTab)] < 3 && m.buttonHeight == 3 && !m.splitMode {
+	m.tiledTabStripHeight = 0
+	if m.splitMode {
+		m.tiledTabStripHeight = provisionalTabStrip
+	}
+	if m.paneEditorHeight[m.activeTab] < 3 && m.buttonHeight == 3 && !m.splitMode {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
 		overhead := layout.BorderHeight() + largeTitleOverhead + 1 + m.subtitleHeight + layout.BorderHeight()
@@ -483,14 +629,12 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		if h < 1 {
 			h = 1
 		}
-		m.paneEditorHeight[0] = h
-		m.paneEditorHeight[1] = h
+		for i := range m.paneEditorHeight {
+			m.paneEditorHeight[i] = h
+		}
 	}
 
-	m.activePaneOffsetX, m.activePaneOffsetY = 0, 0
-	if m.splitMode && m.activeTab == 1 {
-		m.activePaneOffsetX, m.activePaneOffsetY = m.pane1OffsetX, m.pane1OffsetY
-	}
+	m.activePaneOffsetX, m.activePaneOffsetY = m.paneOffsetFor(m.activeTab)
 	if !m.splitMode {
 		// No gutter to resize once collapsed (window shrunk below the
 		// split floor) -- exit both resize states so they don't get stuck
@@ -498,78 +642,108 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		m.resizingGutter = false
 		m.gutterDrag.StopDrag()
 	}
+	if m.activeGutter > n-2 {
+		m.activeGutter = 0
+	}
 
 	for i := range m.tabs {
-		paneIdx := m.paneGeomIdx(i)
 		// Editor content width accounts for inner box borders.
-		editorWidth := m.paneContentWidth[paneIdx] - layout.BorderWidth()
+		editorWidth := m.paneContentWidth[i] - layout.BorderWidth()
 		if editorWidth < 10 {
 			editorWidth = 10
 		}
 		m.tabs[i].editor.SetWidth(editorWidth)
-		m.tabs[i].editor.SetHeight(m.paneEditorHeight[paneIdx])
+		m.tabs[i].editor.SetHeight(m.paneEditorHeight[i])
 	}
 }
 
-// splitBudgetAndFloor returns the total space available to split between
-// the two panes (width side-by-side, height stacked) and the minimum
-// either pane may shrink to, in that same unit. Shared by applyGutterDrag
-// and nudgeSplitRatio so both convert mouse/key deltas into a split-ratio
-// clamp identically to SetSize's own collapse-threshold math.
-func (m *TabbedVarsEditorModel) splitBudgetAndFloor() (budget, minPane int) {
-	layout := displayengine.GetLayout()
-	if m.layoutMode == envLayoutSideBySide {
-		return m.fullContentWidth - splitGutter, minPaneContentWidth
+// effectiveTiledBudget returns the total space actually available to panes
+// along the active layout's split axis, after subtracting every gutter --
+// the same "effective" value distributePaneSizes computes internally, kept
+// here too so drag/nudge can convert between absolute pixel deltas and
+// shares without re-running SetSize's full layout first.
+func (m *TabbedVarsEditorModel) effectiveTiledBudget() int {
+	gutters := (len(m.tabs) - 1) * splitGutter
+	if m.layoutMode == envLayoutStacked {
+		layout := displayengine.GetLayout()
+		paneBudget := m.height - layout.BorderHeight() - m.largeTitleOverhead - m.buttonHeight - m.subtitleHeight - m.tiledTabStripHeight
+		return paneBudget - gutters
 	}
-	paneBudget := m.height - layout.BorderHeight() - m.largeTitleOverhead - m.buttonHeight - m.subtitleHeight
-	return paneBudget - splitGutter, minPaneEditorHeight + layout.BorderHeight()
+	return m.fullContentWidth - gutters
 }
 
-// clampSplitRatio clamps ratio so neither pane can go below minPane out of
-// budget.
-func clampSplitRatio(ratio float64, budget, minPane int) float64 {
-	minRatio := float64(minPane) / float64(budget)
-	maxRatio := 1 - minRatio
-	if ratio < minRatio {
-		return minRatio
+// pairBoxSizes returns the current absolute box sizes (content+border) of
+// the two panes adjacent to gutter boundary g, along the active layout's
+// split axis.
+func (m *TabbedVarsEditorModel) pairBoxSizes(g int) (a, b int) {
+	if g < 0 || g+1 >= len(m.tabs) {
+		return 0, 0
 	}
-	if ratio > maxRatio {
-		return maxRatio
+	if m.layoutMode == envLayoutStacked {
+		layout := displayengine.GetLayout()
+		return m.paneEditorHeight[g] + layout.BorderHeight(), m.paneEditorHeight[g+1] + layout.BorderHeight()
 	}
-	return ratio
+	return m.paneContentWidth[g], m.paneContentWidth[g+1]
 }
 
-// applyGutterDrag updates the active layout's split ratio from the current
-// absolute mouse position during an active gutter drag (mouse is msg.X for
-// side-by-side,
-// msg.Y for stacked), clamped to the same per-pane floor SetSize enforces,
-// then re-lays-out via SetSize.
+// pairFloor returns the minimum absolute box size either pane in a dragged/
+// nudged pair may shrink to, along the active layout's split axis.
+func (m *TabbedVarsEditorModel) pairFloor() int {
+	if m.layoutMode == envLayoutStacked {
+		return minPaneEditorHeight + displayengine.GetLayout().BorderHeight()
+	}
+	return minPaneContentWidth
+}
+
+// applyPairSizes sets gutter g's left/above pane to newSizeA (absolute box
+// size along the active split axis), clamped so neither it nor its partner
+// pane drops below the floor, holding the pair's combined size (and every
+// other pane's share) constant, then re-lays-out via SetSize.
+func (m *TabbedVarsEditorModel) applyPairSizes(g, newSizeA int) {
+	shares := m.activeSplitShares()
+	if g < 0 || g+1 >= len(shares) {
+		return
+	}
+	effective := m.effectiveTiledBudget()
+	if effective < 1 {
+		return
+	}
+	sizeA, sizeB := m.pairBoxSizes(g)
+	combined := sizeA + sizeB
+	floor := m.pairFloor()
+	if newSizeA < floor {
+		newSizeA = floor
+	} else if newSizeA > combined-floor {
+		newSizeA = combined - floor
+	}
+	pairShare := shares[g] + shares[g+1]
+	shareA := pairShare * float64(newSizeA) / float64(combined)
+	shares[g] = shareA
+	shares[g+1] = pairShare - shareA
+	m.SetSize(m.width, m.height)
+}
+
+// applyGutterDrag updates gutter boundary g's adjacent panes from the
+// current absolute mouse position during an active drag (mouse is msg.X for
+// side-by-side, msg.Y for stacked), then re-lays-out via SetSize.
 func (m *TabbedVarsEditorModel) applyGutterDrag(mouse int) {
-	budget, minPane := m.splitBudgetAndFloor()
-	if budget < 1 {
+	if !m.gutterDrag.Dragging {
 		return
 	}
-
+	effective := m.effectiveTiledBudget()
+	startSizeA := int(m.gutterDrag.StartShareA * float64(effective))
 	delta := mouse - m.gutterDrag.StartMouse
-	ratio := clampSplitRatio(m.gutterDrag.StartRatio+float64(delta)/float64(budget), budget, minPane)
-
-	*m.activeSplitRatio() = ratio
-	m.SetSize(m.width, m.height)
+	m.applyPairSizes(m.gutterDrag.GutterIndex, startSizeA+delta)
 }
 
-// nudgeSplitRatio adjusts the active layout's split ratio by a fixed step (2
-// columns/rows worth) in the given direction (-1 or +1), clamped to the
-// same per-pane floor SetSize enforces, then re-lays-out via SetSize. Used
-// by the keyboard resize mode (EnvResizeSplit + arrow keys).
-func (m *TabbedVarsEditorModel) nudgeSplitRatio(dir int) {
+// nudgeActiveGutter adjusts m.activeGutter's boundary by a fixed step (2
+// columns/rows worth) in the given direction (-1 or +1), then re-lays-out
+// via SetSize. Used by the keyboard resize mode (EnvResizeSplit + arrow
+// keys).
+func (m *TabbedVarsEditorModel) nudgeActiveGutter(dir int) {
 	const stepUnits = 2
-	budget, minPane := m.splitBudgetAndFloor()
-	if budget < 1 {
-		return
-	}
-	ratioPtr := m.activeSplitRatio()
-	*ratioPtr = clampSplitRatio(*ratioPtr+float64(dir*stepUnits)/float64(budget), budget, minPane)
-	m.SetSize(m.width, m.height)
+	sizeA, _ := m.pairBoxSizes(m.activeGutter)
+	m.applyPairSizes(m.activeGutter, sizeA+dir*stepUnits)
 }
 
 // calcSubtitleHeightForTab returns the number of subtitle lines for one tab

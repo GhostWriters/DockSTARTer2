@@ -350,6 +350,7 @@ var (
 	TitleBarWidgetRegions          = classic.TitleBarWidgetRegions
 	TitleBarHitRegionsFor          = classic.TitleBarHitRegionsFor
 	TitleBarWidgetY                = classic.TitleBarWidgetY
+	MaxRawTitleWidth               = classic.MaxRawTitleWidth
 	ToStyle                        = classic.ToStyle
 	TruncateLeft                   = classic.TruncateLeft
 	TruncateRight                  = classic.TruncateRight

@@ -65,14 +65,20 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if msg.ID == "tabbed_vars.gutter" {
+		if strings.HasPrefix(msg.ID, "tabbed_vars.gutter-") {
 			if msg.Button != tea.MouseLeft {
 				return m, nil
 			}
+			gIdxStr := strings.TrimPrefix(msg.ID, "tabbed_vars.gutter-")
+			gIdx, err := strconv.Atoi(gIdxStr)
+			if err != nil || gIdx < 0 || gIdx+1 >= len(m.tabs) {
+				return m, nil
+			}
+			shares := m.activeSplitShares()
 			if m.layoutMode == envLayoutSideBySide {
-				m.gutterDrag.StartDrag(msg.X, *m.activeSplitRatio())
+				m.gutterDrag.StartDrag(gIdx, msg.X, shares[gIdx], shares[gIdx+1])
 			} else {
-				m.gutterDrag.StartDrag(msg.Y, *m.activeSplitRatio())
+				m.gutterDrag.StartDrag(gIdx, msg.Y, shares[gIdx], shares[gIdx+1])
 			}
 			return m, nil
 		}
@@ -179,6 +185,25 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tabs[m.activeTab].editor.ToggleOverwrite()
 			}
 			return m, nil
+		} else if strings.HasPrefix(msg.ID, "tabbed_vars.middle.") && strings.Contains(msg.ID, ".title_widget_") {
+			// Middle "tab list" box's layout widget -- applies globally,
+			// not tied to any one pane (unlike the per-pane Maximize below,
+			// which only shows in Maximized mode where there's just one).
+			if msg.Button == tea.MouseLeft {
+				widgetID := strings.TrimPrefix(msg.ID, "tabbed_vars.middle.")
+				pressCmd := m.PressWidgetID(widgetID, msg.ID)
+				switch widgetID {
+				case displayengine.IDTitleWidgetMaximize:
+					m.layoutMode = envLayoutMaximized
+				case displayengine.IDTitleWidgetSideBySide:
+					m.layoutMode = envLayoutSideBySide
+				case displayengine.IDTitleWidgetStacked:
+					m.layoutMode = envLayoutStacked
+				}
+				m.SetSize(m.width, m.height)
+				return m, pressCmd
+			}
+			return m, nil
 		} else if strings.HasPrefix(msg.ID, "tabbed_vars.pane") && strings.Contains(msg.ID, ".title_widget_") {
 			// Per-pane layout widget: "tabbed_vars.paneN.title_widget_*" --
 			// whichever pane the click landed on becomes the active/focused
@@ -227,9 +252,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// where it was.
 					layout := displayengine.GetLayout()
 					relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-					geomIdx := m.paneGeomIdx(idx)
-					editorW := m.paneContentWidth[geomIdx] - layout.BorderWidth()
-					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[geomIdx] || relX >= editorW {
+					editorW := m.paneContentWidth[idx] - layout.BorderWidth()
+					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[idx] || relX >= editorW {
 						return m, nil
 					}
 					var cmd tea.Cmd
@@ -259,9 +283,8 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			layout := displayengine.GetLayout()
 			relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-			geomIdx := m.paneGeomIdx(idx)
-			editorW := m.paneContentWidth[geomIdx] - layout.BorderWidth()
-			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[geomIdx] && relX < editorW {
+			editorW := m.paneContentWidth[idx] - layout.BorderWidth()
+			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[idx] && relX < editorW {
 				var cmd tea.Cmd
 				m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 					X:      relX,
@@ -314,35 +337,48 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Keyboard split-resize mode: EnvResizeSplit toggles it (only
 		// meaningful once actually split -- see splitMode). While active,
-		// arrow keys nudge the split instead of navigating; Esc or the
-		// same key again exits back to normal editing.
+		// Tab/Shift+Tab picks which gutter boundary is being adjusted
+		// (wraps; a no-op with only one gutter), arrow keys nudge it
+		// instead of navigating, and Esc or the same key again exits back
+		// to normal editing.
 		if m.resizingGutter {
+			numGutters := len(m.tabs) - 1
 			switch msg.String() {
 			case "esc":
 				m.resizingGutter = false
 				return m, nil
+			case "tab":
+				if numGutters > 1 {
+					m.activeGutter = (m.activeGutter + 1) % numGutters
+				}
+				return m, nil
+			case "shift+tab":
+				if numGutters > 1 {
+					m.activeGutter = (m.activeGutter - 1 + numGutters) % numGutters
+				}
+				return m, nil
 			case "left":
 				if m.layoutMode == envLayoutSideBySide {
-					m.nudgeSplitRatio(-1)
+					m.nudgeActiveGutter(-1)
 				}
 				return m, nil
 			case "right":
 				if m.layoutMode == envLayoutSideBySide {
-					m.nudgeSplitRatio(1)
+					m.nudgeActiveGutter(1)
 				}
 				return m, nil
 			case "up":
 				if m.layoutMode == envLayoutStacked {
-					m.nudgeSplitRatio(-1)
+					m.nudgeActiveGutter(-1)
 				}
 				return m, nil
 			case "down":
 				if m.layoutMode == envLayoutStacked {
-					m.nudgeSplitRatio(1)
+					m.nudgeActiveGutter(1)
 				}
 				return m, nil
 			case "space":
-				*m.activeSplitRatio() = 0.5
+				m.resetSharesToEqual()
 				m.SetSize(m.width, m.height)
 				return m, nil
 			}
@@ -354,6 +390,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, displayengine.Keys.EnvResizeSplit) {
 			if m.splitMode {
 				m.resizingGutter = true
+				m.activeGutter = 0
 			}
 			return m, nil
 		}
@@ -435,7 +472,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case key.Matches(msg, displayengine.Keys.EnvCycleLayout): // Cycle Maximized -> Side-by-side -> Stacked -> Maximized
-			if len(m.tabs) == 2 {
+			if len(m.tabs) >= 2 {
 				switch m.layoutMode {
 				case envLayoutMaximized:
 					m.layoutMode = envLayoutSideBySide
@@ -448,6 +485,28 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case msg.String() == "tab" || msg.String() == "shift+tab":
+			// When tiled, Tab/Shift+Tab steps through each visible pane
+			// before reaching the button row (Shift+Tab in reverse) -- this
+			// editor has no use for a literal tab character in KEY=VALUE
+			// content, so nothing is lost by repurposing it. In Maximized
+			// mode (a single visible pane) this degenerates to exactly the
+			// direct editor<->buttons toggle below.
+			if m.focus == envFocusEditor && m.splitMode {
+				if msg.String() == "tab" && m.activeTab < len(m.tabs)-1 {
+					m.tabs[m.activeTab].editor.Blur()
+					m.activeTab++
+					m.tabs[m.activeTab].editor.Focus()
+					m.SetSize(m.width, m.height)
+					return m, nil
+				}
+				if msg.String() == "shift+tab" && m.activeTab > 0 {
+					m.tabs[m.activeTab].editor.Blur()
+					m.activeTab--
+					m.tabs[m.activeTab].editor.Focus()
+					m.SetSize(m.width, m.height)
+					return m, nil
+				}
+			}
 			if m.focus == envFocusEditor {
 				m.focus = envFocusButtons
 				if len(m.tabs) > 0 {
@@ -455,6 +514,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else {
 				m.focus = envFocusEditor
+				if m.splitMode && msg.String() == "shift+tab" {
+					m.activeTab = len(m.tabs) - 1
+					m.SetSize(m.width, m.height)
+				}
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.Focus()
 				}
