@@ -32,8 +32,14 @@ func HandleEnvAppFiles(ctx context.Context, group *CommandGroup) error {
 
 	sort.Strings(names)
 	logger.Notice(ctx, "'{{|App|}}%s{{[-]}}' var files:", appName)
+	// The file list itself goes to plain stdout (not logger.Notice, which
+	// writes to stderr with timestamp/level/styling markup) so it can be
+	// captured directly by a script, e.g. `for f in $(ds2 --env-appfiles
+	// immich); do ...; done`. The notice above still shows on a real
+	// terminal (stderr and stdout both render there) but doesn't pollute
+	// what a script captures from stdout.
 	for _, name := range names {
-		logger.Notice(ctx, "  {{|File|}}%s{{[-]}}", name)
+		fmt.Println(name)
 	}
 	return nil
 }

@@ -78,7 +78,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
 			"--theme-tab-layout", "--theme-show-preview", "--theme-no-show-preview",
 			"--theme-extract", "--theme-extract-all", "--app-template-extract", "--app-template-new", "--man",
-			"--theme-spinner", "--theme-no-spinner":
+			"--theme-spinner", "--theme-no-spinner", "--env-appfiles":
 		default:
 			shouldValidate = true
 		}
