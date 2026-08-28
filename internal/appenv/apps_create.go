@@ -107,14 +107,19 @@ func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.A
 			}
 		}
 
-		// 2. Get path to App specific .env instance file (.env.app.*)
-		targetAppEnv := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, appName))
-		processedAppEnv, err := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
-		if err != nil {
-			logger.Debug(ctx, "No app-specific .env template for %s: %v", appNameUpper, err)
-		} else if processedAppEnv != "" {
-			if _, err := MergeNewOnly(ctx, targetAppEnv, processedAppEnv); err != nil {
-				return fmt.Errorf("failed to merge app env for %s: %w", appNameUpper, err)
+		// 2. Get path to App specific .env instance file(s) (.env.app.*) --
+		// the plain file, plus (for a multi-service app) any per-service or
+		// shared/virtual files alongside it.
+		baseApp := strings.ToLower(AppNameToBaseAppName(appNameUpper))
+		for _, pattern := range TemplateAppVarFileSuffixes(baseApp) {
+			targetAppEnv := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", appName))
+			processedAppEnv, err := AppInstanceFile(ctx, appName, pattern)
+			if err != nil {
+				logger.Debug(ctx, "No app-specific .env template for %s (%s): %v", appNameUpper, pattern, err)
+			} else if processedAppEnv != "" {
+				if _, err := MergeNewOnly(ctx, targetAppEnv, processedAppEnv); err != nil {
+					return fmt.Errorf("failed to merge app env for %s (%s): %w", appNameUpper, pattern, err)
+				}
 			}
 		}
 

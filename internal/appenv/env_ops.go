@@ -354,7 +354,16 @@ func CleanupOrphanedEnvFiles(ctx context.Context, conf config.AppConfig) error {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasPrefix(entry.Name(), constants.AppEnvFileNamePrefix) {
 			appName := strings.TrimPrefix(entry.Name(), constants.AppEnvFileNamePrefix)
-			if !IsAppReferenced(ctx, appName, conf) {
+			// Orphan status is decided at the app level, not the individual
+			// file's -- a per-service/shared file (e.g. "immich-database")
+			// has no variable interpolation or override-file reference of
+			// its own to find; it's referenced by the compose template
+			// wiring it into a service's env_file: list, which
+			// IsAppReferenced can't see. Strip the service suffix so the
+			// base app's own referencedness (still added, has vars in
+			// .env, etc.) governs every file belonging to it.
+			baseApp := stripServiceSuffix(strings.ToUpper(appName))
+			if !IsAppReferenced(ctx, baseApp, conf) {
 				targetFile := filepath.Join(conf.ComposeDir, entry.Name())
 				system.SetPermissions(ctx, targetFile)
 				logger.Notice(ctx, "Deleting '"+console.FormatFilePath(targetFile)+"'.")
