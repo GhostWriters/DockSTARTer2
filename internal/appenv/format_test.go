@@ -105,6 +105,7 @@ func TestFormatLinesCore(t *testing.T) {
 		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, ".env.app.audiobookshelf-database")
 
 		expected := []string{
+			"###",
 			"### .env.app.audiobookshelf-database",
 			"",
 			"### Audiobookshelf",

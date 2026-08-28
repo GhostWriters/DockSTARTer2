@@ -78,11 +78,10 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 
 		// Parity lines 46-55: Adds ### wrapping including before/after descriptions.
 		// Description is only shown for built-in apps (not user-defined).
+		formattedEnvLines = append(formattedEnvLines, "###")
 		if fileLabel != "" {
 			formattedEnvLines = append(formattedEnvLines, "### "+fileLabel)
 			formattedEnvLines = append(formattedEnvLines, "")
-		} else {
-			formattedEnvLines = append(formattedEnvLines, "###")
 		}
 		formattedEnvLines = append(formattedEnvLines, "### "+headingTitle)
 		formattedEnvLines = append(formattedEnvLines, "###")
