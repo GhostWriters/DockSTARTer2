@@ -39,6 +39,20 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.resizingGutter {
 			return m, nil
 		}
+		if msg.ID == "tabbed_vars.tabscroll-left" || msg.ID == "tabbed_vars.tabscroll-right" {
+			if msg.Button == tea.MouseRight {
+				return m, nil
+			}
+			if msg.ID == "tabbed_vars.tabscroll-left" {
+				if m.tabScrollOffset > 0 {
+					m.tabScrollOffset--
+				}
+			} else if m.tabScrollOffset < len(m.tabs)-1 {
+				m.tabScrollOffset++
+			}
+			return m, nil
+		}
+
 		if strings.HasPrefix(msg.ID, "tabbed_vars.tab-") {
 			// On right-click, do nothing (allows through hit-testing to global context menu)
 			if msg.Button == tea.MouseRight {

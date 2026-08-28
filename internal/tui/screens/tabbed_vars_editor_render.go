@@ -70,8 +70,7 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 			middleContentWidth = 1
 		}
 		widgets := m.paneLayoutWidgets()
-		maxTitle := displayengine.MaxRawTitleWidth(middleContentWidth, false, ctx.SubmenuTitleAlign, widgets, ctx)
-		title := displayengine.TruncateRight(m.renderTabs(), maxTitle)
+		title := m.renderTabs(m.tabStripAvailWidth())
 		body = displayengine.RenderBorderedBoxCtx(
 			title,
 			body,
@@ -269,7 +268,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 		title := displayengine.TruncateRight(tab.spec.Title, maxTitle)
 		tabRow = displayengine.RenderTitleSegmentCtx(title, focused, focused, true, styleTag, ctx)
 	} else {
-		tabRow = m.renderTabs()
+		tabRow = m.renderTabs(m.tabStripAvailWidth())
 	}
 
 	innerBox := displayengine.RenderBorderedBoxCtx(
@@ -351,11 +350,25 @@ func (m *TabbedVarsEditorModel) renderButtons(width int) string {
 	return displayengine.RenderCenteredButtonsExplicit(width, m.buttonHeight == displayengine.DialogButtonHeight, displayengine.GetActiveContext(), specs...)
 }
 
-func (m *TabbedVarsEditorModel) renderTabs() string {
+// renderTabs renders the shared tab strip's currently-visible window (per
+// tabStripFit, at availWidth) -- an arrow segment prepended/appended when
+// tabStripFit reports more tabs scrolled out of view on that side.
+func (m *TabbedVarsEditorModel) renderTabs(availWidth int) string {
 	ctx := displayengine.GetActiveContext()
 	editorFocused := m.focus == envFocusEditor
+	fit := m.tabStripFit(availWidth)
+
+	leftArrow, rightArrow := "<", ">"
+	if ctx.LineCharacters {
+		leftArrow, rightArrow = "◂", "▸"
+	}
+
 	var tabSegments []string
-	for i, tab := range m.tabs {
+	if fit.showLeftArrow {
+		tabSegments = append(tabSegments, leftArrow)
+	}
+	for i := fit.first; i <= fit.last; i++ {
+		tab := m.tabs[i]
 		title := tab.spec.Title
 		isActive := i == m.activeTab
 		styleTag := "TitleSubMenu"
@@ -367,6 +380,9 @@ func (m *TabbedVarsEditorModel) renderTabs() string {
 		// so it remains visually distinguished regardless of which panel is active.
 		seg := displayengine.RenderTitleSegmentCtx(title, editorFocused, isActive, true, styleTag, ctx)
 		tabSegments = append(tabSegments, seg)
+	}
+	if fit.showRightArrow {
+		tabSegments = append(tabSegments, rightArrow)
 	}
 	return strings.Join(tabSegments, "")
 }
@@ -667,6 +683,8 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 		m.tabs[i].editor.SetWidth(editorWidth)
 		m.tabs[i].editor.SetHeight(m.paneEditorHeight[slot])
 	}
+
+	m.scrollTabIntoView()
 }
 
 // effectiveTiledBudget returns the total space actually available to panes

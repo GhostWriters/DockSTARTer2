@@ -272,6 +272,10 @@ type TabbedVarsEditorModel struct {
 	lastTabClickIdx     int
 	lastTabClickTime    time.Time
 
+	// tabScrollOffset is which m.tabs index the shared tab strip's visible
+	// window currently starts from -- see tabStripFit/scrollTabIntoView.
+	tabScrollOffset int
+
 	// Callbacks
 	onClose tea.Cmd
 
@@ -545,6 +549,155 @@ func (m *TabbedVarsEditorModel) paneBoxLeft(offsetX int) int {
 		left += layout.BorderWidth() / 2
 	}
 	return left
+}
+
+// tabStripAvailWidth returns the width available to the shared tab strip --
+// the middle "tab list" box's own content width when tiled, or the single
+// active pane's content width in Maximized mode. The single source every
+// caller (renderTabs, GetHitRegions' tab-region block, scrollTabIntoView)
+// uses, so they can never compute a different width from one another.
+func (m *TabbedVarsEditorModel) tabStripAvailWidth() int {
+	layout := displayengine.GetLayout()
+	ctx := displayengine.GetActiveContext()
+	widgets := m.paneLayoutWidgets()
+	if m.splitMode {
+		middleContentWidth := m.fullContentWidth - layout.BorderWidth()
+		if middleContentWidth < 1 {
+			middleContentWidth = 1
+		}
+		return displayengine.MaxRawTitleWidth(middleContentWidth, false, ctx.SubmenuTitleAlign, widgets, ctx)
+	}
+	if len(m.paneContentWidth) == 0 {
+		return m.fullContentWidth
+	}
+	slot, _ := m.paneSlotFor(m.activeTab) // uniform array when !splitMode -- see SetSize
+	target := m.paneContentWidth[slot] - 2
+	if target < 1 {
+		target = 1
+	}
+	return displayengine.MaxRawTitleWidth(target, false, ctx.SubmenuTitleAlign, widgets, ctx)
+}
+
+// tabStripLayout describes which tabs are currently visible in the shared
+// tab strip and where. Computed once by tabStripFit, consumed identically
+// by renderTabs and GetHitRegions' tab-region block so what's drawn and
+// what's clickable never drift apart.
+type tabStripLayout struct {
+	first, last                   int // inclusive range of m.tabs indices currently shown
+	showLeftArrow, showRightArrow bool
+	tabX                          []int // each visible tab's X offset from the strip's own start (past any left arrow), one per index in [first, last]
+	arrowWidth                    int   // column width of one arrow glyph
+}
+
+// tabStripFit computes the widest whole-tab window that fits in availWidth
+// while still containing m.tabScrollOffset -- expanding both forward AND
+// backward from that anchor as far as space allows, so growing availWidth
+// (e.g. maximizing the terminal) always pulls more tabs into view around
+// wherever we're currently scrolled/focused, rather than only growing
+// forward or requiring a full reset to see the extra room. m.tabScrollOffset
+// itself is normalized to the resulting window's left edge, so the next
+// fit (or arrow click) continues from there. Never a partially-cut-off
+// title at either edge.
+func (m *TabbedVarsEditorModel) tabStripFit(availWidth int) tabStripLayout {
+	const arrowWidth = 1
+	n := len(m.tabs)
+	if n == 0 {
+		return tabStripLayout{arrowWidth: arrowWidth}
+	}
+	ctx := displayengine.GetActiveContext()
+	widths := make([]int, n)
+	for i, tab := range m.tabs {
+		widths[i] = displayengine.WidthOfTitleSegment(tab.spec.Title, true, ctx)
+	}
+
+	anchor := m.tabScrollOffset
+	if anchor < 0 {
+		anchor = 0
+	}
+	if anchor >= n {
+		anchor = n - 1
+	}
+
+	// rangeWidth is the strip's total rendered width for showing exactly
+	// [lo, hi], including whichever arrows that range still needs.
+	rangeWidth := func(lo, hi int) int {
+		w := 0
+		for i := lo; i <= hi; i++ {
+			w += widths[i]
+		}
+		if lo > 0 {
+			w += arrowWidth
+		}
+		if hi < n-1 {
+			w += arrowWidth
+		}
+		return w
+	}
+
+	lo, hi := anchor, anchor
+	for {
+		progress := false
+		if hi+1 < n && rangeWidth(lo, hi+1) <= availWidth {
+			hi++
+			progress = true
+		}
+		if lo-1 >= 0 && rangeWidth(lo-1, hi) <= availWidth {
+			lo--
+			progress = true
+		}
+		if !progress {
+			break
+		}
+	}
+	m.tabScrollOffset = lo
+
+	showLeft := lo > 0
+	x := 0
+	if showLeft {
+		x = arrowWidth
+	}
+	tabX := make([]int, 0, hi-lo+1)
+	for i := lo; i <= hi; i++ {
+		tabX = append(tabX, x)
+		x += widths[i]
+	}
+
+	return tabStripLayout{
+		first:          lo,
+		last:           hi,
+		showLeftArrow:  showLeft,
+		showRightArrow: hi < n-1,
+		tabX:           tabX,
+		arrowWidth:     arrowWidth,
+	}
+}
+
+// scrollTabIntoView adjusts m.tabScrollOffset minimally (not necessarily to
+// 0) so m.activeTab falls within the tab strip's currently visible window,
+// at the strip's current available width. Called once at the end of
+// SetSize, which already re-runs after every activeTab-changing action in
+// this codebase, rather than repeating a call at each of those sites.
+func (m *TabbedVarsEditorModel) scrollTabIntoView() {
+	if len(m.tabs) == 0 {
+		return
+	}
+	layout := m.tabStripFit(m.tabStripAvailWidth())
+	if m.activeTab < layout.first {
+		m.tabScrollOffset = m.activeTab
+		return
+	}
+	if m.activeTab > layout.last {
+		// Shift right one tab at a time until activeTab is the new last --
+		// tabStripFit's own greedy width-fit (not a fixed tab count) decides
+		// how many additional tabs that pulls into view on the left side.
+		for m.tabScrollOffset < m.activeTab {
+			m.tabScrollOffset++
+			layout = m.tabStripFit(m.tabStripAvailWidth())
+			if m.activeTab <= layout.last {
+				break
+			}
+		}
+	}
 }
 
 // paneOffsetFor returns pane idx's top-left offset relative to pane 0 --

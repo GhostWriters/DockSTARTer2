@@ -33,29 +33,24 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	// there jumps focus to that pane, same as clicking the pane itself.
 	if len(m.tabs) > 0 {
 		ctx := displayengine.GetActiveContext()
-		// Calculate total width of all tabs to determine centering offset
+		availWidth := m.tabStripAvailWidth()
+		fit := m.tabStripFit(availWidth)
+
+		// Total rendered width of the visible window (arrows + tab segments),
+		// for the same RenderBorderedBoxCtx centering replication as before --
+		// now over just what's actually shown, matching renderTabs exactly.
 		totalTitleWidth := 0
-		var tabWidths []int
-		for _, tab := range m.tabs {
-			w := displayengine.WidthOfTitleSegment(tab.spec.Title, true, ctx)
-			tabWidths = append(tabWidths, w)
-			totalTitleWidth += w
+		for i := fit.first; i <= fit.last; i++ {
+			totalTitleWidth += displayengine.WidthOfTitleSegment(m.tabs[i].spec.Title, true, ctx)
+		}
+		if fit.showLeftArrow {
+			totalTitleWidth += fit.arrowWidth
+		}
+		if fit.showRightArrow {
+			totalTitleWidth += fit.arrowWidth
 		}
 
-		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs
-		// row -- each case measures its own box's inner content width
-		// (Maximized: the one pane; tiled: the middle box).
-		innerContentW := m.fullContentWidth
-		if m.splitMode {
-			innerContentW = m.fullContentWidth - layout.BorderWidth()
-		} else {
-			activeSlot, _ := m.paneSlotFor(m.activeTab) // uniform array when !splitMode -- see SetSize
-			innerContentW = m.paneContentWidth[activeSlot] - layout.BorderWidth()
-		}
-		if innerContentW < 1 {
-			innerContentW = 1
-		}
-		actualWidth := innerContentW
+		actualWidth := availWidth
 		if totalTitleWidth > actualWidth {
 			actualWidth = totalTitleWidth
 		}
@@ -70,11 +65,31 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		// skip that box's own inner TopLeft corner, whether that's the
 		// single pane (Maximized) or the middle box (tiled). Same formula
 		// either way: outer border + margin + leftPad + corner.
-		tabX := offsetX + 1 + layout.ContentSideMargin + leftPad + 1
-		for i, tabWidth := range tabWidths {
+		stripX := offsetX + 1 + layout.ContentSideMargin + leftPad + 1
+
+		x := stripX
+		if fit.showLeftArrow {
+			regions = append(regions, displayengine.HitRegion{
+				ID:     "tabbed_vars.tabscroll-left",
+				X:      x,
+				Y:      tabY,
+				Width:  fit.arrowWidth,
+				Height: 1,
+				ZOrder: displayengine.ZDialog + 10,
+				Label:  "Scroll tabs left",
+				Help: &displayengine.HelpContext{
+					ScreenName: m.title,
+					ItemTitle:  "Scroll tabs left",
+					ItemText:   "Click to scroll the tab strip left by one tab.",
+				},
+			})
+			x += fit.arrowWidth
+		}
+		for i := fit.first; i <= fit.last; i++ {
+			tabWidth := displayengine.WidthOfTitleSegment(m.tabs[i].spec.Title, true, ctx)
 			regions = append(regions, displayengine.HitRegion{
 				ID:     "tabbed_vars.tab-" + strconv.Itoa(i),
-				X:      tabX,
+				X:      x,
 				Y:      tabY,
 				Width:  tabWidth,
 				Height: 1,
@@ -86,7 +101,23 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 					ItemText:   "Tab: " + m.tabs[i].spec.Title + ". Click to switch to this category of variables.",
 				},
 			})
-			tabX += tabWidth
+			x += tabWidth
+		}
+		if fit.showRightArrow {
+			regions = append(regions, displayengine.HitRegion{
+				ID:     "tabbed_vars.tabscroll-right",
+				X:      x,
+				Y:      tabY,
+				Width:  fit.arrowWidth,
+				Height: 1,
+				ZOrder: displayengine.ZDialog + 10,
+				Label:  "Scroll tabs right",
+				Help: &displayengine.HelpContext{
+					ScreenName: m.title,
+					ItemTitle:  "Scroll tabs right",
+					ItemText:   "Click to scroll the tab strip right by one tab.",
+				},
+			})
 		}
 	}
 
