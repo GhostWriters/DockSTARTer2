@@ -43,7 +43,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 
 		// Replicate RenderBorderedBoxCtx centering logic for the title/tabs row.
 		// Inner box content width = paneContentWidth - BorderWidth (accounts for inner box borders).
-		innerContentW := m.paneContentWidth[m.activeTab] - layout.BorderWidth()
+		innerContentW := m.paneContentWidth[m.paneGeomIdx(m.activeTab)] - layout.BorderWidth()
 		if innerContentW < 1 {
 			innerContentW = 1
 		}
@@ -86,8 +86,8 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		ID:     "tabbed_vars.editor",
 		X:      m.lastOffsetX + layout.NestedLeftOffset(),
 		Y:      m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight,
-		Width:  m.paneContentWidth[m.activeTab] - layout.BorderWidth(), // inner box content width
-		Height: m.paneEditorHeight[m.activeTab],
+		Width:  m.paneContentWidth[m.paneGeomIdx(m.activeTab)] - layout.BorderWidth(), // inner box content width
+		Height: m.paneEditorHeight[m.paneGeomIdx(m.activeTab)],
 		ZOrder: displayengine.ZDialog + 5,
 		Label:  "Variables Editor",
 		Help: &displayengine.HelpContext{
@@ -100,7 +100,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 	// INS/OVR hit region — bottom-left of the inner editor box border.
 	// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
 	// (NestedTopOffset already accounts for outer border + inner top border/tab row)
-	insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[m.activeTab]
+	insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[m.paneGeomIdx(m.activeTab)]
 	regions = append(regions, displayengine.HitRegion{
 		ID:     "tabbed_vars." + displayengine.IDInsOvr,
 		X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
@@ -213,7 +213,7 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		boxX := offsetX + paneOffX + 1 + layout.ContentSideMargin
 		boxY := offsetY + paneOffY + 1 + m.largeTitleOverhead + m.subtitleHeight
 		regions = append(regions, displayengine.TitleBarHitRegionsFor(
-			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.paneContentWidth[idx], false,
+			"tabbed_vars.pane"+strconv.Itoa(idx), boxX, boxY, m.paneContentWidth[m.paneGeomIdx(idx)], false,
 			widgets, displayengine.ZDialog,
 		)...)
 	}

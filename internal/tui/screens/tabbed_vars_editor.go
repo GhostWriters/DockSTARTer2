@@ -460,6 +460,17 @@ func (m *TabbedVarsEditorModel) paneLayoutWidgets() []displayengine.WidgetDef {
 	}
 }
 
+// paneGeomIdx clamps a tab index to a valid paneContentWidth/paneEditorHeight
+// slot. Both arrays only ever hold 2 entries (split mode is gated to
+// len(m.tabs) == 2); whenever a 3rd+ tab is active, splitMode is guaranteed
+// false, and slots 0/1 already hold the same full-width/full-height value
+// (see SetSize), so slot 1 is a correct stand-in for any tab index beyond
+// it. Only for indexing these two geometry arrays -- never use this to
+// index m.tabs itself, which needs the real, unclamped tab index.
+func (m *TabbedVarsEditorModel) paneGeomIdx(tabIdx int) int {
+	return min(tabIdx, 1)
+}
+
 // paneOffsetFor returns pane idx's top-left offset relative to pane 0 --
 // (0,0) unless split and idx is the second pane.
 func (m *TabbedVarsEditorModel) paneOffsetFor(idx int) (x, y int) {

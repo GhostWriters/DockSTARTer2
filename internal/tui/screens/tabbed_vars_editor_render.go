@@ -161,6 +161,7 @@ func endCappedLine(length int, start, end, fill string) []string {
 // clicking the OTHER pane's background switches which tab is active.
 func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	tab := m.tabs[idx]
+	geomIdx := m.paneGeomIdx(idx)
 	editor := tab.editor
 	// Sync this render-local copy's focus to what's actually being
 	// rendered, rather than trusting m.tabs[idx].editor's own focus flag --
@@ -205,8 +206,8 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	innerBox := displayengine.RenderBorderedBoxCtx(
 		tabRow,
 		editorView,
-		m.paneContentWidth[idx]-2,
-		m.paneEditorHeight[idx]+2,
+		m.paneContentWidth[geomIdx]-2,
+		m.paneEditorHeight[geomIdx]+2,
 		focused,
 		false, // No focus indicators here
 		true,  // Rounded corners to match submenu style
@@ -227,7 +228,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {
-		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[idx], modeLabel, scrollLabel, focused, ctx)
+		lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(m.paneContentWidth[geomIdx], modeLabel, scrollLabel, focused, ctx)
 		innerBox = strings.Join(lines, "\n")
 	}
 
@@ -474,7 +475,7 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 			m.paneEditorHeight[i] = 1
 		}
 	}
-	if m.paneEditorHeight[m.activeTab] < 3 && m.buttonHeight == 3 && !m.splitMode {
+	if m.paneEditorHeight[m.paneGeomIdx(m.activeTab)] < 3 && m.buttonHeight == 3 && !m.splitMode {
 		// Fallback: force buttons flat to save 2 lines if editor would be too small
 		m.buttonHeight = 1
 		overhead := layout.BorderHeight() + largeTitleOverhead + 1 + m.subtitleHeight + layout.BorderHeight()
@@ -499,13 +500,14 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	}
 
 	for i := range m.tabs {
+		paneIdx := m.paneGeomIdx(i)
 		// Editor content width accounts for inner box borders.
-		editorWidth := m.paneContentWidth[i] - layout.BorderWidth()
+		editorWidth := m.paneContentWidth[paneIdx] - layout.BorderWidth()
 		if editorWidth < 10 {
 			editorWidth = 10
 		}
 		m.tabs[i].editor.SetWidth(editorWidth)
-		m.tabs[i].editor.SetHeight(m.paneEditorHeight[i])
+		m.tabs[i].editor.SetHeight(m.paneEditorHeight[paneIdx])
 	}
 }
 

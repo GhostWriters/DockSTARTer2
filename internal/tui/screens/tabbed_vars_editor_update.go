@@ -227,8 +227,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// where it was.
 					layout := displayengine.GetLayout()
 					relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-					editorW := m.paneContentWidth[idx] - layout.BorderWidth()
-					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[idx] || relX >= editorW {
+					geomIdx := m.paneGeomIdx(idx)
+					editorW := m.paneContentWidth[geomIdx] - layout.BorderWidth()
+					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[geomIdx] || relX >= editorW {
 						return m, nil
 					}
 					var cmd tea.Cmd
@@ -258,8 +259,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			layout := displayengine.GetLayout()
 			relX, relY := m.editorRelCoords(idx, msg.X, msg.Y)
-			editorW := m.paneContentWidth[idx] - layout.BorderWidth()
-			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[idx] && relX < editorW {
+			geomIdx := m.paneGeomIdx(idx)
+			editorW := m.paneContentWidth[geomIdx] - layout.BorderWidth()
+			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[geomIdx] && relX < editorW {
 				var cmd tea.Cmd
 				m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 					X:      relX,
