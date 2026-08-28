@@ -61,6 +61,13 @@ func GetTemplatesDir() string {
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
+// GetTemplatesEnvFile returns the absolute path to the global .env template
+// at the DockSTARTer-Templates repo root -- fetched/cached the same way as
+// every per-app template file, so DS1 and DS2 read the exact same file.
+func GetTemplatesEnvFile() string {
+	return filepath.Join(GetTemplatesDir(), ".env")
+}
+
 // GetLegacyStateDir returns the state folder for the legacy DockSTARTer
 // install -- the parent of GetTemplatesDir(), which is shared with that
 // install, so it shouldn't be removed while it's still present.

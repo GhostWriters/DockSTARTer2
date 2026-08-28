@@ -26,7 +26,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 	ctx := context.Background()
 	cfg := config.LoadAppConfig()
 	envPath := filepath.Join(cfg.ComposeDir, constants.EnvFileName)
-	defaultGlobalEnvPath := filepath.Join(paths.GetConfigDir(), constants.EnvExampleFileName)
+	defaultGlobalEnvPath := paths.GetTemplatesEnvFile()
 
 	globalReadOnlyVars := []string{"HOME", "DOCKER_CONFIG_FOLDER", "DOCKER_COMPOSE_FOLDER"}
 
@@ -39,8 +39,10 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 	for i, tab := range m.tabs {
 		var currentLines []string
 		var defaultFilePath string
+		var fileLabel string
 
 		if tab.spec.IsGlobal {
+			fileLabel = envPath
 			if tab.spec.App != "" {
 				currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App, cfg)
 				if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
@@ -52,6 +54,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			}
 		} else {
 			fileApp := tab.spec.fileApp()
+			fileLabel = appenv.GetAppEnvFile(fileApp, cfg)
 			currentLines, _ = appenv.ListAppVarLines(ctx, fileApp+":", cfg)
 			if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
 				defaultFilePath, _ = appenv.AppInstanceFile(ctx, fileApp, appenv.AppNameToVarFilePattern(fileApp))
@@ -59,7 +62,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		}
 
 		defaultLines := appenv.ReadDefaultLines(defaultFilePath)
-		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, "")
+		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, fileLabel)
 
 		content := strings.Join(formattedLines, "\n")
 
@@ -100,11 +103,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 				}
 			}
 		}
-		if tab.spec.IsGlobal {
-			envFilePath = envPath
-		} else {
-			envFilePath = appenv.GetAppEnvFile(tab.spec.fileApp(), cfg)
-		}
+		envFilePath = fileLabel
 
 		addPrefix, validationType, validationApp := "", "", ""
 		if tab.spec.App != "" {

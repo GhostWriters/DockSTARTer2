@@ -1,13 +1,10 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/assets"
-	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
 	"github.com/GhostWriters/semstyle"
 	"context"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -57,6 +54,14 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		}
 	}
 
+	// fileLabel, when set, is a single standalone line placed above whatever
+	// heading block follows (unconditionally -- the global .env case has no
+	// app heading of its own, but still gets this line).
+	if fileLabel != "" {
+		formattedEnvLines = append(formattedEnvLines, "### "+fileLabel)
+		formattedEnvLines = append(formattedEnvLines, "")
+	}
+
 	// 2. Add App Heading if APPNAME is specified (Parity with env_format_lines.sh lines 31-56)
 	if appUpper != "" {
 		appNameNice := GetNiceName(ctx, appUpper)
@@ -74,13 +79,6 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 			if !appEnabled {
 				headingTitle += appDisabledTag
 			}
-		}
-
-		// fileLabel, when set, is a single standalone line placed above the
-		// heading block, which is otherwise unchanged.
-		if fileLabel != "" {
-			formattedEnvLines = append(formattedEnvLines, "### "+fileLabel)
-			formattedEnvLines = append(formattedEnvLines, "")
 		}
 
 		// Parity lines 46-55: Adds ### wrapping including before/after descriptions.
@@ -200,18 +198,6 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 func ReadDefaultLines(defaultEnvFile string) []string {
 	if defaultEnvFile == "" {
 		return nil
-	}
-	if filepath.Base(defaultEnvFile) == constants.EnvExampleFileName {
-		data, err := assets.GetDefaultEnv()
-		if err != nil {
-			return nil
-		}
-		lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-		// readarray -t strips the final newline character from the file
-		if len(lines) > 0 && lines[len(lines)-1] == "" {
-			lines = lines[:len(lines)-1]
-		}
-		return lines
 	}
 	if info, err := os.Stat(defaultEnvFile); err != nil || info.IsDir() {
 		return nil

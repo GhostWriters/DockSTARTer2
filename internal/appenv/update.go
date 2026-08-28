@@ -20,7 +20,6 @@ import (
 func Update(ctx context.Context, force bool, file string) error {
 	conf := config.LoadAppConfig()
 	composeEnvFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	configDir := paths.GetConfigDir()
 
 	if err := os.MkdirAll(conf.ComposeDir, 0755); err != nil {
 		logger.FatalWithStack(ctx, []string{
@@ -64,8 +63,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		defer os.Remove(tmpGlobalFile.Name())
 
-		defaultEnvFile := filepath.Join(configDir, constants.EnvExampleFileName)
-		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), defaultEnvFile, "", composeEnvFile, "")
+		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), paths.GetTemplatesEnvFile(), "", composeEnvFile, composeEnvFile)
 		if err == nil {
 			updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 		}
@@ -147,7 +145,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				if !IsAppUserDefined(ctx, appName, composeEnvFile) {
 					appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), pattern)
 				}
-				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, filepath.Base(appEnvFile))
+				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, appEnvFile)
 				if err == nil {
 					finalAppContent := strings.Join(formattedAppFile, "\n")
 					// Ensure trailing newline

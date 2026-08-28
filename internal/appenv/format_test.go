@@ -129,4 +129,32 @@ func TestFormatLinesCore(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("fileLabel applies to the global .env case too, with no appName", func(t *testing.T) {
+		currentLines := []string{"ALLOW_CORS=1"}
+		var defaultLines []string = nil
+		var envLines []string = nil
+
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, "", "", "/home/user/.config/compose/.env")
+
+		expected := []string{
+			"### /home/user/.config/compose/.env",
+			"",
+			"###",
+			"### Global Variables (User Defined)",
+			"###",
+			"ALLOW_CORS=1",
+		}
+
+		if len(formatted) != len(expected) {
+			t.Errorf("Expected %d lines, got %d. Lines: %v", len(expected), len(formatted), formatted)
+			return
+		}
+
+		for i, line := range formatted {
+			if line != expected[i] {
+				t.Errorf("At index %d: expected %q, got %q", i, expected[i], line)
+			}
+		}
+	})
 }
