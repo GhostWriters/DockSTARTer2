@@ -7,6 +7,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -48,9 +49,16 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// it's currently closed (clicking a closed tab in the strip is
 			// how a mouse user brings it back into the tiled view; unlike
 			// Ctrl+Left/Right, which can select a closed tab without
-			// opening it, a click always both opens and focuses).
+			// opening it, a click always both opens and focuses). A second
+			// click on the same tab within doubleClickWindow maximizes it,
+			// same shortcut as double-clicking a pane's own border.
 			tabIdxStr := strings.TrimPrefix(msg.ID, "tabbed_vars.tab-")
 			if idx, err := strconv.Atoi(tabIdxStr); err == nil && idx >= 0 && idx < len(m.tabs) {
+				now := time.Now()
+				isDouble := idx == m.lastTabClickIdx && now.Sub(m.lastTabClickTime) <= doubleClickWindow
+				m.lastTabClickIdx = idx
+				m.lastTabClickTime = now
+
 				m.focus = envFocusEditor
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.Blur()
@@ -62,6 +70,10 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeTab = idx
 				if len(m.tabs) > 0 {
 					m.tabs[m.activeTab].editor.Focus()
+				}
+				if isDouble {
+					m.lastTabClickIdx = -1 // consume -- a 3rd click starts a fresh pair, not another maximize
+					m.layoutMode = envLayoutMaximized
 				}
 				// Subtitle height (and everything derived from it -- editor
 				// height, button/editor Y positions) depends on the active
@@ -267,6 +279,19 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					slot, _ := m.paneSlotFor(idx)
 					editorW := m.paneContentWidth[slot] - layout.BorderWidth()
 					if relX < 0 || relY < 0 || relY >= m.paneEditorHeight[slot] || relX >= editorW {
+						// Double-click on a pane's own border (not its
+						// content, which has its own double-click meaning --
+						// select word) is a shortcut for its Maximize
+						// widget: jump straight to viewing just this pane.
+						now := time.Now()
+						isDouble := idx == m.lastBorderClickIdx && now.Sub(m.lastBorderClickTime) <= doubleClickWindow
+						m.lastBorderClickIdx = idx
+						m.lastBorderClickTime = now
+						if isDouble {
+							m.lastBorderClickIdx = -1 // consume -- a 3rd click starts a fresh pair, not another maximize
+							m.layoutMode = envLayoutMaximized
+							m.SetSize(m.width, m.height)
+						}
 						return m, nil
 					}
 					var cmd tea.Cmd

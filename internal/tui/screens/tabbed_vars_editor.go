@@ -39,6 +39,11 @@ const (
 	minPaneEditorHeight = 4
 )
 
+// doubleClickWindow is how close together two clicks on the same target
+// (a pane's border, or a tab strip entry) have to land to count as a
+// double-click-to-maximize, matching enveditor's own multi-click timing.
+const doubleClickWindow = 400 * time.Millisecond
+
 // GutterDragState tracks a mouse drag on the split gutter between the two
 // panes. Modeled on displayengine/classic's ScrollbarDragState, but without
 // its PendingDragY/LastDragY/DragPending throttle fields -- that gate is a
@@ -180,12 +185,13 @@ type TabbedVarsEditorModel struct {
 	buttonHeight       int
 	subtitleHeight     int
 	largeTitleOverhead int
-	// paneEditorHeight/paneContentWidth are indexed by pane (same index as
-	// m.tabs), resized to len(m.tabs) in SetSize. Side-by-side splits width
-	// but shares height across all panes; stacked splits height but shares
+	// paneEditorHeight/paneContentWidth are indexed by pane *slot* (position
+	// within openTabIndices(), not raw tab index -- see paneSlotFor),
+	// resized to openCount() in SetSize. Side-by-side splits width but
+	// shares height across all panes; stacked splits height but shares
 	// width -- see SetSize. In Maximized mode (or when tiling has collapsed
 	// for lack of room) every entry holds the same full-content value, so
-	// these are always safe to index by any tab's real index, in any mode.
+	// slot 0 is always a safe stand-in regardless of which tab is active.
 	paneEditorHeight []int
 	paneContentWidth []int
 	fullContentWidth int // full dialog content width, spans all panes when tiled -- used by buttons/outer border
@@ -251,6 +257,20 @@ type TabbedVarsEditorModel struct {
 	// cycled by CyclePaneTitleFocus (F9/Ctrl+T).
 	paneTitleFocused bool
 	paneActiveWidget string
+
+	// lastBorderClickIdx/Time and lastTabClickIdx/Time each track
+	// double-click-to-maximize for their own target kind -- a pane's own
+	// border (Update's "tabbed_vars.pane-" border-click branch) and a tab
+	// strip entry ("tabbed_vars.tab-") respectively -- kept separate so a
+	// border double-click and a tab-strip double-click on the same tab
+	// index in quick succession don't cross-pair as one. -1 when no click
+	// of that kind is pending pairing. Separate from enveditor's own
+	// multi-click tracking (word/value/line select), which only applies
+	// inside a pane's content area.
+	lastBorderClickIdx  int
+	lastBorderClickTime time.Time
+	lastTabClickIdx     int
+	lastTabClickTime    time.Time
 
 	// Callbacks
 	onClose tea.Cmd
@@ -391,14 +411,16 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	}
 
 	m := &TabbedVarsEditorModel{
-		tabs:      tabs,
-		activeTab: 0,
-		title:     title,
-		buttons:   buttons,
-		btnIdx:    0,
-		focus:     envFocusEditor,
-		onClose:   onClose,
-		connType:  connType,
+		tabs:               tabs,
+		activeTab:          0,
+		title:              title,
+		buttons:            buttons,
+		btnIdx:             0,
+		focus:              envFocusEditor,
+		onClose:            onClose,
+		connType:           connType,
+		lastBorderClickIdx: -1,
+		lastTabClickIdx:    -1,
 	}
 	m.resetSharesToEqual()
 	zoneByName := map[string]string{
