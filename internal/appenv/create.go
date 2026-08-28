@@ -1,10 +1,11 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/version"
 	"context"
 	"os"
 	"path/filepath"
@@ -37,12 +38,9 @@ func Create(ctx context.Context, file string) error {
 		return nil // File exists
 	}
 
-	input, err := assets.GetDefaultEnv()
+	input, err := os.ReadFile(paths.GetTemplatesEnvFile())
 	if err != nil {
-		if err := os.WriteFile(file, []byte{}, 0644); err != nil {
-			logger.FatalWithStack(ctx, "Failed to create empty env file '"+console.FormatFilePath(file)+"'.")
-		}
-		return nil
+		logger.Fatal(ctx, "Global .env template '"+console.FormatFilePath(paths.GetTemplatesEnvFile())+"' not found. Run '{{|UserCommand|}}"+version.CommandName+" -u{{[-]}}' to update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}}.")
 	}
 
 	if err := os.WriteFile(file, input, 0644); err != nil {

@@ -1,9 +1,9 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"
 	"bufio"
 	"bytes"
@@ -148,7 +148,7 @@ var (
 func getExampleDefaults() map[string]string {
 	exampleOnce.Do(func() {
 		exampleDefaults = make(map[string]string)
-		data, err := assets.GetDefaultEnv()
+		data, err := os.ReadFile(paths.GetTemplatesEnvFile())
 		if err != nil {
 			return
 		}

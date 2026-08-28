@@ -12,11 +12,6 @@ import (
 //go:embed all:defaults all:themes
 var embeddedFS embed.FS
 
-// GetDefaultEnv returns the content of the default .env example file.
-func GetDefaultEnv() ([]byte, error) {
-	return embeddedFS.ReadFile("defaults/.env.example")
-}
-
 // GetDefaultConfig returns the content of the default dockstarter2.toml file.
 func GetDefaultConfig() ([]byte, error) {
 	return embeddedFS.ReadFile("defaults/dockstarter2.toml")

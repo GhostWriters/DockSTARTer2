@@ -1,12 +1,13 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"
+	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
 	"os"
@@ -57,9 +58,9 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 	if _, err := os.Stat(mainEnvPath); os.IsNotExist(err) {
 		logger.Notice(ctx, "File '"+console.FormatFilePath(mainEnvPath)+"' not found. Copying example template.")
 
-		defaultContent, err := assets.GetDefaultEnv()
+		defaultContent, err := os.ReadFile(paths.GetTemplatesEnvFile())
 		if err != nil {
-			logger.Fatal(ctx, "Failed to load default env template: %v", err)
+			logger.Fatal(ctx, "Global .env template '"+console.FormatFilePath(paths.GetTemplatesEnvFile())+"' not found. Run '{{|UserCommand|}}"+version.CommandName+" -u{{[-]}}' to update {{|ApplicationName|}}DockSTARTer-Templates{{[-]}}.")
 		}
 
 		if err := os.WriteFile(mainEnvPath, defaultContent, 0644); err != nil {
@@ -98,7 +99,7 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 func SanitizeEnv(ctx context.Context, file string, conf config.AppConfig) error {
 	// 1. Merge default values (if keys missing)
 	tmpDefault := filepath.Join(os.TempDir(), "ds2_default.env")
-	defaultContent, err := assets.GetDefaultEnv()
+	defaultContent, err := os.ReadFile(paths.GetTemplatesEnvFile())
 	if err != nil {
 		return fmt.Errorf("failed to load default env for sanitization: %w", err)
 	}

@@ -22,7 +22,6 @@ const (
 	ComposeFileName         = "docker-compose.yml"
 	ComposeOverrideFileName = "docker-compose.override.yml"
 	EnvFileName             = ".env"
-	EnvExampleFileName      = ".env.example"
 	AppEnvFileNamePrefix    = ".env.app."
 	AppConfigFileName       = "dockstarter2.toml"
 )
