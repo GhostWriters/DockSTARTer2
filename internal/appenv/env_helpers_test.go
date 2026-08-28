@@ -347,6 +347,9 @@ func TestVarNameIsValid(t *testing.T) {
 		{"RADARR:2var", "_APPNAME_:", false}, // var starts with digit
 		{"TZ", "_APPNAME_:", false},
 		{"RADARR__TEST", "_APPNAME_:", false},
+		{"immich-database:DB_PASSWORD", "_APPNAME_:", true},          // multi-service shared/virtual file
+		{"immich___postgres:POSTGRES_DB", "_APPNAME_:", true},        // multi-service per-service file
+		{"immich__myinstance-database:DB_PASSWORD", "_APPNAME_:", true}, // instance + service qualifier
 
 		// VarType="radarr:" — colon-format for specific app (case-insensitive)
 		{"radarr:varname", "radarr:", true},

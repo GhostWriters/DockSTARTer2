@@ -290,7 +290,13 @@ func VarNameIsValid(varName string, varType string) bool {
 			return false
 		}
 		parts := strings.SplitN(varName, ":", 2)
-		return IsAppNameValid(parts[0]) && VarNameIsValid(parts[1], "_BARE_")
+		// The colon prefix may carry a service qualifier (e.g.
+		// "immich-database", "immich___postgres") identifying which
+		// .env.app.* file it targets; IsAppNameValid only recognizes real
+		// app[__instance] names, so validate against the app name with
+		// that qualifier stripped.
+		baseAppPart := stripServiceSuffix(strings.ToUpper(parts[0]))
+		return IsAppNameValid(baseAppPart) && VarNameIsValid(parts[1], "_BARE_")
 	default:
 		if strings.HasSuffix(varType, ":") {
 			if !strings.Contains(varName, ":") {
