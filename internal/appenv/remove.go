@@ -64,11 +64,20 @@ func removeAllDisabled(ctx context.Context, conf config.AppConfig, assumeYes boo
 	return nil
 }
 
+// appFileRemoval holds one .env.app.* file's computed removal set --
+// gathered up front for every one of the app's var files (plain, per-
+// service, shared/virtual) so the confirmation prompt can show all of them
+// together before anything is touched.
+type appFileRemoval struct {
+	file  string
+	vars  []string
+	lines []string
+}
+
 func removeApp(ctx context.Context, appName string, conf config.AppConfig, assumeYes bool) error {
 	appUpper := strings.ToUpper(appName)
 	nice := GetNiceName(ctx, appUpper)
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
-	appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 
 	// Get current and default variables
 	currentGlobalVars, err := listAppVars(appName, envFile)
@@ -82,19 +91,34 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 	globalVarsToRemove := intersection(currentGlobalVars, defaultGlobalVars)
 	globalLinesToRemove, _ := getVarLines(globalVarsToRemove, envFile)
 
-	currentAppVars, err := listAppVars("", appEnvFile)
-	if err != nil {
-		return err
+	// Every one of the app's .env.app.* files -- the plain file, plus (for
+	// a multi-service app) any per-service or shared/virtual files -- each
+	// diffed against its own template defaults, same as CreateApp creates
+	// them all instead of just the plain one.
+	baseApp := strings.ToLower(AppNameToBaseAppName(appUpper))
+	var appRemovals []appFileRemoval
+	totalAppVars := 0
+	for _, pattern := range TemplateAppVarFileSuffixes(baseApp) {
+		appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", strings.ToLower(appName)))
+		currentAppVars, err := listAppVars("", appEnvFile)
+		if err != nil {
+			return err
+		}
+		defaultAppVars, err := listDefaultAppVarsForPattern(ctx, appName, pattern)
+		if err != nil {
+			return err
+		}
+		appVarsToRemove := intersection(currentAppVars, defaultAppVars)
+		if len(appVarsToRemove) == 0 {
+			continue
+		}
+		appLinesToRemove, _ := getVarLines(appVarsToRemove, appEnvFile)
+		appRemovals = append(appRemovals, appFileRemoval{file: appEnvFile, vars: appVarsToRemove, lines: appLinesToRemove})
+		totalAppVars += len(appVarsToRemove)
 	}
-	defaultAppVars, err := listDefaultAppVars(ctx, appName)
-	if err != nil {
-		return err
-	}
-	appVarsToRemove := intersection(currentAppVars, defaultAppVars)
-	appLinesToRemove, _ := getVarLines(appVarsToRemove, appEnvFile)
 
 	// Check if there's anything to remove
-	if len(globalVarsToRemove) == 0 && len(appVarsToRemove) == 0 {
+	if len(globalVarsToRemove) == 0 && totalAppVars == 0 {
 		logger.Warn(ctx, "'{{|App|}}%s{{[-]}}' has no variables to remove.", nice)
 		return nil
 	}
@@ -110,9 +134,9 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 		}
 	}
 
-	if len(appLinesToRemove) > 0 {
-		question += fmt.Sprintf("%s%s:\n", indent, console.FormatFolderPath(appEnvFile))
-		for _, line := range appLinesToRemove {
+	for _, removal := range appRemovals {
+		question += fmt.Sprintf("%s%s:\n", indent, console.FormatFolderPath(removal.file))
+		for _, line := range removal.lines {
 			question += fmt.Sprintf("%s%s{{|Var|}}%s{{[-]}}\n", indent, indent, line)
 		}
 	}
@@ -140,16 +164,16 @@ func removeApp(ctx context.Context, appName string, conf config.AppConfig, assum
 		}
 	}
 
-	// Remove app-specific variables (matching Bash multi-line notice format)
-	if len(appVarsToRemove) > 0 {
-		// Build multi-line message
-		msg := "Removing variables from " + console.FormatFilePath(appEnvFile) + ":"
-		for _, line := range appLinesToRemove {
+	// Remove app-specific variables from every affected file (matching
+	// Bash multi-line notice format).
+	for _, removal := range appRemovals {
+		msg := "Removing variables from " + console.FormatFilePath(removal.file) + ":"
+		for _, line := range removal.lines {
 			msg += fmt.Sprintf("\n%s{{|Var|}}%s{{[-]}}", indent, line)
 		}
 		logger.Notice(ctx, msg)
 
-		if err := removeVarsFromFile(appVarsToRemove, appEnvFile); err != nil {
+		if err := removeVarsFromFile(removal.vars, removal.file); err != nil {
 			return fmt.Errorf("failed to purge '%s' variables: %w", nice, err)
 		}
 	}
@@ -204,9 +228,12 @@ func listDefaultGlobalVars(ctx context.Context, appName string) ([]string, error
 	return listAppVars(strings.ToUpper(appName), processedFile)
 }
 
-// listDefaultAppVars lists default app-specific variables
-func listDefaultAppVars(ctx context.Context, appName string) ([]string, error) {
-	processedFile, err := AppInstanceFile(ctx, appName, fmt.Sprintf("%s*", constants.AppEnvFileNamePrefix))
+// listDefaultAppVarsForPattern lists default variables from the template
+// file matching the given AppInstanceFile-style pattern -- the plain
+// ".env.app.*" pattern, or a per-service/shared one from
+// TemplateAppVarFileSuffixes (e.g. ".env.app.*-database").
+func listDefaultAppVarsForPattern(ctx context.Context, appName, pattern string) ([]string, error) {
+	processedFile, err := AppInstanceFile(ctx, appName, pattern)
 	if err != nil {
 		return nil, err
 	}
