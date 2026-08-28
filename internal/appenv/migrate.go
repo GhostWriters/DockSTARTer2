@@ -63,7 +63,11 @@ func MigrateAppVars(ctx context.Context, appName string, conf config.AppConfig) 
 	return scanner.Err()
 }
 
-// EnvMigrate renames a variable while preserving its value.
+// EnvMigrate renames a variable while preserving its value. fromVar's key
+// portion (after any "appname:" prefix) may be a regex -- e.g. an
+// "OLD_NAME_A|OLD_NAME_B" alternation -- mirroring env_migrate.sh's
+// `grep -P` based matching. Every distinct variable name in the source file
+// that matches is migrated in turn.
 func EnvMigrate(ctx context.Context, fromVar, toVar string, conf config.AppConfig) error {
 	fromVarResolved := fromVar
 	fromFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
@@ -87,34 +91,48 @@ func EnvMigrate(ctx context.Context, fromVar, toVar string, conf config.AppConfi
 		}
 	}
 
-	// Get value from source
-	val, err := Get(fromVar, fromFile)
-	if err != nil || val == "" {
-		return nil // Source variable not found or empty
-	}
-
-	// Check if target already exists
-	toVal, _ := Get(toVar, toFile)
-	if toVal != "" {
-		logger.Debug(ctx, "Migration target %s already exists, skipping.", toVar)
+	// fromVarResolved may be a regex; find every real variable name in
+	// fromFile it matches (usually one, but an alternation can match more).
+	matchedKeys, err := FindMatchingKeys(fromVarResolved, fromFile)
+	if err != nil {
+		logger.Warn(ctx, "Invalid migration pattern %q: %v", fromVarResolved, err)
 		return nil
 	}
-
-	logger.Notice(ctx, "Migrating variable {{|Var|}}%s{{[-]}} to {{|Var|}}%s{{[-]}}.", fromVar, toVar)
-
-	// Set new variable
-	if err := SetLiteral(ctx, toVarResolved, val, toFile); err != nil {
-		return err
+	if len(matchedKeys) == 0 {
+		return nil // Source variable not found
 	}
 
-	// Remove old variable
-	if err := unsetVarInFile(ctx, fromVarResolved, fromFile); err != nil {
-		return err
-	}
+	for _, matchedKey := range matchedKeys {
+		val, err := Get(matchedKey, fromFile)
+		if err != nil || val == "" {
+			continue
+		}
 
-	// If we're in the global .env, also check the override file
-	if fromFile == filepath.Join(conf.ComposeDir, constants.EnvFileName) {
-		return OverrideVarRename(ctx, fromVarResolved, toVarResolved, conf)
+		// Check if target already exists
+		toVal, _ := Get(toVarResolved, toFile)
+		if toVal != "" {
+			logger.Debug(ctx, "Migration target %s already exists, skipping.", toVar)
+			continue
+		}
+
+		logger.Notice(ctx, "Migrating variable {{|Var|}}%s{{[-]}} to {{|Var|}}%s{{[-]}}.", matchedKey, toVar)
+
+		// Set new variable
+		if err := SetLiteral(ctx, toVarResolved, val, toFile); err != nil {
+			return err
+		}
+
+		// Remove old variable
+		if err := unsetVarInFile(ctx, matchedKey, fromFile); err != nil {
+			return err
+		}
+
+		// If we're in the global .env, also check the override file
+		if fromFile == filepath.Join(conf.ComposeDir, constants.EnvFileName) {
+			if err := OverrideVarRename(ctx, matchedKey, toVarResolved, conf); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

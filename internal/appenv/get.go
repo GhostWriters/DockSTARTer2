@@ -103,6 +103,35 @@ func GetLineRegex(keyRegex, file string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
+// FindMatchingKeys returns the actual variable names in file whose key matches
+// keyRegex. Mirrors env_migrate.sh's `grep -o -P "^\s*\K${FromVar}(?=\s*=)"` --
+// keyRegex can be a real regex (e.g. an alternation like "OLD_A|OLD_B") and
+// every distinct matching key found is returned, not just the first.
+func FindMatchingKeys(keyRegex, file string) ([]string, error) {
+	var keys []string
+	f, err := os.Open(file)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	re, err := regexp.Compile(fmt.Sprintf(`^\s*(%s)\s*=`, keyRegex))
+	if err != nil {
+		return nil, err
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		if m := re.FindStringSubmatch(scanner.Text()); m != nil {
+			keys = append(keys, m[1])
+		}
+	}
+	return keys, scanner.Err()
+}
+
 // GetLiteral returns the raw value part (RHS) of the variable definition.
 // Mirrors env_get_literal.sh: returns line content after first '='.
 func GetLiteral(key, file string) (string, error) {
