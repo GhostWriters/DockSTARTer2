@@ -84,6 +84,19 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 			ctx,
 			displayengine.TitleBarState{Show: len(widgets) > 0, Widgets: widgets},
 		)
+
+		// Global INS/OVR for the currently focused pane, once on the tab-list
+		// box's own bottom border rather than repeated on every pane (see
+		// renderPane).
+		modeLabel := "INS"
+		if m.tabs[m.activeTab].editor.IsOverwrite() {
+			modeLabel = "OVR"
+		}
+		lines := strings.Split(body, "\n")
+		if len(lines) > 0 {
+			lines[len(lines)-1] = displayengine.BuildDualLabelBottomBorderCtx(middleContentWidth+layout.BorderWidth(), modeLabel, "", m.focus == envFocusEditor, ctx)
+			body = strings.Join(lines, "\n")
+		}
 	}
 
 	// Render buttons (shared row below all panes, spans the full width)
@@ -200,9 +213,12 @@ func endCappedLine(length int, start, end, fill string) []string {
 	return line
 }
 
-// renderPane renders one tab's tab-row/title + bordered editor box +
-// INS/OVR bottom label, at pane idx's own paneContentWidth x
-// paneEditorHeight (see SetSize). The shared subtitle
+// renderPane renders one tab's tab-row/title + bordered editor box, at pane
+// idx's own paneContentWidth x paneEditorHeight (see SetSize). The bottom
+// border carries the scroll % (right) always, and INS/OVR (left) only in
+// Maximized mode -- when tiled, INS/OVR is global and shown once on the
+// middle "tab list" box's own bottom border instead (see ViewString), since
+// only one pane is ever actually being typed into. The shared subtitle
 // heading is rendered in ViewString, not here. In split mode there's no
 // multi-tab strip within a pane -- just this pane's own title segment;
 // clicking the OTHER pane's background switches which tab is active.
@@ -286,9 +302,17 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	)
 
 	// Replace the bottom border with INS/OVR label (left) and scroll % (right, if scrolling).
-	modeLabel := "INS"
-	if editor.IsOverwrite() {
-		modeLabel = "OVR"
+	// When tiled, INS/OVR is global -- shown once on the tab-list box's own
+	// bottom border (see ViewString) instead of repeated on every pane,
+	// since only one pane is ever actually being typed into. Maximized mode
+	// has no separate tab-list box (its top border doubles as the editor's
+	// own), so there it stays on this pane's own border as always.
+	modeLabel := ""
+	if !m.splitMode {
+		modeLabel = "INS"
+		if editor.IsOverwrite() {
+			modeLabel = "OVR"
+		}
 	}
 	scrollLabel := ""
 	if editor.TotalDisplayLines() > editor.Height() {
@@ -663,6 +687,21 @@ func (m *TabbedVarsEditorModel) SetSize(width, height int) {
 	}
 
 	m.activePaneOffsetX, m.activePaneOffsetY = m.paneOffsetFor(m.activeTab)
+	if m.splitMode {
+		// paneOffsetFor only returns each pane's offset relative to its
+		// sibling panes (pane 0 sits at 0,0) -- it has no notion of the
+		// middle "tab list" box's own border/title row wrapping all of
+		// them. Every click/cursor formula elsewhere combines
+		// activePaneOffsetX/Y with layout.NestedLeftOffset()/
+		// NestedTopOffset(), a fixed constant sized for exactly two
+		// border layers (dialog -> pane), which is correct in Maximized
+		// mode but is missing the middle box's own left border column
+		// and top border/title row when tiled -- add them here, once,
+		// rather than patching every one of those call sites.
+		layout := displayengine.GetLayout()
+		m.activePaneOffsetX += layout.BorderWidth() / 2
+		m.activePaneOffsetY += m.tiledTabStripHeight
+	}
 	if !m.splitMode {
 		// No gutter to resize once collapsed (window shrunk below the
 		// split floor) -- exit both resize states so they don't get stuck

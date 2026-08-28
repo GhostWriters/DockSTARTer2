@@ -96,10 +96,26 @@ func AppNameToServiceName(appName string) string {
 	return ""
 }
 
-// VarNameToAppName returns the DS application name based on the variable name passed.
-// Mirrors varname_to_appname.sh: if the name contains ":", the part before the colon
-// is the app name; otherwise the app name is extracted via the double-underscore pattern.
+// VarNameToAppName returns the DS application name based on the variable name
+// passed -- always the bare app[__instance] name, with any service/shared
+// qualifier (see stripServiceSuffix) stripped. Use this for anything that
+// looks up or groups by the app itself: template/meta lookups, nice
+// name/description, referenced-apps detection, etc. Use
+// VarNameToAppNameService instead when you specifically need to preserve the
+// service qualifier (e.g. to strip an "APPNAME[__INST]___SERVICE__" prefix
+// back off the same var name).
 func VarNameToAppName(varName string) string {
+	return stripServiceSuffix(VarNameToAppNameService(varName))
+}
+
+// VarNameToAppNameService returns the DS application name based on the
+// variable name passed, preserving any service/shared qualifier (e.g.
+// "IMMICH___ML" for "IMMICH___ML__CONTAINER_NAME"). Mirrors
+// varname_to_appname.sh: if the name contains ":", the part before the colon
+// is the app name; otherwise the app name is extracted via the
+// double-underscore pattern. Most callers want the bare app name instead --
+// see VarNameToAppName.
+func VarNameToAppNameService(varName string) string {
 	// APPNAME:VARNAME format (used for .env.app.* vars)
 	if idx := strings.Index(varName, ":"); idx > 0 {
 		return strings.ToUpper(varName[:idx])

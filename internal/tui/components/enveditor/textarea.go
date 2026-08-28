@@ -2517,9 +2517,15 @@ func wrap(runes []rune, width int) [][]rune {
 			}
 		} else {
 			// If the last character is a double-width rune, then we may not be able to add it to this line
-			// as it might cause us to go past the width.
+			// as it might cause us to go past the width. Must include lines[row]'s
+			// own existing width here too (as the spaces-pending branch above
+			// does) -- otherwise a long unspaced token (e.g. a .env token/key
+			// with no internal spaces) can keep appending onto a row that
+			// already has content, silently overflowing width without ever
+			// triggering a wrap, which desyncs wrap()'s row boundaries from
+			// what's actually rendered and breaks click/cursor column mapping.
 			lastCharLen := rw.RuneWidth(word[len(word)-1])
-			if uniseg.StringWidth(string(word))+lastCharLen > width {
+			if uniseg.StringWidth(string(lines[row]))+uniseg.StringWidth(string(word))+lastCharLen > width {
 				// If the current line has any content, let's move to the next
 				// line because the current word fills up the entire line.
 				if len(lines[row]) > 0 {

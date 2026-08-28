@@ -230,9 +230,15 @@ type TabbedVarsEditorModel struct {
 
 	// paneOffsetXs/Ys hold each pane's top-left offset relative to pane 0's,
 	// recomputed by SetSize alongside paneContentWidth/paneEditorHeight.
-	// activePaneOffsetX/Y is that offset for m.activeTab -- folded into
-	// lastOffsetX/Y by GetHitRegions so existing single-pane cursor/click/
-	// context-menu math keeps working unmodified.
+	// activePaneOffsetX/Y is paneOffsetFor(m.activeTab), PLUS -- when tiled
+	// -- the middle "tab list" box's own left border column and top
+	// border/title row (paneOffsetFor only knows about offsets between
+	// sibling panes, not that outer wrapping box), so it's folded into
+	// lastOffsetX/Y by GetHitRegions and every click/cursor formula that
+	// combines it with layout.NestedLeftOffset()/NestedTopOffset() (a
+	// constant sized for exactly two border layers: dialog -> pane) lands
+	// on the right cell in both Maximized and tiled mode. See SetSize's
+	// assignment for the exact computation.
 	paneOffsetXs      []int
 	paneOffsetYs      []int
 	activePaneOffsetX int
@@ -814,6 +820,13 @@ func (m *TabbedVarsEditorModel) paneBoxAt(x, y int) (idx int, ok bool) {
 func (m *TabbedVarsEditorModel) editorRelCoords(idx, x, y int) (relX, relY int) {
 	layout := displayengine.GetLayout()
 	offX, offY := m.paneOffsetFor(idx)
+	if m.splitMode {
+		// paneOffsetFor is relative to sibling panes only -- add the middle
+		// "tab list" box's own left border column and top border/title row,
+		// same as SetSize does for m.activePaneOffsetX/Y (see its comment).
+		offX += layout.BorderWidth() / 2
+		offY += m.tiledTabStripHeight
+	}
 	relX = x - (m.dialogOffsetX + offX + layout.NestedLeftOffset())
 	relY = y - (m.dialogOffsetY + offY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight)
 	return

@@ -98,7 +98,7 @@ func GetVarHelpLine(varName string) string {
 // lookupVarHelp finds help information for a variable name.
 func lookupVarHelp(varName string) (varHelpEntry, bool) {
 	upper := strings.ToUpper(varName)
-	appName := VarNameToAppName(upper)
+	appName := VarNameToAppNameService(upper)
 
 	if appName == "" {
 		// GLOBAL variable — exact name match

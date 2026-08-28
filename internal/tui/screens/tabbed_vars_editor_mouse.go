@@ -147,19 +147,24 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		})
 
 		// INS/OVR hit region — bottom-left of the inner editor box border.
+		// Only when Maximized -- when tiled, INS/OVR moved to the middle
+		// "tab list" box's own bottom border (see the m.splitMode block
+		// below), since it's now global rather than repeated per pane.
 		// Inner editor box bottom border = NestedTopOffset + largeTitleOverhead + subtitleHeight + editorHeight
 		// (NestedTopOffset already accounts for outer border + inner top border/tab row)
-		insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[activeSlot]
-		regions = append(regions, displayengine.HitRegion{
-			ID:     "tabbed_vars." + displayengine.IDInsOvr,
-			X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
-			Y:      insOvrY,
-			Width:  3,
-			Height: 1,
-			ZOrder: displayengine.ZDialog + 15,
-			Label:  "INS/OVR",
-			Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
-		})
+		if !m.splitMode {
+			insOvrY := m.lastOffsetY + layout.NestedTopOffset() + m.largeTitleOverhead + m.subtitleHeight + m.paneEditorHeight[activeSlot]
+			regions = append(regions, displayengine.HitRegion{
+				ID:     "tabbed_vars." + displayengine.IDInsOvr,
+				X:      m.lastOffsetX + layout.NestedLeftOffset() + 1, // +1 to skip the corner char
+				Y:      insOvrY,
+				Width:  3,
+				Height: 1,
+				ZOrder: displayengine.ZDialog + 15,
+				Label:  "INS/OVR",
+				Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+			})
+		}
 	}
 
 	// Click-to-focus background for every visible-but-unfocused pane, when
@@ -266,6 +271,29 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 				)...)
 			}
 		}
+
+		// INS/OVR hit region -- bottom-left of the middle "tab list" box's
+		// own bottom border, now that it's global rather than repeated per
+		// pane (see ViewString/renderPane). bodyHeight mirrors ViewString's
+		// own joined-panes height computation: one shared row of full pane
+		// boxes (side by side) or the last pane's cumulative offset + its
+		// own box height (stacked).
+		bodyHeight := m.paneEditorHeight[0] + layout.BorderHeight()
+		if m.layoutMode == envLayoutStacked {
+			last := len(m.paneEditorHeight) - 1
+			bodyHeight = m.paneOffsetYs[last] + m.paneEditorHeight[last] + layout.BorderHeight()
+		}
+		insOvrY := boxY + bodyHeight + layout.BorderHeight() - 1
+		regions = append(regions, displayengine.HitRegion{
+			ID:     "tabbed_vars." + displayengine.IDInsOvr,
+			X:      boxX + 1, // +1 to skip the corner char
+			Y:      insOvrY,
+			Width:  3,
+			Height: 1,
+			ZOrder: displayengine.ZDialog + 15,
+			Label:  "INS/OVR",
+			Help:   &displayengine.HelpContext{ScreenName: m.title, PageTitle: "Insert/Overwrite", PageText: "Toggle between insert and overwrite mode."},
+		})
 	} else if len(widgets) > 0 {
 		idx := m.activeTab
 		slot, _ := m.paneSlotFor(idx) // uniform array when !splitMode -- see SetSize

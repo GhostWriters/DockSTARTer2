@@ -48,6 +48,11 @@ func TestAppNameToServiceName(t *testing.T) {
 	}
 }
 
+// TestVarNameToAppName covers the bare-app-name form -- any service/shared
+// qualifier stripped. This is what callers that look up or group by the app
+// itself want (template/meta lookups, nice name, referenced-apps
+// detection); see TestVarNameToAppNameService for the qualifier-preserving
+// form a couple of callers still need.
 func TestVarNameToAppName(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -71,15 +76,25 @@ func TestVarNameToAppName(t *testing.T) {
 		{"RADARR__ENABLED__FOO", "RADARR__ENABLED"},
 		{"RADARR__TAG__VAR", "RADARR__TAG"},
 
-		// Colon-format (APPNAME:VARNAME) — used for .env.app.* vars
+		// Colon-format (APPNAME:VARNAME) — used for .env.app.* vars. The
+		// colon prefix may itself carry a service/shared qualifier (e.g.
+		// "immich-database", "immich___postgres") identifying which
+		// .env.app.* file it targets -- stripped here too, same as the
+		// double-underscore forms below.
 		{"WATCHTOWER:WATCHTOWER_CLEANUP", "WATCHTOWER"},
 		{"SONARR:PORT_8989", "SONARR"},
 		{"PLEX__4K:PLEX_CLAIM", "PLEX__4K"},
+		{"IMMICH-DATABASE:DB_HOSTNAME", "IMMICH"},
+		{"IMMICH___POSTGRES:POSTGRES_DB", "IMMICH"},
 
-		// Multi-service scheme: APP[__INST]___SERVICE__VAR must return the
-		// full identity including the service segment, not silently drop it.
-		{"IMMICH___POSTGRES__CONTAINER_NAME", "IMMICH___POSTGRES"},
-		{"IMMICH__MYINSTANCE___POSTGRES__CONTAINER_NAME", "IMMICH__MYINSTANCE___POSTGRES"},
+		// Multi-service scheme: APP[__INST]___SERVICE__VAR must resolve to
+		// the app itself, with the service segment stripped -- this is the
+		// bug confirmed live on dstest.lan (2026-08-28): the global .env
+		// tab's own "IMMICH___ML__CONTAINER_NAME"-style vars were being
+		// compared unstripped against the plain "IMMICH" app name and
+		// always failing validation, blocking Save.
+		{"IMMICH___POSTGRES__CONTAINER_NAME", "IMMICH"},
+		{"IMMICH__MYINSTANCE___POSTGRES__CONTAINER_NAME", "IMMICH__MYINSTANCE"},
 		{"IMMICH__MYINSTANCE__CONTAINER_NAME", "IMMICH__MYINSTANCE"}, // no service: unaffected regression check
 	}
 
@@ -87,6 +102,35 @@ func TestVarNameToAppName(t *testing.T) {
 		result := VarNameToAppName(test.input)
 		if result != test.expected {
 			t.Errorf("VarNameToAppName(%q) = %q; want %q", test.input, result, test.expected)
+		}
+	}
+}
+
+// TestVarNameToAppNameService covers the qualifier-preserving form, used
+// only by the couple of callers (VarDefaultValue, lookupVarHelp) that need
+// to strip a full "APPNAME[__INST]___SERVICE__" prefix back off the same
+// var name -- stripping the qualifier there would leave the suffix
+// computation matching against too short a prefix.
+func TestVarNameToAppNameService(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"SONARR__CONTAINER_NAME", "SONARR"},
+		{"SONARR__4K__CONTAINER_NAME", "SONARR__4K"},
+		{"PLEX__4K:PLEX_CLAIM", "PLEX__4K"},
+
+		// Multi-service scheme: full identity including the service
+		// segment, not silently dropped.
+		{"IMMICH___POSTGRES__CONTAINER_NAME", "IMMICH___POSTGRES"},
+		{"IMMICH__MYINSTANCE___POSTGRES__CONTAINER_NAME", "IMMICH__MYINSTANCE___POSTGRES"},
+		{"IMMICH__MYINSTANCE__CONTAINER_NAME", "IMMICH__MYINSTANCE"}, // no service: unaffected regression check
+	}
+
+	for _, test := range tests {
+		result := VarNameToAppNameService(test.input)
+		if result != test.expected {
+			t.Errorf("VarNameToAppNameService(%q) = %q; want %q", test.input, result, test.expected)
 		}
 	}
 }
