@@ -71,6 +71,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.String("env-set-lower-literal", "", "Set variable literal value (lowercase)")
 	fs.String("env-edit", "", "Open the value picker TUI for a variable (APP:VAR or VAR)")
 	fs.String("env-edit-lower", "", "Open the value picker TUI for a variable (preserve case)")
+	fs.String("env-appfiles", "", "List all .env.app.* var files for an application")
 
 	// Editor
 	fs.Bool("edit-global", false, "Open the global environment variables editor")

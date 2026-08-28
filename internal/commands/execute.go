@@ -179,6 +179,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleSysInfo(innerCtx)
 			case "--man":
 				return HandleMan(innerCtx, &group, graphicsSupported)
+			case "--env-appfiles":
+				return HandleEnvAppFiles(innerCtx, &group)
 			case "-i", "--install":
 				return HandleInstall(innerCtx, &group, &state)
 			case "-u", "--update", "--update-app", "--update-templates":

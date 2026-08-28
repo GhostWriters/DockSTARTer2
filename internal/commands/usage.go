@@ -327,6 +327,12 @@ func GetUsage(target string, noHeading bool) string {
 			"	Show documentation for the app specified",
 		)
 	}
+	if match("--env-appfiles") {
+		printStr(
+			"{{|UsageCommand|}}--env-appfiles{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+			"	List all .env.app.* var files for the app specified",
+		)
+	}
 	if match("-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced") {
 		printStr(
 			"{{|UsageCommand|}}-l --list{{[-]}}",
