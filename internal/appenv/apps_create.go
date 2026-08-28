@@ -97,7 +97,16 @@ func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.A
 		logger.Info(ctx, "Creating environment variables for '{{|App|}}%s{{[-]}}'.", niceName)
 		LogAppTemplateOverride(ctx, appName)
 
-		// 1. Get path to Global .env instance file
+		// 1. Migrate any old-named variables (per the app's .migrate file)
+		// forward to their new names, before merging in defaults for the
+		// new names -- mirrors appvars_create.sh's ordering (appvars_migrate
+		// runs before either env_merge_newonly call), so a migrated value
+		// is picked up instead of getting overwritten by a fresh default.
+		if err := MigrateAppVars(ctx, appNameUpper, conf); err != nil {
+			logger.Warn(ctx, "Failed to migrate variables for %s: %v", appNameUpper, err)
+		}
+
+		// 2. Get path to Global .env instance file
 		processedGlobalEnv, err := AppInstanceFile(ctx, appName, constants.EnvFileName)
 		if err != nil {
 			logger.Debug(ctx, "No global .env template for %s: %v", appNameUpper, err)
@@ -107,7 +116,7 @@ func CreateApp(ctx context.Context, appNameRaw string, force bool, conf config.A
 			}
 		}
 
-		// 2. Get path to App specific .env instance file(s) (.env.app.*) --
+		// 3. Get path to App specific .env instance file(s) (.env.app.*) --
 		// the plain file, plus (for a multi-service app) any per-service or
 		// shared/virtual files alongside it.
 		baseApp := strings.ToLower(AppNameToBaseAppName(appNameUpper))

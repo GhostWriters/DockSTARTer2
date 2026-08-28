@@ -78,6 +78,43 @@ func TestEnvMigrate_SkipsIfTargetAlreadySet(t *testing.T) {
 	}
 }
 
+// TestEnvMigrate_AppFilePrefix is the regression test for a bug found
+// alongside the multi-service work: an "appname:VAR" fromVar/toVar targets
+// the app's .env.app.<appname> file (as every .migrate file in
+// DockSTARTer-Templates actually assumes), not the global .env -- but
+// EnvMigrate was resolving the prefix via AppInstanceFile(ctx, appname,
+// ".env"), which always pointed at the global .env instance file no matter
+// what appname was. This also covers a multi-service per-service file
+// (e.g. "immich-database:VAR"), which has no template of its own to
+// resolve against and must work purely from the literal file name.
+func TestEnvMigrate_AppFilePrefix(t *testing.T) {
+	tmpDir := t.TempDir()
+	appFile := filepath.Join(tmpDir, ".env.app.immich-database")
+	if err := os.WriteFile(appFile, []byte("OLD_NAME='hello'\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	conf := config.AppConfig{ComposeDir: tmpDir}
+
+	if err := EnvMigrate(context.Background(), "immich-database:OLD_NAME", "immich-database:NEW_NAME", conf); err != nil {
+		t.Fatalf("EnvMigrate failed: %v", err)
+	}
+
+	val, _ := Get("NEW_NAME", appFile)
+	if val != "hello" {
+		t.Errorf("NEW_NAME = %q; want %q", val, "hello")
+	}
+	if oldVal, _ := Get("OLD_NAME", appFile); oldVal != "" {
+		t.Errorf("OLD_NAME still present with value %q; want unset", oldVal)
+	}
+
+	// The global .env must be untouched -- confirms the migration didn't
+	// silently fall back to it.
+	envFile := filepath.Join(tmpDir, ".env")
+	if _, err := os.Stat(envFile); err == nil {
+		t.Errorf(".env was created/written; migration should only have touched .env.app.immich-database")
+	}
+}
+
 func TestEnvMigrate_NoMatchIsNoop(t *testing.T) {
 	tmpDir := t.TempDir()
 	envFile := filepath.Join(tmpDir, ".env")
