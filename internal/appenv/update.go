@@ -147,11 +147,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				if !IsAppUserDefined(ctx, appName, composeEnvFile) {
 					appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), pattern)
 				}
-				fileLabel := ""
-				if len(patterns) > 1 {
-					fileLabel = filepath.Base(appEnvFile)
-				}
-				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, fileLabel)
+				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, filepath.Base(appEnvFile))
 				if err == nil {
 					finalAppContent := strings.Join(formattedAppFile, "\n")
 					// Ensure trailing newline

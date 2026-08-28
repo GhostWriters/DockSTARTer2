@@ -95,7 +95,7 @@ func TestFormatLinesCore(t *testing.T) {
 		}
 	})
 
-	t.Run("fileLabel replaces the opening blank separator with a filename line", func(t *testing.T) {
+	t.Run("fileLabel adds a standalone filename line above an unchanged heading block", func(t *testing.T) {
 		currentLines := []string{"ALLOW_CORS=1"}
 		var defaultLines []string = nil
 		envLines := []string{"AUDIOBOOKSHELF__ENABLED=true"}
@@ -105,9 +105,9 @@ func TestFormatLinesCore(t *testing.T) {
 		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, ".env.app.audiobookshelf-database")
 
 		expected := []string{
-			"###",
 			"### .env.app.audiobookshelf-database",
 			"",
+			"###",
 			"### Audiobookshelf",
 			"###",
 			"### ! Missing description !",
