@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"context"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -847,26 +848,47 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				capturedDefaultLines = tab.defaultLines
 			}
 
+			// ReformatEnv rebuilds the whole buffer from this function's
+			// return value, not just the body -- fileLabel/lastWritten must
+			// be the real values (matching loadEnv) or the File:/Last
+			// written: header would vanish from the in-memory buffer on
+			// every refresh, not just visually.
+			var capturedLastWritten time.Time
+			if !tab.spec.IsGlobal {
+				if info, err := os.Stat(tab.envFilePath); err == nil {
+					capturedLastWritten = info.ModTime()
+				}
+			}
+
 			// Snapshot pre-refresh values to detect which vars the user actually changed.
 			preRefresh, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
-				// fileLabel is "" -- this reformats an already-open buffer's
-				// body only, not the header, so lastWritten is irrelevant.
-				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath, "", time.Time{}, varFileSuffix)
+				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath, tab.envFilePath, capturedLastWritten, varFileSuffix)
 			})
 			// Update initialVars only for variables the user had not changed before refresh,
 			// so formatting-only changes don't appear as unsaved edits, but real user edits
-			// remain dirty.
+			// remain dirty. A key absent from initialVars is ambiguous on its own -- it could
+			// be a template default the formatter just reintroduced (safe to absorb as
+			// baseline), or a variable the user typed themselves moments ago (must stay
+			// unabsorbed, or Save's initialVars-vs-current diff would see no change and
+			// never write it). IsNewLineKey disambiguates via the same marker that drives
+			// the gutter's "+" indicator.
 			refreshed, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
 			for k, refreshedVal := range refreshed {
 				preVal, existedBefore := preRefresh[k]
 				initVal, existedInit := tab.initialVars[k]
-				if !existedBefore || !existedInit || preVal == initVal {
-					// Key is new, or user hadn't changed it — absorb the refreshed value.
+				switch {
+				case existedInit:
+					if preVal == initVal {
+						tab.initialVars[k] = refreshedVal
+					}
+					// Otherwise user had edited this var — leave initialVars[k] unchanged so
+					// hasChanges() still detects the diff.
+				case !existedBefore || !tab.editor.IsNewLineKey(k):
+					// Not present before refresh (formatter added it), or present but not
+					// user-typed — a reintroduced template default, safe to baseline.
 					tab.initialVars[k] = refreshedVal
 				}
-				// Otherwise user had edited this var — leave initialVars[k] unchanged so
-				// hasChanges() still detects the diff.
 			}
 			// Deliberately no longer prunes tab.initialVars for keys missing from
 			// the post-refresh buffer: a confirmed deletion (manual F5 on a var
