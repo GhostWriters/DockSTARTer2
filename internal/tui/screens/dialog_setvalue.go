@@ -446,7 +446,6 @@ func (m *setValueDialogModel) HelpContext(maxWidth int) displayengine.HelpContex
 		ScreenName:  m.setValueTitle(),
 		PageTitle:   "Variable Info",
 		PageText:    pageText,
-		Legend:      "| {{|MarkerAdded|}}+{{[-]}} Added | {{|MarkerDeleted|}}-{{[-]}} Deleted | {{|MarkerModified|}}~{{[-]}} Changed | {{|MarkerInvalid|}}!{{[-]}} Invalid |",
 		DocMarkdown: m.docMarkdown,
 		DocAppName:  m.docAppName,
 	}

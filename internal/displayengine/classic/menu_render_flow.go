@@ -94,9 +94,17 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		if m.showLockGutter {
 			lockChar := ""
 			if item.IsInvalid {
-				lockChar = RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
+				marker := invalidMarker
+				if !ctx.LineCharacters {
+					marker = invalidMarkerAscii
+				}
+				lockChar = RenderThemeText("{{|MarkerInvalid|}}"+marker+"{{[-]}}", neutralStyle)
 			} else if item.Locked {
-				lockChar = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+				marker := lockedMarker
+				if !ctx.LineCharacters {
+					marker = lockedMarkerAscii
+				}
+				lockChar = RenderThemeText("{{|MarkerLocked|}}"+marker+"{{[-]}}", neutralStyle)
 			} else if item.IsNew {
 				// Same transient "changed" indicator as App Select's
 				// just-added/renamed marker, reusing the same field and glyph.
