@@ -2,12 +2,17 @@ package appenv
 
 import (
 	"DockSTARTer2/internal/envutil"
-	"github.com/GhostWriters/semstyle"
+	"DockSTARTer2/internal/paths"
 	"context"
+	"fmt"
+	"github.com/GhostWriters/semstyle"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/strutil"
 )
@@ -34,7 +39,20 @@ const (
 // "###" separator with "### <fileLabel>" -- distinguishes a multi-service
 // app's several .env.app.* files (e.g. ".env.app.immich-database") from
 // each other, since they'd otherwise share an identical heading.
-func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string) []string {
+// lastWritten, when non-zero, adds an aligned "Last written: <timestamp>"
+// line right after the "File:" line -- the zero value (used by every
+// caller except a .env.app.* tab's live display) means "don't show one".
+// Unlike Update()'s actual write path (which grabs time.Now() as the
+// literal last step before writing), this is meant to reflect a file's
+// real on-disk mtime read via os.Stat by the caller -- safe to show during
+// live display because it only changes when a real write happens, unlike
+// "now" which would misrepresent an unsaved buffer as already-saved.
+// varFileSuffix scopes the "Vars updated:" heading line (see
+// templateTimestampLines) to the one specific template file this tab/write
+// actually corresponds to (AppInstanceFile's "*"-for-base-app-name
+// convention, e.g. ".env" or ".env.app.*") -- pass "" when there's no
+// meaningful single file to scope to (e.g. appName is "").
+func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string, lastWritten time.Time, varFileSuffix string) []string {
 	appUpper := strings.ToUpper(appName)
 
 	var formattedEnvLines []string
@@ -54,11 +72,15 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		}
 	}
 
-	// fileLabel, when set, is a single standalone line placed above whatever
-	// heading block follows (unconditionally -- the global .env case has no
-	// app heading of its own, but still gets this line).
+	// fileLabel, when set, is a standalone "File: <path>" line placed above
+	// whatever heading block follows (unconditionally -- the global .env
+	// case has no app heading of its own, but still gets this line). The
+	// zero time.Time means "not written yet" -- fileHeaderLines returns just
+	// this one line; Update()'s actual disk-write paths call it again with
+	// time.Now() (see stampLastWritten in update.go) to get a second,
+	// aligned "Last written:" line to insert right after this one.
 	if fileLabel != "" {
-		formattedEnvLines = append(formattedEnvLines, "### "+fileLabel)
+		formattedEnvLines = append(formattedEnvLines, fileHeaderLines(fileLabel, lastWritten)...)
 		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
@@ -97,6 +119,15 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 				}
 			}
 			formattedEnvLines = append(formattedEnvLines, "###")
+		}
+
+		// Template last-updated lines: only meaningful for a built-in app's
+		// real template (not user-defined, which has no template folder).
+		if !appIsUserDefined {
+			if timestampLines := templateTimestampLines(appUpper, varFileSuffix); len(timestampLines) > 0 {
+				formattedEnvLines = append(formattedEnvLines, timestampLines...)
+				formattedEnvLines = append(formattedEnvLines, "###")
+			}
 		}
 	}
 
@@ -193,6 +224,94 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 	return formattedEnvLines
 }
 
+// templateTimestampLines builds the "### Template updated: ..." /
+// "### Vars updated: ..." heading lines for appUpper (their labels padded
+// to the same width so the timestamps line up in a column), or nil if
+// there's nothing to report (no template folder, or -- for a repo-tracked
+// app -- no git history for it). varFileSuffix scopes "Vars updated" to
+// one specific template file (AppInstanceFile's "*"-for-base-app-name
+// convention, e.g. ".env" or ".env.app.*") -- not "any var file under the
+// app's folder", so a change to the file backing a different tab (e.g. the
+// global .env's section) doesn't make this one look changed too.
+func templateTimestampLines(appUpper, varFileSuffix string) []string {
+	var templateUpdated, varsUpdated time.Time
+	if IsUserTemplate(appUpper) {
+		// A user override has no git history at all -- mtime on the files
+		// themselves is the only available signal there.
+		varFileName := strings.ReplaceAll(varFileSuffix, "*", strings.ToLower(AppNameToBaseAppName(appUpper)))
+		templateUpdated, varsUpdated = userTemplateTimestamps(TemplateFolder(appUpper), varFileName)
+	} else {
+		templateUpdated, varsUpdated = paths.GetAppTemplateTimestamps(appUpper, varFileSuffix)
+	}
+	if templateUpdated.IsZero() {
+		return nil
+	}
+	const timeFormat = "2006-01-02 15:04:05"
+	pairs := [][2]string{{"Template updated:", templateUpdated.Format(timeFormat)}}
+	if !varsUpdated.IsZero() {
+		pairs = append(pairs, [2]string{"Vars updated:", varsUpdated.Format(timeFormat)})
+	}
+	return formatAlignedHeadingLines(pairs)
+}
+
+// fileHeaderLines builds the top-of-file "File: <fileLabel>" line and,
+// when lastWritten is non-zero, an aligned "Last written: <timestamp>"
+// line right after it. lastWritten's zero value means "not written yet" --
+// used by FormatLinesCore (render/display, nothing saved yet) to get just
+// the "File:" line; Update()'s actual disk-write paths pass time.Now() (see
+// stampLastWritten) to get both, aligned against each other even though
+// they're produced by different code at different times.
+func fileHeaderLines(fileLabel string, lastWritten time.Time) []string {
+	pairs := [][2]string{{"File:", fileLabel}}
+	if lastWritten.IsZero() {
+		pairs = append(pairs, [2]string{"Last written:", ""})
+		return formatAlignedHeadingLines(pairs)[:1]
+	}
+	pairs = append(pairs, [2]string{"Last written:", lastWritten.Format("2006-01-02 15:04:05")})
+	return formatAlignedHeadingLines(pairs)
+}
+
+// formatAlignedHeadingLines renders label/value pairs as "### <label> <value>"
+// heading lines, padding every label to the width of the longest one so the
+// values line up in a column regardless of label length.
+func formatAlignedHeadingLines(pairs [][2]string) []string {
+	maxLabel := 0
+	for _, p := range pairs {
+		if len(p[0]) > maxLabel {
+			maxLabel = len(p[0])
+		}
+	}
+	lines := make([]string, len(pairs))
+	for i, p := range pairs {
+		lines[i] = fmt.Sprintf("### %-*s%s", maxLabel+1, p[0], p[1])
+	}
+	return lines
+}
+
+// userTemplateTimestamps returns the most recent mtime among all files
+// under dir (templateUpdated), and separately the mtime of the one file
+// named varFileName within it (varsUpdated, zero if varFileName is "" or
+// not found). Either is the zero Time if dir doesn't exist either.
+func userTemplateTimestamps(dir, varFileName string) (templateUpdated, varsUpdated time.Time) {
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.ModTime().After(templateUpdated) {
+			templateUpdated = info.ModTime()
+		}
+		if varFileName != "" && d.Name() == varFileName {
+			varsUpdated = info.ModTime()
+		}
+		return nil
+	})
+	return
+}
+
 // ReadDefaultLines loads the default/template lines for the given file path.
 // Returns nil if the file is not found or cannot be read.
 func ReadDefaultLines(defaultEnvFile string) []string {
@@ -215,7 +334,10 @@ func ReadDefaultLines(defaultEnvFile string) []string {
 
 // FormatLines processes environment variable lines to match DockSTARTer formatting.
 // Matches env_format_lines.sh exactly. Reads files from disk and delegates to FormatLinesCore.
-func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string, fileLabel string) ([]string, error) {
+// varFileSuffix scopes "Vars updated:" (see FormatLinesCore) -- pass the
+// same fileSuffix pattern already used to resolve defaultEnvFile via
+// AppInstanceFile, or "" when appName is "" (no per-app scoping possible).
+func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string, fileLabel, varFileSuffix string) ([]string, error) {
 	var currentLines []string
 	if currentEnvFile != "" {
 		var err error
@@ -225,7 +347,10 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 	}
 	defaultLines := ReadDefaultLines(defaultEnvFile)
-	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel), nil
+	// Zero time.Time: Update()'s write path (the only caller of FormatLines)
+	// inserts its own "Last written:" line post-hoc via stampLastWritten,
+	// as the literal last step before the actual write.
+	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel, time.Time{}, varFileSuffix), nil
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.

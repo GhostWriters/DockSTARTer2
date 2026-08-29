@@ -7,13 +7,56 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/system"
-	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 )
+
+// lastWrittenLineRe matches a "### Last written: ..." line stampLastWritten
+// inserts, so stripLastWrittenLine can remove it again before comparing old
+// vs. new content for an actual-change check.
+var lastWrittenLineRe = regexp.MustCompile(`^### Last written:\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`)
+
+// stripLastWrittenLine removes a previously inserted "Last written:" line
+// (always at index 1, right after the "File:" line, if this file has been
+// written by this feature before) from content, so comparing existing
+// on-disk content against freshly formatted (not-yet-stamped) content isn't
+// fooled by the line's own ever-changing timestamp into always looking
+// different.
+func stripLastWrittenLine(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > 1 && lastWrittenLineRe.MatchString(lines[1]) {
+		lines = append(lines[:1], lines[2:]...)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// stampLastWritten inserts a "### Last written: <timestamp>" line right
+// after lines[0] (the "### File: <fileLabel>" line FormatLinesCore always
+// produces first when fileLabel is set), via fileHeaderLines -- the same
+// helper FormatLinesCore uses to build that first line -- so the two align
+// even though they're produced by different code at different times. Call
+// this only once a write has been confirmed necessary, as the literal last
+// step before the actual disk write -- never inside FormatLinesCore itself,
+// which is also used for live TUI display where nothing has been written
+// yet. Takes when explicitly (rather than calling time.Now() itself) so the
+// caller can Chtimes the file to the exact same instant after writing --
+// keeping the embedded text and the file's real mtime in sync instead of
+// letting them drift by however long the write itself takes.
+func stampLastWritten(lines []string, when time.Time) []string {
+	if len(lines) == 0 {
+		return lines
+	}
+	lastWrittenLine := fileHeaderLines("", when)[1]
+	result := make([]string, 0, len(lines)+1)
+	result = append(result, lines[0], lastWrittenLine)
+	result = append(result, lines[1:]...)
+	return result
+}
 
 // Update regenerates the .env file to ensure correct sorting and headers.
 // Mirrors env_update.sh functionality.
@@ -63,7 +106,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		defer os.Remove(tmpGlobalFile.Name())
 
-		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), paths.GetTemplatesEnvFile(), "", composeEnvFile, composeEnvFile)
+		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), paths.GetTemplatesEnvFile(), "", composeEnvFile, composeEnvFile, "")
 		if err == nil {
 			updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 		}
@@ -86,7 +129,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				appDefaultGlobalFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), ".env")
 			}
 
-			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile, "")
+			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile, "", ".env")
 			if err == nil {
 				if len(updatedEnvLines) > 0 {
 					updatedEnvLines = append(updatedEnvLines, "")
@@ -102,13 +145,28 @@ func Update(ctx context.Context, force bool, file string) error {
 			finalContent += "\n"
 		}
 		existing, _ := os.ReadFile(composeEnvFile)
-		if !bytes.Equal(existing, []byte(finalContent)) {
+		// Compare with any prior "Last written" line stripped, so its own
+		// ever-changing timestamp doesn't make every run look "changed".
+		if stripLastWrittenLine(string(existing)) != finalContent {
+			// Only now, as the literal last step before the write, insert
+			// the "Last written:" line -- not inside FormatLinesCore, which
+			// is also used for live TUI display where nothing is written yet.
+			writeTime := time.Now().Local()
+			updatedEnvLines = stampLastWritten(updatedEnvLines, writeTime)
+			finalContent = strings.Join(updatedEnvLines, "\n")
+			if len(updatedEnvLines) > 0 && !strings.HasSuffix(finalContent, "\n") {
+				finalContent += "\n"
+			}
 			if err := os.WriteFile(composeEnvFile, []byte(finalContent), 0644); err != nil {
 				logger.FatalWithStack(ctx, []string{
 					"Failed to copy file.",
 					"Failing command: {{|FailingCommand|}}cp -f \"<tmp>\" \"" + composeEnvFile + "\"{{[-]}}",
 				})
 			}
+			// Keep the file's real mtime in sync with the embedded "Last
+			// written:" text -- best-effort, a failure here just means the
+			// two might drift by a moment, not worth failing the update over.
+			_ = os.Chtimes(composeEnvFile, writeTime, writeTime)
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
@@ -145,10 +203,28 @@ func Update(ctx context.Context, force bool, file string) error {
 				if !IsAppUserDefined(ctx, appName, composeEnvFile) {
 					appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), pattern)
 				}
-				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, appEnvFile)
+				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, appEnvFile, pattern)
 				if err == nil {
 					finalAppContent := strings.Join(formattedAppFile, "\n")
 					// Ensure trailing newline
+					if len(formattedAppFile) > 0 && !strings.HasSuffix(finalAppContent, "\n") {
+						finalAppContent += "\n"
+					}
+
+					existing, _ := os.ReadFile(appEnvFile)
+					// Compare with any prior "Last written" line stripped
+					// (see the main .env write above for why).
+					if stripLastWrittenLine(string(existing)) == finalAppContent {
+						system.SetPermissions(ctx, appEnvFile)
+						UnsetNeedsUpdate(ctx, appEnvFile)
+						continue
+					}
+
+					// Only now, as the literal last step before the write,
+					// insert the "Last written:" line.
+					writeTime := time.Now().Local()
+					formattedAppFile = stampLastWritten(formattedAppFile, writeTime)
+					finalAppContent = strings.Join(formattedAppFile, "\n")
 					if len(formattedAppFile) > 0 && !strings.HasSuffix(finalAppContent, "\n") {
 						finalAppContent += "\n"
 					}
@@ -163,12 +239,6 @@ func Update(ctx context.Context, force bool, file string) error {
 					tmpFile.Close()
 					defer os.Remove(tmpFile.Name())
 
-					existing, _ := os.ReadFile(appEnvFile)
-					if bytes.Equal(existing, []byte(finalAppContent)) {
-						system.SetPermissions(ctx, appEnvFile)
-						UnsetNeedsUpdate(ctx, appEnvFile)
-						continue
-					}
 					if err := CopyFile(tmpFile.Name(), appEnvFile); err != nil {
 						logger.FatalWithStack(ctx, []string{
 							"Failed to copy file.",
@@ -177,6 +247,10 @@ func Update(ctx context.Context, force bool, file string) error {
 					} else {
 						system.SetPermissions(ctx, appEnvFile)
 						UnsetNeedsUpdate(ctx, appEnvFile)
+						// Keep the file's real mtime in sync with the
+						// embedded "Last written:" text (see the main .env
+						// write above for why) -- best-effort.
+						_ = os.Chtimes(appEnvFile, writeTime, writeTime)
 					}
 				}
 			} else {
