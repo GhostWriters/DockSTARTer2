@@ -167,19 +167,21 @@ func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayeng
 		}
 	}
 
-	// Click-to-focus background for every visible-but-unfocused pane, when
-	// tiled -- a click anywhere in one switches which tab is active (see
-	// Update's "tabbed_vars.pane-" case). X/Y match every other pane-box
-	// formula in this file (boxX/boxTop below, paneBoxAt in
+	// Click-to-focus background for every visible pane, when tiled -- a
+	// click anywhere in one switches which tab is active (see Update's
+	// "tabbed_vars.pane-" case). Registered for the active pane too, not
+	// just the unfocused ones: its content is already claimed by the
+	// higher-Z "tabbed_vars.editor" region above, but nothing else covers
+	// its own border, which is where this region's double-click-to-maximize
+	// handling lives -- omitting it here would leave the active pane as the
+	// one pane whose border can never be double-clicked. X/Y match every
+	// other pane-box formula in this file (boxX/boxTop below, paneBoxAt in
 	// tabbed_vars_editor.go): outer border + margin for X, m.paneBoxTop for
 	// Y, before the pane's own box begins.
 	if m.splitMode {
 		paneLeft := m.paneBoxLeft(offsetX)
 		paneTop := m.paneBoxTop(offsetY)
 		for slot, i := range m.openTabIndices() {
-			if i == m.activeTab {
-				continue
-			}
 			offX, offY := m.paneOffsetFor(i)
 			paneHeight := m.paneEditorHeight[slot] + layout.BorderHeight()
 			regions = append(regions, displayengine.HitRegion{
