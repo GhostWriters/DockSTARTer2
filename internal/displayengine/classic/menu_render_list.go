@@ -983,9 +983,17 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		lockMarker := ""
 		if m.showLockGutter {
 			if item.IsInvalid {
-				lockMarker = RenderThemeText("{{|MarkerInvalid|}}"+invalidMarker+"{{[-]}}", neutralStyle)
+				marker := invalidMarker
+				if !ctx.LineCharacters {
+					marker = invalidMarkerAscii
+				}
+				lockMarker = RenderThemeText("{{|MarkerInvalid|}}"+marker+"{{[-]}}", neutralStyle)
 			} else if item.Locked {
-				lockMarker = RenderThemeText("{{|MarkerLocked|}}!{{[-]}}", neutralStyle)
+				marker := lockedMarker
+				if !ctx.LineCharacters {
+					marker = lockedMarkerAscii
+				}
+				lockMarker = RenderThemeText("{{|MarkerLocked|}}"+marker+"{{[-]}}", neutralStyle)
 			} else {
 				lockMarker = neutralStyle.Render(" ")
 			}
