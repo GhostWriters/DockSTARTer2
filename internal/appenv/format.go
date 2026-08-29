@@ -1,13 +1,19 @@
 package appenv
 
 import (
+	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
-	"github.com/GhostWriters/semstyle"
+	"DockSTARTer2/internal/paths"
 	"context"
+	"fmt"
+	"github.com/GhostWriters/semstyle"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"DockSTARTer2/internal/strutil"
 )
@@ -54,11 +60,15 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		}
 	}
 
-	// fileLabel, when set, is a single standalone line placed above whatever
-	// heading block follows (unconditionally -- the global .env case has no
-	// app heading of its own, but still gets this line).
+	// fileLabel, when set, is a standalone "File: <path>" line placed above
+	// whatever heading block follows (unconditionally -- the global .env
+	// case has no app heading of its own, but still gets this line). The
+	// zero time.Time means "not written yet" -- fileHeaderLines returns just
+	// this one line; Update()'s actual disk-write paths call it again with
+	// time.Now() (see stampLastWritten in update.go) to get a second,
+	// aligned "Last written:" line to insert right after this one.
 	if fileLabel != "" {
-		formattedEnvLines = append(formattedEnvLines, "### "+fileLabel)
+		formattedEnvLines = append(formattedEnvLines, fileHeaderLines(fileLabel, time.Time{})...)
 		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
@@ -97,6 +107,15 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 				}
 			}
 			formattedEnvLines = append(formattedEnvLines, "###")
+		}
+
+		// Template last-updated lines: only meaningful for a built-in app's
+		// real template (not user-defined, which has no template folder).
+		if !appIsUserDefined {
+			if timestampLines := templateTimestampLines(appUpper); len(timestampLines) > 0 {
+				formattedEnvLines = append(formattedEnvLines, timestampLines...)
+				formattedEnvLines = append(formattedEnvLines, "###")
+			}
 		}
 	}
 
@@ -191,6 +210,92 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		formattedEnvLines = formattedEnvLines[:len(formattedEnvLines)-1]
 	}
 	return formattedEnvLines
+}
+
+// templateTimestampLines builds the "### Template updated: ..." /
+// "### Vars updated: ..." heading lines for appUpper (their labels padded
+// to the same width so the timestamps line up in a column), or nil if
+// there's nothing to report (no template folder, or -- for a repo-tracked
+// app -- no git history for it).
+func templateTimestampLines(appUpper string) []string {
+	var templateUpdated, varsUpdated time.Time
+	if IsUserTemplate(appUpper) {
+		// A user override has no git history at all -- mtime on the files
+		// themselves is the only available signal there.
+		templateUpdated, varsUpdated = userTemplateTimestamps(TemplateFolder(appUpper))
+	} else {
+		templateUpdated, varsUpdated = paths.GetAppTemplateTimestamps(appUpper)
+	}
+	if templateUpdated.IsZero() {
+		return nil
+	}
+	const timeFormat = "2006-01-02 15:04:05"
+	pairs := [][2]string{{"Template updated:", templateUpdated.Format(timeFormat)}}
+	if !varsUpdated.IsZero() {
+		pairs = append(pairs, [2]string{"Vars updated:", varsUpdated.Format(timeFormat)})
+	}
+	return formatAlignedHeadingLines(pairs)
+}
+
+// fileHeaderLines builds the top-of-file "File: <fileLabel>" line and,
+// when lastWritten is non-zero, an aligned "Last written: <timestamp>"
+// line right after it. lastWritten's zero value means "not written yet" --
+// used by FormatLinesCore (render/display, nothing saved yet) to get just
+// the "File:" line; Update()'s actual disk-write paths pass time.Now() (see
+// stampLastWritten) to get both, aligned against each other even though
+// they're produced by different code at different times.
+func fileHeaderLines(fileLabel string, lastWritten time.Time) []string {
+	pairs := [][2]string{{"File:", fileLabel}}
+	if lastWritten.IsZero() {
+		pairs = append(pairs, [2]string{"Last written:", ""})
+		return formatAlignedHeadingLines(pairs)[:1]
+	}
+	pairs = append(pairs, [2]string{"Last written:", lastWritten.Format("2006-01-02 15:04:05")})
+	return formatAlignedHeadingLines(pairs)
+}
+
+// formatAlignedHeadingLines renders label/value pairs as "### <label> <value>"
+// heading lines, padding every label to the width of the longest one so the
+// values line up in a column regardless of label length.
+func formatAlignedHeadingLines(pairs [][2]string) []string {
+	maxLabel := 0
+	for _, p := range pairs {
+		if len(p[0]) > maxLabel {
+			maxLabel = len(p[0])
+		}
+	}
+	lines := make([]string, len(pairs))
+	for i, p := range pairs {
+		lines[i] = fmt.Sprintf("### %-*s%s", maxLabel+1, p[0], p[1])
+	}
+	return lines
+}
+
+// userTemplateTimestamps returns the most recent mtime among all files
+// under dir (templateUpdated), and separately among just its var-bearing
+// files (.env / .env.app.*, varsUpdated). Either is the zero Time if dir
+// doesn't exist or has no matching files.
+func userTemplateTimestamps(dir string) (templateUpdated, varsUpdated time.Time) {
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.ModTime().After(templateUpdated) {
+			templateUpdated = info.ModTime()
+		}
+		name := d.Name()
+		if name == constants.EnvFileName || strings.HasPrefix(name, constants.AppEnvFileNamePrefix) {
+			if info.ModTime().After(varsUpdated) {
+				varsUpdated = info.ModTime()
+			}
+		}
+		return nil
+	})
+	return
 }
 
 // ReadDefaultLines loads the default/template lines for the given file path.
