@@ -222,8 +222,10 @@ type TabbedVarsEditorModel struct {
 	// sideBySideShares/stackedShares and both are read by ViewString to
 	// show the arrow-tipped resize line on the active gutter instead of a
 	// normal blank one. activeGutter is which of the N-1 boundaries
-	// keyboard resize mode is currently adjusting (Tab/Shift+Tab cycles
-	// it); reset to 0 whenever resizingGutter turns on.
+	// keyboard resize mode is currently adjusting -- Tab/Shift+Tab cycles
+	// it layout-agnostically, or Ctrl/Alt/Ctrl+Alt+Left/Right (side-by-side)
+	// /Up/Down (stacked) cycles it in the same direction the plain arrows
+	// already nudge size in; reset to 0 whenever resizingGutter turns on.
 	resizingGutter bool
 	activeGutter   int
 	gutterDrag     GutterDragState
