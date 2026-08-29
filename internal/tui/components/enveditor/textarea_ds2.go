@@ -1700,20 +1700,6 @@ func (s StyleState) computedLineNumberBrackets() lipgloss.Style {
 	return s.LineNumberBrackets.Inherit(s.Base).Inline(true)
 }
 
-// blinkTickMsg drives the virtual cursor's periodic redraw while idle --
-// see blinkAnchor and blinkTicking.
-type blinkTickMsg struct{}
-
-// blinkTickInterval is how often the virtual cursor's blink phase is
-// re-rendered while idle. Deliberately finer than any theme's BlinkSpeed so
-// the on/off transition itself never lags visibly behind blinkAnchor.
-const blinkTickInterval = 100 * time.Millisecond
-
-// blinkTick schedules the next blinkTickMsg.
-func blinkTick() tea.Cmd {
-	return tea.Tick(blinkTickInterval, func(time.Time) tea.Msg { return blinkTickMsg{} })
-}
-
 // TotalDisplayLines returns the total rendered rows including soft wraps --
 // the same figure the scrollbar is sized against. Compare this to Height(),
 // not LineCount, when deciding whether to show a scroll-percent indicator.

@@ -23,6 +23,13 @@ var (
 	// SpinnerSpeed is the milliseconds per CLI spinner frame (default 120;
 	// overwritten from config before any real use).
 	SpinnerSpeed int = 100
+
+	// RefreshRate is the screen repaint interval in milliseconds (default
+	// 60; overwritten from config before any real use) -- the baseline
+	// AlignToRefreshRate aligns other periodic UI speeds against, so their
+	// state changes always land on an actual repaint instead of getting
+	// stranded between two out-of-sync clocks until the next unrelated one.
+	RefreshRate int = 60
 )
 
 // AlignToRefreshRate rounds spinnerMs to the nearest multiple of refreshMs,

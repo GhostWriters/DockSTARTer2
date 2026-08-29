@@ -839,6 +839,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case displayengine.ConfigChangedMsg:
 		m.config = msg.Config
 		console.SpinnerEnabled = msg.Config.UI.Spinner
+		console.RefreshRate = msg.Config.UI.RefreshRate
 		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.UI.SpinnerSpeed, msg.Config.UI.RefreshRate)
 		console.LineCharacters = msg.Config.UI.LineCharacters
 		_, _ = theme.Load(m.config.UI.Theme, "")
