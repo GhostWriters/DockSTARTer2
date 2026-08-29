@@ -13,9 +13,11 @@ import (
 	"DockSTARTer2/internal/tui"
 	"context"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -40,9 +42,14 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		var currentLines []string
 		var defaultFilePath string
 		var fileLabel string
+		var lastWritten time.Time
 
 		if tab.spec.IsGlobal {
 			fileLabel = envPath
+			// lastWritten stays zero for the global .env: its File:/Last
+			// written: pair describes the whole shared file, not any one
+			// app's section within it, so a real mtime here would be
+			// misleading about which app's edits it reflects.
 			if tab.spec.App != "" {
 				currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App, cfg)
 				if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
@@ -59,10 +66,17 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
 				defaultFilePath, _ = appenv.AppInstanceFile(ctx, fileApp, appenv.AppNameToVarFilePattern(fileApp))
 			}
+			// A .env.app.* tab maps 1:1 to a real file -- its mtime is a
+			// meaningful, truthful "when was this last actually saved"
+			// signal, and naturally refreshes on the next loadEnv after a
+			// save (see envSaveSuccessMsg's handler).
+			if info, err := os.Stat(fileLabel); err == nil {
+				lastWritten = info.ModTime()
+			}
 		}
 
 		defaultLines := appenv.ReadDefaultLines(defaultFilePath)
-		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, fileLabel)
+		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, fileLabel, lastWritten)
 
 		content := strings.Join(formattedLines, "\n")
 

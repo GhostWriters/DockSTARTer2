@@ -840,7 +840,9 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Snapshot pre-refresh values to detect which vars the user actually changed.
 			preRefresh, _ := appenv.ListVarsLiteralsData(tab.editor.GetContent())
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
-				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath, "")
+				// fileLabel is "" -- this reformats an already-open buffer's
+				// body only, not the header, so lastWritten is irrelevant.
+				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath, "", time.Time{})
 			})
 			// Update initialVars only for variables the user had not changed before refresh,
 			// so formatting-only changes don't appear as unsaved edits, but real user edits

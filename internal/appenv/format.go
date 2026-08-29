@@ -40,7 +40,15 @@ const (
 // "###" separator with "### <fileLabel>" -- distinguishes a multi-service
 // app's several .env.app.* files (e.g. ".env.app.immich-database") from
 // each other, since they'd otherwise share an identical heading.
-func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string) []string {
+// lastWritten, when non-zero, adds an aligned "Last written: <timestamp>"
+// line right after the "File:" line -- the zero value (used by every
+// caller except a .env.app.* tab's live display) means "don't show one".
+// Unlike Update()'s actual write path (which grabs time.Now() as the
+// literal last step before writing), this is meant to reflect a file's
+// real on-disk mtime read via os.Stat by the caller -- safe to show during
+// live display because it only changes when a real write happens, unlike
+// "now" which would misrepresent an unsaved buffer as already-saved.
+func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string, lastWritten time.Time) []string {
 	appUpper := strings.ToUpper(appName)
 
 	var formattedEnvLines []string
@@ -68,7 +76,7 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 	// time.Now() (see stampLastWritten in update.go) to get a second,
 	// aligned "Last written:" line to insert right after this one.
 	if fileLabel != "" {
-		formattedEnvLines = append(formattedEnvLines, fileHeaderLines(fileLabel, time.Time{})...)
+		formattedEnvLines = append(formattedEnvLines, fileHeaderLines(fileLabel, lastWritten)...)
 		formattedEnvLines = append(formattedEnvLines, "")
 	}
 
@@ -330,7 +338,10 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 		}
 	}
 	defaultLines := ReadDefaultLines(defaultEnvFile)
-	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel), nil
+	// Zero time.Time: Update()'s write path (the only caller of FormatLines)
+	// inserts its own "Last written:" line post-hoc via stampLastWritten,
+	// as the literal last step before the actual write.
+	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel, time.Time{}), nil
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.

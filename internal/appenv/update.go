@@ -43,12 +43,15 @@ func stripLastWrittenLine(content string) string {
 // this only once a write has been confirmed necessary, as the literal last
 // step before the actual disk write -- never inside FormatLinesCore itself,
 // which is also used for live TUI display where nothing has been written
-// yet.
-func stampLastWritten(lines []string) []string {
+// yet. Takes when explicitly (rather than calling time.Now() itself) so the
+// caller can Chtimes the file to the exact same instant after writing --
+// keeping the embedded text and the file's real mtime in sync instead of
+// letting them drift by however long the write itself takes.
+func stampLastWritten(lines []string, when time.Time) []string {
 	if len(lines) == 0 {
 		return lines
 	}
-	lastWrittenLine := fileHeaderLines("", time.Now().Local())[1]
+	lastWrittenLine := fileHeaderLines("", when)[1]
 	result := make([]string, 0, len(lines)+1)
 	result = append(result, lines[0], lastWrittenLine)
 	result = append(result, lines[1:]...)
@@ -148,7 +151,8 @@ func Update(ctx context.Context, force bool, file string) error {
 			// Only now, as the literal last step before the write, insert
 			// the "Last written:" line -- not inside FormatLinesCore, which
 			// is also used for live TUI display where nothing is written yet.
-			updatedEnvLines = stampLastWritten(updatedEnvLines)
+			writeTime := time.Now().Local()
+			updatedEnvLines = stampLastWritten(updatedEnvLines, writeTime)
 			finalContent = strings.Join(updatedEnvLines, "\n")
 			if len(updatedEnvLines) > 0 && !strings.HasSuffix(finalContent, "\n") {
 				finalContent += "\n"
@@ -159,6 +163,10 @@ func Update(ctx context.Context, force bool, file string) error {
 					"Failing command: {{|FailingCommand|}}cp -f \"<tmp>\" \"" + composeEnvFile + "\"{{[-]}}",
 				})
 			}
+			// Keep the file's real mtime in sync with the embedded "Last
+			// written:" text -- best-effort, a failure here just means the
+			// two might drift by a moment, not worth failing the update over.
+			_ = os.Chtimes(composeEnvFile, writeTime, writeTime)
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
@@ -214,7 +222,8 @@ func Update(ctx context.Context, force bool, file string) error {
 
 					// Only now, as the literal last step before the write,
 					// insert the "Last written:" line.
-					formattedAppFile = stampLastWritten(formattedAppFile)
+					writeTime := time.Now().Local()
+					formattedAppFile = stampLastWritten(formattedAppFile, writeTime)
 					finalAppContent = strings.Join(formattedAppFile, "\n")
 					if len(formattedAppFile) > 0 && !strings.HasSuffix(finalAppContent, "\n") {
 						finalAppContent += "\n"
@@ -238,6 +247,10 @@ func Update(ctx context.Context, force bool, file string) error {
 					} else {
 						system.SetPermissions(ctx, appEnvFile)
 						UnsetNeedsUpdate(ctx, appEnvFile)
+						// Keep the file's real mtime in sync with the
+						// embedded "Last written:" text (see the main .env
+						// write above for why) -- best-effort.
+						_ = os.Chtimes(appEnvFile, writeTime, writeTime)
 					}
 				}
 			} else {

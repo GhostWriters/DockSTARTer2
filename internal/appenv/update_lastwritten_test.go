@@ -8,7 +8,7 @@ import (
 
 func TestStampLastWritten(t *testing.T) {
 	original := []string{fileHeaderLines("/home/user/.config/compose/.env", time.Time{})[0], "", "ALLOW_CORS=1"}
-	lines := stampLastWritten(original)
+	lines := stampLastWritten(original, time.Date(2026, 8, 29, 1, 23, 45, 0, time.Local))
 
 	if len(lines) != 4 {
 		t.Fatalf("expected one line inserted, got: %v", lines)
@@ -30,7 +30,7 @@ func TestStampLastWritten(t *testing.T) {
 
 func TestStampLastWritten_EmptyLines(t *testing.T) {
 	var lines []string
-	result := stampLastWritten(lines) // must not panic
+	result := stampLastWritten(lines, time.Now()) // must not panic
 	if len(result) != 0 {
 		t.Errorf("expected empty result for empty input, got: %v", result)
 	}
@@ -38,7 +38,7 @@ func TestStampLastWritten_EmptyLines(t *testing.T) {
 
 func TestStampLastWritten_AlignsWithFileLine(t *testing.T) {
 	lines := fileHeaderLines("/home/user/.config/compose/.env", time.Time{})
-	lines = stampLastWritten(lines)
+	lines = stampLastWritten(lines, time.Date(2026, 8, 29, 1, 23, 45, 0, time.Local))
 
 	fileIdx := strings.Index(lines[0], "/home")
 	writtenIdx := strings.Index(lines[1], "20") // year prefix of the timestamp
@@ -90,7 +90,7 @@ func TestStripLastWrittenLine(t *testing.T) {
 // timestamp.
 func TestStampThenStrip_RoundTrips(t *testing.T) {
 	original := []string{fileHeaderLines("/path/.env", time.Time{})[0], "", "ALLOW_CORS=1"}
-	stamped := stampLastWritten(original)
+	stamped := stampLastWritten(original, time.Date(2026, 8, 29, 1, 23, 45, 0, time.Local))
 
 	joined := strings.Join(stamped, "\n")
 	stripped := stripLastWrittenLine(joined)
