@@ -1,7 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/envutil"
 	"DockSTARTer2/internal/paths"
 	"context"
@@ -48,7 +47,12 @@ const (
 // real on-disk mtime read via os.Stat by the caller -- safe to show during
 // live display because it only changes when a real write happens, unlike
 // "now" which would misrepresent an unsaved buffer as already-saved.
-func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string, lastWritten time.Time) []string {
+// varFileSuffix scopes the "Vars updated:" heading line (see
+// templateTimestampLines) to the one specific template file this tab/write
+// actually corresponds to (AppInstanceFile's "*"-for-base-app-name
+// convention, e.g. ".env" or ".env.app.*") -- pass "" when there's no
+// meaningful single file to scope to (e.g. appName is "").
+func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines []string, appName, composeEnvFile string, fileLabel string, lastWritten time.Time, varFileSuffix string) []string {
 	appUpper := strings.ToUpper(appName)
 
 	var formattedEnvLines []string
@@ -120,7 +124,7 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 		// Template last-updated lines: only meaningful for a built-in app's
 		// real template (not user-defined, which has no template folder).
 		if !appIsUserDefined {
-			if timestampLines := templateTimestampLines(appUpper); len(timestampLines) > 0 {
+			if timestampLines := templateTimestampLines(appUpper, varFileSuffix); len(timestampLines) > 0 {
 				formattedEnvLines = append(formattedEnvLines, timestampLines...)
 				formattedEnvLines = append(formattedEnvLines, "###")
 			}
@@ -224,15 +228,20 @@ func FormatLinesCore(ctx context.Context, currentLines, defaultLines, envLines [
 // "### Vars updated: ..." heading lines for appUpper (their labels padded
 // to the same width so the timestamps line up in a column), or nil if
 // there's nothing to report (no template folder, or -- for a repo-tracked
-// app -- no git history for it).
-func templateTimestampLines(appUpper string) []string {
+// app -- no git history for it). varFileSuffix scopes "Vars updated" to
+// one specific template file (AppInstanceFile's "*"-for-base-app-name
+// convention, e.g. ".env" or ".env.app.*") -- not "any var file under the
+// app's folder", so a change to the file backing a different tab (e.g. the
+// global .env's section) doesn't make this one look changed too.
+func templateTimestampLines(appUpper, varFileSuffix string) []string {
 	var templateUpdated, varsUpdated time.Time
 	if IsUserTemplate(appUpper) {
 		// A user override has no git history at all -- mtime on the files
 		// themselves is the only available signal there.
-		templateUpdated, varsUpdated = userTemplateTimestamps(TemplateFolder(appUpper))
+		varFileName := strings.ReplaceAll(varFileSuffix, "*", strings.ToLower(AppNameToBaseAppName(appUpper)))
+		templateUpdated, varsUpdated = userTemplateTimestamps(TemplateFolder(appUpper), varFileName)
 	} else {
-		templateUpdated, varsUpdated = paths.GetAppTemplateTimestamps(appUpper)
+		templateUpdated, varsUpdated = paths.GetAppTemplateTimestamps(appUpper, varFileSuffix)
 	}
 	if templateUpdated.IsZero() {
 		return nil
@@ -280,10 +289,10 @@ func formatAlignedHeadingLines(pairs [][2]string) []string {
 }
 
 // userTemplateTimestamps returns the most recent mtime among all files
-// under dir (templateUpdated), and separately among just its var-bearing
-// files (.env / .env.app.*, varsUpdated). Either is the zero Time if dir
-// doesn't exist or has no matching files.
-func userTemplateTimestamps(dir string) (templateUpdated, varsUpdated time.Time) {
+// under dir (templateUpdated), and separately the mtime of the one file
+// named varFileName within it (varsUpdated, zero if varFileName is "" or
+// not found). Either is the zero Time if dir doesn't exist either.
+func userTemplateTimestamps(dir, varFileName string) (templateUpdated, varsUpdated time.Time) {
 	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -295,11 +304,8 @@ func userTemplateTimestamps(dir string) (templateUpdated, varsUpdated time.Time)
 		if info.ModTime().After(templateUpdated) {
 			templateUpdated = info.ModTime()
 		}
-		name := d.Name()
-		if name == constants.EnvFileName || strings.HasPrefix(name, constants.AppEnvFileNamePrefix) {
-			if info.ModTime().After(varsUpdated) {
-				varsUpdated = info.ModTime()
-			}
+		if varFileName != "" && d.Name() == varFileName {
+			varsUpdated = info.ModTime()
 		}
 		return nil
 	})
@@ -328,7 +334,10 @@ func ReadDefaultLines(defaultEnvFile string) []string {
 
 // FormatLines processes environment variable lines to match DockSTARTer formatting.
 // Matches env_format_lines.sh exactly. Reads files from disk and delegates to FormatLinesCore.
-func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string, fileLabel string) ([]string, error) {
+// varFileSuffix scopes "Vars updated:" (see FormatLinesCore) -- pass the
+// same fileSuffix pattern already used to resolve defaultEnvFile via
+// AppInstanceFile, or "" when appName is "" (no per-app scoping possible).
+func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, composeEnvFile string, fileLabel, varFileSuffix string) ([]string, error) {
 	var currentLines []string
 	if currentEnvFile != "" {
 		var err error
@@ -341,7 +350,7 @@ func FormatLines(ctx context.Context, currentEnvFile, defaultEnvFile, appName, c
 	// Zero time.Time: Update()'s write path (the only caller of FormatLines)
 	// inserts its own "Last written:" line post-hoc via stampLastWritten,
 	// as the literal last step before the actual write.
-	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel, time.Time{}), nil
+	return FormatLinesCore(ctx, currentLines, defaultLines, nil, appName, composeEnvFile, fileLabel, time.Time{}, varFileSuffix), nil
 }
 
 // GetReferencedApps returns a list of apps referenced in the compose env file.

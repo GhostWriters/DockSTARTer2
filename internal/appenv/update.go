@@ -106,7 +106,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		}
 		defer os.Remove(tmpGlobalFile.Name())
 
-		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), paths.GetTemplatesEnvFile(), "", composeEnvFile, composeEnvFile)
+		formattedGlobals, err := FormatLines(ctx, tmpGlobalFile.Name(), paths.GetTemplatesEnvFile(), "", composeEnvFile, composeEnvFile, "")
 		if err == nil {
 			updatedEnvLines = append(updatedEnvLines, formattedGlobals...)
 		}
@@ -129,7 +129,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				appDefaultGlobalFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), ".env")
 			}
 
-			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile, "")
+			formattedApp, err := FormatLines(ctx, tmpAppFile.Name(), appDefaultGlobalFile, appName, composeEnvFile, "", ".env")
 			if err == nil {
 				if len(updatedEnvLines) > 0 {
 					updatedEnvLines = append(updatedEnvLines, "")
@@ -203,7 +203,7 @@ func Update(ctx context.Context, force bool, file string) error {
 				if !IsAppUserDefined(ctx, appName, composeEnvFile) {
 					appDefaultEnvFile, _ = AppInstanceFile(ctx, strings.ToUpper(appName), pattern)
 				}
-				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, appEnvFile)
+				formattedAppFile, err := FormatLines(ctx, appEnvFile, appDefaultEnvFile, appName, composeEnvFile, appEnvFile, pattern)
 				if err == nil {
 					finalAppContent := strings.Join(formattedAppFile, "\n")
 					// Ensure trailing newline

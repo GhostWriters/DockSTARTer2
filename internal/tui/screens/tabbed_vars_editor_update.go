@@ -816,19 +816,29 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			capturedEnvLines := envLines
 
+			// varFileSuffix scopes "Vars updated:" the same way loadEnv does
+			// (see tabbed_vars_editor_data.go), needed here regardless of
+			// capturedDefaultLines below since that's additionally gated on
+			// user-defined status while the timestamp lines aren't.
+			var varFileSuffix string
+			if capturedApp != "" {
+				if tab.spec.IsGlobal {
+					varFileSuffix = ".env"
+				} else {
+					varFileSuffix = appenv.AppNameToVarFilePattern(tab.spec.fileApp())
+				}
+			}
+
 			// Re-derive defaultLines using staged envLines so a newly-typed APPNAME__ENABLED
 			// causes the template to be loaded on refresh (mirrors loadEnv logic but uses
 			// IsAppUserDefinedFromLines instead of the disk-based IsAppUserDefined).
 			var capturedDefaultLines []string
 			if capturedApp != "" && !appenv.IsAppUserDefinedFromLines(ctx, capturedApp, capturedEnvLines) {
-				var instanceApp, fileSuffix string
-				if tab.spec.IsGlobal {
-					instanceApp, fileSuffix = capturedApp, ".env"
-				} else {
+				instanceApp := capturedApp
+				if !tab.spec.IsGlobal {
 					instanceApp = tab.spec.fileApp()
-					fileSuffix = appenv.AppNameToVarFilePattern(instanceApp)
 				}
-				if defaultFilePath, err := appenv.AppInstanceFile(ctx, instanceApp, fileSuffix); err == nil {
+				if defaultFilePath, err := appenv.AppInstanceFile(ctx, instanceApp, varFileSuffix); err == nil {
 					capturedDefaultLines = appenv.ReadDefaultLines(defaultFilePath)
 				}
 			} else if capturedApp == "" {
@@ -842,7 +852,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tab.editor.ReformatEnv(tab.editor.DefaultValueFunc, tab.readOnlyVars, msg.preservePendingDeletes, func(currentLines []string) []string {
 				// fileLabel is "" -- this reformats an already-open buffer's
 				// body only, not the header, so lastWritten is irrelevant.
-				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath, "", time.Time{})
+				return appenv.FormatLinesCore(ctx, currentLines, capturedDefaultLines, capturedEnvLines, capturedApp, capturedComposeEnvPath, "", time.Time{}, varFileSuffix)
 			})
 			// Update initialVars only for variables the user had not changed before refresh,
 			// so formatting-only changes don't appear as unsaved edits, but real user edits

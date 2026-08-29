@@ -43,6 +43,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		var defaultFilePath string
 		var fileLabel string
 		var lastWritten time.Time
+		var varFileSuffix string
 
 		if tab.spec.IsGlobal {
 			fileLabel = envPath
@@ -52,8 +53,9 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			// misleading about which app's edits it reflects.
 			if tab.spec.App != "" {
 				currentLines, _ = appenv.ListAppVarLines(ctx, tab.spec.App, cfg)
+				varFileSuffix = ".env"
 				if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
-					defaultFilePath, _ = appenv.AppInstanceFile(ctx, tab.spec.App, ".env")
+					defaultFilePath, _ = appenv.AppInstanceFile(ctx, tab.spec.App, varFileSuffix)
 				}
 			} else {
 				currentLines, _ = appenv.ListAppVarLines(ctx, "", cfg)
@@ -63,8 +65,9 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			fileApp := tab.spec.fileApp()
 			fileLabel = appenv.GetAppEnvFile(fileApp, cfg)
 			currentLines, _ = appenv.ListAppVarLines(ctx, fileApp+":", cfg)
+			varFileSuffix = appenv.AppNameToVarFilePattern(fileApp)
 			if !appenv.IsAppUserDefined(ctx, tab.spec.App, envPath) {
-				defaultFilePath, _ = appenv.AppInstanceFile(ctx, fileApp, appenv.AppNameToVarFilePattern(fileApp))
+				defaultFilePath, _ = appenv.AppInstanceFile(ctx, fileApp, varFileSuffix)
 			}
 			// A .env.app.* tab maps 1:1 to a real file -- its mtime is a
 			// meaningful, truthful "when was this last actually saved"
@@ -76,7 +79,7 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 		}
 
 		defaultLines := appenv.ReadDefaultLines(defaultFilePath)
-		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, fileLabel, lastWritten)
+		formattedLines := appenv.FormatLinesCore(ctx, currentLines, defaultLines, envLines, tab.spec.App, envPath, fileLabel, lastWritten, varFileSuffix)
 
 		content := strings.Join(formattedLines, "\n")
 

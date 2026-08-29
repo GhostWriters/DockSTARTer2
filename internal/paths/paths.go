@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 
 	"sync"
@@ -55,10 +54,21 @@ func appTimestampCacheDir() string {
 	return filepath.Join(GetTimestampsDir(), "app_templates")
 }
 
-// getCachedAppTimestamps returns the cached timestamps for appKey if the
-// on-disk cache is still current for headHash. Also handles invalidating a
-// stale cache (wiping the folder) so callers don't need to.
-func getCachedAppTimestamps(headHash, appKey string) (templateUpdated, varsUpdated time.Time, ok bool) {
+// varsCacheFileName builds the touch-file name for a specific var file's
+// cached timestamp, following the same "append the filename to the
+// existing marker name" convention appenv's env_update markers use (see
+// updateFileChanged in internal/appenv/update.go) -- e.g. "immich.vars.env"
+// or "immich.vars.env.app.immich-database". varFileName's own leading "."
+// is trimmed first so this doesn't produce a confusing double dot.
+func varsCacheFileName(appKey, varFileName string) string {
+	return appKey + ".vars." + strings.TrimPrefix(varFileName, ".")
+}
+
+// getCachedAppTimestamps returns the cached timestamps for appKey (vars
+// scoped to varFileName) if the on-disk cache is still current for
+// headHash. Also handles invalidating a stale cache (wiping the folder) so
+// callers don't need to.
+func getCachedAppTimestamps(headHash, appKey, varFileName string) (templateUpdated, varsUpdated time.Time, ok bool) {
 	appTimestampCacheMu.Lock()
 	defer appTimestampCacheMu.Unlock()
 
@@ -76,25 +86,31 @@ func getCachedAppTimestamps(headHash, appKey string) (templateUpdated, varsUpdat
 		return time.Time{}, time.Time{}, false
 	}
 
+	// Both must actually be present (or not requested, for varFileName) --
+	// unlike a simple "either one is enough" check, this avoids a false
+	// cache hit: the template entry can exist from an earlier call for a
+	// *different* varFileName (same app, different tab), while this
+	// specific varFileName's entry was never computed at all.
 	templateInfo, tErr := os.Stat(filepath.Join(dir, appKey+".template"))
-	varsInfo, vErr := os.Stat(filepath.Join(dir, appKey+".vars"))
-	if tErr != nil && vErr != nil {
+	if tErr != nil {
 		return time.Time{}, time.Time{}, false
 	}
-	if tErr == nil {
-		templateUpdated = templateInfo.ModTime()
+	templateUpdated = templateInfo.ModTime()
+	if varFileName == "" {
+		return templateUpdated, time.Time{}, true
 	}
-	if vErr == nil {
-		varsUpdated = varsInfo.ModTime()
+	varsInfo, vErr := os.Stat(filepath.Join(dir, varsCacheFileName(appKey, varFileName)))
+	if vErr != nil {
+		return time.Time{}, time.Time{}, false
 	}
-	return templateUpdated, varsUpdated, true
+	return templateUpdated, varsInfo.ModTime(), true
 }
 
 // setCachedAppTimestamps writes a touch file per non-zero timestamp,
 // encoding the value as the file's mtime. Assumes the cache folder (and its
 // _head_hash marker) is already current -- getCachedAppTimestamps always
 // runs first and creates/wipes it as needed.
-func setCachedAppTimestamps(appKey string, templateUpdated, varsUpdated time.Time) {
+func setCachedAppTimestamps(appKey, varFileName string, templateUpdated, varsUpdated time.Time) {
 	appTimestampCacheMu.Lock()
 	defer appTimestampCacheMu.Unlock()
 
@@ -110,7 +126,9 @@ func setCachedAppTimestamps(appKey string, templateUpdated, varsUpdated time.Tim
 		_ = os.Chtimes(path, when, when)
 	}
 	touch(appKey+".template", templateUpdated)
-	touch(appKey+".vars", varsUpdated)
+	if varFileName != "" {
+		touch(varsCacheFileName(appKey, varFileName), varsUpdated)
+	}
 }
 
 // GetConfigFilePath returns the absolute path to the dockstarter2.toml file.
@@ -238,9 +256,16 @@ func GetTemplatesVersion() string {
 // time) touching anything under an app's templates folder
 // (.apps/<baseAppName>/ -- compose.yml, override snippets, icons,
 // .migrate files, var files), and separately the most recent commit time
-// touching just its var files (.env / .env.app.*). Either return value is
-// the zero Time if the templates dir isn't a git checkout, has no matching
-// history, or baseAppName has no template folder.
+// touching just one specific var file within it -- varFileSuffix follows
+// AppInstanceFile's convention ("*" is replaced with the base app name,
+// e.g. ".env" or ".env.app.*"). Scoping to one file (not "any var file in
+// the folder") matters for a multi-service app: a change to the file
+// backing the global .env's section (".env") shouldn't make an unrelated
+// ".env.app.<app>-database" tab's "Vars updated" look stale-but-actually-
+// changed, or vice versa. Either return value is the zero Time if the
+// templates dir isn't a git checkout, has no matching history, baseAppName
+// has no template folder, or varFileSuffix is "" (no specific file to scope
+// to -- e.g. no default file was found for this tab at all).
 //
 // This deliberately avoids go-git's Log(PathFilter:...): that computes a
 // full tree diff/patch per commit, which is documented as extremely slow on
@@ -255,7 +280,7 @@ func GetTemplatesVersion() string {
 // commit instead of a full diff, and first-parent-only matches this repo's
 // GitHub-merge-commit shape (each PR's merge commit's tree already reflects
 // whatever that PR changed, compared against mainline before the merge).
-func GetAppTemplateTimestamps(baseAppName string) (templateUpdated, varsUpdated time.Time) {
+func GetAppTemplateTimestamps(baseAppName, varFileSuffix string) (templateUpdated, varsUpdated time.Time) {
 	r, err := git.PlainOpen(GetTemplatesDir())
 	if err != nil {
 		return
@@ -266,12 +291,13 @@ func GetAppTemplateTimestamps(baseAppName string) (templateUpdated, varsUpdated 
 	}
 	headHash := head.Hash().String()
 	appKey := strings.ToLower(baseAppName)
+	varFileName := strings.ReplaceAll(varFileSuffix, "*", appKey)
 
-	if tmpl, vars, ok := getCachedAppTimestamps(headHash, appKey); ok {
+	if tmpl, vars, ok := getCachedAppTimestamps(headHash, appKey, varFileName); ok {
 		return tmpl, vars
 	}
 	defer func() {
-		setCachedAppTimestamps(appKey, templateUpdated, varsUpdated)
+		setCachedAppTimestamps(appKey, varFileName, templateUpdated, varsUpdated)
 	}()
 
 	headCommit, err := r.CommitObject(head.Hash())
@@ -283,7 +309,7 @@ func GetAppTemplateTimestamps(baseAppName string) (templateUpdated, varsUpdated 
 
 	var foundTemplate, foundVars bool
 	commit := headCommit
-	prevSnap := appTemplateSnapshot(r, commit, appDirPath)
+	prevSnap := appTemplateSnapshot(r, commit, appDirPath, varFileName)
 	if !prevSnap.exists {
 		// App has no template folder at HEAD -- nothing to report.
 		return
@@ -295,7 +321,7 @@ func GetAppTemplateTimestamps(baseAppName string) (templateUpdated, varsUpdated 
 		}
 		var curSnap appDirSnapshot
 		if parent != nil && err == nil {
-			curSnap = appTemplateSnapshot(r, parent, appDirPath)
+			curSnap = appTemplateSnapshot(r, parent, appDirPath, varFileName)
 		}
 		// curSnap zero value (exists=false) correctly signals "changed" if
 		// there's no parent (root commit) or the folder didn't exist yet.
@@ -303,7 +329,7 @@ func GetAppTemplateTimestamps(baseAppName string) (templateUpdated, varsUpdated 
 			templateUpdated = commit.Author.When.Local()
 			foundTemplate = true
 		}
-		if !foundVars && curSnap.varsSig != prevSnap.varsSig {
+		if !foundVars && curSnap.varHash != prevSnap.varHash {
 			varsUpdated = commit.Author.When.Local()
 			foundVars = true
 		}
@@ -322,13 +348,15 @@ func GetAppTemplateTimestamps(baseAppName string) (templateUpdated, varsUpdated 
 type appDirSnapshot struct {
 	exists    bool
 	wholeHash plumbing.Hash // the subtree's own hash -- changes if anything under it changes
-	varsSig   string        // "name:hash " for just the var-bearing entries, sorted by name
+	varHash   plumbing.Hash // the one matching var file's own blob hash (zero if absent/not requested)
 }
 
 // appTemplateSnapshot resolves appDirPath (e.g. ".apps/audiobookshelf") within
 // commit's tree. Returns the zero value (exists=false) if the path doesn't
-// exist at this commit.
-func appTemplateSnapshot(r *git.Repository, commit *object.Commit, appDirPath string) appDirSnapshot {
+// exist at this commit. varFileName, if non-empty, is the exact entry name
+// (within appDirPath) to also capture the blob hash of, for vars-only
+// comparison; "" means "don't track any specific var file".
+func appTemplateSnapshot(r *git.Repository, commit *object.Commit, appDirPath, varFileName string) appDirSnapshot {
 	tree, err := commit.Tree()
 	if err != nil {
 		return appDirSnapshot{}
@@ -344,24 +372,16 @@ func appTemplateSnapshot(r *git.Repository, commit *object.Commit, appDirPath st
 		return appDirSnapshot{exists: true, wholeHash: entry.Hash}
 	}
 
-	var names []string
-	hashByName := make(map[string]plumbing.Hash, len(subtree.Entries))
-	for _, e := range subtree.Entries {
-		if e.Name == constants.EnvFileName || strings.HasPrefix(e.Name, constants.AppEnvFileNamePrefix) {
-			names = append(names, e.Name)
-			hashByName[e.Name] = e.Hash
+	snap := appDirSnapshot{exists: true, wholeHash: entry.Hash}
+	if varFileName != "" {
+		for _, e := range subtree.Entries {
+			if e.Name == varFileName {
+				snap.varHash = e.Hash
+				break
+			}
 		}
 	}
-	sort.Strings(names)
-	var sb strings.Builder
-	for _, n := range names {
-		sb.WriteString(n)
-		sb.WriteByte(':')
-		sb.WriteString(hashByName[n].String())
-		sb.WriteByte(' ')
-	}
-
-	return appDirSnapshot{exists: true, wholeHash: entry.Hash, varsSig: sb.String()}
+	return snap
 }
 
 // GetCacheDir returns the absolute path to the dockstarter2 cache directory.

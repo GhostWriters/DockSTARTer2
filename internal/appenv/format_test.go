@@ -40,7 +40,7 @@ func TestFormatLinesCore(t *testing.T) {
 		appName := "audiobookshelf"
 		composeEnvFile := ""
 
-		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, "", time.Time{})
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, "", time.Time{}, ".env")
 
 		expected := []string{
 			"###",
@@ -74,7 +74,7 @@ func TestFormatLinesCore(t *testing.T) {
 		appName := "audiobookshelf"
 		composeEnvFile := ""
 
-		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, "", time.Time{})
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, "", time.Time{}, ".env")
 
 		expected := []string{
 			"###",
@@ -107,7 +107,7 @@ func TestFormatLinesCore(t *testing.T) {
 		appName := "audiobookshelf"
 		composeEnvFile := ""
 
-		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, ".env.app.audiobookshelf-database", time.Time{})
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, appName, composeEnvFile, ".env.app.audiobookshelf-database", time.Time{}, ".env")
 
 		expected := []string{
 			fileHeaderLines(".env.app.audiobookshelf-database", time.Time{})[0],
@@ -140,7 +140,7 @@ func TestFormatLinesCore(t *testing.T) {
 		var defaultLines []string = nil
 		var envLines []string = nil
 
-		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, "", "", "/home/user/.config/compose/.env", time.Time{})
+		formatted := FormatLinesCore(ctx, currentLines, defaultLines, envLines, "", "", "/home/user/.config/compose/.env", time.Time{}, "")
 
 		expected := []string{
 			fileHeaderLines("/home/user/.config/compose/.env", time.Time{})[0],
@@ -203,7 +203,7 @@ func TestFormatLinesCore_TemplateTimestamp(t *testing.T) {
 
 	ctx := context.Background()
 	envLines := []string{"AUDIOBOOKSHELF__ENABLED=true"}
-	formatted := FormatLinesCore(ctx, nil, nil, envLines, "audiobookshelf", "", "", time.Time{})
+	formatted := FormatLinesCore(ctx, nil, nil, envLines, "audiobookshelf", "", "", time.Time{}, ".env")
 
 	templateLine, varsLine := findTimestampLines(formatted)
 	if templateLine == "" || varsLine == "" {
@@ -276,7 +276,7 @@ func TestFormatLinesCore_TemplateTimestamp_UserOverride(t *testing.T) {
 
 	ctx := context.Background()
 	envLines := []string{"TESTAPP__ENABLED=true"}
-	formatted := FormatLinesCore(ctx, nil, nil, envLines, "testapp", "", "", time.Time{})
+	formatted := FormatLinesCore(ctx, nil, nil, envLines, "testapp", "", "", time.Time{}, ".env")
 
 	templateLine, varsLine := findTimestampLines(formatted)
 	if templateLine == "" || varsLine == "" {
