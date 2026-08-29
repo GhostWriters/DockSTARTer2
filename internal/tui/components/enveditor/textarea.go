@@ -2173,7 +2173,11 @@ func (m Model) promptView(displayLine, dataLine int) (prompt string) {
 			case meta.PendingDelete:
 				char = "-"
 			case meta.IsInvalid:
-				char = glyphs.InvalidMarker
+				if m.LineCharacters {
+					char = glyphs.InvalidMarker
+				} else {
+					char = glyphs.InvalidMarkerAscii
+				}
 			case meta.IsNewLine || meta.InitialLine == "":
 				char = "+"
 			case string(m.value[dataLine]) != meta.InitialLine:

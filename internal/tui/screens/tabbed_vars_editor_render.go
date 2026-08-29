@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui/glyphs"
 	"context"
 	"fmt"
 	"strings"
@@ -917,6 +918,23 @@ func (m *TabbedVarsEditorModel) renderSubtitleForTab(tab *envTab, width, height 
 	return strings.Join(lines, "\n")
 }
 
+// envGutterLegend builds the gutter-marker legend shown at the bottom of the
+// help dialog. The Invalid glyph is gated on LineCharacters like every other
+// Unicode/ASCII glyph pair, matching the gutter marker itself (textarea.go's
+// promptView).
+func envGutterLegend() string {
+	invalid := glyphs.InvalidMarkerAscii
+	if displayengine.GetActiveContext().LineCharacters {
+		invalid = glyphs.InvalidMarker
+	}
+	return "| " +
+		"{{|MarkerAdded|}}+{{[-]}} Added | " +
+		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
+		"{{|MarkerModified|}}~{{[-]}} Changed | " +
+		"{{|MarkerModified|}}M{{[-]}} Moved | " +
+		"{{|MarkerInvalid|}}" + invalid + "{{[-]}} Invalid |"
+}
+
 // HelpContext implements displayengine.HelpContextProvider.
 // Returns heading-style info about the variable under the cursor shown at the top of the help dialog.
 // contentWidth is the available display width (used to word-wrap descriptions).
@@ -926,12 +944,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) displayengine.Help
 	}
 
 	tab := m.tabs[m.activeTab]
-	legend := "| " +
-		"{{|MarkerAdded|}}+{{[-]}} Added | " +
-		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
-		"{{|MarkerModified|}}~{{[-]}} Changed | " +
-		"{{|MarkerModified|}}M{{[-]}} Moved | " +
-		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
+	legend := envGutterLegend()
 
 	meta, ok := tab.editor.CurrentLineMeta()
 	if !ok || !meta.IsVariable {
@@ -984,12 +997,7 @@ func (m *TabbedVarsEditorModel) HelpContext(contentWidth int) displayengine.Help
 // getVariableHelpContext builds a help context for a specific variable in a tab.
 func (m *TabbedVarsEditorModel) getVariableHelpContext(varName string, tab *envTab, contentWidth int) *displayengine.HelpContext {
 	ctx := context.Background()
-	legend := "| " +
-		"{{|MarkerAdded|}}+{{[-]}} Added | " +
-		"{{|MarkerDeleted|}}-{{[-]}} Deleted | " +
-		"{{|MarkerModified|}}~{{[-]}} Changed | " +
-		"{{|MarkerModified|}}M{{[-]}} Moved | " +
-		"{{|MarkerInvalid|}}!{{[-]}} Invalid |"
+	legend := envGutterLegend()
 
 	meta, ok := tab.editor.GetVariableMeta(varName)
 
