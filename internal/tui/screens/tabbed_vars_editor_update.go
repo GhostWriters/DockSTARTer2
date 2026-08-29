@@ -431,6 +431,36 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.nudgeActiveGutter(1)
 				}
 				return m, nil
+			// Ctrl/Alt/Ctrl+Alt+arrow are Tab/Shift+Tab's gutter-navigation,
+			// spelled with whichever direction that layout's plain arrows
+			// already use to nudge size -- Left/Right for side-by-side,
+			// Up/Down for stacked -- rather than the layout-agnostic
+			// Tab/Shift+Tab pair. All three modifier combos do the same
+			// thing, matching this project's general convention (see e.g.
+			// enveditor's own DeleteWordBackward/Undo/etc. bindings):
+			// terminal emulators/window managers vary in which of Ctrl+,
+			// Alt+, or Ctrl+Alt+ they intercept for their own use, so all
+			// three are offered and whichever one isn't claimed works.
+			case "ctrl+left", "alt+left", "ctrl+alt+left":
+				if m.layoutMode == envLayoutSideBySide && numGutters > 1 {
+					m.activeGutter = (m.activeGutter - 1 + numGutters) % numGutters
+				}
+				return m, nil
+			case "ctrl+right", "alt+right", "ctrl+alt+right":
+				if m.layoutMode == envLayoutSideBySide && numGutters > 1 {
+					m.activeGutter = (m.activeGutter + 1) % numGutters
+				}
+				return m, nil
+			case "ctrl+up", "alt+up", "ctrl+alt+up":
+				if m.layoutMode == envLayoutStacked && numGutters > 1 {
+					m.activeGutter = (m.activeGutter - 1 + numGutters) % numGutters
+				}
+				return m, nil
+			case "ctrl+down", "alt+down", "ctrl+alt+down":
+				if m.layoutMode == envLayoutStacked && numGutters > 1 {
+					m.activeGutter = (m.activeGutter + 1) % numGutters
+				}
+				return m, nil
 			case "space":
 				m.resetSharesToEqual()
 				m.SetSize(m.width, m.height)
