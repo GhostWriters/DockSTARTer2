@@ -110,10 +110,41 @@ func (m Model) LineAt(row int) string {
 	return string(m.value[row])
 }
 
-// GotoFirstEditable moves the cursor to the first editable position in the buffer.
+// IsNewLineKey reports whether key's line was added by the user after the
+// tab loaded, not reintroduced by a template/formatter pass -- lets a
+// caller distinguish "the user just typed this" from "the formatter
+// reintroduced a template default" for keys not yet in its own baseline
+// tracking, e.g. deciding whether it's safe to treat a key as already-saved
+// before it's actually been written to disk. Same IsNewLine||InitialLine=="
+// signal the + gutter marker uses, so this always agrees with what's shown.
+func (m *Model) IsNewLineKey(key string) bool {
+	for i, line := range m.value {
+		if i >= len(m.lineMeta) || !m.lineMeta[i].IsVariable {
+			continue
+		}
+		s := string(line)
+		eqIdx := strings.Index(s, "=")
+		if eqIdx <= 0 {
+			continue
+		}
+		if strings.TrimSpace(s[:eqIdx]) == key {
+			return m.lineMeta[i].IsNewLine || m.lineMeta[i].InitialLine == ""
+		}
+	}
+	return false
+}
+
+// GotoFirstEditable moves the cursor to the first editable position in the
+// buffer -- the first line that's actually a variable or user-defined
+// content, not merely "not ReadOnly" (a plain spacer blank line between
+// comment blocks satisfies that too, without being a real editing target).
+// Falls back to the last line if nothing qualifies.
 func (m *Model) GotoFirstEditable() {
 	for row, meta := range m.lineMeta {
 		if meta.ReadOnly || meta.PendingDelete {
+			continue
+		}
+		if !meta.IsVariable && !meta.IsUserDefined {
 			continue
 		}
 		m.row = row
@@ -121,8 +152,9 @@ func (m *Model) GotoFirstEditable() {
 		m.repositionView()
 		return
 	}
-	m.row = 0
+	m.row = max(0, len(m.value)-1)
 	m.col = 0
+	m.repositionView()
 }
 
 // GetContent returns the reconstituted .env file content, excluding any lines
@@ -1376,6 +1408,14 @@ func (m *Model) reclassifyCurrentLine() {
 		meta.IsVariable = true
 		meta.EditableStartCol = eqIdx + 1
 		meta.IsUserDefined = true
+		// Same "did this line exist when the tab loaded" signal the +
+		// gutter marker already uses (see its own IsNewLine||InitialLine=="
+		// check) -- keeps the flag itself truthful instead of relying on
+		// InitialLine=="" as an implicit stand-in wherever IsNewLine is
+		// checked directly.
+		if meta.InitialLine == "" {
+			meta.IsNewLine = true
+		}
 
 		key := strings.TrimSpace(string(line[:eqIdx]))
 		vType := m.ValidationType

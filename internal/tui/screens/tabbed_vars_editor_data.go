@@ -128,7 +128,12 @@ func (m *TabbedVarsEditorModel) loadEnv() tea.Msg {
 			if !tab.spec.IsGlobal {
 				validationTarget = tab.spec.fileApp()
 			}
-			addPrefix = validationTarget + "__"
+			// .env.app.* files are free-form -- only the global .env's
+			// APPNAME__VARNAME convention benefits from auto-prepending the
+			// app prefix as the user types a new variable name.
+			if tab.spec.IsGlobal {
+				addPrefix = validationTarget + "__"
+			}
 			validationType = validationTarget
 			if !tab.spec.IsGlobal {
 				validationType += ":"
