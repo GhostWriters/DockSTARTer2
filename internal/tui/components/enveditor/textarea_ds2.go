@@ -1002,21 +1002,40 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 	for len(runes) > 0 && (runes[len(runes)-1] == '\n' || runes[len(runes)-1] == '\r') {
 		runes = runes[:len(runes)-1]
 	}
+	// wrap() (textarea.go) appends one synthetic trailing space to the last
+	// wrapped row of every logical line, for cursor-navigation bookkeeping --
+	// not real buffer content. The content-specific styles below apply as a
+	// single Render call over the whole slice, so that space would otherwise
+	// inherit whatever style the real text gets. Split it off and always
+	// render it with the plain baseStyle.
+	var synthetic []rune
+	if l < len(m.value) {
+		if syntheticFrom := len(m.value[l]) - startIdx; syntheticFrom >= 0 && syntheticFrom < len(runes) {
+			synthetic = runes[syntheticFrom:]
+			runes = runes[:syntheticFrom]
+		}
+	}
+	renderTail := func(styled string) string {
+		if len(synthetic) == 0 {
+			return styled
+		}
+		return styled + baseStyle.Render(string(synthetic))
+	}
 	if l >= len(m.lineMeta) {
-		return baseStyle.Render(string(runes))
+		return renderTail(baseStyle.Render(string(runes)))
 	}
 	meta := &m.lineMeta[l]
 	if meta.PendingDelete {
-		return m.activeStyle().PendingDeleteText.Inherit(baseStyle).Render(string(runes))
+		return renderTail(m.activeStyle().PendingDeleteText.Inherit(baseStyle).Render(string(runes)))
 	}
 	if meta.ReadOnly {
 		if meta.IsComment {
-			return m.activeStyle().CommentText.Inherit(baseStyle).Render(string(runes))
+			return renderTail(m.activeStyle().CommentText.Inherit(baseStyle).Render(string(runes)))
 		}
-		return m.activeStyle().ReadOnlyText.Inherit(baseStyle).Render(string(runes))
+		return renderTail(m.activeStyle().ReadOnlyText.Inherit(baseStyle).Render(string(runes)))
 	}
 	if !meta.IsVariable && !meta.IsUserDefined {
-		return baseStyle.Render(string(runes))
+		return renderTail(baseStyle.Render(string(runes)))
 	}
 
 	// Determine if the current variable name is valid
@@ -1141,7 +1160,7 @@ func (m *Model) renderRunes(runes []rune, l int, startIdx int, baseStyle lipglos
 			}
 		}
 	}
-	return b.String()
+	return renderTail(b.String())
 }
 
 // isReadOnlyRow returns true if the current row shouldn't be edited at all
