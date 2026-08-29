@@ -118,6 +118,7 @@ func Initialize(ctx context.Context) error {
 
 	cfg := config.LoadAppConfig()
 	console.SpinnerEnabled = cfg.UI.Spinner
+	console.RefreshRate = cfg.UI.RefreshRate
 	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
 	console.LineCharacters = cfg.UI.LineCharacters
 	if deflts, err := theme.Load(cfg.UI.Theme, ""); err != nil {

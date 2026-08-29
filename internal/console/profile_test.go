@@ -8,6 +8,27 @@ import (
 	"github.com/charmbracelet/colorprofile"
 )
 
+func TestAlignToRefreshRate(t *testing.T) {
+	tests := []struct {
+		name                     string
+		speedMs, refreshMs, want int
+	}{
+		{"exact multiple is unchanged", 480, 60, 480},
+		{"rounds up to nearest multiple", 520, 60, 540}, // 520 is closer to 540 than 480
+		{"rounds down to nearest multiple", 490, 60, 480},
+		{"non-positive refresh rate leaves speed unmodified", 100, 0, 100},
+		{"negative refresh rate leaves speed unmodified", 100, -1, 100},
+		{"result never rounds down to zero -- floors at refreshMs", 20, 60, 60},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AlignToRefreshRate(tt.speedMs, tt.refreshMs); got != tt.want {
+				t.Errorf("AlignToRefreshRate(%d, %d) = %d, want %d", tt.speedMs, tt.refreshMs, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderPolicyStripsWhenProfileHasNoColor(t *testing.T) {
 	origProfile := GetPreferredProfile()
 	defer SetPreferredProfile(origProfile)

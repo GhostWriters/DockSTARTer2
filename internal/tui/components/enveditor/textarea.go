@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui/components/enveditor/memoization"
 	"DockSTARTer2/internal/tui/components/enveditor/runeutil"
@@ -121,11 +122,11 @@ func DefaultKeyMap() KeyMap {
 		InputBegin:              key.NewBinding(key.WithKeys("ctrl+home", "alt+<", "ctrl+alt+home", "ctrl+alt+<"), key.WithHelp("alt+<", "input begin")),
 		InputEnd:                key.NewBinding(key.WithKeys("ctrl+end", "alt+>", "ctrl+alt+end", "ctrl+alt+>"), key.WithHelp("alt+>", "input end")),
 
-		InsertLine:   key.NewBinding(key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"), key.WithHelp("alt+o", "insert line")),
-		Undo:         key.NewBinding(key.WithKeys("ctrl+z", "alt+z", "ctrl+alt+z"), key.WithHelp("alt+z", "undo")),
-		Redo:         key.NewBinding(key.WithKeys("ctrl+y", "alt+y", "ctrl+alt+y"), key.WithHelp("alt+y", "redo")),
-		Copy:         key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
-		Cut:          key.NewBinding(key.WithKeys("ctrl+x", "alt+x", "ctrl+alt+x"), key.WithHelp("alt+x", "cut")),
+		InsertLine:         key.NewBinding(key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"), key.WithHelp("alt+o", "insert line")),
+		Undo:               key.NewBinding(key.WithKeys("ctrl+z", "alt+z", "ctrl+alt+z"), key.WithHelp("alt+z", "undo")),
+		Redo:               key.NewBinding(key.WithKeys("ctrl+y", "alt+y", "ctrl+alt+y"), key.WithHelp("alt+y", "redo")),
+		Copy:               key.NewBinding(key.WithKeys("ctrl+c", "alt+c", "ctrl+alt+c"), key.WithHelp("alt+c", "copy")),
+		Cut:                key.NewBinding(key.WithKeys("ctrl+x", "alt+x", "ctrl+alt+x"), key.WithHelp("alt+x", "cut")),
 		SelectLeft:         key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "select left")),
 		SelectRight:        key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "select right")),
 		SelectHome:         key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "select to start")),
@@ -353,14 +354,6 @@ type Model struct {
 	// interaction (movement, click), gaining focus, or entering a blink-
 	// eligible state.
 	blinkAnchor time.Time
-
-	// blinkTicking is true while the periodic redraw tick (blinkTick,
-	// driven by blinkTickMsg) is scheduled -- so Update starts it at most
-	// once rather than spawning a new parallel self-perpetuating chain on
-	// every message. The tick's only job is causing periodic re-renders so
-	// blinkAnchor's computed phase is actually redrawn while idle; it stops
-	// rescheduling itself once blinking is no longer needed.
-	blinkTicking bool
 
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
@@ -666,7 +659,15 @@ func (m *Model) updateVirtualCursorStyle() {
 	// internally.
 	if m.styles.Cursor.Blink {
 		if m.styles.Cursor.BlinkSpeed > 0 {
-			m.virtualCursor.BlinkSpeed = m.styles.Cursor.BlinkSpeed
+			// Aligned to RefreshRate the same way console.SpinnerSpeed is
+			// (see AlignToRefreshRate) -- otherwise, even with the phase
+			// itself always computed fresh at render time (see blinkAnchor's
+			// doc comment), an on/off duration that isn't a whole multiple
+			// of the repaint cadence rounds to whichever render boundary it
+			// happens to land nearest, wobbling slightly cycle to cycle
+			// instead of keeping a perfectly even rhythm.
+			alignedMS := console.AlignToRefreshRate(int(m.styles.Cursor.BlinkSpeed/time.Millisecond), console.RefreshRate)
+			m.virtualCursor.BlinkSpeed = time.Duration(alignedMS) * time.Millisecond
 		}
 		m.virtualCursor.SetMode(cursor.CursorBlink)
 		return
@@ -1518,7 +1519,6 @@ func (m *Model) SetHeight(h int) {
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.focus {
 		m.virtualCursor.Blur()
-		m.blinkTicking = false
 		return m, nil
 	}
 
@@ -1868,13 +1868,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.pushUndoSnapshot()
 		m.replaceSelectionForInsert()
 		m.insertRunes([]rune(msg.Content), true)
-
-	case blinkTickMsg:
-		if m.useVirtualCursor && m.focus && m.virtualCursor.Mode() == cursor.CursorBlink {
-			cmds = append(cmds, blinkTick())
-		} else {
-			m.blinkTicking = false
-		}
 	}
 
 	// Handle viewport update without resetting content here.
@@ -1890,22 +1883,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if m.useVirtualCursor {
 		// The blink phase itself is computed fresh from blinkAnchor at
 		// render time (see view()), not driven by cursor.Model's own
-		// BlinkMsg chain -- so all that's needed here is resetting the
-		// anchor on real interaction (the cursor moved, or the message is
-		// a click that might not move it, e.g. clicking the same
-		// character), so movement/clicking always shows the cursor solid
-		// immediately instead of wherever the blink phase happened to be.
+		// BlinkMsg chain or a private ticker of our own -- the app's
+		// existing global tick (see model.go's globalTickMsg) already
+		// forces a repaint at RefreshRate regardless, which is what
+		// actually makes the phase change visible while idle. So all
+		// that's needed here is resetting the anchor on real interaction
+		// (the cursor moved, or the message is a click that might not move
+		// it, e.g. clicking the same character), so movement/clicking
+		// always shows the cursor solid immediately instead of wherever
+		// the blink phase happened to be.
 		newRow, newCol := m.cursorLineNumber(), m.col
 		_, isClick := msg.(tea.MouseClickMsg)
 		if newRow != oldRow || newCol != oldCol || isClick {
 			m.blinkAnchor = time.Now()
-		}
-		// Start the periodic redraw tick if it isn't already running -- it
-		// self-perpetuates via the blinkTickMsg case below and stops itself
-		// once blinking is no longer needed, so this only (re)starts it.
-		if m.virtualCursor.Mode() == cursor.CursorBlink && !m.blinkTicking {
-			m.blinkTicking = true
-			cmds = append(cmds, blinkTick())
 		}
 	}
 
