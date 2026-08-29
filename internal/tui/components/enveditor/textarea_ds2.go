@@ -110,10 +110,17 @@ func (m Model) LineAt(row int) string {
 	return string(m.value[row])
 }
 
-// GotoFirstEditable moves the cursor to the first editable position in the buffer.
+// GotoFirstEditable moves the cursor to the first editable position in the
+// buffer -- the first line that's actually a variable or user-defined
+// content, not merely "not ReadOnly" (a plain spacer blank line between
+// comment blocks satisfies that too, without being a real editing target).
+// Falls back to the last line if nothing qualifies.
 func (m *Model) GotoFirstEditable() {
 	for row, meta := range m.lineMeta {
 		if meta.ReadOnly || meta.PendingDelete {
+			continue
+		}
+		if !meta.IsVariable && !meta.IsUserDefined {
 			continue
 		}
 		m.row = row
@@ -121,8 +128,9 @@ func (m *Model) GotoFirstEditable() {
 		m.repositionView()
 		return
 	}
-	m.row = 0
+	m.row = max(0, len(m.value)-1)
 	m.col = 0
+	m.repositionView()
 }
 
 // GetContent returns the reconstituted .env file content, excluding any lines
