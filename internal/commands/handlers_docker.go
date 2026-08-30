@@ -17,32 +17,58 @@ import (
 
 // HandleContainerStart runs the standalone --start command.
 func HandleContainerStart(ctx context.Context, group *CommandGroup, state *CmdState) error {
-	return handleContainerVerb(ctx, group, state, "start", "Start", "Starting", docker.StartContainer)
+	return handleContainerVerb(ctx, group, state, false, "start", "Start", "Starting", docker.StartContainer)
 }
 
 // HandleContainerStop runs the standalone --stop command.
 func HandleContainerStop(ctx context.Context, group *CommandGroup, state *CmdState) error {
-	return handleContainerVerb(ctx, group, state, "stop", "Stop", "Stopping", docker.StopContainer)
+	return handleContainerVerb(ctx, group, state, false, "stop", "Stop", "Stopping", docker.StopContainer)
 }
 
 // HandleContainerRestart runs the standalone --restart command.
 func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *CmdState) error {
-	return handleContainerVerb(ctx, group, state, "restart", "Restart", "Restarting", docker.RestartContainer)
+	return handleContainerVerb(ctx, group, state, false, "restart", "Restart", "Restarting", docker.RestartContainer)
+}
+
+// HandleContainerStartAll runs the standalone --start-all command.
+func HandleContainerStartAll(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	return handleContainerVerb(ctx, group, state, true, "start", "Start", "Starting", docker.StartContainer)
+}
+
+// HandleContainerStopAll runs the standalone --stop-all command.
+func HandleContainerStopAll(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	return handleContainerVerb(ctx, group, state, true, "stop", "Stop", "Stopping", docker.StopContainer)
+}
+
+// HandleContainerRestartAll runs the standalone --restart-all command.
+func HandleContainerRestartAll(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	return handleContainerVerb(ctx, group, state, true, "restart", "Restart", "Restarting", docker.RestartContainer)
 }
 
 // handleContainerVerb runs `docker <verb> <container>` per named container,
 // via the SDK directly (not docker compose) -- container names are used as
 // typed, with no .env or compose-project lookup involved. Shared by
-// --start/--stop/--restart, which differ only in the verb, prompt wording,
-// and underlying SDK call.
-func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdState, verb, imperative, presentParticiple string, action func(context.Context, string) error) error {
-	names := group.Args
-	if len(names) == 0 {
-		return fmt.Errorf("--%s requires at least one container name", verb)
-	}
-
+// --start/--stop/--restart and their -all variants, which differ only in the
+// verb, prompt wording, underlying SDK call, and (for -all) the container
+// list coming from Docker itself instead of group.Args.
+func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdState, all bool, verb, imperative, presentParticiple string, action func(context.Context, string) error) error {
 	if err := dockercheck.Require(ctx); err != nil {
 		return err
+	}
+
+	names := group.Args
+	if all {
+		var err error
+		names, err = docker.ListAllContainerNames(ctx)
+		if err != nil {
+			return err
+		}
+		if len(names) == 0 {
+			logger.Notice(ctx, "No containers found.")
+			return nil
+		}
+	} else if len(names) == 0 {
+		return fmt.Errorf("--%s requires at least one container name", verb)
 	}
 
 	namesJoined := strings.Join(names, ", ")

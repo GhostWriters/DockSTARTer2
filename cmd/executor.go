@@ -273,6 +273,15 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--restart":
 				ranCommand = true
 				return commands.HandleContainerRestart(subCtx, &group, &state)
+			case "--start-all":
+				ranCommand = true
+				return commands.HandleContainerStartAll(subCtx, &group, &state)
+			case "--stop-all":
+				ranCommand = true
+				return commands.HandleContainerStopAll(subCtx, &group, &state)
+			case "--restart-all":
+				ranCommand = true
+				return commands.HandleContainerRestartAll(subCtx, &group, &state)
 			case "--logs":
 				ranCommand = true
 				return commands.HandleContainerLogs(subCtx, &group, &state)

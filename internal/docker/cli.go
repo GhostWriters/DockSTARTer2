@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/containerd/errdefs"
@@ -82,6 +83,26 @@ func ContainerLogs(ctx context.Context, containerName string, follow bool) (io.R
 		ShowStderr: true,
 		Follow:     follow,
 	})
+}
+
+// ListAllContainerNames returns the names of every container Docker knows
+// about, regardless of state or which project (if any) created it.
+func ListAllContainerNames(ctx context.Context) ([]string, error) {
+	cli, err := GetClient()
+	if err != nil {
+		return nil, err
+	}
+	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(containers))
+	for _, c := range containers {
+		if len(c.Names) > 0 {
+			names = append(names, strings.TrimPrefix(c.Names[0], "/"))
+		}
+	}
+	return names, nil
 }
 
 // GetContainerStatus returns the status of a container by ID.

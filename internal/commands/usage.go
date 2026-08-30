@@ -232,6 +232,14 @@ func GetUsage(target string, noHeading bool) string {
 			"	Restart container(s) by name (raw '{{|UsageCommand|}}docker restart{{[-]}}', not compose-scoped)",
 		)
 	}
+	if match("--start-all", "--stop-all", "--restart-all") {
+		printStr(
+			"{{|UsageCommand|}}--start-all{{[-]}}",
+			"{{|UsageCommand|}}--stop-all{{[-]}}",
+			"{{|UsageCommand|}}--restart-all{{[-]}}",
+			"	Start/stop/restart every container Docker knows about, not just "+version.ApplicationName+"-managed ones",
+		)
+	}
 	if match("--logs") {
 		printStr(
 			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
