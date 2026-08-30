@@ -204,9 +204,21 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal",
 			"-r", "--remove",
 			"-s", "--status",
-			"--status-enable", "--status-disable",
-			"--restart", "--logs":
+			"--status-enable", "--status-disable":
 			consumesUntilDash = true
+
+		case "--restart":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires at least one container name.", cmd)}
+			}
+			consumesUntilDash = true
+
+		case "--logs":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a container name.", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
 
 		case "-c", "--compose":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {

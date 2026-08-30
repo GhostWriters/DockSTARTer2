@@ -222,7 +222,7 @@ func GetUsage(target string, noHeading bool) string {
 	}
 	if match("--logs") {
 		printStr(
-			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
 			"	Show container logs by name (raw '{{|UsageCommand|}}docker logs{{[-]}}', not compose-scoped). Use {{|UsageCommand|}}-F{{[-]}} to follow.",
 		)
 	}

@@ -45,7 +45,7 @@ func NewFlagSet() *pflag.FlagSet {
 
 	// Docker (raw container operations, not compose-scoped)
 	fs.String("restart", "", "Restart container(s) by name")
-	fs.String("logs", "", "Show container logs by name (use -F to follow)")
+	fs.String("logs", "", "Show a container's logs by name (use -F to follow)")
 
 	// Installation / Update
 	fs.BoolP("install", "i", false, "Install/update dependencies")
