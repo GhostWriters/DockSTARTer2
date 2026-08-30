@@ -313,10 +313,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				subtitle = ComposeSubtitle(&group)
 			case "--logs":
 				if state.Follow {
-					// --logs -F never returns on its own -- mark the context so
-					// ProgramBoxModel shows its OK button immediately and cancels
-					// the task when closed early, instead of waiting forever for
-					// the stream to finish.
+					// See console.IsFollowMode: ProgramBoxModel shows its OK
+					// button immediately and cancels the task on early close.
 					runCtx = console.WithFollowMode(ctx)
 				}
 			}
