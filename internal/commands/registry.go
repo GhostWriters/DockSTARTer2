@@ -4,17 +4,34 @@ package commands
 
 import "strings"
 
+// envShorthandCommands is every flag whose handler actually supports the
+// legacy "--flag=value" syntax (HandleEnvGet/HandleEnvSet split it back out
+// of CommandGroup.Command themselves) -- BaseCommand only normalizes these.
+// Any other flag typed with "=" is left alone and rejected as an unknown
+// option, rather than silently routed to a handler whose own internal
+// switch still compares the untouched raw command and finds no match.
+var envShorthandCommands = map[string]bool{
+	"--env-get": true, "--env-get-line": true, "--env-get-line-regex": true, "--env-get-literal": true,
+	"--env-get-lower": true, "--env-get-lower-line": true, "--env-get-lower-literal": true,
+	"--env-set": true, "--env-set-lower": true, "--env-set-literal": true, "--env-set-lower-literal": true,
+}
+
 // BaseCommand strips a "=value" shorthand suffix (e.g. "--env-get=VAR") off
 // a raw flag argument, returning just the flag name -- every Registry
 // lookup and top-level dispatch switch must compare against this, not the
-// raw argument, since command flags supporting that shorthand (--env-get,
-// --env-set, and their variants) are stored with the value still attached
-// in CommandGroup.Command for their own handlers to split back out.
+// raw argument, for the handful of flags in envShorthandCommands, which are
+// stored with the value still attached in CommandGroup.Command for their
+// own handlers to split back out. Any other flag is returned unchanged.
 func BaseCommand(s string) string {
-	if idx := strings.Index(s, "="); idx != -1 {
-		return s[:idx]
+	idx := strings.Index(s, "=")
+	if idx == -1 {
+		return s
 	}
-	return s
+	base := s[:idx]
+	if !envShorthandCommands[base] {
+		return s
+	}
+	return base
 }
 
 // Def holds metadata for a single CLI command flag.

@@ -184,7 +184,10 @@ func Parse(args []string) ([]CommandGroup, error) {
 			validFlag = fs.ShorthandLookup(cmdName)
 		}
 
-		if validFlag == nil {
+		// A flag not supporting "=value" (only envShorthandCommands do) is
+		// treated the same as an unrecognized flag entirely -- same error,
+		// same caret pointer -- rather than a separate bespoke message.
+		if validFlag == nil || (strings.Contains(arg, "=") && !envShorthandCommands[cmdToCheck]) {
 			return nil, &ParseError{Args: expandedArgs, Index: i, Message: "Invalid option %o"}
 		}
 
@@ -194,7 +197,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 		// flag name so the switch below and ParseError's usage lookup both
 		// match regardless of whether the shorthand was used.
 		currentGroup.Command = arg
-		cmd := cmdToCheck
+		cmd := BaseCommand(arg)
 		lastCommand = cmd
 		// hasEqualsValue is true for the "--flag=value" shorthand -- the
 		// value is already embedded in arg itself, so the required-argument
