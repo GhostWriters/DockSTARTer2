@@ -53,8 +53,10 @@ func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *Cmd
 		}
 		// Echo the container name on success, matching real `docker
 		// restart`'s own output -- same tab-indented, tool-prefixed Notice
-		// convention used for git output in update_templates.go.
-		logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} {{|App|}}%s{{[-]}}", name)
+		// convention used for git output in update_templates.go. Plain, not
+		// App-tagged, same as the "Running: ..." line above: this is mimicking
+		// docker's own literal output, not a DS2-authored notice.
+		logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} %s", name)
 	}
 	return firstErr
 }
