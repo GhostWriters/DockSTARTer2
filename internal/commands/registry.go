@@ -98,6 +98,8 @@ var Registry = map[string]Def{
 	"--compose":               {Title: "Docker Compose", SessionLocked: true, ConsoleSafe: true},
 	"-p":                      {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
 	"--prune":                 {Title: "Docker Prune", SessionLocked: true, ConsoleSafe: true},
+	"--restart":               {Title: "Restart Container", SessionLocked: true, ConsoleSafe: true},
+	"--logs":                  {Title: "Container Logs", ConsoleSafe: true},
 	"-i":                      {Title: "Install", ConsoleSafe: true},
 	"--install":               {Title: "Install", ConsoleSafe: true},
 	// RequiresSudo: an update target can be redirected to an arbitrary

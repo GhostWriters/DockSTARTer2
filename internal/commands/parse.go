@@ -131,6 +131,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 		"-v": true, "--verbose": true,
 		"-x": true, "--debug": true,
 		"-y": true, "--yes": true,
+		"-F": true, "--follow": true,
 	}
 
 	IsModifier := func(s string) bool {
@@ -203,7 +204,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal",
 			"-r", "--remove",
 			"-s", "--status",
-			"--status-enable", "--status-disable":
+			"--status-enable", "--status-disable",
+			"--restart", "--logs":
 			consumesUntilDash = true
 
 		case "-c", "--compose":

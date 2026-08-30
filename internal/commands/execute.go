@@ -22,6 +22,7 @@ type CmdState struct {
 	Yes     bool
 	Verbose bool
 	Debug   bool
+	Follow  bool
 }
 
 // UIProvider defines an interface for commands to request UI interactions.
@@ -133,6 +134,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			case "-g", "--gui":
 				state.GUI = true
 				console.GlobalGUI = true
+			case "-F", "--follow":
+				state.Follow = true
 			}
 		}
 
@@ -266,6 +269,10 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleCompose(innerCtx, &group, &state)
 			case "-p", "--prune":
 				return HandlePrune(innerCtx, &state)
+			case "--restart":
+				return HandleContainerRestart(innerCtx, &group, &state)
+			case "--logs":
+				return HandleContainerLogs(innerCtx, &group, &state)
 			case "-R", "--reset":
 				return HandleReset(innerCtx)
 			case "--theme-table":

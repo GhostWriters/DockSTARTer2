@@ -183,6 +183,12 @@ func GetUsage(target string, noHeading bool) string {
 			"	Assume Yes for all prompts",
 		)
 	}
+	if match("-F", "--follow") {
+		printStr(
+			"{{|UsageCommand|}}-F --follow{{[-]}}",
+			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}})",
+		)
+	}
 
 	if showAll && !noHeading {
 		printStr(
@@ -206,6 +212,18 @@ func GetUsage(target string, noHeading bool) string {
 			"	The '{{|UsageOption|}}update{{[-]}}' command is the same as a '{{|UsageOption|}}pull{{[-]}}' followed by an '{{|UsageOption|}}up{{[-]}}'",
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
 			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
+		)
+	}
+	if match("--restart") {
+		printStr(
+			"{{|UsageCommand|}}--restart{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Restart container(s) by name (raw '{{|UsageCommand|}}docker restart{{[-]}}', not compose-scoped)",
+		)
+	}
+	if match("--logs") {
+		printStr(
+			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Show container logs by name (raw '{{|UsageCommand|}}docker logs{{[-]}}', not compose-scoped). Use {{|UsageCommand|}}-F{{[-]}} to follow.",
 		)
 	}
 

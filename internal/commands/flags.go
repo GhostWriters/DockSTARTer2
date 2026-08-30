@@ -19,6 +19,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.BoolP("debug", "x", false, "Debug output")
 	fs.BoolP("yes", "y", false, "Assume yes")
 	fs.BoolP("help", "h", false, "Show help")
+	fs.BoolP("follow", "F", false, "Follow log output (used with --logs)")
 
 	// App Management
 	fs.StringP("add", "a", "", "Add application(s)")
@@ -41,6 +42,10 @@ func NewFlagSet() *pflag.FlagSet {
 	// Docker Compose
 	fs.StringP("compose", "c", "", "Docker Compose operations (up, down, pull, etc.)")
 	fs.StringP("prune", "p", "", "Prune docker resources")
+
+	// Docker (raw container operations, not compose-scoped)
+	fs.String("restart", "", "Restart container(s) by name")
+	fs.String("logs", "", "Show container logs by name (use -F to follow)")
 
 	// Installation / Update
 	fs.BoolP("install", "i", false, "Install/update dependencies")

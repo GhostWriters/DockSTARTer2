@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"io"
 	"sync"
 
 	"github.com/containerd/errdefs"
@@ -46,6 +47,31 @@ func RemoveContainer(ctx context.Context, containerID string) error {
 	return cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force:         true,
 		RemoveVolumes: true,
+	})
+}
+
+// RestartContainer restarts a container by name or ID.
+func RestartContainer(ctx context.Context, containerName string) error {
+	cli, err := GetClient()
+	if err != nil {
+		return err
+	}
+	return cli.ContainerRestart(ctx, containerName, container.StopOptions{})
+}
+
+// ContainerLogs returns the raw multiplexed log stream for a container by
+// name or ID. Follow keeps the stream open for new log lines as they're
+// written; the caller is responsible for closing the returned ReadCloser and
+// demultiplexing it (see github.com/docker/docker/pkg/stdcopy.StdCopy).
+func ContainerLogs(ctx context.Context, containerName string, follow bool) (io.ReadCloser, error) {
+	cli, err := GetClient()
+	if err != nil {
+		return nil, err
+	}
+	return cli.ContainerLogs(ctx, containerName, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     follow,
 	})
 }
 

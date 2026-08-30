@@ -124,6 +124,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-y", "--yes":
 				state.Yes = true
 				console.GlobalYes = true
+			case "-F", "--follow":
+				state.Follow = true
 			}
 		}
 
@@ -262,6 +264,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-p", "--prune":
 				ranCommand = true
 				return commands.HandlePrune(subCtx, &state)
+			case "--restart":
+				ranCommand = true
+				return commands.HandleContainerRestart(subCtx, &group, &state)
+			case "--logs":
+				ranCommand = true
+				return commands.HandleContainerLogs(subCtx, &group, &state)
 			case "-R", "--reset":
 				ranCommand = true
 				return commands.HandleReset(subCtx)
