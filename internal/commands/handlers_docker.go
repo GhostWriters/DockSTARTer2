@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -131,10 +132,18 @@ func HandleContainerLogs(ctx context.Context, group *CommandGroup, state *CmdSta
 		return err
 	}
 
-	stopSpinner := console.StartSpinner()
-	defer stopSpinner()
-	stdout := console.SpinnerSafeWriter(os.Stdout)
-	stderr := console.SpinnerSafeWriter(os.Stderr)
+	var stdout, stderr io.Writer
+	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
+		// -g routes command output through the ProgramBox dialog, not the
+		// real stdout/stderr -- same io.Writer for both streams, since the
+		// dialog is one combined viewport, not separate stdout/stderr areas.
+		stdout, stderr = w, w
+	} else {
+		stopSpinner := console.StartSpinner()
+		defer stopSpinner()
+		stdout = console.SpinnerSafeWriter(os.Stdout)
+		stderr = console.SpinnerSafeWriter(os.Stderr)
+	}
 
 	followFlag := ""
 	if state.Follow {

@@ -307,11 +307,20 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		if state.GUI && GlobalUIProvider != nil && group.Command != "" && group.Command != "-h" && group.Command != "--help" {
 			// Wrap in Program Box
 			subtitle := ""
+			runCtx := ctx
 			switch group.Command {
 			case "-c", "--compose":
 				subtitle = ComposeSubtitle(&group)
+			case "--logs":
+				if state.Follow {
+					// --logs -F never returns on its own -- mark the context so
+					// ProgramBoxModel shows its OK button immediately and cancels
+					// the task when closed early, instead of waiting forever for
+					// the stream to finish.
+					runCtx = console.WithFollowMode(ctx)
+				}
 			}
-			err = GlobalUIProvider.RunCommand(ctx, "Console Command", subtitle, "{{[-]}} {{|CommandLine|}}"+cmdStr+"{{[-]}}", runWithUI)
+			err = GlobalUIProvider.RunCommand(runCtx, "Console Command", subtitle, "{{[-]}} {{|CommandLine|}}"+cmdStr+"{{[-]}}", runWithUI)
 		} else {
 			err = runWithUI(ctx)
 		}

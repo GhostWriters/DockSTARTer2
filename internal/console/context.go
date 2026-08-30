@@ -107,6 +107,24 @@ func ReplaceOutputFuncFromContext(ctx context.Context) func([]string) {
 	return fn
 }
 
+// followModeKey is the context key marking a task that never returns on its
+// own (e.g. --logs -F's live-following stream) -- ProgramBoxModel checks
+// this to show its OK button immediately instead of waiting for the task to
+// finish, and to cancel the task's context when OK/Esc closes the dialog
+// early rather than leaving it running unattended in the background.
+type followModeKey struct{}
+
+// WithFollowMode marks ctx as belonging to a never-returns-on-its-own task.
+func WithFollowMode(ctx context.Context) context.Context {
+	return context.WithValue(ctx, followModeKey{}, true)
+}
+
+// IsFollowMode reports whether ctx was marked via WithFollowMode.
+func IsFollowMode(ctx context.Context) bool {
+	v, _ := ctx.Value(followModeKey{}).(bool)
+	return v
+}
+
 // IsTUI returns true if the context has a TUI writer attached or TUI mode is globally enabled.
 func IsTUI(ctx context.Context) bool {
 	return ctx.Value(TUIWriterKey) != nil || IsTUIEnabled()
