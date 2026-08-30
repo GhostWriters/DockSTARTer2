@@ -2,6 +2,21 @@
 // executor and the TUI console panel.
 package commands
 
+import "strings"
+
+// BaseCommand strips a "=value" shorthand suffix (e.g. "--env-get=VAR") off
+// a raw flag argument, returning just the flag name -- every Registry
+// lookup and top-level dispatch switch must compare against this, not the
+// raw argument, since command flags supporting that shorthand (--env-get,
+// --env-set, and their variants) are stored with the value still attached
+// in CommandGroup.Command for their own handlers to split back out.
+func BaseCommand(s string) string {
+	if idx := strings.Index(s, "="); idx != -1 {
+		return s[:idx]
+	}
+	return s
+}
+
 // Def holds metadata for a single CLI command flag.
 // SessionLocked: blocks the command when a TUI session is active.
 // ConsoleSafe: the command can be run from the restricted console panel
@@ -187,33 +202,33 @@ var Registry = map[string]Def{
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.
 func IsConsoleSafe(flag string) bool {
-	return Registry[flag].ConsoleSafe
+	return Registry[BaseCommand(flag)].ConsoleSafe
 }
 
 // IsRequiresSudo reports whether a command flag needs a fresh sudo
 // re-verification when run from a remote System Console session -- see
 // Def's RequiresSudo doc comment.
 func IsRequiresSudo(flag string) bool {
-	return Registry[flag].RequiresSudo
+	return Registry[BaseCommand(flag)].RequiresSudo
 }
 
 // IsConsoleBlocked reports whether a command flag can never be run from
 // either console panel mode (restricted Console or System Console),
 // regardless of sudo verification -- see Def's ConsoleBlocked doc comment.
 func IsConsoleBlocked(flag string) bool {
-	return Registry[flag].ConsoleBlocked
+	return Registry[BaseCommand(flag)].ConsoleBlocked
 }
 
 // IsSessionLocked reports whether a command flag requires an inactive TUI session.
 func IsSessionLocked(flag string) bool {
-	return Registry[flag].SessionLocked
+	return Registry[BaseCommand(flag)].SessionLocked
 }
 
 // GroupsNeedConfigReload reports whether any group in groups has ConfigChanging set,
 // meaning the TUI should reload config/styles after execution.
 func GroupsNeedConfigReload(groups []CommandGroup) bool {
 	for _, g := range groups {
-		if Registry[g.Command].ConfigChanging {
+		if Registry[BaseCommand(g.Command)].ConfigChanging {
 			return true
 		}
 	}
@@ -224,7 +239,7 @@ func GroupsNeedConfigReload(groups []CommandGroup) bool {
 // meaning the TUI should refresh the app list after execution.
 func GroupsNeedAppsRefresh(groups []CommandGroup) bool {
 	for _, g := range groups {
-		if Registry[g.Command].AppsChanging {
+		if Registry[BaseCommand(g.Command)].AppsChanging {
 			return true
 		}
 	}
