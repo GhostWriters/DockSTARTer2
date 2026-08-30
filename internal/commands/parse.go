@@ -199,12 +199,22 @@ func Parse(args []string) ([]CommandGroup, error) {
 		switch cmd {
 		case "-a", "--add",
 			"--env-appvars", "--env-appvars-lines",
-			"--env-get", "--env-get-line", "--env-get-line-regex", "--env-get-literal",
-			"--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal",
-			"--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal",
-			"-r", "--remove",
 			"-s", "--status",
 			"--status-enable", "--status-disable":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires one or more application names.", cmd)}
+			}
+			consumesUntilDash = true
+
+		case "--env-get", "--env-get-line", "--env-get-line-regex", "--env-get-literal",
+			"--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires one or more variable names.", cmd)}
+			}
+			consumesUntilDash = true
+
+		case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal",
+			"-r", "--remove":
 			consumesUntilDash = true
 
 		case "--restart":
