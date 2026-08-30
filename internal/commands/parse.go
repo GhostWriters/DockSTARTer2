@@ -217,7 +217,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"-r", "--remove":
 			consumesUntilDash = true
 
-		case "--restart":
+		case "--start", "--stop", "--restart":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires at least one container name.", cmd)}
 			}

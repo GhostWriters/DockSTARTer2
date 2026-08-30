@@ -264,6 +264,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-p", "--prune":
 				ranCommand = true
 				return commands.HandlePrune(subCtx, &state)
+			case "--start":
+				ranCommand = true
+				return commands.HandleContainerStart(subCtx, &group, &state)
+			case "--stop":
+				ranCommand = true
+				return commands.HandleContainerStop(subCtx, &group, &state)
 			case "--restart":
 				ranCommand = true
 				return commands.HandleContainerRestart(subCtx, &group, &state)

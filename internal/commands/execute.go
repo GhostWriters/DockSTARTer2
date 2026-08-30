@@ -269,6 +269,10 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleCompose(innerCtx, &group, &state)
 			case "-p", "--prune":
 				return HandlePrune(innerCtx, &state)
+			case "--start":
+				return HandleContainerStart(innerCtx, &group, &state)
+			case "--stop":
+				return HandleContainerStop(innerCtx, &group, &state)
 			case "--restart":
 				return HandleContainerRestart(innerCtx, &group, &state)
 			case "--logs":

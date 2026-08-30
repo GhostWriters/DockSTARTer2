@@ -50,6 +50,15 @@ func RemoveContainer(ctx context.Context, containerID string) error {
 	})
 }
 
+// StartContainer starts a container by name or ID.
+func StartContainer(ctx context.Context, containerName string) error {
+	cli, err := GetClient()
+	if err != nil {
+		return err
+	}
+	return cli.ContainerStart(ctx, containerName, container.StartOptions{})
+}
+
 // RestartContainer restarts a container by name or ID.
 func RestartContainer(ctx context.Context, containerName string) error {
 	cli, err := GetClient()

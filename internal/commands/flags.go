@@ -44,6 +44,8 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.StringP("prune", "p", "", "Prune docker resources")
 
 	// Docker (raw container operations, not compose-scoped)
+	fs.String("start", "", "Start container(s) by name")
+	fs.String("stop", "", "Stop container(s) by name")
 	fs.String("restart", "", "Restart container(s) by name")
 	fs.String("logs", "", "Show a container's logs by name (use -F to follow)")
 

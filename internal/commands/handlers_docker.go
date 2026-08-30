@@ -15,14 +15,30 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
-// HandleContainerRestart runs the standalone --restart command: `docker
-// restart <container>` per named container, via the SDK directly (not
-// docker compose) -- container names are used as typed, with no .env or
-// compose-project lookup involved.
+// HandleContainerStart runs the standalone --start command.
+func HandleContainerStart(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	return handleContainerVerb(ctx, group, state, "start", "Start", "Starting", docker.StartContainer)
+}
+
+// HandleContainerStop runs the standalone --stop command.
+func HandleContainerStop(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	return handleContainerVerb(ctx, group, state, "stop", "Stop", "Stopping", docker.StopContainer)
+}
+
+// HandleContainerRestart runs the standalone --restart command.
 func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *CmdState) error {
+	return handleContainerVerb(ctx, group, state, "restart", "Restart", "Restarting", docker.RestartContainer)
+}
+
+// handleContainerVerb runs `docker <verb> <container>` per named container,
+// via the SDK directly (not docker compose) -- container names are used as
+// typed, with no .env or compose-project lookup involved. Shared by
+// --start/--stop/--restart, which differ only in the verb, prompt wording,
+// and underlying SDK call.
+func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdState, verb, imperative, presentParticiple string, action func(context.Context, string) error) error {
 	names := group.Args
 	if len(names) == 0 {
-		return fmt.Errorf("--restart requires at least one container name")
+		return fmt.Errorf("--%s requires at least one container name", verb)
 	}
 
 	if err := dockercheck.Require(ctx); err != nil {
@@ -30,22 +46,22 @@ func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *Cmd
 	}
 
 	namesJoined := strings.Join(names, ", ")
-	question := fmt.Sprintf("Restart container: {{|App|}}%s{{[-]}}?", namesJoined)
-	answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Restart", question, "Y", state.Yes)
+	question := fmt.Sprintf("%s container: {{|App|}}%s{{[-]}}?", imperative, namesJoined)
+	answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker "+imperative, question, "Y", state.Yes)
 	if err != nil {
 		return err
 	}
 	if !answer {
-		logger.Notice(ctx, "Not restarting: {{|App|}}%s{{[-]}}.", namesJoined)
+		logger.Notice(ctx, "Not %s: {{|App|}}%s{{[-]}}.", strings.ToLower(presentParticiple), namesJoined)
 		return nil
 	}
 
-	logger.Notice(ctx, "Restarting container: {{|App|}}%s{{[-]}}.", namesJoined)
+	logger.Notice(ctx, "%s container: {{|App|}}%s{{[-]}}.", presentParticiple, namesJoined)
 	var firstErr error
 	for _, name := range names {
-		logger.Notice(ctx, "Running: {{|RunningCommand|}}docker restart %s{{[-]}}", name)
-		if err := docker.RestartContainer(ctx, name); err != nil {
-			logger.Error(ctx, "Failed to restart '{{|App|}}%s{{[-]}}': %v", name, err)
+		logger.Notice(ctx, "Running: {{|RunningCommand|}}docker %s %s{{[-]}}", verb, name)
+		if err := action(ctx, name); err != nil {
+			logger.Error(ctx, "Failed to %s '{{|App|}}%s{{[-]}}': %v", verb, name, err)
 			if firstErr == nil {
 				firstErr = err
 			}

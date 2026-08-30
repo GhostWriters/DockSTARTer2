@@ -214,6 +214,18 @@ func GetUsage(target string, noHeading bool) string {
 			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
 		)
 	}
+	if match("--start") {
+		printStr(
+			"{{|UsageCommand|}}--start{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Start container(s) by name (raw '{{|UsageCommand|}}docker start{{[-]}}', not compose-scoped)",
+		)
+	}
+	if match("--stop") {
+		printStr(
+			"{{|UsageCommand|}}--stop{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Stop container(s) by name (raw '{{|UsageCommand|}}docker stop{{[-]}}', not compose-scoped)",
+		)
+	}
 	if match("--restart") {
 		printStr(
 			"{{|UsageCommand|}}--restart{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
