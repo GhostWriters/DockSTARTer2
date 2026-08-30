@@ -184,14 +184,25 @@ func Parse(args []string) ([]CommandGroup, error) {
 			validFlag = fs.ShorthandLookup(cmdName)
 		}
 
-		if validFlag == nil {
+		// A flag not supporting "=value" (only envShorthandCommands do) is
+		// treated the same as an unrecognized flag entirely -- same error,
+		// same caret pointer -- rather than a separate bespoke message.
+		if validFlag == nil || (strings.Contains(arg, "=") && !envShorthandCommands[cmdToCheck]) {
 			return nil, &ParseError{Args: expandedArgs, Index: i, Message: "Invalid option %o"}
 		}
 
-		// Set command
+		// Set command. currentGroup.Command keeps the raw arg (with any
+		// "=value" shorthand still attached, for handlers like HandleEnvGet
+		// that split it back out themselves); cmd/lastCommand use the base
+		// flag name so the switch below and ParseError's usage lookup both
+		// match regardless of whether the shorthand was used.
 		currentGroup.Command = arg
-		lastCommand = arg
-		cmd := arg
+		cmd := BaseCommand(arg)
+		lastCommand = cmd
+		// hasEqualsValue is true for the "--flag=value" shorthand -- the
+		// value is already embedded in arg itself, so the required-argument
+		// checks below (which look at the *next* token) must not apply.
+		hasEqualsValue := arg != cmd
 		i++
 
 		consumesUntilDash := false
@@ -201,14 +212,14 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--env-appvars", "--env-appvars-lines",
 			"-s", "--status",
 			"--status-enable", "--status-disable":
-			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+			if !hasEqualsValue && (i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-")) {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires one or more application names.", cmd)}
 			}
 			consumesUntilDash = true
 
 		case "--env-get", "--env-get-line", "--env-get-line-regex", "--env-get-literal",
 			"--env-get-lower", "--env-get-lower-line", "--env-get-lower-literal":
-			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+			if !hasEqualsValue && (i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-")) {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires one or more variable names.", cmd)}
 			}
 			consumesUntilDash = true

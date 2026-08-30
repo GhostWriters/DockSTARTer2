@@ -139,7 +139,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 		// Command Execution
 		task := func(subCtx context.Context) error {
-			switch group.Command {
+			switch commands.BaseCommand(group.Command) {
 			case "-h", "--help":
 				ranCommand = true
 				target := ""
@@ -336,7 +336,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 
 		// Block action commands when someone else is currently editing the configuration.
-		def := commandDefs[group.Command]
+		def := commandDefs[commands.BaseCommand(group.Command)]
 		if def.SessionLocked {
 			cliTransport := "local"
 			if os.Getenv("SSH_CONNECTION") != "" {

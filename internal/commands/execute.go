@@ -94,7 +94,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		}
 
 		// Block non-consoleSafe commands.
-		def := Registry[group.Command]
+		def := Registry[BaseCommand(group.Command)]
 		if group.Command != "" && !def.ConsoleSafe {
 			logger.Warn(ctx, fmt.Sprintf("'{{|UserCommand|}}%s{{[-]}}' cannot be run from the console panel.", group.Command))
 			continue
@@ -173,7 +173,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 
 		// Execute logic
 		runWithUI := func(innerCtx context.Context) error {
-			switch group.Command {
+			switch BaseCommand(group.Command) {
 			case "-h", "--help":
 				return HandleHelp(innerCtx, &group)
 			case "-V", "--version":

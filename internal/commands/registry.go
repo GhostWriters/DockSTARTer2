@@ -2,6 +2,38 @@
 // executor and the TUI console panel.
 package commands
 
+import "strings"
+
+// envShorthandCommands is every flag whose handler actually supports the
+// legacy "--flag=value" syntax (HandleEnvGet/HandleEnvSet split it back out
+// of CommandGroup.Command themselves) -- BaseCommand only normalizes these.
+// Any other flag typed with "=" is left alone and rejected as an unknown
+// option, rather than silently routed to a handler whose own internal
+// switch still compares the untouched raw command and finds no match.
+var envShorthandCommands = map[string]bool{
+	"--env-get": true, "--env-get-line": true, "--env-get-line-regex": true, "--env-get-literal": true,
+	"--env-get-lower": true, "--env-get-lower-line": true, "--env-get-lower-literal": true,
+	"--env-set": true, "--env-set-lower": true, "--env-set-literal": true, "--env-set-lower-literal": true,
+}
+
+// BaseCommand strips a "=value" shorthand suffix (e.g. "--env-get=VAR") off
+// a raw flag argument, returning just the flag name -- every Registry
+// lookup and top-level dispatch switch must compare against this, not the
+// raw argument, for the handful of flags in envShorthandCommands, which are
+// stored with the value still attached in CommandGroup.Command for their
+// own handlers to split back out. Any other flag is returned unchanged.
+func BaseCommand(s string) string {
+	idx := strings.Index(s, "=")
+	if idx == -1 {
+		return s
+	}
+	base := s[:idx]
+	if !envShorthandCommands[base] {
+		return s
+	}
+	return base
+}
+
 // Def holds metadata for a single CLI command flag.
 // SessionLocked: blocks the command when a TUI session is active.
 // ConsoleSafe: the command can be run from the restricted console panel
@@ -187,33 +219,33 @@ var Registry = map[string]Def{
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.
 func IsConsoleSafe(flag string) bool {
-	return Registry[flag].ConsoleSafe
+	return Registry[BaseCommand(flag)].ConsoleSafe
 }
 
 // IsRequiresSudo reports whether a command flag needs a fresh sudo
 // re-verification when run from a remote System Console session -- see
 // Def's RequiresSudo doc comment.
 func IsRequiresSudo(flag string) bool {
-	return Registry[flag].RequiresSudo
+	return Registry[BaseCommand(flag)].RequiresSudo
 }
 
 // IsConsoleBlocked reports whether a command flag can never be run from
 // either console panel mode (restricted Console or System Console),
 // regardless of sudo verification -- see Def's ConsoleBlocked doc comment.
 func IsConsoleBlocked(flag string) bool {
-	return Registry[flag].ConsoleBlocked
+	return Registry[BaseCommand(flag)].ConsoleBlocked
 }
 
 // IsSessionLocked reports whether a command flag requires an inactive TUI session.
 func IsSessionLocked(flag string) bool {
-	return Registry[flag].SessionLocked
+	return Registry[BaseCommand(flag)].SessionLocked
 }
 
 // GroupsNeedConfigReload reports whether any group in groups has ConfigChanging set,
 // meaning the TUI should reload config/styles after execution.
 func GroupsNeedConfigReload(groups []CommandGroup) bool {
 	for _, g := range groups {
-		if Registry[g.Command].ConfigChanging {
+		if Registry[BaseCommand(g.Command)].ConfigChanging {
 			return true
 		}
 	}
@@ -224,7 +256,7 @@ func GroupsNeedConfigReload(groups []CommandGroup) bool {
 // meaning the TUI should refresh the app list after execution.
 func GroupsNeedAppsRefresh(groups []CommandGroup) bool {
 	for _, g := range groups {
-		if Registry[g.Command].AppsChanging {
+		if Registry[BaseCommand(g.Command)].AppsChanging {
 			return true
 		}
 	}
