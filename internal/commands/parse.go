@@ -389,6 +389,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"-p", "--prune",
 			"-R", "--reset",
 			"--start-all", "--stop-all", "--restart-all",
+			"--start-stopped", "--stop-started", "--restart-started",
 			"--uninstall",
 			"-e", "--env",
 			"--setcap", "--config-setcap", "--config-no-setcap",

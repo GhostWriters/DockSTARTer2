@@ -240,6 +240,14 @@ func GetUsage(target string, noHeading bool) string {
 			"	Start/stop/restart every container Docker knows about, not just "+version.ApplicationName+"-managed ones",
 		)
 	}
+	if match("--start-stopped", "--stop-started", "--restart-started") {
+		printStr(
+			"{{|UsageCommand|}}--start-stopped{{[-]}}",
+			"{{|UsageCommand|}}--stop-started{{[-]}}",
+			"{{|UsageCommand|}}--restart-started{{[-]}}",
+			"	Same as the -all variants, but only targets currently-stopped/-running containers",
+		)
+	}
 	if match("--logs") {
 		printStr(
 			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",

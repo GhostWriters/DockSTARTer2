@@ -50,6 +50,9 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.Bool("start-all", false, "Start every container Docker knows about")
 	fs.Bool("stop-all", false, "Stop every container Docker knows about")
 	fs.Bool("restart-all", false, "Restart every container Docker knows about")
+	fs.Bool("start-stopped", false, "Start every currently-stopped container")
+	fs.Bool("stop-started", false, "Stop every currently-running container")
+	fs.Bool("restart-started", false, "Restart every currently-running container")
 	fs.String("logs", "", "Show a container's logs by name (use -F to follow)")
 
 	// Installation / Update

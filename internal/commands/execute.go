@@ -281,6 +281,12 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleContainerStopAll(innerCtx, &group, &state)
 			case "--restart-all":
 				return HandleContainerRestartAll(innerCtx, &group, &state)
+			case "--start-stopped":
+				return HandleContainerStartStopped(innerCtx, &group, &state)
+			case "--stop-started":
+				return HandleContainerStopStarted(innerCtx, &group, &state)
+			case "--restart-started":
+				return HandleContainerRestartStarted(innerCtx, &group, &state)
 			case "--logs":
 				return HandleContainerLogs(innerCtx, &group, &state)
 			case "-R", "--reset":

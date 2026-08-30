@@ -88,11 +88,45 @@ func ContainerLogs(ctx context.Context, containerName string, follow bool) (io.R
 // ListAllContainerNames returns the names of every container Docker knows
 // about, regardless of state or which project (if any) created it.
 func ListAllContainerNames(ctx context.Context) ([]string, error) {
+	return listContainerNames(ctx, true)
+}
+
+// ListRunningContainerNames returns the names of every currently-running
+// ("started") container Docker knows about.
+func ListRunningContainerNames(ctx context.Context) ([]string, error) {
+	return listContainerNames(ctx, false)
+}
+
+// ListStoppedContainerNames returns the names of every container Docker
+// knows about that isn't currently running.
+func ListStoppedContainerNames(ctx context.Context) ([]string, error) {
+	all, err := ListAllContainerNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	running, err := ListRunningContainerNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	runningSet := make(map[string]bool, len(running))
+	for _, name := range running {
+		runningSet[name] = true
+	}
+	stopped := make([]string, 0, len(all)-len(running))
+	for _, name := range all {
+		if !runningSet[name] {
+			stopped = append(stopped, name)
+		}
+	}
+	return stopped, nil
+}
+
+func listContainerNames(ctx context.Context, all bool) ([]string, error) {
 	cli, err := GetClient()
 	if err != nil {
 		return nil, err
 	}
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	containers, err := cli.ContainerList(ctx, container.ListOptions{All: all})
 	if err != nil {
 		return nil, err
 	}
