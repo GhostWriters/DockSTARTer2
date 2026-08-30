@@ -69,10 +69,29 @@ func RestartContainer(ctx context.Context, containerName string) error {
 	return cli.ContainerRestart(ctx, containerName, container.StopOptions{})
 }
 
-// ContainerLogs returns the raw multiplexed log stream for a container by
-// name or ID. Follow keeps the stream open for new log lines as they're
-// written; the caller is responsible for closing the returned ReadCloser and
-// demultiplexing it (see github.com/docker/docker/pkg/stdcopy.StdCopy).
+// ContainerIsTTY reports whether a container was created with Config.Tty
+// set. Docker's log stream format depends on this: a TTY container's stream
+// is raw (no multiplexing headers), while a non-TTY container's stream
+// interleaves stdout/stderr with 8-byte framing headers -- callers of
+// ContainerLogs must inspect this before deciding whether to demultiplex
+// with stdcopy.StdCopy (TTY streams must be copied directly instead).
+func ContainerIsTTY(ctx context.Context, containerName string) (bool, error) {
+	cli, err := GetClient()
+	if err != nil {
+		return false, err
+	}
+	inspect, err := cli.ContainerInspect(ctx, containerName)
+	if err != nil {
+		return false, err
+	}
+	return inspect.Config != nil && inspect.Config.Tty, nil
+}
+
+// ContainerLogs returns the raw log stream for a container by name or ID.
+// Follow keeps the stream open for new log lines as they're written; the
+// caller is responsible for closing the returned ReadCloser. Whether the
+// stream needs demultiplexing (see github.com/docker/docker/pkg/stdcopy.StdCopy)
+// depends on the container's TTY setting -- see ContainerIsTTY.
 func ContainerLogs(ctx context.Context, containerName string, follow bool) (io.ReadCloser, error) {
 	cli, err := GetClient()
 	if err != nil {

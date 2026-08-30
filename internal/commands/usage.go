@@ -186,7 +186,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("-F", "--follow") {
 		printStr(
 			"{{|UsageCommand|}}-F --follow{{[-]}}",
-			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}})",
+			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}}) -- like other modifiers, must come before the command it modifies, e.g. {{|UsageCommand|}}-F --logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
 		)
 	}
 
@@ -251,7 +251,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("--logs") {
 		printStr(
 			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
-			"	Show container logs by name (raw '{{|UsageCommand|}}docker logs{{[-]}}', not compose-scoped). Use {{|UsageCommand|}}-F{{[-]}} to follow.",
+			"	Show container logs by name (raw '{{|UsageCommand|}}docker logs{{[-]}}', not compose-scoped). Use {{|UsageCommand|}}-F --logs{{[-]}} to follow.",
 		)
 	}
 

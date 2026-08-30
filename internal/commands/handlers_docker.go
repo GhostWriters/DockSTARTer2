@@ -163,12 +163,23 @@ func HandleContainerLogs(ctx context.Context, group *CommandGroup, state *CmdSta
 		defer console.SetInterruptScope(nil)
 	}
 
+	isTTY, err := docker.ContainerIsTTY(ctx, name)
+	if err != nil {
+		logger.Error(ctx, "Failed to inspect '{{|App|}}%s{{[-]}}': %v", name, err)
+		return err
+	}
+
 	rc, err := docker.ContainerLogs(logCtx, name, state.Follow)
 	if err != nil {
 		logger.Error(ctx, "Failed to get logs for '{{|App|}}%s{{[-]}}': %v", name, err)
 		return err
 	}
-	_, copyErr := stdcopy.StdCopy(stdout, stderr, rc)
+	var copyErr error
+	if isTTY {
+		_, copyErr = io.Copy(stdout, rc)
+	} else {
+		_, copyErr = stdcopy.StdCopy(stdout, stderr, rc)
+	}
 	_ = rc.Close()
 	// A canceled context (Ctrl+C stopping the follow) isn't a failure --
 	// nothing the command was doing actually failed, it just stopped

@@ -19,7 +19,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.BoolP("debug", "x", false, "Debug output")
 	fs.BoolP("yes", "y", false, "Assume yes")
 	fs.BoolP("help", "h", false, "Show help")
-	fs.BoolP("follow", "F", false, "Follow log output (used with --logs)")
+	fs.BoolP("follow", "F", false, "Follow log output (must come before --logs, e.g. -F --logs <container>)")
 
 	// App Management
 	fs.StringP("add", "a", "", "Add application(s)")
