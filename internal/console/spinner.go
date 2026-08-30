@@ -1,8 +1,9 @@
 package console
 
 import (
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"fmt"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -163,6 +164,32 @@ func ShowSpinnerFrame() {
 	fmt.Fprintf(os.Stderr, "\033[?25l\r%s", cliSpinnerStyle.Render(frames[activeSpinner.frame%len(frames)]))
 	activeSpinner.visible = true
 	activeSpinner.frame++
+}
+
+// spinnerSafeWriter wraps an io.Writer so each Write clears the spinner
+// frame first and redraws it after, the same clear/write/show sequence
+// Println already uses -- for callers that stream raw, line-unaware output
+// (e.g. a piped docker logs stream) directly to stdout/stderr alongside an
+// active spinner, where interleaved writes would otherwise garble the line.
+type spinnerSafeWriter struct {
+	w io.Writer
+}
+
+func (s spinnerSafeWriter) Write(p []byte) (int, error) {
+	LockTerminal()
+	ClearSpinnerLine()
+	n, err := s.w.Write(p)
+	ShowSpinnerFrame()
+	UnlockTerminal()
+	return n, err
+}
+
+// SpinnerSafeWriter returns an io.Writer wrapping w so its writes never
+// interleave with the CLI spinner's frame redraws. Safe to use even when no
+// spinner is currently active (ClearSpinnerLine/ShowSpinnerFrame are no-ops
+// in that case).
+func SpinnerSafeWriter(w io.Writer) io.Writer {
+	return spinnerSafeWriter{w: w}
 }
 
 // StartSpinner marks the spinner as active and starts the background tick.

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -48,7 +49,12 @@ func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *Cmd
 			if firstErr == nil {
 				firstErr = err
 			}
+			continue
 		}
+		// Echo the container name on success, matching real `docker
+		// restart`'s own output -- same tab-indented, tool-prefixed Notice
+		// convention used for git output in update_templates.go.
+		logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} %s", name)
 	}
 	return firstErr
 }
@@ -68,6 +74,11 @@ func HandleContainerLogs(ctx context.Context, group *CommandGroup, state *CmdSta
 		return err
 	}
 
+	stopSpinner := console.StartSpinner()
+	defer stopSpinner()
+	stdout := console.SpinnerSafeWriter(os.Stdout)
+	stderr := console.SpinnerSafeWriter(os.Stderr)
+
 	var firstErr error
 	for _, name := range names {
 		followFlag := ""
@@ -76,17 +87,37 @@ func HandleContainerLogs(ctx context.Context, group *CommandGroup, state *CmdSta
 		}
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}docker logs %s%s{{[-]}}", followFlag, name)
 
-		rc, err := docker.ContainerLogs(ctx, name, state.Follow)
+		logCtx := ctx
+		if state.Follow {
+			// Scope Ctrl+C to just this stream -- canceling logCtx breaks
+			// the ContainerLogs read, and HandleScopedInterrupt (called from
+			// main's SIGINT handler) intercepts the signal before it hits
+			// the default "abort the whole process" behavior.
+			var cancel context.CancelFunc
+			logCtx, cancel = context.WithCancel(ctx)
+			console.SetInterruptScope(cancel)
+		}
+
+		rc, err := docker.ContainerLogs(logCtx, name, state.Follow)
 		if err != nil {
+			if state.Follow {
+				console.SetInterruptScope(nil)
+			}
 			logger.Error(ctx, "Failed to get logs for '{{|App|}}%s{{[-]}}': %v", name, err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
-		_, copyErr := stdcopy.StdCopy(os.Stdout, os.Stderr, rc)
+		_, copyErr := stdcopy.StdCopy(stdout, stderr, rc)
 		_ = rc.Close()
-		if copyErr != nil && firstErr == nil {
+		if state.Follow {
+			console.SetInterruptScope(nil)
+		}
+		// A canceled context (Ctrl+C stopping the follow) isn't a failure --
+		// nothing the command was doing actually failed, it just stopped
+		// watching.
+		if copyErr != nil && !errors.Is(copyErr, context.Canceled) && firstErr == nil {
 			firstErr = copyErr
 		}
 	}

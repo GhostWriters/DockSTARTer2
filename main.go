@@ -210,6 +210,9 @@ func run() (exitCode int) {
 				return
 			}
 			if sig == os.Interrupt {
+				if console.HandleScopedInterrupt() {
+					continue
+				}
 				interruptCount++
 				if interruptCount > 1 {
 					console.RestoreCursor()
