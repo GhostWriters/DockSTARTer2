@@ -357,6 +357,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 			title = "{{|TitleSuccess|}}" + title + "{{[-]}}"
 			subtitle := ""
+			runCtx := ctx
 			switch group.Command {
 			case "-c", "--compose":
 				subtitle = commands.ComposeSubtitle(&group)
@@ -366,8 +367,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				subtitle = fmt.Sprintf("Updating %s.", version.ApplicationName)
 			case "--update-templates":
 				subtitle = "Updating app templates."
+			case "--logs":
+				if state.Follow {
+					runCtx = console.WithFollowMode(ctx)
+				}
 			}
-			err := tui.RunCommand(ctx, title, subtitle, cmdLine, task)
+			err := tui.RunCommand(runCtx, title, subtitle, cmdLine, task)
 			if err != nil {
 				exitCode = 1
 				if errors.Is(err, console.ErrUserAborted) {

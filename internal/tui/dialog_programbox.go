@@ -343,11 +343,10 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 		m.task = nil // Prevent double-start
 
 		m.sv.CommandRunning = true
-		followMode := console.IsFollowMode(m.ctx)
-		if followMode {
-			// A follow-mode task never returns on its own -- show OK
-			// immediately instead of waiting for outputDoneMsg, so the
-			// dialog isn't stuck with no way to close it.
+		// A follow-mode task never returns on its own -- show OK immediately
+		// instead of waiting for outputDoneMsg, so the dialog isn't stuck
+		// with no way to close it.
+		if console.IsFollowMode(m.ctx) {
 			m.outer.SetButtons(m.okButtons())
 		}
 		taskCtx, cancel := context.WithCancel(m.ctx)
