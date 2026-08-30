@@ -124,6 +124,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-y", "--yes":
 				state.Yes = true
 				console.GlobalYes = true
+			case "-F", "--follow":
+				state.Follow = true
 			}
 		}
 
@@ -262,6 +264,36 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "-p", "--prune":
 				ranCommand = true
 				return commands.HandlePrune(subCtx, &state)
+			case "--start":
+				ranCommand = true
+				return commands.HandleContainerStart(subCtx, &group, &state)
+			case "--stop":
+				ranCommand = true
+				return commands.HandleContainerStop(subCtx, &group, &state)
+			case "--restart":
+				ranCommand = true
+				return commands.HandleContainerRestart(subCtx, &group, &state)
+			case "--start-all":
+				ranCommand = true
+				return commands.HandleContainerStartAll(subCtx, &group, &state)
+			case "--stop-all":
+				ranCommand = true
+				return commands.HandleContainerStopAll(subCtx, &group, &state)
+			case "--restart-all":
+				ranCommand = true
+				return commands.HandleContainerRestartAll(subCtx, &group, &state)
+			case "--start-stopped":
+				ranCommand = true
+				return commands.HandleContainerStartStopped(subCtx, &group, &state)
+			case "--stop-started":
+				ranCommand = true
+				return commands.HandleContainerStopStarted(subCtx, &group, &state)
+			case "--restart-started":
+				ranCommand = true
+				return commands.HandleContainerRestartStarted(subCtx, &group, &state)
+			case "--logs":
+				ranCommand = true
+				return commands.HandleContainerLogs(subCtx, &group, &state)
 			case "-R", "--reset":
 				ranCommand = true
 				return commands.HandleReset(subCtx)
@@ -325,6 +357,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			}
 			title = "{{|TitleSuccess|}}" + title + "{{[-]}}"
 			subtitle := ""
+			runCtx := ctx
 			switch group.Command {
 			case "-c", "--compose":
 				subtitle = commands.ComposeSubtitle(&group)
@@ -334,8 +367,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				subtitle = fmt.Sprintf("Updating %s.", version.ApplicationName)
 			case "--update-templates":
 				subtitle = "Updating app templates."
+			case "--logs":
+				if state.Follow {
+					runCtx = console.WithFollowMode(ctx)
+				}
 			}
-			err := tui.RunCommand(ctx, title, subtitle, cmdLine, task)
+			err := tui.RunCommand(runCtx, title, subtitle, cmdLine, task)
 			if err != nil {
 				exitCode = 1
 				if errors.Is(err, console.ErrUserAborted) {

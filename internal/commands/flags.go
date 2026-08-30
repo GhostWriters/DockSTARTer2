@@ -19,6 +19,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.BoolP("debug", "x", false, "Debug output")
 	fs.BoolP("yes", "y", false, "Assume yes")
 	fs.BoolP("help", "h", false, "Show help")
+	fs.BoolP("follow", "F", false, "Follow log output (must come before --logs, e.g. -F --logs <container>)")
 
 	// App Management
 	fs.StringP("add", "a", "", "Add application(s)")
@@ -41,6 +42,18 @@ func NewFlagSet() *pflag.FlagSet {
 	// Docker Compose
 	fs.StringP("compose", "c", "", "Docker Compose operations (up, down, pull, etc.)")
 	fs.StringP("prune", "p", "", "Prune docker resources")
+
+	// Docker (raw container operations, not compose-scoped)
+	fs.String("start", "", "Start container(s) by name")
+	fs.String("stop", "", "Stop container(s) by name")
+	fs.String("restart", "", "Restart container(s) by name")
+	fs.Bool("start-all", false, "Start every container Docker knows about")
+	fs.Bool("stop-all", false, "Stop every container Docker knows about")
+	fs.Bool("restart-all", false, "Restart every container Docker knows about")
+	fs.Bool("start-stopped", false, "Start every currently-stopped container")
+	fs.Bool("stop-started", false, "Stop every currently-running container")
+	fs.Bool("restart-started", false, "Restart every currently-running container")
+	fs.String("logs", "", "Show a container's logs by name (use -F to follow)")
 
 	// Installation / Update
 	fs.BoolP("install", "i", false, "Install/update dependencies")

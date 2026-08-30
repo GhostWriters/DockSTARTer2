@@ -183,6 +183,12 @@ func GetUsage(target string, noHeading bool) string {
 			"	Assume Yes for all prompts",
 		)
 	}
+	if match("-F", "--follow") {
+		printStr(
+			"{{|UsageCommand|}}-F --follow{{[-]}}",
+			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}}) -- like other modifiers, must come before the command it modifies, e.g. {{|UsageCommand|}}-F --logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
+		)
+	}
 
 	if showAll && !noHeading {
 		printStr(
@@ -206,6 +212,46 @@ func GetUsage(target string, noHeading bool) string {
 			"	The '{{|UsageOption|}}update{{[-]}}' command is the same as a '{{|UsageOption|}}pull{{[-]}}' followed by an '{{|UsageOption|}}up{{[-]}}'",
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
 			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
+		)
+	}
+	if match("--start") {
+		printStr(
+			"{{|UsageCommand|}}--start{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Start container(s) by name (raw '{{|UsageCommand|}}docker start{{[-]}}', not compose-scoped)",
+		)
+	}
+	if match("--stop") {
+		printStr(
+			"{{|UsageCommand|}}--stop{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Stop container(s) by name (raw '{{|UsageCommand|}}docker stop{{[-]}}', not compose-scoped)",
+		)
+	}
+	if match("--restart") {
+		printStr(
+			"{{|UsageCommand|}}--restart{{[-]}} {{|UsageApp|}}<container>{{[-]}} [{{|UsageApp|}}<container>{{[-]}} ...]{{[-]}}",
+			"	Restart container(s) by name (raw '{{|UsageCommand|}}docker restart{{[-]}}', not compose-scoped)",
+		)
+	}
+	if match("--start-all", "--stop-all", "--restart-all") {
+		printStr(
+			"{{|UsageCommand|}}--start-all{{[-]}}",
+			"{{|UsageCommand|}}--stop-all{{[-]}}",
+			"{{|UsageCommand|}}--restart-all{{[-]}}",
+			"	Start/stop/restart every container Docker knows about, not just "+version.ApplicationName+"-managed ones",
+		)
+	}
+	if match("--start-stopped", "--stop-started", "--restart-started") {
+		printStr(
+			"{{|UsageCommand|}}--start-stopped{{[-]}}",
+			"{{|UsageCommand|}}--stop-started{{[-]}}",
+			"{{|UsageCommand|}}--restart-started{{[-]}}",
+			"	Same as the -all variants, but only targets currently-stopped/-running containers",
+		)
+	}
+	if match("--logs") {
+		printStr(
+			"{{|UsageCommand|}}--logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
+			"	Show container logs by name (raw '{{|UsageCommand|}}docker logs{{[-]}}', not compose-scoped). Use {{|UsageCommand|}}-F --logs{{[-]}} to follow.",
 		)
 	}
 

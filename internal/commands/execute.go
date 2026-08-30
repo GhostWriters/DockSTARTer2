@@ -22,6 +22,7 @@ type CmdState struct {
 	Yes     bool
 	Verbose bool
 	Debug   bool
+	Follow  bool
 }
 
 // UIProvider defines an interface for commands to request UI interactions.
@@ -133,6 +134,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			case "-g", "--gui":
 				state.GUI = true
 				console.GlobalGUI = true
+			case "-F", "--follow":
+				state.Follow = true
 			}
 		}
 
@@ -266,6 +269,26 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleCompose(innerCtx, &group, &state)
 			case "-p", "--prune":
 				return HandlePrune(innerCtx, &state)
+			case "--start":
+				return HandleContainerStart(innerCtx, &group, &state)
+			case "--stop":
+				return HandleContainerStop(innerCtx, &group, &state)
+			case "--restart":
+				return HandleContainerRestart(innerCtx, &group, &state)
+			case "--start-all":
+				return HandleContainerStartAll(innerCtx, &group, &state)
+			case "--stop-all":
+				return HandleContainerStopAll(innerCtx, &group, &state)
+			case "--restart-all":
+				return HandleContainerRestartAll(innerCtx, &group, &state)
+			case "--start-stopped":
+				return HandleContainerStartStopped(innerCtx, &group, &state)
+			case "--stop-started":
+				return HandleContainerStopStarted(innerCtx, &group, &state)
+			case "--restart-started":
+				return HandleContainerRestartStarted(innerCtx, &group, &state)
+			case "--logs":
+				return HandleContainerLogs(innerCtx, &group, &state)
 			case "-R", "--reset":
 				return HandleReset(innerCtx)
 			case "--theme-table":
@@ -284,11 +307,18 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		if state.GUI && GlobalUIProvider != nil && group.Command != "" && group.Command != "-h" && group.Command != "--help" {
 			// Wrap in Program Box
 			subtitle := ""
+			runCtx := ctx
 			switch group.Command {
 			case "-c", "--compose":
 				subtitle = ComposeSubtitle(&group)
+			case "--logs":
+				if state.Follow {
+					// See console.IsFollowMode: ProgramBoxModel shows its OK
+					// button immediately and cancels the task on early close.
+					runCtx = console.WithFollowMode(ctx)
+				}
 			}
-			err = GlobalUIProvider.RunCommand(ctx, "Console Command", subtitle, "{{[-]}} {{|CommandLine|}}"+cmdStr+"{{[-]}}", runWithUI)
+			err = GlobalUIProvider.RunCommand(runCtx, "Console Command", subtitle, "{{[-]}} {{|CommandLine|}}"+cmdStr+"{{[-]}}", runWithUI)
 		} else {
 			err = runWithUI(ctx)
 		}

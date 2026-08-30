@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/streamvp"
 
@@ -57,6 +58,11 @@ type ProgramBoxModel struct {
 	task       func(context.Context, io.Writer) error
 	focused    bool
 	ctx        context.Context
+
+	// taskCancel cancels the context passed to task -- always derived in
+	// Init so OK/Esc can stop a follow-mode task early (see console.IsFollowMode);
+	// harmless to call again after the task has already finished normally.
+	taskCancel context.CancelFunc
 
 	// sendFunc, if set, delivers a tea.Msg to the owning session's own
 	// Program (see AppModel.Send) instead of the process-wide global program
@@ -177,6 +183,12 @@ func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
 func (m *ProgramBoxModel) okButtons() []displayengine.ButtonDef {
 	return []displayengine.ButtonDef{
 		{Label: "OK", ZoneID: "btn-select", Action: func() tea.Msg {
+			// No-op if the task already finished on its own -- cancelling an
+			// already-passed context is harmless, and this is the only way
+			// a still-running follow-mode task gets stopped when closed early.
+			if m.taskCancel != nil {
+				m.taskCancel()
+			}
 			result := tea.Msg(true)
 			if m.err == nil && m.SuccessMsg != nil {
 				result = m.SuccessMsg
@@ -331,6 +343,13 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 		m.task = nil // Prevent double-start
 
 		m.sv.CommandRunning = true
+		// A follow-mode task (console.IsFollowMode) never returns on its own,
+		// so its OK button is available from the start.
+		if console.IsFollowMode(m.ctx) {
+			m.outer.SetButtons(m.okButtons())
+		}
+		taskCtx, cancel := context.WithCancel(m.ctx)
+		m.taskCancel = cancel
 		lockID := fmt.Sprintf("programbox-%p", m)
 		return tea.Batch(
 			func() tea.Msg { return displayengine.ConsoleLockMsg{ID: lockID, Locked: true} },
@@ -354,9 +373,8 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 				// Run the task in a goroutine
 				go func() {
 					defer writer.Close()
-					ctx := m.ctx
 					// task is already wrapped with WithTUIWriter if coming from RunCommand
-					errChan <- task(ctx, writer)
+					errChan <- task(taskCtx, writer)
 				}()
 
 				go func() {
