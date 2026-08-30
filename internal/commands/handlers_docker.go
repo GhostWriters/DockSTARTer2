@@ -40,7 +40,7 @@ func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *Cmd
 		return nil
 	}
 
-	logger.Notice(ctx, "Restarting container: %s.", namesJoined)
+	logger.Notice(ctx, "Restarting container: {{|App|}}%s{{[-]}}.", namesJoined)
 	var firstErr error
 	for _, name := range names {
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}docker restart %s{{[-]}}", name)
@@ -54,7 +54,7 @@ func HandleContainerRestart(ctx context.Context, group *CommandGroup, state *Cmd
 		// Echo the container name on success, matching real `docker
 		// restart`'s own output -- same tab-indented, tool-prefixed Notice
 		// convention used for git output in update_templates.go.
-		logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} %s", name)
+		logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} {{|App|}}%s{{[-]}}", name)
 	}
 	return firstErr
 }
