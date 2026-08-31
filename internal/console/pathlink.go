@@ -142,10 +142,21 @@ func formatPathTag(tag, name, path string, isFolder bool) string {
 	if path == "" || blocksHyperlink() {
 		return "{{|" + tag + "|}}" + name + "{{[-]}}"
 	}
+	isDefaultLabel := name == path
 	if isFolder {
 		path = ensureTrailingSlash(path)
 	}
-	return "{{|" + tag + "::::" + strutil.FileURL(path) + "|}}" + name + "{{[-]}}"
+	url := strutil.FileURL(path)
+	// ":::N:" (empty fg/bg, "N" flag) marks the tag as location-only for semstyle's
+	// hyperlink_mode=auto -- only when name is just path displayed verbatim (the
+	// FormatFile/FormatFolder default), not a genuinely different caller-supplied label
+	// (FormatFileName/FormatFolderName): a distinct label doesn't reveal the destination
+	// the way the bare path does, so auto still has something worth adding there. See
+	// locationOnlyFlag.
+	if isDefaultLabel {
+		return "{{|" + tag + ":::N:" + url + "|}}" + name + "{{[-]}}"
+	}
+	return "{{|" + tag + "::::" + url + "|}}" + name + "{{[-]}}"
 }
 
 // FormatUserFolderPath returns raw semstyle markup for fullPath expressed
@@ -185,7 +196,7 @@ func formatUserPathSegments(baseDir, fullPath string, lastIsFile bool) string {
 	if blocked {
 		b.WriteString("{{|Folder|}}user{{[-]}}")
 	} else {
-		b.WriteString("{{|Folder::::" + strutil.FileURL(ensureTrailingSlash(baseDir)) + "|}}user{{[-]}}")
+		b.WriteString("{{|Folder:::N:" + strutil.FileURL(ensureTrailingSlash(baseDir)) + "|}}user{{[-]}}")
 	}
 	// The ":" is styled to match but never wrapped in the hyperlink -- same
 	// convention as the "/" separators below, only the segment itself
@@ -221,7 +232,7 @@ func formatUserPathSegments(baseDir, fullPath string, lastIsFile bool) string {
 			if tag == "Folder" {
 				cumulative = ensureTrailingSlash(cumulative)
 			}
-			b.WriteString("{{|" + tag + "::::" + strutil.FileURL(cumulative) + "|}}" + seg + "{{[-]}}")
+			b.WriteString("{{|" + tag + ":::N:" + strutil.FileURL(cumulative) + "|}}" + seg + "{{[-]}}")
 		}
 	}
 	return b.String()
@@ -278,7 +289,7 @@ func formatPathSegments(path string, lastIsFile bool) string {
 			if tag == "Folder" {
 				cumulative = ensureTrailingSlash(cumulative)
 			}
-			b.WriteString("{{|" + tag + "::::" + strutil.FileURL(cumulative) + "|}}" + seg + "{{[-]}}")
+			b.WriteString("{{|" + tag + ":::N:" + strutil.FileURL(cumulative) + "|}}" + seg + "{{[-]}}")
 		}
 	}
 	return b.String()

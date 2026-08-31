@@ -1101,11 +1101,12 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		data = append(data, displayNames[key])
 
 		switch {
-		case useFolderColor:
-			data = append(data, console.FormatFolderPath(value))
 		case key == "Theme":
 			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", value))
 		default:
+			// Not hyperlinked even when useFolderColor -- this raw "value" column can hold
+			// an unexpanded placeholder like "${XDG_CONFIG_HOME}", which isn't a real path
+			// to link to. The resolved path (safe to hyperlink) is the expandedValue column.
 			data = append(data, value)
 		}
 
