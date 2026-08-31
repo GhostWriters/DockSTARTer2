@@ -144,6 +144,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.Bool("theme-no-show-preview", false, "Hide the Appearance Settings preview panel by default")
 	fs.String("theme-tab-layout", "", "Set tab layout for the vars editor (maximized/sidebyside/stacked)")
 	fs.String("theme-markdown-hyperlinks", "", "Set markdown hyperlink rendering (off/inline/auto)")
+	fs.String("theme-hyperlinks", "", "Set DS2's own console/path hyperlink rendering (off/inline/auto)")
 	fs.String("theme-extract", "", "Extract a theme to a directory for customization")
 	fs.Bool("theme-extract-all", false, "Extract all embedded themes to a directory")
 	fs.String("app-template-extract", "", "Extract a bundled app template to a directory for customization")

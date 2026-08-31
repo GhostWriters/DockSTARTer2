@@ -26,6 +26,7 @@ line_number_brackets = true        # wrap the focused line's number in [brackets
 tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
 show_preview         = true        # default visibility of the Appearance Settings preview panel
 markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
+hyperlinks           = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"

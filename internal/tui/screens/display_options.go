@@ -351,6 +351,14 @@ func (s *DisplayOptionsScreen) initMenus() {
 				func() string { return s.config.UI.MarkdownHyperlinks },
 				func(cfg *config.AppConfig, v string) { cfg.UI.MarkdownHyperlinks = v }),
 		},
+		{
+			Tag:  "Hyperlinks",
+			Desc: s.dropdownDesc(hyperlinksDesc(s.config.UI.Hyperlinks)),
+			Help: "OSC8 hyperlink rendering for DS2's own console/path/link tags (Enter for options)",
+			Action: s.showMarkdownHyperlinksDropdown("hyperlinks", "Hyperlinks",
+				func() string { return s.config.UI.Hyperlinks },
+				func(cfg *config.AppConfig, v string) { cfg.UI.Hyperlinks = v }),
+		},
 
 		// -- Brackets --
 		{
@@ -715,6 +723,13 @@ func markdownHyperlinksDesc(v string) string {
 	default:
 		return "Inline"
 	}
+}
+
+// hyperlinksDesc mirrors markdownHyperlinksDesc's shape for ui.hyperlinks --
+// same fixed off/inline/auto set, separate function since the two settings
+// are independent config fields.
+func hyperlinksDesc(v string) string {
+	return markdownHyperlinksDesc(v)
 }
 
 func (s *DisplayOptionsScreen) panelModeToDesc(v string) string {

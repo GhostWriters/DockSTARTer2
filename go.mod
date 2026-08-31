@@ -2,6 +2,10 @@ module DockSTARTer2
 
 go 1.27.0
 
+// Temporary: point at the local semstyle checkout's feat/hyperlink-mode branch until
+// it merges upstream and DS2 bumps to a released tag.
+replace github.com/GhostWriters/semstyle => ../semstyle
+
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.0.9

@@ -332,6 +332,7 @@ var optionTagToUIField = map[string]string{
 	"Tab Layout":           "TabLayout",
 	"Show Preview":         "ShowPreview",
 	"Markdown Hyperlinks":  "MarkdownHyperlinks",
+	"Hyperlinks":           "Hyperlinks",
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
@@ -361,6 +362,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout))
 		case "Markdown Hyperlinks":
 			items[i].Desc = s.dropdownDesc(markdownHyperlinksDesc(s.config.UI.MarkdownHyperlinks))
+		case "Hyperlinks":
+			items[i].Desc = s.dropdownDesc(hyperlinksDesc(s.config.UI.Hyperlinks))
 		case "Shadow Level":
 			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
 		case "Border Color":

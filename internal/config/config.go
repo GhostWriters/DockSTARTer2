@@ -148,6 +148,7 @@ type UIConfig struct {
 	TabLayout          string `toml:"tab_layout"`           // "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
 	ShowPreview        bool   `toml:"show_preview"`         // default visibility of the Appearance Settings preview panel
 	MarkdownHyperlinks string `toml:"markdown_hyperlinks"`  // "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
+	Hyperlinks         string `toml:"hyperlinks"`           // "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags (semstyle.HyperlinkModeFunc)
 }
 
 // PathConfig holds directory path settings.
@@ -339,6 +340,12 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 		warn("markdown_hyperlinks", ui.MarkdownHyperlinks, def.UI.MarkdownHyperlinks)
 		ui.MarkdownHyperlinks = def.UI.MarkdownHyperlinks
 	}
+	switch ui.Hyperlinks {
+	case "off", "inline", "auto":
+	default:
+		warn("hyperlinks", ui.Hyperlinks, def.UI.Hyperlinks)
+		ui.Hyperlinks = def.UI.Hyperlinks
+	}
 	switch ui.CheckboxBrackets {
 	case "never", "selected", "always":
 	default:
@@ -440,6 +447,23 @@ func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Prin
 	}
 	logger.Warn(ctx, "Skipping legacy compose folder; using the new default location:\n   '"+console.FormatFolderPath(defaultPath)+"'")
 	return true
+}
+
+func init() {
+	// Wires DS2's ui.hyperlinks config into semstyle's rendering engine, mirroring how
+	// internal/console/profile.go wires RenderPolicy. Set once: the closure reads
+	// LoadAppConfig() fresh on every call, so it stays correct across config reloads
+	// without needing to be re-assigned anywhere config changes (e.g. ConfigChangedMsg).
+	semstyle.HyperlinkModeFunc = func() semstyle.HyperlinkMode {
+		switch LoadAppConfig().UI.Hyperlinks {
+		case "off":
+			return semstyle.HyperlinkModeOff
+		case "auto":
+			return semstyle.HyperlinkModeAuto
+		default:
+			return semstyle.HyperlinkModeInline
+		}
+	}
 }
 
 func LoadAppConfig() AppConfig {
@@ -948,7 +972,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview", "MarkdownHyperlinks",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview", "MarkdownHyperlinks", "Hyperlinks",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -977,6 +1001,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"TabLayout":          "Tab Layout",
 		"ShowPreview":        "Show Preview",
 		"MarkdownHyperlinks": "Markdown Hyperlinks",
+		"Hyperlinks":         "Hyperlinks",
 		"SSHPort":            "SSH Port",
 		"WebPort":            "Web Port",
 		"AuthMode":           "Auth Mode",
@@ -1055,6 +1080,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = boolToYesNo(conf.UI.ShowPreview)
 		case "MarkdownHyperlinks":
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.MarkdownHyperlinks)
+		case "Hyperlinks":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.Hyperlinks)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)
