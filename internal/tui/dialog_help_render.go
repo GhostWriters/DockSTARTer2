@@ -2,9 +2,9 @@ package tui
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -30,15 +30,20 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	}
 
 	source := m.contextInfo.DocMarkdown
+	mode := config.LoadAppConfig().UI.MarkdownHyperlinks
 
-	// Pre-process: convert Shields.io images to links to ensure visibility/clickability
-	reBadge := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]*shields\.io[^)]*)\)`)
-	source = reBadge.ReplaceAllString(source, `[$1]($2)`)
+	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
+	// Auto (link text + visible URL) and strips the resulting OSC8 escapes
+	// afterward, leaving plain readable text with no embedded hyperlink.
+	hyperlinkMode := glamouransi.HyperlinkModeInline
+	if mode == "off" || mode == "auto" {
+		hyperlinkMode = glamouransi.HyperlinkModeAuto
+	}
 
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStandardStyle(glamourstyles.DarkStyle),
 		glamour.WithWordWrap(width),
-		glamour.WithHyperlinkMode(glamouransi.HyperlinkModeInline),
+		glamour.WithHyperlinkMode(hyperlinkMode),
 	)
 	if err != nil {
 		m.renderedMarkdown = m.contextInfo.DocMarkdown
@@ -51,6 +56,9 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 		m.renderedMarkdown = m.contextInfo.DocMarkdown
 		m.renderedMarkdownWidth = width
 		return m.renderedMarkdown
+	}
+	if mode == "off" {
+		out = displayengine.StripHyperlinks(out)
 	}
 
 	m.renderedMarkdown = strings.TrimRight(out, "\n")

@@ -331,6 +331,7 @@ var optionTagToUIField = map[string]string{
 	"Radio Brackets":       "RadioBrackets",
 	"Tab Layout":           "TabLayout",
 	"Show Preview":         "ShowPreview",
+	"Markdown Hyperlinks":  "MarkdownHyperlinks",
 }
 
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
@@ -358,6 +359,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.UI.ShowPreview
 		case "Tab Layout":
 			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout))
+		case "Markdown Hyperlinks":
+			items[i].Desc = s.dropdownDesc(markdownHyperlinksDesc(s.config.UI.MarkdownHyperlinks))
 		case "Shadow Level":
 			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
 		case "Border Color":

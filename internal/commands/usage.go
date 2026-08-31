@@ -502,7 +502,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 		"--theme-checkbox-brackets", "--theme-radio-brackets",
 		"--theme-menu-brackets", "--theme-no-menu-brackets",
-		"--theme-tab-layout", "--theme-show-preview", "--theme-no-show-preview",
+		"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
 		"--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}]",
@@ -547,6 +547,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Turn brackets around the focused menu item's tag on or off",
 			"{{|UsageCommand|}}--theme-tab-layout{{[-]}} {{|UsageOption|}}<layout>{{[-]}}",
 			"	Set the vars editor's tab layout when 2 tabs are open ({{|UsageOption|}}maximized{{[-]}}, {{|UsageOption|}}sidebyside{{[-]}}, or {{|UsageOption|}}stacked{{[-]}})",
+			"{{|UsageCommand|}}--theme-markdown-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"	Set markdown hyperlink rendering ({{|UsageOption|}}off{{[-]}}, {{|UsageOption|}}inline{{[-]}}, or {{|UsageOption|}}auto{{[-]}})",
 			"{{|UsageCommand|}}--theme-show-preview{{[-]}} | {{|UsageCommand|}}--theme-no-show-preview{{[-]}}",
 			"	Show or hide the Appearance Settings preview panel by default",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",

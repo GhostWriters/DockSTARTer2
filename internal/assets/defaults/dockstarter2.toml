@@ -25,6 +25,7 @@ menu_brackets        = true        # wrap the focused menu item's tag in [bracke
 line_number_brackets = true        # wrap the focused line's number in [brackets] in the env editor
 tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
 show_preview         = true        # default visibility of the Appearance Settings preview panel
+markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"

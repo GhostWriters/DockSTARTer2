@@ -343,6 +343,14 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Selectable:  true,
 			SpaceAction: s.toggleShowPreview(),
 		},
+		{
+			Tag:  "Markdown Hyperlinks",
+			Desc: s.dropdownDesc(markdownHyperlinksDesc(s.config.UI.MarkdownHyperlinks)),
+			Help: "OSC8 hyperlink rendering for markdown, e.g. the help dialog doc page and --man (Enter for options)",
+			Action: s.showMarkdownHyperlinksDropdown("markdown_hyperlinks", "Markdown Hyperlinks",
+				func() string { return s.config.UI.MarkdownHyperlinks },
+				func(cfg *config.AppConfig, v string) { cfg.UI.MarkdownHyperlinks = v }),
+		},
 
 		// -- Brackets --
 		{
@@ -698,6 +706,17 @@ func tabLayoutDesc(v string) string {
 	}
 }
 
+func markdownHyperlinksDesc(v string) string {
+	switch strings.ToLower(v) {
+	case "off":
+		return "Off"
+	case "auto":
+		return "Auto"
+	default:
+		return "Inline"
+	}
+}
+
 func (s *DisplayOptionsScreen) panelModeToDesc(v string) string {
 	switch strings.ToLower(v) {
 	case "none":
@@ -783,6 +802,35 @@ func (s *DisplayOptionsScreen) showBracketModeDropdown(menuName, label string, g
 		case "never":
 			menu.Select(0)
 		case "always":
+			menu.Select(2)
+		default:
+			menu.Select(1)
+		}
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
+}
+
+// showMarkdownHyperlinksDropdown mirrors showBracketModeDropdown's shape for
+// ui.markdown_hyperlinks's 3 fixed options.
+func (s *DisplayOptionsScreen) showMarkdownHyperlinksDropdown(menuName, label string, getter func() string, apply func(*config.AppConfig, string)) tea.Cmd {
+	return func() tea.Msg {
+		current := strings.ToLower(getter())
+		items := []displayengine.MenuItem{
+			{Tag: "Off", Desc: "Plain text, no hyperlinks", Help: "Plain text, no hyperlinks", IsRadioButton: true, Selectable: true, Checked: current == "off"},
+			{Tag: "Inline", Desc: "Underlined clickable text, URL hidden", Help: "Underlined clickable text, URL hidden", IsRadioButton: true, Selectable: true, Checked: current != "off" && current != "auto"},
+			{Tag: "Auto", Desc: "Clickable text plus visible URL", Help: "Clickable text plus visible URL", IsRadioButton: true, Selectable: true, Checked: current == "auto"},
+		}
+		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "off"), s.titleAlignAction(apply, "inline"), s.titleAlignAction(apply, "auto")}
+		menu := displayengine.NewMenuModel(menuName, label, "Select mode", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked mode."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
+		switch current {
+		case "off":
+			menu.Select(0)
+		case "auto":
 			menu.Select(2)
 		default:
 			menu.Select(1)
