@@ -125,7 +125,7 @@ func HandleList(ctx context.Context, group *CommandGroup) error {
 			disabled := ""
 			if appenv.IsAppAdded(ctx, app, envFile) {
 				added = "*ADDED*"
-				if !appenv.IsAppEnabled(app, envFile) {
+				if appenv.IsAppDisabled(ctx, app, envFile) {
 					disabled = "(Disabled)"
 				}
 			}
