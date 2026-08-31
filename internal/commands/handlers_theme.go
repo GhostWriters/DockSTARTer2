@@ -142,6 +142,15 @@ func parseTabLayout(ctx context.Context, arg string) (string, error) {
 	return "", fmt.Errorf("invalid tab layout")
 }
 
+func parseMarkdownHyperlinks(ctx context.Context, arg string) (string, error) {
+	switch strings.ToLower(arg) {
+	case "off", "inline", "auto":
+		return strings.ToLower(arg), nil
+	}
+	logger.Error(ctx, "Invalid markdown hyperlinks mode: %s (use off, inline, or auto)", arg)
+	return "", fmt.Errorf("invalid markdown hyperlinks mode")
+}
+
 func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	switch group.Command {
@@ -335,6 +344,17 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			logger.Display(ctx, "Current tab layout: %s", conf.UI.TabLayout)
 			return nil
 		}
+	case "--theme-markdown-hyperlinks":
+		if len(group.Args) > 0 {
+			v, err := parseMarkdownHyperlinks(ctx, group.Args[0])
+			if err != nil {
+				return err
+			}
+			conf.UI.MarkdownHyperlinks = v
+		} else {
+			logger.Display(ctx, "Current markdown hyperlinks mode: %s", conf.UI.MarkdownHyperlinks)
+			return nil
+		}
 	}
 
 	if err := config.SaveAppConfig(conf); err != nil {
@@ -369,6 +389,9 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	}
 	if group.Command == "--theme-tab-layout" && len(group.Args) > 0 {
 		logger.Notice(ctx, "Tab layout set to: {{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
+	}
+	if group.Command == "--theme-markdown-hyperlinks" && len(group.Args) > 0 {
+		logger.Notice(ctx, "Markdown hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.UI.MarkdownHyperlinks)
 	}
 	if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
 		var percent int

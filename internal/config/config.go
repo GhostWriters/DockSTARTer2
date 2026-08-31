@@ -147,6 +147,7 @@ type UIConfig struct {
 	LineNumberBrackets bool   `toml:"line_number_brackets"` // wrap the focused line's number in [brackets] in the env editor
 	TabLayout          string `toml:"tab_layout"`           // "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
 	ShowPreview        bool   `toml:"show_preview"`         // default visibility of the Appearance Settings preview panel
+	MarkdownHyperlinks string `toml:"markdown_hyperlinks"`  // "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
 }
 
 // PathConfig holds directory path settings.
@@ -331,6 +332,12 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	default:
 		warn("tab_layout", ui.TabLayout, def.UI.TabLayout)
 		ui.TabLayout = def.UI.TabLayout
+	}
+	switch ui.MarkdownHyperlinks {
+	case "off", "inline", "auto":
+	default:
+		warn("markdown_hyperlinks", ui.MarkdownHyperlinks, def.UI.MarkdownHyperlinks)
+		ui.MarkdownHyperlinks = def.UI.MarkdownHyperlinks
 	}
 	switch ui.CheckboxBrackets {
 	case "never", "selected", "always":
@@ -941,7 +948,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"ConfigFolder", "ComposeFolder",
 		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
 		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview",
+		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview", "MarkdownHyperlinks",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
@@ -969,6 +976,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		"LineNumberBrackets": "Line Number Brackets",
 		"TabLayout":          "Tab Layout",
 		"ShowPreview":        "Show Preview",
+		"MarkdownHyperlinks": "Markdown Hyperlinks",
 		"SSHPort":            "SSH Port",
 		"WebPort":            "Web Port",
 		"AuthMode":           "Auth Mode",
@@ -1045,6 +1053,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
 		case "ShowPreview":
 			value = boolToYesNo(conf.UI.ShowPreview)
+		case "MarkdownHyperlinks":
+			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.MarkdownHyperlinks)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)

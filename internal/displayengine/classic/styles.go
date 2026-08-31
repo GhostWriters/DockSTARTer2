@@ -64,19 +64,28 @@ func (regions HitRegions) FindHit(x, y int) *HitRegion {
 }
 
 // hyperlinkRegex matches an OSC 8 hyperlink span: \x1b]8;[params];[url]\a[content]\x1b]8;;\a
-// Both \x07 (BEL) and \x1b\\ (ST) terminators are supported. Shared by
-// ScanForHyperlinks (hit-region detection) and StripHyperlinks (removing the
-// link wrapper for sessions where it can't resolve to anything useful).
+// Both \x07 (BEL) and \x1b\\ (ST) terminators are supported. Used by
+// ScanForHyperlinks (hit-region detection), which needs the paired
+// url/content capture groups.
 var hyperlinkRegex = regexp.MustCompile(`\x1b\]8;.*?;(.*?)(?:\x07|\x1b\\)(.*?)\x1b\]8;;(?:\x07|\x1b\\)`)
 
-// StripHyperlinks removes OSC 8 hyperlink wrappers from rendered text while
-// keeping the label's own styling intact -- a file:// link only resolves on
-// the machine DS2 itself runs on, so it's meaningless for SSH and web
-// sessions (unlike an https:// docs link, there's no useful fallback since
-// the remote machine doesn't have the file). Call for any non-local session
-// before displaying such text.
+// osc8MarkerRegex matches a single OSC 8 marker (open or close) independent
+// of pairing. Unlike hyperlinkRegex, which matches a whole open-content-close
+// span and so breaks on nested hyperlinks (e.g. an image inside a link --
+// the inner close consumes the outer's closer too, leaving the outer's open
+// marker stranded), this removes every marker on its own regardless of
+// nesting depth, since StripHyperlinks only needs the markers gone, not to
+// correlate which open belongs to which close.
+var osc8MarkerRegex = regexp.MustCompile(`\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)`)
+
+// StripHyperlinks removes OSC 8 hyperlink markers from rendered text while
+// keeping the visible content and its own styling intact -- a file:// link
+// only resolves on the machine DS2 itself runs on, so it's meaningless for
+// SSH and web sessions (unlike an https:// docs link, there's no useful
+// fallback since the remote machine doesn't have the file). Call for any
+// non-local session before displaying such text.
 func StripHyperlinks(rendered string) string {
-	return hyperlinkRegex.ReplaceAllString(rendered, "$2")
+	return osc8MarkerRegex.ReplaceAllString(rendered, "")
 }
 
 // HyperlinkPath renders path as a clickable OSC 8 hyperlink to itself
@@ -363,7 +372,7 @@ type StyleContext struct {
 	Console              lipgloss.Style
 	OptionValueFocused   lipgloss.Style
 	StatusBarFocused     lipgloss.Style
-	PanelTitleColor    color.Color
+	PanelTitleColor      color.Color
 	DialogTitleAlign     string
 	SubmenuTitleAlign    string
 	PanelTitleAlign      string
@@ -439,7 +448,7 @@ func GetActiveContext() StyleContext {
 		Console:              CurrentStyles.Console,
 		OptionValueFocused:   CurrentStyles.OptionValueFocused,
 		StatusBarFocused:     CurrentStyles.StatusBarFocused,
-		PanelTitleColor:    CurrentStyles.PanelTitleColor,
+		PanelTitleColor:      CurrentStyles.PanelTitleColor,
 		DialogTitleAlign:     CurrentStyles.DialogTitleAlign,
 		SubmenuTitleAlign:    CurrentStyles.SubmenuTitleAlign,
 		PanelTitleAlign:      CurrentStyles.PanelTitleAlign,
