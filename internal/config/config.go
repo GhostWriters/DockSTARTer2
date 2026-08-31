@@ -449,23 +449,6 @@ func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Prin
 	return true
 }
 
-func init() {
-	// Wires DS2's ui.hyperlinks config into semstyle's rendering engine, mirroring how
-	// internal/console/profile.go wires RenderPolicy. Set once: the closure reads
-	// LoadAppConfig() fresh on every call, so it stays correct across config reloads
-	// without needing to be re-assigned anywhere config changes (e.g. ConfigChangedMsg).
-	semstyle.HyperlinkModeFunc = func() semstyle.HyperlinkMode {
-		switch LoadAppConfig().UI.Hyperlinks {
-		case "off":
-			return semstyle.HyperlinkModeOff
-		case "auto":
-			return semstyle.HyperlinkModeAuto
-		default:
-			return semstyle.HyperlinkModeInline
-		}
-	}
-}
-
 func LoadAppConfig() AppConfig {
 	var conf AppConfig
 	// Start from embedded defaults so every key has a known baseline value.

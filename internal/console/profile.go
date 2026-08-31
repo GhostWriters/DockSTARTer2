@@ -30,6 +30,16 @@ var (
 	// state changes always land on an actual repaint instead of getting
 	// stranded between two out-of-sync clocks until the next unrelated one.
 	RefreshRate int = 60
+
+	// HyperlinksMode caches ui.hyperlinks ("off"/"inline"/"auto"; default
+	// "inline", overwritten from config before any real use). Consulted by
+	// semstyle.HyperlinkModeFunc (wired below) -- must stay a cheap cached
+	// read, not a live config.LoadAppConfig() call: that hook fires once per
+	// hyperlink tag rendered, including tags emitted from inside
+	// LoadAppConfig()'s own no-config-file bootstrap path (FormatFolderPath
+	// et al.), so calling LoadAppConfig() from the hook would recursively
+	// re-enter it every time a bootstrap message renders.
+	HyperlinksMode string = "inline"
 )
 
 // AlignToRefreshRate rounds spinnerMs to the nearest multiple of refreshMs,
@@ -70,6 +80,19 @@ func init() {
 	// stays local and is wired in here rather than moving too.
 	semstyle.HyperlinkEligibleFunc = func() bool {
 		return !blocksHyperlink()
+	}
+
+	// Reads the cached HyperlinksMode var, not config.LoadAppConfig() -- see
+	// HyperlinksMode's doc comment for why a live config read here is unsafe.
+	semstyle.HyperlinkModeFunc = func() semstyle.HyperlinkMode {
+		switch HyperlinksMode {
+		case "off":
+			return semstyle.HyperlinkModeOff
+		case "auto":
+			return semstyle.HyperlinkModeAuto
+		default:
+			return semstyle.HyperlinkModeInline
+		}
 	}
 }
 

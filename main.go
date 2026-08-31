@@ -168,6 +168,7 @@ func run() (exitCode int) {
 		console.LineCharacters = earlyConf.UI.LineCharacters
 		console.SpinnerEnabled = earlyConf.UI.Spinner
 		console.SpinnerSpeed = earlyConf.UI.SpinnerSpeed
+		console.HyperlinksMode = earlyConf.UI.Hyperlinks
 	}
 
 	// Re-tighten permissions on DS2's own config/state/log files every

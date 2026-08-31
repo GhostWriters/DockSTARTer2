@@ -842,6 +842,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		console.RefreshRate = msg.Config.UI.RefreshRate
 		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.UI.SpinnerSpeed, msg.Config.UI.RefreshRate)
 		console.LineCharacters = msg.Config.UI.LineCharacters
+		console.HyperlinksMode = msg.Config.UI.Hyperlinks
 		_, _ = theme.Load(m.config.UI.Theme, "")
 		m.invalidateAllCaches()
 		m.backdrop.Header.SyncFlags()

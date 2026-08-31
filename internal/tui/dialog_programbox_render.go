@@ -231,6 +231,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	console.SpinnerEnabled = cfg.UI.Spinner
 	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
 	console.LineCharacters = cfg.UI.LineCharacters
+	console.HyperlinksMode = cfg.UI.Hyperlinks
 	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
 		displayengine.InitStyles(cfg)
 	}
