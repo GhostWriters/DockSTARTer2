@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"DockSTARTer2/internal/displayengine"
@@ -30,10 +29,6 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	}
 
 	source := m.contextInfo.DocMarkdown
-
-	// Pre-process: convert Shields.io images to links to ensure visibility/clickability
-	reBadge := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]*shields\.io[^)]*)\)`)
-	source = reBadge.ReplaceAllString(source, `[$1]($2)`)
 
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStandardStyle(glamourstyles.DarkStyle),

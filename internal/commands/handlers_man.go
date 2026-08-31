@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"golang.org/x/term"
 	"os"
-	"regexp"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/logger"
@@ -33,10 +32,6 @@ func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool
 	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
 		width = w
 	}
-
-	// Pre-process: convert Shields.io images to links to ensure visibility/clickability
-	reBadge := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]*shields\.io[^)]*)\)`)
-	out = reBadge.ReplaceAllString(out, `[$1]($2)`)
 
 	styleName := glamourstyles.LightStyle
 	if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
