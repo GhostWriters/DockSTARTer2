@@ -1,34 +1,25 @@
 package tui
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/pgavlin/goldmark"
-	"github.com/pgavlin/goldmark/extension"
-	goldmark_parser "github.com/pgavlin/goldmark/parser"
-	"github.com/pgavlin/goldmark/renderer"
-	"github.com/pgavlin/goldmark/text"
-	"github.com/pgavlin/goldmark/util"
 
-	// "golang.org/x/term"
-	_ "github.com/gen2brain/svg"
-	kit_renderer "github.com/pgavlin/markdown-kit/renderer"
-	"github.com/pgavlin/markdown-kit/styles"
+	glamour "charm.land/glamour/v2"
+	glamouransi "charm.land/glamour/v2/ansi"
+	glamourstyles "charm.land/glamour/v2/styles"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-// getRenderedMarkdown renders DocMarkdown via markdown-kit at the given column width,
+// getRenderedMarkdown renders DocMarkdown via glamour at the given column width,
 // caching the result so repeated ViewString calls are cheap.
 func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	if m.contextInfo.DocMarkdown == "" {
@@ -38,47 +29,31 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 		return m.renderedMarkdown
 	}
 
-	source := []byte(m.contextInfo.DocMarkdown)
+	source := m.contextInfo.DocMarkdown
 
-	// Use smart graphics detection for high-fidelity on Linux and clean links on Windows
-	canDisplay := m.graphicsSupported
-	// Use Sixel encoder for high-fidelity web terminal support
-	encoder := graphics.SixelGraphicsEncoder()
-
-	// Initialize the terminal-optimized NodeRenderer // Use markdown-kit renderer with auto-detected theme
-	kitR := kit_renderer.New(
-		kit_renderer.WithTheme(styles.GlamourDark),
-		kit_renderer.WithWordWrap(width),
-		kit_renderer.WithSoftBreak(width != 0),
-		kit_renderer.WithImages(canDisplay, width, ""),
-		kit_renderer.WithImageEncoder(encoder),
-		kit_renderer.WithHyperlinks(true), // Enable hyperlinks for better fallbacks
-	)
-
-	// Create a goldmark renderer and register our terminal NodeRenderer
-	mainR := renderer.NewRenderer(renderer.WithNodeRenderers(
-		util.Prioritized(kitR, 100),
-	))
-
-	// Parse the markdown into an AST
 	// Pre-process: convert Shields.io images to links to ensure visibility/clickability
 	reBadge := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]*shields\.io[^)]*)\)`)
-	source = reBadge.ReplaceAll(source, []byte(`[$1]($2)`))
+	source = reBadge.ReplaceAllString(source, `[$1]($2)`)
 
-	parser := goldmark.DefaultParser()
-	parser.AddOptions(goldmark_parser.WithParagraphTransformers(
-		util.Prioritized(extension.NewTableParagraphTransformer(), 200),
-	))
-	doc := parser.Parse(text.NewReader(source))
-
-	var buf bytes.Buffer
-	if err := mainR.Render(&buf, source, doc); err != nil {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle(glamourstyles.DarkStyle),
+		glamour.WithWordWrap(width),
+		glamour.WithHyperlinkMode(glamouransi.HyperlinkModeInline),
+	)
+	if err != nil {
 		m.renderedMarkdown = m.contextInfo.DocMarkdown
 		m.renderedMarkdownWidth = width
 		return m.renderedMarkdown
 	}
 
-	m.renderedMarkdown = strings.TrimRight(buf.String(), "\n")
+	out, err := r.Render(source)
+	if err != nil {
+		m.renderedMarkdown = m.contextInfo.DocMarkdown
+		m.renderedMarkdownWidth = width
+		return m.renderedMarkdown
+	}
+
+	m.renderedMarkdown = strings.TrimRight(out, "\n")
 	m.renderedMarkdownWidth = width
 	return m.renderedMarkdown
 }
