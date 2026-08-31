@@ -973,14 +973,14 @@ func (m *TabbedVarsEditorModel) enabledStateForApp(appUpper string) string {
 	for i := range m.tabs {
 		if m.tabs[i].spec.IsGlobal && strings.ToUpper(m.tabs[i].spec.App) == appUpper {
 			lines := m.tabs[i].editor.ActiveLines()
-			_, exists := appenv.GetFromLines(appUpper+"__ENABLED", lines)
-			if !exists {
+			switch {
+			case appenv.IsAppEnabledFromLines(appUpper, lines):
+				return "active"
+			case appenv.IsAppDisabledFromLines(appUpper, lines):
+				return "disabled"
+			default:
 				return "absent"
 			}
-			if appenv.IsAppEnabledFromLines(appUpper, lines) {
-				return "active"
-			}
-			return "disabled"
 		}
 	}
 	return "absent"

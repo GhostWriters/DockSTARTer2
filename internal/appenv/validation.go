@@ -94,6 +94,17 @@ func IsAppAdded(ctx context.Context, appName string, envFile string) bool {
 	return IsAppBuiltIn(appUpper) && exists
 }
 
+// IsAppDisabled checks if an app is builtin, added (has an __ENABLED
+// variable), and that variable is not true -- i.e. explicitly disabled, as
+// opposed to a user-defined app or one never given an __ENABLED value at
+// all (see IsAppUserDefined, which covers both of those instead).
+func IsAppDisabled(ctx context.Context, appName string, envFile string) bool {
+	if !IsAppAdded(ctx, appName, envFile) {
+		return false
+	}
+	return !IsAppEnabled(appName, envFile)
+}
+
 // IsAppRunnable checks if an app has the required YML template files for the current architecture.
 func IsAppRunnable(appName string, conf config.AppConfig) bool {
 	// Check for main.yml
@@ -249,6 +260,22 @@ func IsAppEnabledFromLines(appName string, lines []string) bool {
 	}
 	val, exists := GetFromLines(appUpper+"__ENABLED", lines)
 	return exists && IsTrue(val)
+}
+
+// IsAppDisabledFromLines reports whether the app is builtin, has an
+// __ENABLED variable in the provided staged lines, and it's not true --
+// i.e. explicitly disabled. See IsAppDisabled's doc comment for how this
+// differs from IsAppUserDefinedFromLines.
+func IsAppDisabledFromLines(appName string, lines []string) bool {
+	appUpper := strings.ToUpper(appName)
+	if !IsAppBuiltIn(appUpper) {
+		return false
+	}
+	_, exists := GetFromLines(appUpper+"__ENABLED", lines)
+	if !exists {
+		return false
+	}
+	return !IsAppEnabledFromLines(appUpper, lines)
 }
 
 // InstanceNameIsValid checks if an instance name is allowed.
