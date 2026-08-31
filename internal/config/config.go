@@ -1100,8 +1100,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 
 		data = append(data, displayNames[key])
 
-		switch {
-		case key == "Theme":
+		switch key {
+		case "Theme":
 			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", value))
 		default:
 			// Not hyperlinked even when useFolderColor -- this raw "value" column can hold
