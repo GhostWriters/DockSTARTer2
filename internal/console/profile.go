@@ -62,6 +62,15 @@ func init() {
 	semstyle.RenderPolicy = func() bool {
 		return IsTUIEnabled() || GetPreferredProfile() > colorprofile.Ascii
 	}
+
+	// semstyle's FormatFilePath/FormatFolderPath/etc. (the app-agnostic path-segmenting
+	// logic, moved there since it has nothing DS2-specific in it) consult this hook to
+	// decide whether including a file:// URL is safe -- only DS2 knows about its own
+	// SSH/web server and same-machine detection, so that gating logic (blocksHyperlink)
+	// stays local and is wired in here rather than moving too.
+	semstyle.HyperlinkEligibleFunc = func() bool {
+		return !blocksHyperlink()
+	}
 }
 
 // GetPreferredProfile returns the detected or forced color profile.
