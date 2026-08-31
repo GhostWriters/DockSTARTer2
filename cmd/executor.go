@@ -48,6 +48,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 	console.LineCharacters = conf.UI.LineCharacters
 	console.SpinnerEnabled = conf.UI.Spinner
 	console.SpinnerSpeed = conf.UI.SpinnerSpeed
+	console.HyperlinksMode = conf.UI.Hyperlinks
 	exitCode := 0
 
 	// Validate override file for operational commands
