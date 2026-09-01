@@ -1084,7 +1084,11 @@ func (m *AppModel) setPanelFocus(focused bool) {
 	m.panel.Focused = focused
 	m.panel.BlurTitleBar()
 	if focused {
+		// Must invalidate here too (setHeaderFocus's own SetFocus calls always do) --
+		// otherwise the header's rendered cache keeps showing whatever was focused
+		// before, even though the focus state itself moved to the panel.
 		m.backdrop.Header.SetFocus(displayengine.HeaderFocusNone)
+		m.backdrop.InvalidateBackdropCache()
 	} else {
 		m.panel.Input.Blur()
 		m.panel.InputFocused = false
