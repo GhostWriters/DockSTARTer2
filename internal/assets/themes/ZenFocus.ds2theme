@@ -104,12 +104,12 @@ accent    = "$highlight"
   LargeIconPressed             = "{{[white:black:B]}}"            # = "{{|IconPressed|}}"
 
 ## Subtitles
-  Subtitle    = "{{[-:-:R]}}"   # = "{{|Dialog|}}"
-  CommandLine = "{{|Screen|}}"  # = "{{|Dialog|}}"
+  Subtitle    = "{{[-:-:R]}}"                 # = "{{|Dialog|}}"
+  CommandLine = "{{[$secondary:$accent:-]}}"  # = "{{|Dialog|}}"
 
 ## Headings
   Heading               = "{{|Dialog:::B|}}"              # = "{{|Title|}}"
-  HeadingTag            = "{{[$secondary:$primary:B]}}"   # = "{{|Heading|}}"
+  HeadingTag            = "{{[$secondary:$accent:B]}}"    # = "{{|Heading|}}"
   HeadingValue          = "{{[$secondary:$primary:BU]}}"  # = "{{|Heading|}}"
   HeadingAppDescription = "{{|Dialog|}}"                  # = "{{|Heading|}}"
 
