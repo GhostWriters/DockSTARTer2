@@ -221,18 +221,26 @@ func (m *HeaderModel) ViewString() string {
 
 func (m HeaderModel) renderLeft() string {
 	styles := GetStyles()
-	isFocused := m.focus == HeaderFocusFlags
+	isFlagsFocused := m.focus == HeaderFocusFlags
+	// Web Display Settings' click target lives on the hostname (not the title) --
+	// only reachable for web sessions, matching GetHitRegions' gating.
+	isWebFocused := m.ConnType == "web" && m.focus == HeaderFocusWebDisplay
 
 	// 1. Hostname
-	leftText := "{{|StatusHostname|}}" + m.hostname + "{{[-]}} "
+	var leftText string
+	if isWebFocused {
+		leftText = "{{|StatusBarFocused|}}" + m.hostname + "{{[-]}} "
+	} else {
+		leftText = "{{|StatusHostname|}}" + m.hostname + "{{[-]}} "
+	}
 
 	// 2. Start selection if focused
-	if isFocused {
+	if isFlagsFocused {
 		leftText += "{{|StatusBarFocused|}}"
 	}
 
 	// 3. Open bracket for flags
-	if !isFocused {
+	if !isFlagsFocused {
 		leftText += "{{|StatusFlagsBrackets|}}"
 	}
 	leftText += "|"
@@ -242,12 +250,12 @@ func (m HeaderModel) renderLeft() string {
 		for i, flag := range m.flags {
 			if i > 0 {
 				// Internal separator
-				if isFocused {
+				if isFlagsFocused {
 					leftText += "|"
 				} else {
 					leftText += "{{[-]}}{{|StatusFlagsBrackets|}}|{{[-]}}{{|StatusFlags|}}"
 				}
-			} else if !isFocused {
+			} else if !isFlagsFocused {
 				leftText += "{{[-]}}{{|StatusFlags|}}"
 			}
 			leftText += flag
@@ -255,7 +263,7 @@ func (m HeaderModel) renderLeft() string {
 	}
 
 	// 5. Close bracket for flags
-	if !isFocused {
+	if !isFlagsFocused {
 		leftText += "{{[-]}}{{|StatusFlagsBrackets|}}"
 	}
 	leftText += "|"
@@ -269,12 +277,10 @@ func (m HeaderModel) renderLeft() string {
 
 func (m HeaderModel) renderCenter() string {
 	styles := GetStyles()
-	var centerText string
-	if m.ConnType == "web" && m.focus == HeaderFocusWebDisplay {
-		centerText = "{{|StatusBarFocused|}}" + version.ApplicationName + "{{[-]}}"
-	} else {
-		centerText = "{{|StatusName|}}" + version.ApplicationName + "{{[-]}}"
-	}
+	// The title is always a hyperlink to the project site, regardless of ConnType --
+	// unlike Web Display Settings (moved to the hostname), this has no DS2-internal
+	// action of its own to focus/highlight, so it's just styled+linked text.
+	centerText := "{{|StatusName::::https://dockstarter.com|}}" + version.ApplicationName + "{{[-]}}"
 	return MaintainBackground(RenderThemeText(centerText, styles.HeaderBG), styles.HeaderBG)
 }
 
@@ -370,6 +376,26 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 
 	hostnameW := lipgloss.Width(m.hostname)
 	flagsW := leftW - hostnameW - 1
+
+	if m.ConnType == "web" {
+		regions = append(regions, HitRegion{
+			ID:     IDHeaderWebDisplay,
+			X:      offsetX,
+			Y:      offsetY,
+			Width:  hostnameW,
+			Height: 1,
+			ZOrder: ZHeader + 1,
+			Label:  "Display Settings",
+			Help: &HelpContext{
+				ScreenName: "Display Settings",
+				PageTitle:  "Web Display",
+				PageText:   "Configure xterm.js display settings for this browser session.",
+				ItemTitle:  "Display Settings",
+				ItemText:   "Click or press Enter to open font and display settings for the web terminal.",
+			},
+		})
+	}
+
 	regions = append(regions, HitRegion{
 		ID:     IDHeaderFlags,
 		X:      offsetX + hostnameW + 1,
@@ -390,25 +416,6 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	centerX := (m.width - centerW) / 2
 	if centerX < 0 {
 		centerX = 0
-	}
-
-	if m.ConnType == "web" {
-		regions = append(regions, HitRegion{
-			ID:     IDHeaderWebDisplay,
-			X:      offsetX + centerX,
-			Y:      offsetY,
-			Width:  centerW,
-			Height: 1,
-			ZOrder: ZHeader + 1,
-			Label:  "Display Settings",
-			Help: &HelpContext{
-				ScreenName: "Display Settings",
-				PageTitle:  "Web Display",
-				PageText:   "Configure xterm.js display settings for this browser session.",
-				ItemTitle:  "Display Settings",
-				ItemText:   "Click or press Enter to open font and display settings for the web terminal.",
-			},
-		})
 	}
 
 	rightW := appW + tmplW

@@ -138,7 +138,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				m.setPanelFocus(false)
 				return m, nil, true
 			}
-			m.setHeaderFocus(displayengine.HeaderFocusFlags)
+			m.setHeaderFocus(m.headerEntryFocus())
 			return m, nil, true
 		} else if m.dialog != nil {
 			// Dialog open: pass Tab through to the dialog (not handled here).
@@ -152,7 +152,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		} else {
 			// Panel disabled: skip straight to the header.
-			m.setHeaderFocus(displayengine.HeaderFocusFlags)
+			m.setHeaderFocus(m.headerEntryFocus())
 			return m, nil, true
 		}
 	}
@@ -170,12 +170,12 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		} else {
-			// From screen to header -- same entry point as Tab (Flags).
+			// From screen to header -- same entry point as Tab.
 			if m.dialog != nil {
 				// Dialog open: pass ShiftTab through to the dialog (not handled here).
 				return m, nil, false
 			}
-			m.setHeaderFocus(displayengine.HeaderFocusFlags)
+			m.setHeaderFocus(m.headerEntryFocus())
 			return m, nil, true
 		}
 	}
@@ -183,8 +183,12 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Arrow Key Navigation within Header
 	// We handle this regardless of m.dialog != nil because the header should trap its keys if focused
 	if m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
+		isWeb := m.backdrop.Header.ConnType == "web"
+		// Left-to-right order: WebDisplay (hostname, web only) -> Flags -> App -> Tmpl.
 		if key.Matches(msg, displayengine.Keys.Right) {
 			switch m.backdrop.Header.GetFocus() {
+			case displayengine.HeaderFocusWebDisplay:
+				m.setHeaderFocus(displayengine.HeaderFocusFlags)
 			case displayengine.HeaderFocusFlags:
 				m.setHeaderFocus(displayengine.HeaderFocusApp)
 			case displayengine.HeaderFocusApp:
@@ -198,6 +202,10 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				m.setHeaderFocus(displayengine.HeaderFocusApp)
 			case displayengine.HeaderFocusApp:
 				m.setHeaderFocus(displayengine.HeaderFocusFlags)
+			case displayengine.HeaderFocusFlags:
+				if isWeb {
+					m.setHeaderFocus(displayengine.HeaderFocusWebDisplay)
+				}
 			}
 			return m, nil, true
 		}
@@ -212,11 +220,13 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 
-	// Handle Enter on focused header items
-	if key.Matches(msg, displayengine.Keys.Enter) && m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
+	// Handle Enter/Space on focused header items
+	if (key.Matches(msg, displayengine.Keys.Enter) || key.Matches(msg, displayengine.Keys.Space)) && m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
 		switch m.backdrop.Header.GetFocus() {
 		case displayengine.HeaderFocusFlags:
 			return m, func() tea.Msg { return ShowGlobalFlagsMsg{} }, true
+		case displayengine.HeaderFocusWebDisplay:
+			return m, func() tea.Msg { return ShowWebDisplaySettingsMsg{} }, true
 		case displayengine.HeaderFocusApp:
 			if update.RestartPending {
 				return m, func() tea.Msg { return ShowPendingRestartMsg{} }, true
@@ -462,6 +472,8 @@ func (m *AppModel) focusedPanelHelpContext() *displayengine.HelpContext {
 	switch focus {
 	case displayengine.HeaderFocusFlags:
 		targetID = displayengine.IDHeaderFlags
+	case displayengine.HeaderFocusWebDisplay:
+		targetID = displayengine.IDHeaderWebDisplay
 	case displayengine.HeaderFocusApp:
 		targetID = displayengine.IDAppVersion
 	case displayengine.HeaderFocusTmpl:

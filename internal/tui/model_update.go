@@ -1112,6 +1112,17 @@ func (m *AppModel) setPanelTitleFocus(focused bool) {
 	m.updateComponentFocus()
 }
 
+// headerEntryFocus returns the first stop when tabbing into the header from the
+// screen/panel: the hostname (WebDisplay) for web sessions, since it's the
+// leftmost interactive element; Flags otherwise, since WebDisplay doesn't exist
+// for non-web sessions.
+func (m *AppModel) headerEntryFocus() displayengine.HeaderFocus {
+	if m.backdrop.Header.ConnType == "web" {
+		return displayengine.HeaderFocusWebDisplay
+	}
+	return displayengine.HeaderFocusFlags
+}
+
 func (m *AppModel) setHeaderFocus(focus displayengine.HeaderFocus) {
 	m.backdrop.Header.SetFocus(focus)
 	m.backdrop.InvalidateBackdropCache()

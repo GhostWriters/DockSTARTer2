@@ -49,28 +49,35 @@ func headerUpdate(h *displayengine.HeaderModel, msg tea.Msg) (tea.Model, tea.Cmd
 
 	case displayengine.LayerWheelMsg:
 		if msg.ID == displayengine.IDStatusBar {
-			// Scroll wheel cycles between Flags, Center (web only), App version and Tmpl version.
+			// Scroll wheel cycles left-to-right: hostname/WebDisplay (web only) -> Flags
+			// -> App version -> Tmpl version.
 			isWeb := h.ConnType == "web"
+			entry := displayengine.HeaderFocusFlags
+			if isWeb {
+				entry = displayengine.HeaderFocusWebDisplay
+			}
 			focus := h.GetFocus()
 			switch msg.Button {
 			case tea.MouseWheelUp:
 				switch focus {
-				case displayengine.HeaderFocusNone, displayengine.HeaderFocusApp:
+				case displayengine.HeaderFocusNone:
+					focus = entry
+				case displayengine.HeaderFocusFlags:
+					if isWeb {
+						focus = displayengine.HeaderFocusWebDisplay
+					}
+				case displayengine.HeaderFocusApp:
 					focus = displayengine.HeaderFocusFlags
 				case displayengine.HeaderFocusTmpl:
 					focus = displayengine.HeaderFocusApp
-				case displayengine.HeaderFocusWebDisplay:
-					focus = displayengine.HeaderFocusFlags
 				}
 			case tea.MouseWheelDown:
 				switch focus {
-				case displayengine.HeaderFocusNone, displayengine.HeaderFocusFlags:
-					if isWeb {
-						focus = displayengine.HeaderFocusWebDisplay
-					} else {
-						focus = displayengine.HeaderFocusApp
-					}
+				case displayengine.HeaderFocusNone:
+					focus = entry
 				case displayengine.HeaderFocusWebDisplay:
+					focus = displayengine.HeaderFocusFlags
+				case displayengine.HeaderFocusFlags:
 					focus = displayengine.HeaderFocusApp
 				case displayengine.HeaderFocusApp:
 					focus = displayengine.HeaderFocusTmpl
