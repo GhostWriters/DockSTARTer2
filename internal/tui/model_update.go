@@ -1084,7 +1084,11 @@ func (m *AppModel) setPanelFocus(focused bool) {
 	m.panel.Focused = focused
 	m.panel.BlurTitleBar()
 	if focused {
+		// Must invalidate here too (setHeaderFocus's own SetFocus calls always do) --
+		// otherwise the header's rendered cache keeps showing whatever was focused
+		// before, even though the focus state itself moved to the panel.
 		m.backdrop.Header.SetFocus(displayengine.HeaderFocusNone)
+		m.backdrop.InvalidateBackdropCache()
 	} else {
 		m.panel.Input.Blur()
 		m.panel.InputFocused = false
@@ -1106,6 +1110,17 @@ func (m *AppModel) setPanelTitleFocus(focused bool) {
 		m.panel.BlurTitleBar()
 	}
 	m.updateComponentFocus()
+}
+
+// headerEntryFocus returns the first stop when tabbing into the header from the
+// screen/panel: the hostname (WebDisplay) for web sessions, since it's the
+// leftmost interactive element; Flags otherwise, since WebDisplay doesn't exist
+// for non-web sessions.
+func (m *AppModel) headerEntryFocus() displayengine.HeaderFocus {
+	if m.backdrop.Header.ConnType == "web" {
+		return displayengine.HeaderFocusWebDisplay
+	}
+	return displayengine.HeaderFocusFlags
 }
 
 func (m *AppModel) setHeaderFocus(focus displayengine.HeaderFocus) {
