@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
@@ -67,7 +68,10 @@ func HandleContainerRestartStarted(ctx context.Context, group *CommandGroup, sta
 // --start/--stop/--restart and their -all/-started/-stopped variants, which
 // differ only in the verb, prompt wording, underlying SDK call, and (when
 // nameSource is set) where the container list comes from instead of
-// group.Args.
+// group.Args. Runs all containers' SDK calls concurrently (one goroutine
+// each) rather than one at a time -- the Engine API has no batch endpoint,
+// so this mirrors how docker/cli itself fans out a multi-name `docker stop
+// c1 c2 c3` invocation.
 func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdState, nameSource func(context.Context) ([]string, error), verb, imperative, presentParticiple string, action func(context.Context, string) error) error {
 	if err := dockercheck.Require(ctx); err != nil {
 		return err
@@ -100,20 +104,37 @@ func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdSta
 	}
 
 	logger.Notice(ctx, "%s container: {{|App|}}%s{{[-]}}.", presentParticiple, namesJoined)
-	var firstErr error
+	// One combined "docker <verb> <names...>" line, matching how `docker
+	// stop c1 c2 c3` reads as a single command on the real CLI -- even
+	// though each container's SDK call below runs concurrently, not as one
+	// request (the Engine API has no batch endpoint; docker/cli's own
+	// multi-name support is the same per-container-goroutine shape).
+	logger.Notice(ctx, "Running: {{|RunningCommand|}}docker %s %s{{[-]}}", verb, strings.Join(names, " "))
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		firstErr error
+	)
 	for _, name := range names {
-		logger.Notice(ctx, "Running: {{|RunningCommand|}}docker %s %s{{[-]}}", verb, name)
-		if err := action(ctx, name); err != nil {
-			logger.Error(ctx, "Failed to %s '{{|App|}}%s{{[-]}}': %v", verb, name, err)
-			if firstErr == nil {
-				firstErr = err
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			if err := action(ctx, name); err != nil {
+				logger.Error(ctx, "Failed to %s '{{|App|}}%s{{[-]}}': %v", verb, name, err)
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+				return
 			}
-			continue
-		}
-		// Same tab-indented, tool-prefixed Notice convention used for git
-		// output in update_templates.go.
-		logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} %s", name)
+			// Same tab-indented, tool-prefixed Notice convention used for git
+			// output in update_templates.go.
+			logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} %s", name)
+		}(name)
 	}
+	wg.Wait()
 	return firstErr
 }
 
