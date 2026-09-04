@@ -84,12 +84,9 @@ require (
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
-	github.com/digitorus/pkcs7 v0.0.0-20260821105541-05f79448fa77 // indirect
-	github.com/digitorus/timestamp v0.0.0-20250524132541-c45532741eea // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.7.1 // indirect
-	github.com/docker/buildx v0.37.0 // indirect
 	github.com/docker/docker-credential-helpers v0.9.9 // indirect
 	github.com/docker/go-connections v0.8.1 // indirect
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203 // indirect
@@ -105,18 +102,9 @@ require (
 	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-openapi/runtime v0.33.1 // indirect
-	github.com/go-openapi/spec v1.0.0 // indirect
-	github.com/go-openapi/strfmt v0.27.1 // indirect
-	github.com/go-openapi/swag/conv v0.29.1 // indirect
-	github.com/go-openapi/swag/fileutils v0.29.1 // indirect
-	github.com/go-openapi/swag/jsonutils v0.29.1 // indirect
-	github.com/go-openapi/swag/stringutils v0.29.1 // indirect
-	github.com/go-openapi/validate v0.26.5 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/go-containerregistry v0.22.0 // indirect
 	github.com/google/go-github/v86 v86.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
@@ -140,7 +128,6 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-shellwords v1.0.14 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
-	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/moby/buildkit v0.33.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.3.3 // indirect
@@ -170,8 +157,6 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.11.1 // indirect
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
-	github.com/sigstore/protobuf-specs v0.5.2 // indirect
-	github.com/sigstore/rekor v1.5.4 // indirect
 	github.com/sigstore/sigstore v1.10.9 // indirect
 	github.com/sigstore/sigstore-go v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
@@ -179,7 +164,6 @@ require (
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/tilt-dev/fsnotify v1.4.8-0.20220602155310-fff9c274a375 // indirect
-	github.com/tonistiigi/dchapes-mode v0.0.0-20250318174251-73d941a28323 // indirect
 	github.com/tonistiigi/fsutil v0.0.0-20260819142231-83cac42c1c52 // indirect
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
@@ -188,7 +172,6 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
-	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	gitlab.com/gitlab-org/api/client-go v1.46.0 // indirect
