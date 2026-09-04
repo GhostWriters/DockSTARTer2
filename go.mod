@@ -19,11 +19,11 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/charmbracelet/x/input v0.3.7
 	github.com/coder/websocket v1.8.15
-	github.com/compose-spec/compose-go/v2 v2.14.0
+	github.com/compose-spec/compose-go/v2 v2.15.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
-	github.com/docker/cli v29.7.2+incompatible
-	github.com/docker/compose/v5 v5.5.0
+	github.com/docker/cli v29.8.0+incompatible
+	github.com/docker/compose/v5 v5.5.1
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/fsnotify/fsnotify v1.10.1
@@ -32,7 +32,7 @@ require (
 	github.com/gofrs/flock v0.13.1
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.29
-	github.com/moby/moby/client v0.5.1
+	github.com/moby/moby/client v0.6.0
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/rivo/uniseg v0.4.7
@@ -145,7 +145,7 @@ require (
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.3.3 // indirect
 	github.com/moby/locker v1.0.1 // indirect
-	github.com/moby/moby/api v1.55.0 // indirect
+	github.com/moby/moby/api v1.56.0 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/policy-helpers v0.0.0-20260901142052-72f704e6cdb6 // indirect
 	github.com/moby/sys/atomicwriter v0.1.0 // indirect
