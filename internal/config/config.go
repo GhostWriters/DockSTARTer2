@@ -109,9 +109,19 @@ type SSHConfig struct {
 	Port int `toml:"port"` // TCP port for the SSH server (0 = disabled)
 }
 
-// WebConfig holds settings for the optional xterm.js web frontend.
+// WebConfig holds settings for the optional sip-based web frontend.
 type WebConfig struct {
-	Port int `toml:"port"` // TCP port for the HTTP/WebSocket server (0 = disabled)
+	Port int `toml:"port"` // TCP port for the web server (0 = disabled)
+
+	// TLS selects how the web server serves connections:
+	//   "self-signed" (default, or empty) -- sip generates and manages its
+	//     own self-signed certificate. Browsers show a one-time warning.
+	//   "cert" -- use the certificate/key at TLSCert/TLSKey.
+	//   "http" -- plain HTTP, no encryption. Anyone on the network path can
+	//     read (and, with auth.mode = "password", capture) traffic.
+	TLS     string `toml:"tls"`
+	TLSCert string `toml:"tls_cert"` // Path to a certificate file, when tls = "cert"
+	TLSKey  string `toml:"tls_key"`  // Path to the certificate's private key, when tls = "cert"
 }
 
 // AuthConfig holds authentication settings for the SSH server.

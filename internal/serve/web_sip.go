@@ -47,10 +47,29 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 	sipCfg := sip.DefaultConfig()
 	sipCfg.Host = "0.0.0.0"
 	sipCfg.Port = strconv.Itoa(cfg.Web.Port)
-	// Binding a non-loopback address without TLS is refused by sip itself;
-	// AutoTLS has it generate and reuse a self-signed keypair rather than
-	// requiring an operator-supplied certificate for a LAN home-server tool.
-	sipCfg.AutoTLS = true
+
+	switch cfg.Web.TLS {
+	case "cert":
+		if cfg.Web.TLSCert == "" || cfg.Web.TLSKey == "" {
+			return fmt.Errorf("server.web.tls_cert and server.web.tls_key must both be set when server.web.tls = \"cert\"")
+		}
+		sipCfg.TLSCert = cfg.Web.TLSCert
+		sipCfg.TLSKey = cfg.Web.TLSKey
+	case "http":
+		// Binding a non-loopback address without TLS is refused by sip
+		// unless explicitly permitted -- this is that explicit opt-in.
+		sipCfg.AllowInsecureNoTLS = true
+		logger.Warn(ctx, "Web server is running over plain HTTP (server.web.tls = \"http\"). "+
+			"Traffic, including any auth.mode = \"password\" credentials, is unencrypted.")
+	case "self-signed", "":
+		// sip generates and manages its own self-signed keypair rather than
+		// requiring an operator-supplied certificate for a LAN home-server
+		// tool. Browsers show a one-time warning on first visit.
+		sipCfg.AutoTLS = true
+	default:
+		return fmt.Errorf("unknown server.web.tls %q (valid: self-signed, cert, http)", cfg.Web.TLS)
+	}
+
 	sipCfg.ConnectMiddleware = append(sipCfg.ConnectMiddleware, captureUserAgentMiddleware)
 	if cfg.Auth.Mode == "password" {
 		if cfg.Auth.Password == "" {
