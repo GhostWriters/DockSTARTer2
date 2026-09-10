@@ -11,7 +11,6 @@ import (
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
-	"DockSTARTer2/internal/webmsg"
 
 	"charm.land/wish/v2"
 	"charm.land/ssh"
@@ -25,7 +24,6 @@ var ds2TrustEnvPrefixes = []string{
 	"DS2_CONN_TYPE=",
 	"DS2_CLIENT_IP=",
 	"DS2_SESSION_ID=",
-	"DS2_WEB_TOKEN=",
 }
 
 // stripDS2TrustEnv drops any entries matching ds2TrustEnvPrefixes from a
@@ -55,29 +53,11 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 		return func(s ssh.Session) {
 			ctx := s.Context()
 
-			// DS2_CLIENT_IP and DS2_WEB_TOKEN are trust markers DS2's own
-			// internal web-proxy connection sets (see web_handler.go's
-			// Setenv calls) -- only honor them from that connection
-			// (s.User() == "web"). A plain SSH client injecting its own
-			// DS2_WEB_TOKEN could otherwise hook into another session's
-			// live web-proxy channel (webmsg.Get(webToken) below), and a
-			// forged DS2_CLIENT_IP could poison session logs/registry with
-			// a fake address.
-			isWebProxy := s.User() == "web"
 			clientIP := formatIP(s.RemoteAddr().String())
-			userAgent := ""
 			termProgram := ""
-			webToken := ""
 			for _, env := range s.Environ() {
-				switch {
-				case isWebProxy && strings.HasPrefix(env, "DS2_CLIENT_IP="):
-					clientIP = strings.TrimPrefix(env, "DS2_CLIENT_IP=")
-				case strings.HasPrefix(env, "DS2_USER_AGENT="):
-					userAgent = strings.TrimPrefix(env, "DS2_USER_AGENT=")
-				case strings.HasPrefix(env, "TERM_PROGRAM="):
+				if strings.HasPrefix(env, "TERM_PROGRAM=") {
 					termProgram = strings.TrimPrefix(env, "TERM_PROGRAM=")
-				case isWebProxy && strings.HasPrefix(env, "DS2_WEB_TOKEN="):
-					webToken = strings.TrimPrefix(env, "DS2_WEB_TOKEN=")
 				}
 			}
 
@@ -106,20 +86,14 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			// identity edit-lock re-entry checks against (see AcquireEditLock)
 			// -- computed before opts/envs so it can ride along in Environ,
 			// same as DS2_CLIENT_IP below.
-			connType := "SSH"
+			// For SSH: "TERM_PROGRAM/TERM" or just "TERM"
 			var terminal string
-			if isWebProxy {
-				connType = "Web"
-				terminal = simplifyUserAgent(userAgent)
+			if termProgram != "" {
+				terminal = termProgram + "/" + ptyReq.Term
 			} else {
-				// For SSH: "TERM_PROGRAM/TERM" or just "TERM"
-				if termProgram != "" {
-					terminal = termProgram + "/" + ptyReq.Term
-				} else {
-					terminal = ptyReq.Term
-				}
+				terminal = ptyReq.Term
 			}
-			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, connType, terminal)
+			sessionID := sessionlocks.Sessions.RegisterSession(clientIP, "SSH", terminal)
 			defer sessionlocks.Sessions.UnregisterSession(sessionID)
 
 			// DS2's own trust markers (connection type/identity, consumed by
@@ -134,9 +108,7 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 			envs = append(envs, "TERM="+ptyReq.Term)
 			envs = append(envs, "DS2_CLIENT_IP="+clientIP)
 			envs = append(envs, "DS2_SESSION_ID="+sessionID)
-			if !isWebProxy {
-				envs = append(envs, "DS2_CONN_TYPE=ssh-server")
-			}
+			envs = append(envs, "DS2_CONN_TYPE=ssh-server")
 			opts := tui.ProgramOptions{
 				Input:         s,
 				Output:        s,
@@ -144,8 +116,6 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 				Environ:       envs,
 				InitialWidth:  ptyReq.Window.Width,
 				InitialHeight: ptyReq.Window.Height,
-				WebOutbound:   webmsg.Get(webToken),
-				WebToken:      webToken,
 			}
 
 			logger.Info(ctx, "SSH session started from %s", s.RemoteAddr())

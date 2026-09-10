@@ -305,7 +305,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				sub := expandedArgs[i]
 				validSubs := map[string]bool{
-					"status": true, "start": true, "stop": true, "restart": true,
+					"status": true, "start": true, "start-ssh": true, "start-web": true,
+					"stop": true, "restart": true,
 					"disconnect": true, "install": true, "uninstall": true,
 					"enable": true, "disable": true,
 				}

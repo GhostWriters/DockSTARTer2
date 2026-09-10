@@ -23,10 +23,13 @@ import (
 	"charm.land/ssh"
 )
 
-// StartSSHServer starts the wish SSH server using settings from cfg.
-// It blocks until ctx is cancelled. Returns an error if the server cannot
-// be started (e.g. port already in use, bad config).
-func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu string) error { //nolint:cyclop
+// StartServer starts whichever of the SSH (wish) and web (sip) servers have
+// a port configured -- each is independently optional, matching the "port
+// is the intent signal" convention SSHConfig/WebConfig each already use on
+// their own. It blocks until ctx is cancelled. Returns an error if neither
+// is configured, or if the one(s) that are fail to start (e.g. port already
+// in use, bad config).
+func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string) error { //nolint:cyclop
 	// Register a shutdown hook so that when an update is applied from within a
 	// TUI session running inside this daemon, ReExec can cancel the server
 	// context and allow main() to pick up PendingReExec and exec the new binary.
@@ -37,107 +40,21 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	console.ServerDisconnect = func() { _ = sessionlocks.Sessions.RequestDisconnect() }
 	defer func() { console.ServerDisconnect = nil }()
 	ctx = innerCtx
-	if cfg.SSH.Port == 0 {
-		return fmt.Errorf("server.ssh.port is not set in dockstarter2.toml")
+
+	if cfg.SSH.Port == 0 && cfg.Web.Port == 0 {
+		return fmt.Errorf("neither server.ssh.port nor server.web.port is set in dockstarter2.toml")
 	}
 
-	if cfg.Auth.Mode == "none" {
-		logger.Warn(ctx, "SSH server is running with no authentication (server.auth.mode = \"none\"). "+
-			"This is insecure — anyone on the network can connect.")
-	}
-
-	// Generate an ephemeral key pair for the internal web proxy client.
-	// This key is never written to disk; it is regenerated each startup.
-	internalKey, err := generateInternalKey()
-	if err != nil {
-		return fmt.Errorf("generating internal key: %w", err)
-	}
-
-	hostKeyPath := cfg.HostKey
-	if hostKeyPath == "" {
-		hostKeyPath = filepath.Join(paths.GetStateDir(), "server_host_key")
-	}
-	if err := os.MkdirAll(filepath.Dir(hostKeyPath), 0700); err != nil {
-		return fmt.Errorf("creating host key directory: %w", err)
-	}
-
-	addr := fmt.Sprintf(":%d", cfg.SSH.Port)
-
-	opts := []ssh.Option{
-		wish.WithAddress(addr),
-		wish.WithHostKeyPath(hostKeyPath),
-		wish.WithMiddleware(
-			tuiMiddleware(startMenu),
-			logging.Middleware(),
-		),
-	}
-
-	// isInternalKey checks whether a presented public key is our ephemeral
-	// web-proxy key. Used as the fast-path in combined public-key handlers.
-	isInternalKey := func(key ssh.PublicKey) bool {
-		return ssh.KeysEqual(key, internalKey.PublicKey)
-	}
-
-	// Configure authentication. Every branch must register exactly one
-	// PublicKeyHandler (wish.WithPublicKeyAuth / wish.WithAuthorizedKeys each
-	// set the same underlying field, so two calls would overwrite each other).
-	// We therefore build a combined handler wherever needed.
-	switch cfg.Auth.Mode {
-	case "pubkey":
-		if cfg.Auth.AuthKeysFile == "" {
-			return fmt.Errorf("server.auth.auth_keys_file must be set when auth mode is \"pubkey\"")
+	var sshServer *ssh.Server
+	if cfg.SSH.Port > 0 {
+		var err error
+		sshServer, err = newSSHServer(cfg, startMenu)
+		if err != nil {
+			return err
 		}
-		authKeysFile := cfg.Auth.AuthKeysFile
-		opts = append(opts, wish.WithPublicKeyAuth(func(_ ssh.Context, key ssh.PublicKey) bool {
-			// Accept the internal web-proxy key OR any key in the authorized_keys file.
-			if isInternalKey(key) {
-				return true
-			}
-			return authorizedKeysContains(authKeysFile, key)
-		}))
-	case "password":
-		if cfg.Auth.Password == "" {
-			return fmt.Errorf("server.auth.password must be set when auth mode is \"password\"")
-		}
-		opts = append(opts,
-			wish.WithPasswordAuth(func(_ ssh.Context, password string) bool {
-				return checkPassword(password, cfg.Auth.Password)
-			}),
-			// Also accept the internal key via public-key auth so the web proxy
-			// can connect without a password.
-			wish.WithPublicKeyAuth(func(_ ssh.Context, key ssh.PublicKey) bool {
-				return isInternalKey(key)
-			}),
-		)
-	case "none", "":
-		// No auth — allow all connections (warning already logged above).
-		// The internal key is implicitly accepted since we allow everything.
-		opts = append(opts, wish.WithPublicKeyAuth(func(_ ssh.Context, _ ssh.PublicKey) bool {
-			return true
-		}))
-	default:
-		return fmt.Errorf("unknown server.auth.mode %q (valid: password, pubkey, none)", cfg.Auth.Mode)
 	}
 
-	srv, err := wish.NewServer(opts...)
-	if err != nil {
-		return fmt.Errorf("creating SSH server: %w", err)
-	}
-
-	// wish.WithHostKeyPath generates the key file itself (on first run) but
-	// doesn't guarantee restrictive permissions on it -- pin them explicitly
-	// rather than relying on the library's default or the OS umask.
-	if err := os.Chmod(hostKeyPath, 0600); err != nil {
-		logger.Warn(ctx, "Could not restrict host key file permissions: %v", err)
-	}
-
-	logger.Notice(ctx, "SSH server started on port %d", cfg.SSH.Port)
-
-	webPort := 0
-	if cfg.Web.Port > 0 {
-		webPort = cfg.Web.Port
-	}
-	if err := sessionlocks.Sessions.AcquireServer(cfg.SSH.Port, webPort); err != nil {
+	if err := sessionlocks.Sessions.AcquireServer(cfg.SSH.Port, cfg.Web.Port); err != nil {
 		logger.Warn(ctx, "Could not write server PID file: %v", err)
 	}
 	defer sessionlocks.Sessions.ReleaseServer()
@@ -145,19 +62,53 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 	// Update proc registration with server port info so other instances
 	// can display it in startup warnings. Only meaningful in the daemon process.
 	if console.IsDaemon {
-		connInfo := fmt.Sprintf("SSH:%d", cfg.SSH.Port)
-		if webPort > 0 {
-			connInfo += fmt.Sprintf(" Web:%d", webPort)
+		var connInfo string
+		if cfg.SSH.Port > 0 {
+			connInfo = fmt.Sprintf("SSH:%d", cfg.SSH.Port)
+		}
+		if cfg.Web.Port > 0 {
+			if connInfo != "" {
+				connInfo += " "
+			}
+			connInfo += fmt.Sprintf("Web:%d", cfg.Web.Port)
 		}
 		sessionlocks.Sessions.UpdateProcConnInfo(connInfo)
 	}
 
-	// Start web server alongside SSH if configured.
+	// errCh carries the first failure from either server; a nil send means
+	// that server stopped cleanly (context cancellation).
+	errCh := make(chan error, 2)
+	running := 0
+
 	if cfg.Web.Port > 0 {
+		running++
 		go func() {
-			if err := StartWebServer(ctx, cfg, internalKey.Signer); err != nil {
+			err := StartSipWebServer(ctx, cfg, startMenu)
+			if err != nil {
 				logger.Error(ctx, "Web server stopped: %v", err)
 			}
+			errCh <- err
+		}()
+	}
+
+	if sshServer != nil {
+		running++
+		go func() {
+			<-ctx.Done()
+			shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutCancel()
+			_ = sshServer.Shutdown(shutCtx)
+		}()
+		go func() {
+			err := sshServer.ListenAndServe()
+			// ErrServerClosed is expected on clean shutdown.
+			if err != nil && err.Error() == "ssh: Server closed" {
+				err = nil
+			}
+			if err != nil {
+				logger.Error(ctx, "SSH server stopped: %v", err)
+			}
+			errCh <- err
 		}()
 	}
 
@@ -182,27 +133,91 @@ func StartSSHServer(ctx context.Context, cfg config.ServerConfig, startMenu stri
 		}
 	}()
 
-	// Shut down gracefully when context is cancelled.
-	go func() {
-		<-ctx.Done()
-		shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutCancel()
-		_ = srv.Shutdown(shutCtx)
-	}()
-
 	// Poll for a binary update independent of any connected session -- a
 	// per-session watcher only runs while someone is connected, so an idle
 	// daemon would otherwise never notice an update until the next connection.
 	tui.StartDaemonRestartWatcher(ctx)
 
-	if err := srv.ListenAndServe(); err != nil {
-		// ErrServerClosed is expected on clean shutdown.
-		if err.Error() == "ssh: Server closed" {
-			return nil
+	// Wait for every started server to stop; report the first real error.
+	var firstErr error
+	for range running {
+		if err := <-errCh; err != nil && firstErr == nil {
+			firstErr = err
+			cancelInner()
 		}
-		return fmt.Errorf("SSH server: %w", err)
 	}
-	return nil
+	return firstErr
+}
+
+// newSSHServer builds (but does not start) the wish SSH server using
+// settings from cfg.
+func newSSHServer(cfg config.ServerConfig, startMenu string) (*ssh.Server, error) {
+	if cfg.Auth.Mode == "none" {
+		logger.Warn(context.Background(), "SSH server is running with no authentication (server.auth.mode = \"none\"). "+
+			"This is insecure — anyone on the network can connect.")
+	}
+
+	hostKeyPath := cfg.HostKey
+	if hostKeyPath == "" {
+		hostKeyPath = filepath.Join(paths.GetStateDir(), "server_host_key")
+	}
+	if err := os.MkdirAll(filepath.Dir(hostKeyPath), 0700); err != nil {
+		return nil, fmt.Errorf("creating host key directory: %w", err)
+	}
+
+	addr := fmt.Sprintf(":%d", cfg.SSH.Port)
+
+	opts := []ssh.Option{
+		wish.WithAddress(addr),
+		wish.WithHostKeyPath(hostKeyPath),
+		wish.WithMiddleware(
+			tuiMiddleware(startMenu),
+			logging.Middleware(),
+		),
+	}
+
+	// Configure authentication. Every branch must register exactly one
+	// PublicKeyHandler (wish.WithPublicKeyAuth / wish.WithAuthorizedKeys each
+	// set the same underlying field, so two calls would overwrite each other).
+	switch cfg.Auth.Mode {
+	case "pubkey":
+		if cfg.Auth.AuthKeysFile == "" {
+			return nil, fmt.Errorf("server.auth.auth_keys_file must be set when auth mode is \"pubkey\"")
+		}
+		authKeysFile := cfg.Auth.AuthKeysFile
+		opts = append(opts, wish.WithPublicKeyAuth(func(_ ssh.Context, key ssh.PublicKey) bool {
+			return authorizedKeysContains(authKeysFile, key)
+		}))
+	case "password":
+		if cfg.Auth.Password == "" {
+			return nil, fmt.Errorf("server.auth.password must be set when auth mode is \"password\"")
+		}
+		opts = append(opts, wish.WithPasswordAuth(func(_ ssh.Context, password string) bool {
+			return checkPassword(password, cfg.Auth.Password)
+		}))
+	case "none", "":
+		// No auth — allow all connections (warning already logged above).
+		opts = append(opts, wish.WithPublicKeyAuth(func(_ ssh.Context, _ ssh.PublicKey) bool {
+			return true
+		}))
+	default:
+		return nil, fmt.Errorf("unknown server.auth.mode %q (valid: password, pubkey, none)", cfg.Auth.Mode)
+	}
+
+	srv, err := wish.NewServer(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("creating SSH server: %w", err)
+	}
+
+	// wish.WithHostKeyPath generates the key file itself (on first run) but
+	// doesn't guarantee restrictive permissions on it -- pin them explicitly
+	// rather than relying on the library's default or the OS umask.
+	if err := os.Chmod(hostKeyPath, 0600); err != nil {
+		logger.Warn(context.Background(), "Could not restrict host key file permissions: %v", err)
+	}
+
+	logger.Notice(context.Background(), "SSH server started on port %d", cfg.SSH.Port)
+	return srv, nil
 }
 
 // FindServersByPort returns all server instances that use targetPort as either
