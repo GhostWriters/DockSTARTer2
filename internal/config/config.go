@@ -117,7 +117,7 @@ type WebConfig struct {
 	//   "self-signed" (default, or empty) -- sip generates and manages its
 	//     own self-signed certificate. Browsers show a one-time warning.
 	//   "cert" -- use the certificate/key at TLSCert/TLSKey.
-	//   "http" -- plain HTTP, no encryption. Anyone on the network path can
+	//   "none" -- plain HTTP, no encryption. Anyone on the network path can
 	//     read (and, with auth.mode = "password", capture) traffic.
 	TLS     string `toml:"tls"`
 	TLSCert string `toml:"tls_cert"` // Path to a certificate file, when tls = "cert"

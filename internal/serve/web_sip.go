@@ -55,11 +55,11 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 		}
 		sipCfg.TLSCert = cfg.Web.TLSCert
 		sipCfg.TLSKey = cfg.Web.TLSKey
-	case "http":
+	case "none":
 		// Binding a non-loopback address without TLS is refused by sip
 		// unless explicitly permitted -- this is that explicit opt-in.
 		sipCfg.AllowInsecureNoTLS = true
-		logger.Warn(ctx, "Web server is running over plain HTTP (server.web.tls = \"http\"). "+
+		logger.Warn(ctx, "Web server is running over plain HTTP (server.web.tls = \"none\"). "+
 			"Traffic, including any auth.mode = \"password\" credentials, is unencrypted.")
 	case "self-signed", "":
 		// sip generates and manages its own self-signed keypair rather than
@@ -67,7 +67,7 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 		// tool. Browsers show a one-time warning on first visit.
 		sipCfg.AutoTLS = true
 	default:
-		return fmt.Errorf("unknown server.web.tls %q (valid: self-signed, cert, http)", cfg.Web.TLS)
+		return fmt.Errorf("unknown server.web.tls %q (valid: self-signed, cert, none)", cfg.Web.TLS)
 	}
 
 	sipCfg.ConnectMiddleware = append(sipCfg.ConnectMiddleware, captureUserAgentMiddleware)
