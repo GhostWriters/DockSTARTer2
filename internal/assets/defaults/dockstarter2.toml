@@ -71,8 +71,12 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # colors (e.g. "white"/"black", which compile to plain ANSI codes rather than
 # literal RGB) may render off from pure values unless overridden here.
 # Each value accepts hex ("#ffffff"), an ANSI name, or any color name tcell
-# resolves (e.g. "grey").
+# resolves (e.g. "grey"). scheme_file points to a tinted-theming base16
+# scheme YAML file (https://github.com/tinted-theming/schemes) to seed all
+# 16 slots at once; any of the 16 fields set explicitly below still wins
+# over the scheme for that one slot.
 [ansi_palette.local]
+scheme_file = ""
 black = ""
 red = ""
 green = ""
@@ -91,6 +95,7 @@ bright_cyan = ""
 bright_white = ""
 
 [ansi_palette.ssh]
+scheme_file = ""
 black = ""
 red = ""
 green = ""
@@ -109,6 +114,7 @@ bright_cyan = ""
 bright_white = ""
 
 [ansi_palette.web]
+scheme_file = ""
 black = ""
 red = ""
 green = ""

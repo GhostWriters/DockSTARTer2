@@ -146,6 +146,13 @@ type AnsiPaletteConfig struct {
 // the 16 ANSI names, or any broader color name tcell resolves (e.g.
 // "grey"). Empty leaves that slot at the terminal's own default.
 type AnsiColors struct {
+	// SchemeFile is an optional path to a tinted-theming base16 scheme YAML
+	// file (https://github.com/tinted-theming/schemes) -- its 16 colors seed
+	// this palette per tinted-theming's documented terminal mapping. Any of
+	// the 16 fields below set explicitly here still wins over the scheme for
+	// that one slot.
+	SchemeFile string `toml:"scheme_file"`
+
 	Black         string `toml:"black"`
 	Red           string `toml:"red"`
 	Green         string `toml:"green"`
@@ -187,6 +194,36 @@ func (c AnsiColors) Slots() [16]string {
 		c.Blue, c.Magenta, c.Cyan, c.White,
 		c.BrightBlack, c.BrightRed, c.BrightGreen, c.BrightYellow,
 		c.BrightBlue, c.BrightMagenta, c.BrightCyan, c.BrightWhite,
+	}
+}
+
+// WithDefaults returns c with any empty slot filled from fallback (e.g. a
+// SchemeFile-derived palette), leaving every slot c sets explicitly
+// untouched -- an explicit value always wins over a scheme's.
+func (c AnsiColors) WithDefaults(fallback AnsiColors) AnsiColors {
+	fill := func(v, d string) string {
+		if v == "" {
+			return d
+		}
+		return v
+	}
+	return AnsiColors{
+		Black:         fill(c.Black, fallback.Black),
+		Red:           fill(c.Red, fallback.Red),
+		Green:         fill(c.Green, fallback.Green),
+		Yellow:        fill(c.Yellow, fallback.Yellow),
+		Blue:          fill(c.Blue, fallback.Blue),
+		Magenta:       fill(c.Magenta, fallback.Magenta),
+		Cyan:          fill(c.Cyan, fallback.Cyan),
+		White:         fill(c.White, fallback.White),
+		BrightBlack:   fill(c.BrightBlack, fallback.BrightBlack),
+		BrightRed:     fill(c.BrightRed, fallback.BrightRed),
+		BrightGreen:   fill(c.BrightGreen, fallback.BrightGreen),
+		BrightYellow:  fill(c.BrightYellow, fallback.BrightYellow),
+		BrightBlue:    fill(c.BrightBlue, fallback.BrightBlue),
+		BrightMagenta: fill(c.BrightMagenta, fallback.BrightMagenta),
+		BrightCyan:    fill(c.BrightCyan, fallback.BrightCyan),
+		BrightWhite:   fill(c.BrightWhite, fallback.BrightWhite),
 	}
 }
 
