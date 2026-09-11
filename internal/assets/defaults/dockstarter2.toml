@@ -41,7 +41,10 @@ compose_folder = "${XDG_CONFIG_HOME}/compose"
 port = 40022                       # e.g. 22
 
 [server.web]
-port = 40080                       # e.g. 80
+port     = 40080                   # e.g. 80
+tls      = "self-signed"           # "self-signed", "cert", or "none" (plain HTTP)
+tls_cert = ""                      # path to a certificate file, when tls = "cert"
+tls_key  = ""                      # path to the certificate's private key, when tls = "cert"
 
 [server.auth]
 mode          = "none"             # "none", "password", or "pubkey"
@@ -58,3 +61,67 @@ auto_setcap  = false               # keep CAP_CHOWN/CAP_FOWNER applied to the bi
 setcap_asked = false               # set automatically once the one-time auto_setcap question has
                                    # been answered; the question is skipped when auto_setcap is
                                    # already true (e.g. enabled here by hand)
+
+# ── ANSI palette overrides ────────────────────────────────────────────────────
+# Optional per-connection-type overrides for the 16 standard ANSI colors,
+# sent to the terminal via OSC 4 at session start. Empty (the default) means
+# no override -- the connecting terminal's own palette is used, exactly as
+# today. Most relevant for "web": its client has no user-configured palette
+# the way a real local/SSH terminal (WezTerm, etc.) does, so a theme's named
+# colors (e.g. "white"/"black", which compile to plain ANSI codes rather than
+# literal RGB) may render off from pure values unless overridden here.
+# Each value accepts hex ("#ffffff"), an ANSI name, or any color name tcell
+# resolves (e.g. "grey").
+[ansi_palette.local]
+black = ""
+red = ""
+green = ""
+yellow = ""
+blue = ""
+magenta = ""
+cyan = ""
+white = ""
+bright_black = ""
+bright_red = ""
+bright_green = ""
+bright_yellow = ""
+bright_blue = ""
+bright_magenta = ""
+bright_cyan = ""
+bright_white = ""
+
+[ansi_palette.ssh]
+black = ""
+red = ""
+green = ""
+yellow = ""
+blue = ""
+magenta = ""
+cyan = ""
+white = ""
+bright_black = ""
+bright_red = ""
+bright_green = ""
+bright_yellow = ""
+bright_blue = ""
+bright_magenta = ""
+bright_cyan = ""
+bright_white = ""
+
+[ansi_palette.web]
+black = ""
+red = ""
+green = ""
+yellow = ""
+blue = ""
+magenta = ""
+cyan = ""
+white = ""
+bright_black = ""
+bright_red = ""
+bright_green = ""
+bright_yellow = ""
+bright_blue = ""
+bright_magenta = ""
+bright_cyan = ""
+bright_white = ""
