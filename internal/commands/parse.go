@@ -360,6 +360,18 @@ func Parse(args []string) ([]CommandGroup, error) {
 				}
 			}
 
+		case "--theme-tint", "--theme-tint-file":
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a connection type (local/ssh/web/all) and a %s.", cmd, map[string]string{"--theme-tint": "scheme name", "--theme-tint-file": "file path"}[cmd])}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a %s.", cmd, map[string]string{"--theme-tint": "scheme name", "--theme-tint-file": "file path"}[cmd])}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+
 		case "--theme-extract-all":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])

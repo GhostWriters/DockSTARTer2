@@ -216,6 +216,8 @@ var Registry = map[string]Def{
 	"--theme-tab-layout":          {Title: "Set Tab Layout", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-markdown-hyperlinks": {Title: "Set Markdown Hyperlinks Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-hyperlinks":          {Title: "Set Hyperlinks Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-tint":                {Title: "Set ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-tint-file":           {Title: "Set ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--config-panel":              {Title: "Set Panel Mode", ConfigChanging: true, ConsoleBlocked: true},
 }
 

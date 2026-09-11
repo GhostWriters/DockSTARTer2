@@ -147,6 +147,8 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.String("theme-hyperlinks", "", "Set DS2's own console/path hyperlink rendering (off/inline/auto)")
 	fs.String("theme-extract", "", "Extract a theme to a directory for customization")
 	fs.Bool("theme-extract-all", false, "Extract all embedded themes to a directory")
+	fs.String("theme-tint", "", "Set an ANSI palette tint from a tinted-theming base16 scheme name (local/ssh/web/all)")
+	fs.String("theme-tint-file", "", "Set an ANSI palette tint from a local base16 scheme file (local/ssh/web/all)")
 	fs.String("app-template-extract", "", "Extract a bundled app template to a directory for customization")
 	fs.String("app-template-new", "", "Scaffold a brand-new app template in the user app templates folder")
 

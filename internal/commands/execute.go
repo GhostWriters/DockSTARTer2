@@ -78,7 +78,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
 			"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--theme-tint", "--theme-tint-file", "--app-template-extract", "--app-template-new", "--man",
 			"--theme-spinner", "--theme-no-spinner", "--env-appfiles":
 		default:
 			shouldValidate = true
@@ -295,6 +295,10 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleThemeTable(innerCtx)
 			case "--theme-extract", "--theme-extract-all":
 				return HandleThemeExtract(innerCtx, &group)
+			case "--theme-tint":
+				return HandleThemeTint(innerCtx, &group)
+			case "--theme-tint-file":
+				return HandleThemeTintFile(innerCtx, &group)
 			case "--app-template-extract":
 				return HandleAppTemplateExtract(innerCtx, &group)
 			case "--app-template-new":
