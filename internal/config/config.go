@@ -67,10 +67,11 @@ func isMigrationMode(ctx context.Context) bool {
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
-	UI     UIConfig     `toml:"ui"`
-	Paths  PathConfig   `toml:"paths"`
-	Server ServerConfig `toml:"server"`
-	System SystemConfig `toml:"system"`
+	UI         UIConfig          `toml:"ui"`
+	Paths      PathConfig        `toml:"paths"`
+	Server     ServerConfig      `toml:"server"`
+	System     SystemConfig      `toml:"system"`
+	AnsiColors AnsiPaletteConfig `toml:"ansi_palette"`
 
 	// These are helper fields for runtime use, not saved to TOML
 	Arch       string     `toml:"-"`
@@ -122,6 +123,71 @@ type WebConfig struct {
 	TLS     string `toml:"tls"`
 	TLSCert string `toml:"tls_cert"` // Path to a certificate file, when tls = "cert"
 	TLSKey  string `toml:"tls_key"`  // Path to the certificate's private key, when tls = "cert"
+}
+
+// AnsiPaletteConfig holds optional overrides for the standard 16-color ANSI
+// palette, sent to the terminal via OSC 4 at session start so a theme's
+// named colors (e.g. semstyle's "white"/"black", which compile to plain
+// ANSI codes rather than literal RGB) render as intended regardless of the
+// connecting terminal's own default palette -- most relevant for the web
+// frontend, whose client has no user-configured palette of its own the way
+// a real local/SSH terminal (WezTerm, Ghostty, etc.) does.
+//
+// Each of Local/SSH/Web is independently optional and empty by default --
+// this never touches a user's own terminal color scheme unless configured.
+type AnsiPaletteConfig struct {
+	Local AnsiColors `toml:"local"`
+	SSH   AnsiColors `toml:"ssh"`
+	Web   AnsiColors `toml:"web"`
+}
+
+// AnsiColors holds the 16 standard ANSI palette slots. Each field accepts
+// anything semstyle.ToColor understands: a hex value ("#ffffff"), one of
+// the 16 ANSI names, or any broader color name tcell resolves (e.g.
+// "grey"). Empty leaves that slot at the terminal's own default.
+type AnsiColors struct {
+	Black         string `toml:"black"`
+	Red           string `toml:"red"`
+	Green         string `toml:"green"`
+	Yellow        string `toml:"yellow"`
+	Blue          string `toml:"blue"`
+	Magenta       string `toml:"magenta"`
+	Cyan          string `toml:"cyan"`
+	White         string `toml:"white"`
+	BrightBlack   string `toml:"bright_black"`
+	BrightRed     string `toml:"bright_red"`
+	BrightGreen   string `toml:"bright_green"`
+	BrightYellow  string `toml:"bright_yellow"`
+	BrightBlue    string `toml:"bright_blue"`
+	BrightMagenta string `toml:"bright_magenta"`
+	BrightCyan    string `toml:"bright_cyan"`
+	BrightWhite   string `toml:"bright_white"`
+}
+
+// ForConnType returns the palette override for connType ("local", "ssh", or
+// "web"), or a zero-value AnsiColors (no overrides) for anything else.
+func (c AnsiPaletteConfig) ForConnType(connType string) AnsiColors {
+	switch connType {
+	case "local":
+		return c.Local
+	case "ssh":
+		return c.SSH
+	case "web":
+		return c.Web
+	default:
+		return AnsiColors{}
+	}
+}
+
+// Slots returns the palette's 16 entries in ANSI index order (0-15), paired
+// with their configured override value (possibly empty).
+func (c AnsiColors) Slots() [16]string {
+	return [16]string{
+		c.Black, c.Red, c.Green, c.Yellow,
+		c.Blue, c.Magenta, c.Cyan, c.White,
+		c.BrightBlack, c.BrightRed, c.BrightGreen, c.BrightYellow,
+		c.BrightBlue, c.BrightMagenta, c.BrightCyan, c.BrightWhite,
+	}
 }
 
 // AuthConfig holds authentication settings for the SSH server.
