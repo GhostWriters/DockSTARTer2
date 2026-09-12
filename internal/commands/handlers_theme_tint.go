@@ -83,9 +83,10 @@ func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*con
 }
 
 // applyTint validates data as a base16 scheme, then for each of connTypes:
-// copies it to that connection type's state file, points
-// ansi_palette.<connType>.scheme_file at it, and re-enables the tint
-// (clearing any earlier --theme-no-tint).
+// copies it to that connection type's state file and points
+// ansi_palette.<connType>.scheme_file at it. Does not touch disabled --
+// --theme-tint-repo/-file only pick which scheme is configured, not
+// whether it's applied; use --theme-tint/--theme-no-tint for that.
 func applyTint(ctx context.Context, connTypes []string, data []byte, source string) error {
 	if _, err := config.ParseBase16Scheme(data); err != nil {
 		return fmt.Errorf("%s does not look like a valid base16 scheme: %w", source, err)
@@ -103,7 +104,6 @@ func applyTint(ctx context.Context, connTypes []string, data []byte, source stri
 		}
 		setAnsiColorsField(&conf, []string{ct}, func(c *config.AnsiColors) {
 			c.SchemeFile = tintStateFile(ct)
-			c.Disabled = false
 		})
 	}
 

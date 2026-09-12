@@ -443,7 +443,7 @@ func (m *AppModel) Init() tea.Cmd {
 		// querying it too would be harmless but pointless.
 		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes))
 	}
-	if osc := buildAnsiPaletteOSC(m.ctx, m.config.AnsiColors.ForConnType(m.connType)); osc != "" {
+	if osc := buildAnsiPaletteOSC(m.config.AnsiColors.ForConnType(m.connType)); osc != "" {
 		cmds = append(cmds, tea.Raw(osc))
 	}
 	return logger.BatchRecoverTUI(m.ctx, cmds...)

@@ -1,12 +1,10 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/logger"
 
 	semstyle "github.com/GhostWriters/semstyle"
 )
@@ -22,11 +20,11 @@ import (
 // intended regardless of the connecting terminal's own default palette --
 // most relevant for the web frontend, whose client has no user-configured
 // palette the way a real local/SSH terminal does.
-func buildAnsiPaletteOSC(ctx context.Context, colors config.AnsiColors) string {
+func buildAnsiPaletteOSC(colors config.AnsiColors) string {
 	if colors.Disabled {
 		return ""
 	}
-	colors = resolveAnsiColors(ctx, colors)
+	colors = resolveAnsiColors(colors)
 	var b strings.Builder
 	for i, v := range colors.Slots() {
 		if v == "" {
@@ -42,14 +40,16 @@ func buildAnsiPaletteOSC(ctx context.Context, colors config.AnsiColors) string {
 }
 
 // resolveAnsiColors layers colors' own explicit fields over its SchemeFile
-// (if set), so an individually-set field always wins over the scheme.
-func resolveAnsiColors(ctx context.Context, colors config.AnsiColors) config.AnsiColors {
+// (if set), so an individually-set field always wins over the scheme. A
+// missing or unreadable SchemeFile is silently ignored -- falls back to
+// colors' own explicit fields (or the terminal's own default palette if
+// those are empty too), same as if SchemeFile were never set.
+func resolveAnsiColors(colors config.AnsiColors) config.AnsiColors {
 	if colors.SchemeFile == "" {
 		return colors
 	}
 	scheme, err := config.LoadBase16Scheme(colors.SchemeFile)
 	if err != nil {
-		logger.Warn(ctx, "ansi_palette: could not load scheme_file %q: %v", colors.SchemeFile, err)
 		return colors
 	}
 	return colors.WithDefaults(scheme)
