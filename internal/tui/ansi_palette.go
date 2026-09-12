@@ -23,6 +23,9 @@ import (
 // most relevant for the web frontend, whose client has no user-configured
 // palette the way a real local/SSH terminal does.
 func buildAnsiPaletteOSC(ctx context.Context, colors config.AnsiColors) string {
+	if colors.Disabled {
+		return ""
+	}
 	colors = resolveAnsiColors(ctx, colors)
 	var b strings.Builder
 	for i, v := range colors.Slots() {

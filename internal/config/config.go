@@ -146,6 +146,13 @@ type AnsiPaletteConfig struct {
 // the 16 ANSI names, or any broader color name tcell resolves (e.g.
 // "grey"). Empty leaves that slot at the terminal's own default.
 type AnsiColors struct {
+	// Disabled turns off applying this palette (SchemeFile and the 16
+	// fields below) without discarding any of it -- set via
+	// --theme-no-tint, cleared via --theme-tint. Defaults false (i.e.
+	// enabled) so existing configs without this field keep behaving as
+	// they always have.
+	Disabled bool `toml:"disabled"`
+
 	// SchemeFile is an optional path to a tinted-theming base16 scheme YAML
 	// file (https://github.com/tinted-theming/schemes) -- its 16 colors seed
 	// this palette per tinted-theming's documented terminal mapping. Any of

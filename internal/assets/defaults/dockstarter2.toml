@@ -74,8 +74,10 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # resolves (e.g. "grey"). scheme_file points to a tinted-theming base16
 # scheme YAML file (https://github.com/tinted-theming/schemes) to seed all
 # 16 slots at once; any of the 16 fields set explicitly below still wins
-# over the scheme for that one slot.
+# over the scheme for that one slot. disabled turns off the whole section
+# below without discarding it (set via --theme-no-tint / --theme-tint).
 [ansi_palette.local]
+disabled = false
 scheme_file = ""
 black = ""
 red = ""
@@ -95,6 +97,7 @@ bright_cyan = ""
 bright_white = ""
 
 [ansi_palette.ssh]
+disabled = false
 scheme_file = ""
 black = ""
 red = ""
@@ -114,6 +117,7 @@ bright_cyan = ""
 bright_white = ""
 
 [ansi_palette.web]
+disabled = false
 scheme_file = ""
 black = ""
 red = ""
