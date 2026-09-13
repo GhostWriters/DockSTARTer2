@@ -78,7 +78,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
 			"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--tint-repo", "--tint-file", "--theme-tint", "--theme-no-tint", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--theme-tint", "--theme-no-tint", "--app-template-extract", "--app-template-new", "--man",
 			"--theme-spinner", "--theme-no-spinner", "--env-appfiles":
 		default:
 			shouldValidate = true
@@ -295,6 +295,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleThemeTable(innerCtx)
 			case "--theme-extract", "--theme-extract-all":
 				return HandleThemeExtract(innerCtx, &group)
+			case "--tint":
+				return HandleTintStatus(innerCtx, &group)
 			case "--tint-repo":
 				return HandleThemeTintRepo(innerCtx, &group)
 			case "--tint-file":

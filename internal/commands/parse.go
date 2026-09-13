@@ -361,16 +361,18 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		case "--tint-repo", "--tint-file":
-			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
-				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a connection type (local/ssh/web/all) and a %s.", cmd, map[string]string{"--tint-repo": "scheme name", "--tint-file": "file path"}[cmd])}
-			}
-			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
-			i++
+			// <scheme-name-or-path> is required; the trailing connection-type
+			// arg is optional (omitted means "all"), same as --theme-tint/
+			// --theme-no-tint.
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a %s.", cmd, map[string]string{"--tint-repo": "scheme name", "--tint-file": "file path"}[cmd])}
 			}
 			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 			i++
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
 
 		case "--theme-tint", "--theme-no-tint":
 			// Connection type is optional here -- omitted means "all".

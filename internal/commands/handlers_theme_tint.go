@@ -104,22 +104,27 @@ func applyTint(ctx context.Context, connTypes []string, data []byte, source stri
 	return nil
 }
 
-// HandleThemeTintRepo implements --tint-repo <types> <scheme-name>,
+// HandleThemeTintRepo implements --tint-repo <scheme-name> [types],
 // resolving a named tinted-theming base16 scheme
 // (github.com/tinted-theming/schemes) from a local clone of that repo
 // (cloned on first use, see ensureTintedThemingSchemesRepo) and applying
-// it as an ANSI palette tint for the given connection type(s).
+// it as an ANSI palette tint for the given connection type(s). types is
+// optional -- omitted means "all".
 func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
-	if len(group.Args) < 2 {
-		logger.Error(ctx, "Usage: --tint-repo <local|ssh|web|all|a,b,c> <scheme-name>")
+	if len(group.Args) < 1 {
+		logger.Error(ctx, "Usage: --tint-repo <scheme-name> [local|ssh|web|all|a,b,c]")
 		return fmt.Errorf("missing arguments")
 	}
-	connTypes, err := parseConnTypeList(group.Args[0])
+	schemeName := group.Args[0]
+	typesArg := ""
+	if len(group.Args) > 1 {
+		typesArg = group.Args[1]
+	}
+	connTypes, err := parseOptionalConnTypeList(typesArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	schemeName := group.Args[1]
 
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
@@ -137,20 +142,24 @@ func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 	return applyTint(ctx, connTypes, data, "'"+schemeName+"'")
 }
 
-// HandleThemeTintFile implements --tint-file <types> <path>, applying
+// HandleThemeTintFile implements --tint-file <path> [types], applying
 // a local base16 scheme YAML file as an ANSI palette tint for the given
-// connection type(s).
+// connection type(s). types is optional -- omitted means "all".
 func HandleThemeTintFile(ctx context.Context, group *CommandGroup) error {
-	if len(group.Args) < 2 {
-		logger.Error(ctx, "Usage: --tint-file <local|ssh|web|all|a,b,c> <path>")
+	if len(group.Args) < 1 {
+		logger.Error(ctx, "Usage: --tint-file <path> [local|ssh|web|all|a,b,c]")
 		return fmt.Errorf("missing arguments")
 	}
-	connTypes, err := parseConnTypeList(group.Args[0])
+	path := group.Args[0]
+	typesArg := ""
+	if len(group.Args) > 1 {
+		typesArg = group.Args[1]
+	}
+	connTypes, err := parseOptionalConnTypeList(typesArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	path := group.Args[1]
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -191,6 +200,32 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
 	} else {
 		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+	}
+	return nil
+}
+
+// HandleTintStatus implements --tint, printing each connection type's
+// current tint state (enabled/disabled and scheme_file, if any).
+func HandleTintStatus(_ context.Context, _ *CommandGroup) error {
+	conf := config.LoadAppConfig()
+	rows := []struct {
+		label string
+		c     config.AnsiColors
+	}{
+		{"local", conf.AnsiColors.Local},
+		{"ssh", conf.AnsiColors.SSH},
+		{"web", conf.AnsiColors.Web},
+	}
+	for _, row := range rows {
+		state := "enabled"
+		if row.c.Disabled {
+			state = "disabled"
+		}
+		scheme := row.c.SchemeFile
+		if scheme == "" {
+			scheme = "(none)"
+		}
+		fmt.Printf("%-6s %-9s scheme_file: %s\n", row.label+":", state, scheme)
 	}
 	return nil
 }
