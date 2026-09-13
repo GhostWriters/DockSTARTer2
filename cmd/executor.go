@@ -68,7 +68,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks",
 			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--theme-tint-repo", "--theme-tint-file", "--theme-tint", "--theme-no-tint", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--tint-repo", "--tint-file", "--theme-tint", "--theme-no-tint", "--app-template-extract", "--app-template-new", "--man",
 			"--env-appfiles":
 			// Skip validation for meta/config commands
 		default:
@@ -307,10 +307,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--theme-extract", "--theme-extract-all":
 				ranCommand = true
 				return commands.HandleThemeExtract(subCtx, &group)
-			case "--theme-tint-repo":
+			case "--tint-repo":
 				ranCommand = true
 				return commands.HandleThemeTintRepo(subCtx, &group)
-			case "--theme-tint-file":
+			case "--tint-file":
 				ranCommand = true
 				return commands.HandleThemeTintFile(subCtx, &group)
 			case "--theme-tint", "--theme-no-tint":

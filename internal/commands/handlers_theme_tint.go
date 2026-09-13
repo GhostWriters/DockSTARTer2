@@ -16,17 +16,18 @@ import (
 	"DockSTARTer2/internal/paths"
 )
 
-// tintSchemeBaseURL is where --theme-tint-repo resolves a scheme name to a
+// tintSchemeBaseURL is where --tint-repo resolves a scheme name to a
 // downloadable file. Scheme names match a file's slug in this directory
 // (e.g. "gruvbox-dark-hard" -> gruvbox-dark-hard.yaml).
 const tintSchemeBaseURL = "https://raw.githubusercontent.com/tinted-theming/schemes/spec-0.11/base16/"
 
-// tintHTTPClient is used for --theme-tint-repo's scheme download. A short
+// tintHTTPClient is used for --tint-repo's scheme download. A short
 // timeout since this is a small, synchronous, interactive CLI command.
 var tintHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-// parseConnTypeList parses a --theme-tint* command's connection-type
-// argument: "all", a single conn type, or a comma-separated list of them.
+// parseConnTypeList parses a --tint-repo/--tint-file/--theme-tint/
+// --theme-no-tint command's connection-type argument: "all", a single
+// conn type, or a comma-separated list of them.
 func parseConnTypeList(s string) ([]string, error) {
 	if s == "all" {
 		return []string{"local", "ssh", "web"}, nil
@@ -85,7 +86,7 @@ func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*con
 // applyTint validates data as a base16 scheme, then for each of connTypes:
 // copies it to that connection type's state file and points
 // ansi_palette.<connType>.scheme_file at it. Does not touch disabled --
-// --theme-tint-repo/-file only pick which scheme is configured, not
+// --tint-repo/-file only pick which scheme is configured, not
 // whether it's applied; use --theme-tint/--theme-no-tint for that.
 func applyTint(ctx context.Context, connTypes []string, data []byte, source string) error {
 	if _, err := config.ParseBase16Scheme(data); err != nil {
@@ -115,13 +116,13 @@ func applyTint(ctx context.Context, connTypes []string, data []byte, source stri
 	return nil
 }
 
-// HandleThemeTintRepo implements --theme-tint-repo <types> <scheme-name>,
+// HandleThemeTintRepo implements --tint-repo <types> <scheme-name>,
 // downloading a named tinted-theming base16 scheme
 // (github.com/tinted-theming/schemes) and applying it as an ANSI palette
 // tint for the given connection type(s).
 func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) < 2 {
-		logger.Error(ctx, "Usage: --theme-tint-repo <local|ssh|web|all|a,b,c> <scheme-name>")
+		logger.Error(ctx, "Usage: --tint-repo <local|ssh|web|all|a,b,c> <scheme-name>")
 		return fmt.Errorf("missing arguments")
 	}
 	connTypes, err := parseConnTypeList(group.Args[0])
@@ -152,12 +153,12 @@ func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 	return applyTint(ctx, connTypes, data, "'"+schemeName+"'")
 }
 
-// HandleThemeTintFile implements --theme-tint-file <types> <path>, applying
+// HandleThemeTintFile implements --tint-file <types> <path>, applying
 // a local base16 scheme YAML file as an ANSI palette tint for the given
 // connection type(s).
 func HandleThemeTintFile(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) < 2 {
-		logger.Error(ctx, "Usage: --theme-tint-file <local|ssh|web|all|a,b,c> <path>")
+		logger.Error(ctx, "Usage: --tint-file <local|ssh|web|all|a,b,c> <path>")
 		return fmt.Errorf("missing arguments")
 	}
 	connTypes, err := parseConnTypeList(group.Args[0])

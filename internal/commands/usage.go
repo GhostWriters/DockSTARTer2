@@ -503,7 +503,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-checkbox-brackets", "--theme-radio-brackets",
 		"--theme-menu-brackets", "--theme-no-menu-brackets",
 		"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
-		"--theme-extract", "--theme-extract-all", "--theme-tint-repo", "--theme-tint-file", "--theme-tint", "--theme-no-tint") {
+		"--theme-extract", "--theme-extract-all", "--tint-repo", "--tint-file", "--theme-tint", "--theme-no-tint") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}]",
 			"	Apply a theme. No arg shows the current theme.",
@@ -557,9 +557,9 @@ func GetUsage(target string, noHeading bool) string {
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",
 			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
-			"{{|UsageCommand|}}--theme-tint-repo{{[-]}} {{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}} {{|UsageOption|}}<scheme-name>{{[-]}}",
+			"{{|UsageCommand|}}--tint-repo{{[-]}} {{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}} {{|UsageOption|}}<scheme-name>{{[-]}}",
 			"	Set an ANSI palette tint by downloading a tinted-theming base16 scheme (github.com/tinted-theming/schemes)",
-			"{{|UsageCommand|}}--theme-tint-file{{[-]}} {{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}} {{|UsageOption|}}<path>{{[-]}}",
+			"{{|UsageCommand|}}--tint-file{{[-]}} {{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}} {{|UsageOption|}}<path>{{[-]}}",
 			"	Set an ANSI palette tint from a local base16 scheme YAML file",
 			"{{|UsageCommand|}}--theme-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Enable an already-configured ANSI palette tint. No arg means all.",
