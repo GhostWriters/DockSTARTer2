@@ -155,6 +155,14 @@ func GetTemplatesDir() string {
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
+// GetTintedThemingSchemesDir returns the absolute path to a local clone of
+// the tinted-theming/schemes repo (github.com/tinted-theming/schemes),
+// used by --tint-repo to resolve a scheme name to its YAML file without a
+// network round-trip on every call.
+func GetTintedThemingSchemesDir() string {
+	return filepath.Join(GetStateDir(), "tinted-theming-schemes")
+}
+
 // GetTemplatesEnvFile returns the absolute path to the global .env template
 // at the DockSTARTer-Templates repo root -- fetched/cached the same way as
 // every per-app template file, so DS1 and DS2 read the exact same file.

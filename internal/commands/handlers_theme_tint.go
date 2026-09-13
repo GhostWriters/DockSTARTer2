@@ -3,27 +3,15 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 )
-
-// tintSchemeBaseURL is where --tint-repo resolves a scheme name to a
-// downloadable file. Scheme names match a file's slug in this directory
-// (e.g. "gruvbox-dark-hard" -> gruvbox-dark-hard.yaml).
-const tintSchemeBaseURL = "https://raw.githubusercontent.com/tinted-theming/schemes/spec-0.11/base16/"
-
-// tintHTTPClient is used for --tint-repo's scheme download. A short
-// timeout since this is a small, synchronous, interactive CLI command.
-var tintHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 // parseConnTypeList parses a --tint-repo/--tint-file/--theme-tint/
 // --theme-no-tint command's connection-type argument: "all", a single
@@ -117,9 +105,10 @@ func applyTint(ctx context.Context, connTypes []string, data []byte, source stri
 }
 
 // HandleThemeTintRepo implements --tint-repo <types> <scheme-name>,
-// downloading a named tinted-theming base16 scheme
-// (github.com/tinted-theming/schemes) and applying it as an ANSI palette
-// tint for the given connection type(s).
+// resolving a named tinted-theming base16 scheme
+// (github.com/tinted-theming/schemes) from a local clone of that repo
+// (cloned on first use, see ensureTintedThemingSchemesRepo) and applying
+// it as an ANSI palette tint for the given connection type(s).
 func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) < 2 {
 		logger.Error(ctx, "Usage: --tint-repo <local|ssh|web|all|a,b,c> <scheme-name>")
@@ -132,21 +121,16 @@ func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 	}
 	schemeName := group.Args[1]
 
-	url := tintSchemeBaseURL + schemeName + ".yaml"
-	resp, err := tintHTTPClient.Get(url) //nolint:gosec,noctx
+	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
-		logger.Error(ctx, "Downloading scheme '{{|Theme|}}%s{{[-]}}': %v", schemeName, err)
-		return err
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("scheme %q not found (HTTP %d) -- check the name against %s", schemeName, resp.StatusCode, "https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	data, err := io.ReadAll(resp.Body)
+
+	data, err := os.ReadFile(filepath.Join(repoDir, "base16", schemeName+".yaml"))
 	if err != nil {
-		logger.Error(ctx, "Reading downloaded scheme: %v", err)
+		err := fmt.Errorf("scheme %q not found -- check the name against %s", schemeName, "https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
+		logger.Error(ctx, "%v", err)
 		return err
 	}
 
