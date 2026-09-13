@@ -503,7 +503,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-checkbox-brackets", "--theme-radio-brackets",
 		"--theme-menu-brackets", "--theme-no-menu-brackets",
 		"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
-		"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--theme-tint", "--theme-no-tint") {
+		"--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}]",
 			"	Apply a theme. No arg shows the current theme.",
@@ -557,16 +557,57 @@ func GetUsage(target string, noHeading bool) string {
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",
 			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
+		)
+	}
+	if match("--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-list-repo", "--tint-list-embedded") {
+		printStr(
 			"{{|UsageCommand|}}--tint{{[-]}}",
 			"	Show the current ANSI palette tint status for local/ssh/web",
 			"{{|UsageCommand|}}--tint-repo{{[-]}} {{|UsageOption|}}<scheme-name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set an ANSI palette tint by downloading a tinted-theming base16 scheme (github.com/tinted-theming/schemes). No connection type means all.",
 			"{{|UsageCommand|}}--tint-file{{[-]}} {{|UsageOption|}}<path>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set an ANSI palette tint from a local base16 scheme YAML file. No connection type means all.",
+			"{{|UsageCommand|}}--tint-embedded{{[-]}} {{|UsageOption|}}<name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Set an ANSI palette tint from one of DS2's own bundled base16 schemes (see --tint-list-embedded). No connection type means all.",
+			"{{|UsageCommand|}}--tint-list-repo{{[-]}}",
+			"	List the base16 scheme names available from the tinted-theming/schemes repo (for --tint-repo)",
+			"{{|UsageCommand|}}--tint-list-embedded{{[-]}}",
+			"	List the base16 scheme names bundled with DS2 (for --tint-embedded)",
+		)
+	}
+	if match("--theme-tint", "--theme-no-tint") {
+		printStr(
 			"{{|UsageCommand|}}--theme-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Enable an already-configured ANSI palette tint. No arg means all.",
 			"{{|UsageCommand|}}--theme-no-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Disable an already-configured ANSI palette tint without discarding it. No arg means all.",
+		)
+	}
+	if match("--theme-cli-tint", "--theme-no-cli-tint") {
+		printStr(
+			"{{|UsageCommand|}}--theme-cli-tint{{[-]}} | {{|UsageCommand|}}--theme-no-cli-tint{{[-]}}",
+			"	Enable/disable ANSI palette tint for non-interactive CLI output (e.g. `ds2 --tint`). The interactive local TUI is always tinted regardless.",
+		)
+	}
+	if match("--theme-programbox-tint", "--theme-no-programbox-tint") {
+		printStr(
+			"{{|UsageCommand|}}--theme-programbox-tint{{[-]}} | {{|UsageCommand|}}--theme-no-programbox-tint{{[-]}}",
+			"	Enable/disable ANSI palette tint for a ProgramBox dialog's streamed command output (e.g. `docker compose up` progress). Disabled renders with the terminal's own native palette instead.",
+		)
+	}
+	if match("--ansi-override") {
+		printStr(
+			"{{|UsageCommand|}}--ansi-override{{[-]}} {{|UsageOption|}}<slot>{{[-]}} {{|UsageOption|}}<value>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Override one of the 16 standard ANSI colors directly, independent of any tint. <value> \"none\" clears it. No connection type means all.",
+			"	  <slot>: black, red, green, yellow, blue, magenta, cyan, white, or bright-<one of those>",
+		)
+	}
+	if match("--theme-ansi-override", "--theme-no-ansi-override") {
+		printStr(
+			"{{|UsageCommand|}}--theme-ansi-override{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Enable already-configured ANSI color overrides. No arg means all.",
+			"{{|UsageCommand|}}--theme-no-ansi-override{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Disable ANSI color overrides without discarding them. No arg means all.",
 		)
 	}
 	if match("--theme-spinner-speed") {

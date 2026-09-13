@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -100,7 +101,11 @@ func applyTint(ctx context.Context, connTypes []string, data []byte, source stri
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	logger.Notice(ctx, "ANSI palette tint set from %s for: {{|Var|}}%s{{[-]}}", source, strings.Join(connTypes, ", "))
+	desc := source
+	if d := describeSchemeData(data); d != "" {
+		desc = d
+	}
+	logger.Notice(ctx, "ANSI palette tint set to %s for: {{|Var|}}%s{{[-]}}", desc, strings.Join(connTypes, ", "))
 	return nil
 }
 
@@ -142,6 +147,85 @@ func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 	return applyTint(ctx, connTypes, data, "'"+schemeName+"'")
 }
 
+// HandleThemeTintEmbedded implements --tint-embedded <name> [types],
+// applying one of DS2's own bundled schemes (see assets.GetTintTheme) as an
+// ANSI palette tint -- kept as its own command rather than folded into
+// --tint-repo's lookup so a bundled name never silently shadows (or gets
+// shadowed by) a same-named scheme in the real tinted-theming/schemes repo.
+// If tinted-theming ever publishes an equivalent scheme upstream, removing
+// the bundled file here just makes this command 404 for that name, with
+// --tint-repo picking it up from the real repo instead. types is optional
+// -- omitted means "all".
+func HandleThemeTintEmbedded(ctx context.Context, group *CommandGroup) error {
+	if len(group.Args) < 1 {
+		logger.Error(ctx, "Usage: --tint-embedded <name> [local|ssh|web|all|a,b,c]")
+		return fmt.Errorf("missing arguments")
+	}
+	schemeName := group.Args[0]
+	typesArg := ""
+	if len(group.Args) > 1 {
+		typesArg = group.Args[1]
+	}
+	connTypes, err := parseOptionalConnTypeList(typesArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+
+	data, err := assets.GetTintTheme(schemeName)
+	if err != nil {
+		names, _ := assets.ListTintThemes()
+		err := fmt.Errorf("no bundled scheme named %q (available: %s)", schemeName, strings.Join(names, ", "))
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+
+	return applyTint(ctx, connTypes, data, "'"+schemeName+"' (embedded)")
+}
+
+// HandleTintListEmbedded implements --tint-list-embedded, listing the
+// base16 scheme names bundled with DS2 (usable with --tint-embedded).
+func HandleTintListEmbedded(ctx context.Context, _ *CommandGroup) error {
+	names, err := assets.ListTintThemes()
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		fmt.Println(name)
+	}
+	return nil
+}
+
+// HandleTintListRepo implements --tint-list-repo, listing the base16
+// scheme names available from the cloned tinted-theming/schemes repo
+// (usable with --tint-repo) -- cloning it on first use, same as --tint-repo
+// itself.
+func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
+	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Join(repoDir, "base16"))
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+			names = append(names, strings.TrimSuffix(e.Name(), ".yaml"))
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		fmt.Println(name)
+	}
+	return nil
+}
+
 // HandleThemeTintFile implements --tint-file <path> [types], applying
 // a local base16 scheme YAML file as an ANSI palette tint for the given
 // connection type(s). types is optional -- omitted means "all".
@@ -171,9 +255,11 @@ func HandleThemeTintFile(ctx context.Context, group *CommandGroup) error {
 }
 
 // HandleThemeTintOnOff implements --theme-tint [types] and --theme-no-tint
-// [types], toggling whether an already-configured tint (SchemeFile/the 16
-// explicit fields) is applied, without discarding any of it. types is
-// optional on both -- omitted means "all".
+// [types], toggling whether an already-configured tint (SchemeFile) is
+// applied, without discarding it. Does not affect any --ansi-override
+// values, which are a separate mechanism (see HandleThemeAnsiOverrideOnOff
+// for their own on/off switch). types is optional on both -- omitted means
+// "all".
 func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 	typesArg := ""
 	if len(group.Args) > 0 {
@@ -185,28 +271,115 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	disabled := group.Command == "--theme-no-tint"
+	enabled := group.Command == "--theme-tint"
 
 	conf := config.LoadAppConfig()
 	setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
-		c.Disabled = disabled
+		c.TintEnabled = enabled
 	})
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save tint setting: %v", err)
 		return err
 	}
 
-	if disabled {
-		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
-	} else {
+	if enabled {
 		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+	} else {
+		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
 	}
 	return nil
 }
 
+// HandleThemeCLITintOnOff implements --theme-cli-tint and
+// --theme-no-cli-tint, toggling whether a bare, non-interactive CLI
+// invocation also renders with local's tint (config.AnsiPaletteConfig.
+// ApplyToCLI), in addition to the interactive local TUI (which always
+// does). Takes no connType argument -- a bare CLI invocation is always
+// local (see cmd.Execute's only caller, main.go).
+func HandleThemeCLITintOnOff(ctx context.Context, group *CommandGroup) error {
+	enabled := group.Command == "--theme-cli-tint"
+
+	conf := config.LoadAppConfig()
+	conf.AnsiColors.ApplyToCLI = enabled
+	if err := config.SaveAppConfig(conf); err != nil {
+		logger.Error(ctx, "Failed to save CLI tint setting: %v", err)
+		return err
+	}
+
+	if enabled {
+		logger.Notice(ctx, "ANSI palette tint enabled for non-interactive CLI output.")
+	} else {
+		logger.Notice(ctx, "ANSI palette tint disabled for non-interactive CLI output (the interactive TUI is unaffected).")
+	}
+	return nil
+}
+
+// HandleThemeProgramBoxTintOnOff implements --theme-programbox-tint and
+// --theme-no-programbox-tint, toggling whether a ProgramBox dialog's
+// streamed command output renders with the session's tint
+// (config.AnsiPaletteConfig.ApplyToProgramBox) or with the terminal's own
+// native palette instead. Takes no connType argument -- it affects every
+// connType's ProgramBox dialogs the same way.
+func HandleThemeProgramBoxTintOnOff(ctx context.Context, group *CommandGroup) error {
+	enabled := group.Command == "--theme-programbox-tint"
+
+	conf := config.LoadAppConfig()
+	conf.AnsiColors.ApplyToProgramBox = enabled
+	if err := config.SaveAppConfig(conf); err != nil {
+		logger.Error(ctx, "Failed to save ProgramBox tint setting: %v", err)
+		return err
+	}
+
+	if enabled {
+		logger.Notice(ctx, "ANSI palette tint enabled for ProgramBox output.")
+	} else {
+		logger.Notice(ctx, "ANSI palette tint disabled for ProgramBox output (it will render with the terminal's own palette).")
+	}
+	return nil
+}
+
+// describeSchemeData formats a base16 scheme's own name/author/variant
+// metadata (e.g. "ANSI by DockSTARTer2 (dark)") for display, or "" if data
+// doesn't parse or has no name.
+func describeSchemeData(data []byte) string {
+	meta, err := config.ParseBase16SchemeMeta(data)
+	if err != nil || meta.Name == "" {
+		return ""
+	}
+	desc := meta.Name
+	if meta.Author != "" {
+		desc += " by " + meta.Author
+	}
+	if meta.Variant != "" {
+		desc += " (" + meta.Variant + ")"
+	}
+	return desc
+}
+
+// describeSchemeFile reads path's base16 scheme metadata for --tint's
+// status display -- the raw state-file path itself (see tintStateFile)
+// tells the user nothing, since it's just DS2's own per-connType copy, not
+// the scheme's original name. Falls back to the bare filename if the file
+// can't be read or parsed, so a broken/missing file is still visible
+// rather than silently blank.
+func describeSchemeFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return filepath.Base(path) + " (unreadable)"
+	}
+	if desc := describeSchemeData(data); desc != "" {
+		return desc
+	}
+	return filepath.Base(path)
+}
+
 // HandleTintStatus implements --tint, printing each connection type's
-// current tint state (enabled/disabled and scheme_file, if any).
-func HandleTintStatus(_ context.Context, _ *CommandGroup) error {
+// current tint state (enabled/disabled and scheme_file, if any) plus
+// whether ANSI color overrides are enabled and any that are explicitly set
+// via --ansi-override -- a separate mechanism from the tint (see
+// HandleAnsiOverride/HandleThemeAnsiOverrideOnOff), shown here too since
+// together they determine what actually renders for that connType.
+func HandleTintStatus(ctx context.Context, _ *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	rows := []struct {
 		label string
@@ -217,15 +390,35 @@ func HandleTintStatus(_ context.Context, _ *CommandGroup) error {
 		{"web", conf.AnsiColors.Web},
 	}
 	for _, row := range rows {
-		state := "enabled"
-		if row.c.Disabled {
-			state = "disabled"
+		state := "disabled"
+		if row.c.TintEnabled {
+			state = "enabled"
 		}
-		scheme := row.c.SchemeFile
-		if scheme == "" {
-			scheme = "(none)"
+		scheme := "(none)"
+		if row.c.SchemeFile != "" {
+			scheme = describeSchemeFile(row.c.SchemeFile)
 		}
-		fmt.Printf("%-6s %-9s scheme_file: %s\n", row.label+":", state, scheme)
+
+		overrideState := "disabled"
+		if row.c.OverrideEnabled {
+			overrideState = "enabled"
+		}
+		var overrides []string
+		for _, slot := range ansiColorSlotNames {
+			if v := *ansiColorSlotField(&row.c, slot); v != "" {
+				overrides = append(overrides, slot+"="+v)
+			}
+		}
+		overridesDesc := "(none set)"
+		if len(overrides) > 0 {
+			overridesDesc = strings.Join(overrides, ", ")
+		}
+
+		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
+		logger.Notice(ctx, "\tTint (%s):", state)
+		logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", scheme)
+		logger.Notice(ctx, "\tOverrides (%s):", overrideState)
+		logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", overridesDesc)
 	}
 	return nil
 }

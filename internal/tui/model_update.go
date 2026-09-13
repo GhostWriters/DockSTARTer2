@@ -14,8 +14,18 @@ import (
 	"github.com/charmbracelet/x/input"
 )
 
-// Update implements tea.Model
-func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements tea.Model. Wraps updateWithTint so this session's own
+// connType's tint and color profile (see ActivateSessionRenderContext) are
+// active for the duration of the update -- concurrent sessions of a
+// different connType/profile don't clobber each other's rendering.
+func (m *AppModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	ActivateSessionRenderContext(m.connType, m.colorProfile, func() {
+		model, cmd = m.updateWithTint(msg)
+	})
+	return model, cmd
+}
+
+func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Restore terminal immediately
@@ -844,6 +854,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		console.LineCharacters = msg.Config.UI.LineCharacters
 		console.HyperlinksMode = msg.Config.UI.Hyperlinks
 		_, _ = theme.Load(m.config.UI.Theme, "")
+		RegisterConnTypeTints(m.ctx, m.connType, m.config.AnsiColors.ForConnType(m.connType))
 		m.invalidateAllCaches()
 		m.backdrop.Header.SyncFlags()
 		updated, _ := m.panel.Update(msg)

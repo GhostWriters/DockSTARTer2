@@ -64,20 +64,39 @@ setcap_asked = false               # set automatically once the one-time auto_se
 
 # ── ANSI palette overrides ────────────────────────────────────────────────────
 # Optional per-connection-type overrides for the 16 standard ANSI colors,
-# sent to the terminal via OSC 4 at session start. Empty (the default) means
-# no override -- the connecting terminal's own palette is used, exactly as
-# today. Most relevant for "web": its client has no user-configured palette
-# the way a real local/SSH terminal (WezTerm, etc.) does, so a theme's named
-# colors (e.g. "white"/"black", which compile to plain ANSI codes rather than
-# literal RGB) may render off from pure values unless overridden here.
+# substituted internally at session start rather than relying on the
+# terminal's own palette. Empty (the default) means no override -- colors
+# render exactly as today. Most relevant for "web": its client has no
+# user-configured palette the way a real local/SSH terminal (WezTerm, etc.)
+# does, so a theme's named colors (e.g. "white"/"black", which compile to
+# plain ANSI codes rather than literal RGB) may render off from pure values
+# unless overridden here.
 # Each value accepts hex ("#ffffff"), an ANSI name, or any color name tcell
 # resolves (e.g. "grey"). scheme_file points to a tinted-theming base16
 # scheme YAML file (https://github.com/tinted-theming/schemes) to seed all
 # 16 slots at once; any of the 16 fields set explicitly below still wins
-# over the scheme for that one slot. disabled turns off the whole section
-# below without discarding it (set via --theme-no-tint / --theme-tint).
+# over the scheme for that one slot (settable individually via
+# --ansi-override; "none" clears one). tint_enabled and override_enabled
+# independently turn scheme_file and the 16 fields on or off as a group,
+# without discarding either (set via --theme-tint/--theme-no-tint and
+# --theme-ansi-override/--theme-no-ansi-override) -- either can be off
+# regardless of the other.
+[ansi_palette]
+# apply_to_cli: whether a bare, non-interactive command (e.g. `ds2 --tint`)
+# also renders with local's tint, in addition to the interactive local TUI
+# (which always does). Set false for a plain/script-friendly CLI while
+# keeping the tinted look in the TUI (set via --theme-cli-tint /
+# --theme-no-cli-tint).
+apply_to_cli = true
+# apply_to_programbox: whether a ProgramBox dialog's streamed command output
+# (e.g. `docker compose up` progress) renders with the session's tint, or
+# with the terminal's own native palette instead (set via
+# --theme-programbox-tint / --theme-no-programbox-tint).
+apply_to_programbox = true
+
 [ansi_palette.local]
-disabled = false
+tint_enabled = true
+override_enabled = true
 scheme_file = ""
 black = ""
 red = ""
@@ -97,7 +116,8 @@ bright_cyan = ""
 bright_white = ""
 
 [ansi_palette.ssh]
-disabled = false
+tint_enabled = true
+override_enabled = true
 scheme_file = ""
 black = ""
 red = ""
@@ -117,7 +137,8 @@ bright_cyan = ""
 bright_white = ""
 
 [ansi_palette.web]
-disabled = false
+tint_enabled = true
+override_enabled = true
 scheme_file = ""
 black = ""
 red = ""

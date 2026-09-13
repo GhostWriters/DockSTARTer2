@@ -42,9 +42,26 @@ var commandDefs = commands.Registry
 
 // Execute runs the logic for a sequence of command groups.
 // It handles flag application, command switching, and state resetting.
+//
+// The pre-flight checks (update/status warnings) that run before this is
+// called activate/release local's tint on their own, further up in main.go's
+// run() (if AnsiPaletteConfig.ApplyToCLI); that scope ends before Execute
+// starts. Execute manages its own activation from there, independently,
+// re-checking ApplyToCLI fresh at the top of every group (see the loop
+// below) -- a --theme-cli-tint/--theme-no-cli-tint command run as one group
+// in this same invocation must be reflected starting with ITS OWN
+// confirmation message and every later group, not just on the next separate
+// invocation.
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
+	tui.RegisterConnTypeTints(ctx, "local", conf.AnsiColors.ForConnType("local"))
 	_, _ = theme.Load(conf.UI.Theme, "")
+	var cliTintRestore func()
+	defer func() {
+		if cliTintRestore != nil {
+			cliTintRestore()
+		}
+	}()
 	console.LineCharacters = conf.UI.LineCharacters
 	console.SpinnerEnabled = conf.UI.Spinner
 	console.SpinnerSpeed = conf.UI.SpinnerSpeed
@@ -68,7 +85,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks",
 			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--theme-tint", "--theme-no-tint", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-list-repo", "--tint-list-embedded", "--theme-tint", "--theme-no-tint", "--theme-cli-tint", "--theme-no-cli-tint", "--theme-programbox-tint", "--theme-no-programbox-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
 			"--env-appfiles":
 			// Skip validation for meta/config commands
 		default:
@@ -86,6 +103,28 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// Check for context cancellation (e.g. Ctrl-C)
 		if ctx.Err() != nil {
 			return 1
+		}
+
+		// Re-register local's tint fresh for every group, not just once
+		// before the loop -- an earlier group in this same invocation
+		// (e.g. --tint-repo) may have just changed it on disk, and without
+		// this a later group (e.g. --version) in the same invocation would
+		// still render with whatever was registered at startup, only
+		// picking up the change on the next separate invocation.
+		freshAnsiColors := config.LoadAppConfig().AnsiColors
+		tui.RegisterConnTypeTints(ctx, "local", freshAnsiColors.ForConnType("local"))
+
+		// Same reasoning, for the ApplyToCLI on/off switch itself: a
+		// --theme-cli-tint/--theme-no-cli-tint group earlier in this same
+		// invocation must take effect starting with its own confirmation
+		// message, not just on the next separate invocation.
+		if freshAnsiColors.ApplyToCLI {
+			if cliTintRestore == nil {
+				cliTintRestore = tui.BeginTintFor("local")
+			}
+		} else if cliTintRestore != nil {
+			cliTintRestore()
+			cliTintRestore = nil
 		}
 
 		// Reset global state for this command set
@@ -316,9 +355,30 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--tint-file":
 				ranCommand = true
 				return commands.HandleThemeTintFile(subCtx, &group)
+			case "--tint-embedded":
+				ranCommand = true
+				return commands.HandleThemeTintEmbedded(subCtx, &group)
+			case "--tint-list-repo":
+				ranCommand = true
+				return commands.HandleTintListRepo(subCtx, &group)
+			case "--tint-list-embedded":
+				ranCommand = true
+				return commands.HandleTintListEmbedded(subCtx, &group)
 			case "--theme-tint", "--theme-no-tint":
 				ranCommand = true
 				return commands.HandleThemeTintOnOff(subCtx, &group)
+			case "--theme-cli-tint", "--theme-no-cli-tint":
+				ranCommand = true
+				return commands.HandleThemeCLITintOnOff(subCtx, &group)
+			case "--theme-programbox-tint", "--theme-no-programbox-tint":
+				ranCommand = true
+				return commands.HandleThemeProgramBoxTintOnOff(subCtx, &group)
+			case "--ansi-override":
+				ranCommand = true
+				return commands.HandleAnsiOverride(subCtx, &group)
+			case "--theme-ansi-override", "--theme-no-ansi-override":
+				ranCommand = true
+				return commands.HandleThemeAnsiOverrideOnOff(subCtx, &group)
 			case "--app-template-extract":
 				ranCommand = true
 				return commands.HandleAppTemplateExtract(subCtx, &group)

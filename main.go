@@ -27,6 +27,7 @@ import (
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/system"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 	"charm.land/lipgloss/v2"
@@ -338,6 +339,40 @@ func run() (exitCode int) {
 	// baseline to compare against, even after a manual binary replacement.
 	sessionlocks.Sessions.SeedInstalledVersion(exePath, version.Version)
 
+	// Activate local's tint (if configured and AnsiPaletteConfig.ApplyToCLI)
+	// for the pre-flight checks below (update/status warnings) -- this scope
+	// ends before cmd.Execute is called; Execute manages its own activation
+	// from there, re-checked fresh per command group (see its doc comment),
+	// since a --theme-cli-tint command run as one of those groups must not
+	// have to wait for a separate invocation to take effect.
+	// A begin/restore pair rather than one wrapping closure (see
+	// tui.BeginTintFor's doc comment) since this span has early returns
+	// scattered through it (setcap re-exec, fatal template-clone errors)
+	// that a closure would either miss or need restructuring to fit.
+	var restoreTint func()
+	// Releases this scope's activation exactly once -- called explicitly
+	// right before cmd.Execute below (which then owns activation itself),
+	// and deferred here too so an early return before reaching that point
+	// (e.g. the re-exec/fatal-template-clone paths further down) still
+	// restores it. Safe to call twice: restoreTint is nilled out the first
+	// time, since semstyle.BeginTint's own restore func must run at most
+	// once (it releases a mutex Lock()).
+	endCLITintScope := func() {
+		if restoreTint != nil {
+			restoreTint()
+			restoreTint = nil
+		}
+	}
+	defer endCLITintScope()
+	if cliConf := config.LoadAppConfig(); cliConf.AnsiColors.ApplyToCLI {
+		// Activate first, then register: the console logger's
+		// [LEVEL]/timestamp styles are rebuilt fresh on every "ansi" log
+		// line (see TagProcessorHandler.Handle), which only reflects the
+		// correct tint if the key is already the active one by then.
+		restoreTint = tui.BeginTintFor("local")
+		tui.RegisterConnTypeTints(ctx, "local", cliConf.AnsiColors.Local)
+	}
+
 	stopStartupSpinner := console.StartSpinner()
 
 	// Ensure templates are cloned
@@ -425,6 +460,11 @@ func run() (exitCode int) {
 		logger.Error(ctx, err.Error())
 		exitCode = 1
 	} else {
+		// End this scope's tint activation before Execute takes over its
+		// own (see endCLITintScope's comment) -- otherwise Execute's first
+		// BeginTintFor call would deadlock on the mutex this scope still
+		// holds.
+		endCLITintScope()
 		// Hand off execution to the cmd package
 		exitCode = cmd.Execute(ctx, groups)
 	}

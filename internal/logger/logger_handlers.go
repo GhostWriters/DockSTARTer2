@@ -2,9 +2,9 @@ package logger
 
 import (
 	"DockSTARTer2/internal/console"
-	"github.com/GhostWriters/semstyle"
 	"context"
 	"fmt"
+	"github.com/GhostWriters/semstyle"
 	"io"
 	"log/slog"
 )
@@ -149,9 +149,23 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	})
 
 	if h.mode == "ansi" {
-		// Hold termMu across clear+write+show so the spinner goroutine cannot
-		// interleave between these three steps.
+		// Hold termMu across rebuild+clear+write+show so the spinner
+		// goroutine cannot interleave between these steps.
 		console.LockTerminal()
+		// consoleLogger's own [LEVEL]/timestamp styles (see
+		// buildConsoleStyles) are baked lipgloss.Style values, not
+		// re-resolved on their own the way msg is (fresh on every call,
+		// above) -- rebuild them right before this render so they always
+		// reflect whatever tint is active *now*, not whatever was active
+		// whenever they last happened to be (re)built. Cheap enough (~7
+		// styles) to do unconditionally per line rather than track every
+		// place the tint can change and remember to invalidate. Done under
+		// termMu, same reason as the rest of this block: an interleaved
+		// SetStyles from a concurrent "ansi" log call must never land
+		// between this rebuild and h.base.Handle actually using it.
+		if consoleLogger != nil {
+			consoleLogger.SetStyles(buildConsoleStyles())
+		}
 		console.ClearSpinnerLine()
 		err := h.base.Handle(ctx, newR)
 		console.ShowSpinnerFrame()

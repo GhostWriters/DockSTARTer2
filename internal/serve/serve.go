@@ -23,6 +23,64 @@ import (
 	"charm.land/ssh"
 )
 
+func init() {
+	config.ServerTLSDefaultHook = applyServerTLSDefault
+}
+
+// applyServerTLSDefault backfills server.web.tls for a config file saved
+// before that field existed (see config.ServerTLSDefaultHook's doc comment).
+// The field is new with the switch to sip for the web frontend -- an
+// existing user who was already running a plain-HTTP web server under the
+// old frontend must not be silently switched to requiring HTTPS, since that
+// breaks any bookmark/script hitting "http://" outright. present["TLS"]
+// being false means this config predates the field entirely (a file saved
+// after this shipped always has it, once merged back to disk on any load or
+// save -- see LoadAppConfig), so this only ever fires once per such file.
+//
+// conf.Server.Web.Port alone can't answer "was a server already in active
+// use" -- the embedded default config ships with it already non-zero
+// (40080), so a install that has never touched server settings at all looks
+// identical to one that has. The two real signals are: another instance of
+// this program is right now registered as a running server with a web port
+// (sessionlocks tracks this across processes), or this one is installed/
+// enabled as a system service (systemd/launchd) -- both mean this user
+// deliberately set the web server up before, as opposed to just inheriting
+// an untouched default.
+//
+// Accepted gap: a server that was stopped and never installed/enabled as a
+// system service leaves no trace anywhere (not in config, not on disk), so
+// it looks identical to a fresh install and gets the secure default too --
+// there is no remaining signal to check.
+func applyServerTLSDefault(conf *config.AppConfig, present map[string]bool) {
+	if present["TLS"] {
+		return
+	}
+	if serverAlreadyInUse() {
+		conf.Server.Web.TLS = "none"
+	}
+	// Else: leave it at the compiled-in default ("self-signed") -- this is
+	// either a genuinely fresh install, or an existing config whose server
+	// was never actually enabled/run, which should get the secure default.
+}
+
+// serverAlreadyInUse reports whether the web server appears to already be
+// in active use by this installation, via either signal described in
+// applyServerTLSDefault's doc comment.
+func serverAlreadyInUse() bool {
+	for _, p := range sessionlocks.Sessions.ListProcInfos() {
+		if p.IsServer && p.WebPort > 0 {
+			return true
+		}
+	}
+	if installed, err := ServiceInstalled(); err == nil && installed {
+		return true
+	}
+	if enabled, err := ServiceEnabled(); err == nil && enabled {
+		return true
+	}
+	return false
+}
+
 // StartServer starts whichever of the SSH (wish) and web (sip) servers have
 // a port configured -- each is independently optional, matching the "port
 // is the intent signal" convention SSHConfig/WebConfig each already use on

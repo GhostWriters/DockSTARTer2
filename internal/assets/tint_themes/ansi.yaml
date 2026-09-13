@@ -1,0 +1,32 @@
+system: "base16"
+name: "ANSI"
+author: "DockSTARTer2"
+variant: "dark"
+# Standard xterm/ANSI 16-color values, expressed as a base16 scheme so it
+# loads through the same --tint-repo/--tint-file path as any other
+# tinted-theming scheme. base16's format only has one hue per color (no
+# separate bright variant for red/green/yellow/blue/magenta/cyan -- see
+# tinted-theming/home's documented terminal mapping), so those six pairs
+# collapse to the same value here; only black/white get a genuine bright
+# step (base00/03, base05/07). A base24 scheme (adding base10-base17) could
+# give every color a real distinct bright variant -- not done yet.
+# If tinted-theming ever publishes an equivalent upstream scheme, this file
+# can be removed and --tint-repo will resolve the name from the real repo
+# clone instead.
+palette:
+  base00: "#000000"
+  base01: "#7f7f7f"
+  base02: "#7f7f7f"
+  base03: "#7f7f7f"
+  base04: "#e5e5e5"
+  base05: "#e5e5e5"
+  base06: "#ffffff"
+  base07: "#ffffff"
+  base08: "#cd0000"
+  base09: "#ff0000"
+  base0A: "#cdcd00"
+  base0B: "#00cd00"
+  base0C: "#00cdcd"
+  base0D: "#0000ee"
+  base0E: "#cd00cd"
+  base0F: "#5c5cff"

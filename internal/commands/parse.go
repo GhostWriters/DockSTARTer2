@@ -360,12 +360,12 @@ func Parse(args []string) ([]CommandGroup, error) {
 				}
 			}
 
-		case "--tint-repo", "--tint-file":
+		case "--tint-repo", "--tint-file", "--tint-embedded":
 			// <scheme-name-or-path> is required; the trailing connection-type
 			// arg is optional (omitted means "all"), same as --theme-tint/
 			// --theme-no-tint.
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
-				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a %s.", cmd, map[string]string{"--tint-repo": "scheme name", "--tint-file": "file path"}[cmd])}
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a %s.", cmd, map[string]string{"--tint-repo": "scheme name", "--tint-file": "file path", "--tint-embedded": "scheme name"}[cmd])}
 			}
 			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 			i++
@@ -374,8 +374,27 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
-		case "--theme-tint", "--theme-no-tint":
+		case "--theme-tint", "--theme-no-tint", "--theme-ansi-override", "--theme-no-ansi-override":
 			// Connection type is optional here -- omitted means "all".
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
+		case "--ansi-override":
+			// <slot> <value> are both required; the trailing connection-type
+			// arg is optional (omitted means "all"), same as --tint-repo/
+			// --tint-file.
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a color slot name.", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a value (a color, or \"none\" to clear).", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++

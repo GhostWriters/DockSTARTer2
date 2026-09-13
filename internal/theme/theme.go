@@ -653,7 +653,12 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 	if useConsole {
 		registryKey = "console"
 	}
-	cacheKey := "tag:" + registryKey + ":" + prefix + ":" + tag
+	// Includes the active tint key (see semstyle.ActiveTintKey's doc
+	// comment) so a cache hit never returns a style resolved under a
+	// different tint (or no tint) than the one active now -- without this,
+	// a style resolved once (e.g. at logger init, before any tint is
+	// active) would never be recomputed even after a tint change.
+	cacheKey := "tag:" + registryKey + ":" + prefix + ":" + tag + ":" + semstyle.ActiveTintKey()
 	cacheMu.RLock()
 	s, ok := semanticStyleCache[cacheKey]
 	cacheMu.RUnlock()
@@ -665,6 +670,8 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 	if strings.HasPrefix(tag, semstyle.SemanticPrefix) && strings.HasSuffix(tag, semstyle.SemanticSuffix) {
 		name := tag[len(semstyle.SemanticPrefix) : len(tag)-len(semstyle.SemanticSuffix)]
 		style = SemanticRawStyleWithRegistry(name, prefix, useConsole)
+	} else if useConsole {
+		style = semstyle.ToConsoleStyle(semstyle.Default, tag, lipgloss.NewStyle(), lipgloss.NewStyle())
 	} else {
 		style = semstyle.ToStyle(semstyle.Default, tag, lipgloss.NewStyle(), lipgloss.NewStyle())
 	}
@@ -696,7 +703,9 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 	if useConsole {
 		registryKey = "console"
 	}
-	cacheKey := "raw:" + registryKey + ":" + prefix + ":" + name
+	// See SemanticStyleWithRegistry's matching comment on why the active
+	// tint key is part of this cache key too.
+	cacheKey := "raw:" + registryKey + ":" + prefix + ":" + name + ":" + semstyle.ActiveTintKey()
 	cacheMu.RLock()
 	if s, ok := semanticStyleCache[cacheKey]; ok {
 		cacheMu.RUnlock()
@@ -711,6 +720,14 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 		// prefix's own namespace instead of the bare/global one.
 		raw := semstyle.GetRawTagCodeWithPrefix(name, prefix)
 		s = semstyle.CodeToStyle(raw, lipgloss.NewStyle(), lipgloss.NewStyle())
+	} else if useConsole {
+		// Strict console-map resolution -- must not be shadowed by a loaded
+		// theme lacking this name, nor by SetAutoConsoleFallback(false) (see
+		// registerTagFallbacks), which disables ToStyle's theme-then-console
+		// fallback entirely. A console tag like a log level's style must
+		// always resolve from the console/base registry regardless of theme
+		// state.
+		s = semstyle.ToConsoleStyle(semstyle.Default, semstyle.WrapSemantic(name), lipgloss.NewStyle(), lipgloss.NewStyle())
 	} else {
 		s = semstyle.ToStyle(semstyle.Default, semstyle.WrapSemantic(name), lipgloss.NewStyle(), lipgloss.NewStyle())
 	}

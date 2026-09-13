@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 
@@ -33,6 +34,24 @@ func StartForSession(ctx context.Context, startMenu string, opts ProgramOptions)
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(clientIP)
 
+	// See Start's matching comment (internal/tui/tui.go): activate
+	// connType's tint for the Initialize/screen-construction/NewAppModel
+	// span below, released before returning p to the caller -- sip's
+	// ServeWithProgram calls p.Run() itself, outside this function, and
+	// AppModel.Update/View activate this same tint again per render via
+	// ActivateSessionRenderContext, which would deadlock on semstyle's
+	// non-reentrant tint mutex if this scope were still held when that
+	// starts.
+	restoreStartupTint := BeginTintFor(connType)
+	endStartupTintScope := func() {
+		if restoreStartupTint != nil {
+			restoreStartupTint()
+			restoreStartupTint = nil
+		}
+	}
+	defer endStartupTintScope()
+	RegisterConnTypeTints(ctx, connType, config.LoadAppConfig().AnsiColors.ForConnType(connType))
+
 	if err := Initialize(ctx); err != nil {
 		return nil, nil, err
 	}
@@ -59,7 +78,8 @@ func StartForSession(ctx context.Context, startMenu string, opts ProgramOptions)
 		}
 	}
 
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, sessionKey, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, sessionKey, opts.Environ, startScreen, initialStack...)
+	endStartupTintScope()
 
 	p := NewProgram(model, opts)
 	model.panel.SetConfirmFunc(sessionConfirmFunc(p))

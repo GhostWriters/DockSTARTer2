@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -236,6 +237,16 @@ type AppModel struct {
 	connType   string
 	sessionKey string // identifies this session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 
+	// colorProfile is this session's own color profile (see
+	// resolveColorProfile), applied around every Update/View call (see
+	// ActivateTintFor's call sites) so semstyle's own ANSI generation
+	// (logger output, ProgramBox content, etc. -- separate from Bubble
+	// Tea's own per-program renderer, which already gets this right via
+	// tea.WithEnvironment) matches what this specific session's terminal
+	// can actually render, not whatever the process happened to detect
+	// from its own launch environment.
+	colorProfile colorprofile.Profile
+
 	// graphicsSupported reports whether this session's terminal has
 	// confirmed Sixel graphics support, via a Primary Device Attributes
 	// (DA1) query sent from Init(). Starts false and flips true if/when the
@@ -357,7 +368,7 @@ type AppModel struct {
 // NewAppModel creates a new application model.
 // initialStack is optional; pass parent screens (outermost first) to pre-populate
 // the navigation stack so that Back navigates to the parent rather than quitting.
-func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType, sessionKey string, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
+func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType, sessionKey string, environ []string, startScreen ScreenModel, initialStack ...ScreenModel) *AppModel {
 	// Get initial help text from screen if available
 	helpText := ""
 	if startScreen != nil {
@@ -376,6 +387,7 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType, 
 		clientIP:     clientIP,
 		connType:     connType,
 		sessionKey:   sessionKey,
+		colorProfile: resolveColorProfile(connType, environ),
 		activeScreen: startScreen,
 		screenStack:  stack,
 		needsInit:    make(map[ScreenModel]bool),
@@ -385,19 +397,20 @@ func NewAppModel(ctx context.Context, cfg config.AppConfig, clientIP, connType, 
 }
 
 // NewAppModelStandalone creates a new application model that starts with a modal dialog only
-func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType, sessionKey string, dialog tea.Model) *AppModel {
+func NewAppModelStandalone(ctx context.Context, cfg config.AppConfig, clientIP, connType, sessionKey string, environ []string, dialog tea.Model) *AppModel {
 	bd := displayengine.NewBackdropModel("")
 	bd.SetConnType(connType)
 	return &AppModel{
-		ctx:        ctx,
-		config:     cfg,
-		clientIP:   clientIP,
-		connType:   connType,
-		sessionKey: sessionKey,
-		needsInit:  make(map[ScreenModel]bool),
-		backdrop:   bd,
-		panel:      displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType, clientIP, sessionKey),
-		dialog:     dialog,
+		ctx:          ctx,
+		config:       cfg,
+		clientIP:     clientIP,
+		connType:     connType,
+		sessionKey:   sessionKey,
+		colorProfile: resolveColorProfile(connType, environ),
+		needsInit:    make(map[ScreenModel]bool),
+		backdrop:     bd,
+		panel:        displayengine.NewPanelModel(displayengine.EffectivePanelMode(cfg, connType), connType, clientIP, sessionKey),
+		dialog:       dialog,
 	}
 }
 
@@ -443,8 +456,6 @@ func (m *AppModel) Init() tea.Cmd {
 		// querying it too would be harmless but pointless.
 		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes))
 	}
-	if osc := buildAnsiPaletteOSC(m.ctx, m.config.AnsiColors.ForConnType(m.connType)); osc != "" {
-		cmds = append(cmds, tea.Raw(osc))
-	}
+	RegisterConnTypeTints(m.ctx, m.connType, m.config.AnsiColors.ForConnType(m.connType))
 	return logger.BatchRecoverTUI(m.ctx, cmds...)
 }
