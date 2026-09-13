@@ -11,7 +11,7 @@ require (
 	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.3
 	github.com/Gaurav-Gosain/sip v0.7.1
-	github.com/GhostWriters/semstyle v0.2.18
+	github.com/GhostWriters/semstyle v0.2.19
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
@@ -42,6 +42,7 @@ require (
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
+	golang.org/x/text v0.42.0
 	mvdan.cc/sh/v3 v3.14.1
 )
 
@@ -201,7 +202,6 @@ require (
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260831171406-18b4a7587f8a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260831171406-18b4a7587f8a // indirect
