@@ -336,21 +336,30 @@ func describeSchemeData(data []byte) string {
 	return desc
 }
 
+// tintStatusMeta is ref's own scheme metadata for --tint's status display,
+// broken into its separate fields rather than one collapsed line -- the raw
+// reference itself tells the user little for "user:"/"embedded:"/"repo:"
+// names, and nothing extra for "file:" beyond the path they already
+// configured. Unreadable is set (and Name left as ref) if the source can't
+// be read or parsed, so a broken/missing one is still visible rather than
+// silently blank.
+type tintStatusMeta struct {
+	Name, Author, Variant string
+	Unreadable            bool
+}
+
 // describeTintRef reads ref's (see config.AnsiColors.Tint's doc comment)
-// base16 scheme metadata for --tint's status display -- the raw reference
-// itself tells the user little for "user:"/"embedded:"/"repo:" names, and
-// nothing extra for "file:" beyond the path they already configured. Falls
-// back to ref itself if the source can't be read or parsed, so a
-// broken/missing one is still visible rather than silently blank.
-func describeTintRef(ctx context.Context, ref string) string {
+// base16 scheme metadata for --tint's status display.
+func describeTintRef(ctx context.Context, ref string) tintStatusMeta {
 	data, _, err := ResolveTintRefData(ctx, ref)
 	if err != nil {
-		return ref + " (unreadable)"
+		return tintStatusMeta{Name: ref, Unreadable: true}
 	}
-	if desc := describeSchemeData(data); desc != "" {
-		return desc
+	meta, err := config.ParseBase16SchemeMeta(data)
+	if err != nil || meta.Name == "" {
+		return tintStatusMeta{Name: ref}
 	}
-	return ref
+	return tintStatusMeta{Name: meta.Name, Author: meta.Author, Variant: meta.Variant}
 }
 
 // HandleTint implements --tint: no args prints each connection type's
@@ -401,10 +410,6 @@ func handleTintStatus(ctx context.Context) error {
 		if row.c.TintEnabled {
 			state = "enabled"
 		}
-		scheme := "(none)"
-		if row.c.Tint != "" {
-			scheme = describeTintRef(ctx, row.c.Tint)
-		}
 
 		overrideState := "disabled"
 		if row.c.OverrideEnabled {
@@ -423,7 +428,22 @@ func handleTintStatus(ctx context.Context) error {
 
 		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
 		logger.Notice(ctx, "\tTint (%s):", state)
-		logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", scheme)
+		if row.c.Tint == "" {
+			logger.Notice(ctx, "\t\t{{|Var|}}(none){{[-]}}")
+		} else {
+			meta := describeTintRef(ctx, row.c.Tint)
+			if meta.Unreadable {
+				logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}} (unreadable)", meta.Name)
+			} else {
+				logger.Notice(ctx, "\t\tScheme:  {{|Var|}}%s{{[-]}}", meta.Name)
+				if meta.Author != "" {
+					logger.Notice(ctx, "\t\tAuthor:  {{|Var|}}%s{{[-]}}", meta.Author)
+				}
+				if meta.Variant != "" {
+					logger.Notice(ctx, "\t\tVariant: {{|Var|}}%s{{[-]}}", meta.Variant)
+				}
+			}
+		}
 		logger.Notice(ctx, "\tOverrides (%s):", overrideState)
 		logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", overridesDesc)
 	}
