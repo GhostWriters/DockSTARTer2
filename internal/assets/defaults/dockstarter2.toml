@@ -75,7 +75,9 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # for "web": its client has no user-configured palette the way a real
 # local/SSH terminal (WezTerm, etc.) does, so a theme's named colors (e.g.
 # "white"/"black", which compile to plain ANSI codes rather than literal RGB)
-# may render off from pure values unless overridden here.
+# may render off from pure values unless overridden here -- which is why
+# "web" below ships with tint = "embedded:ansi" set by default (local/ssh
+# don't, since a real terminal already supplies a usable palette).
 # Each value accepts hex ("#ffffff"), an ANSI name, or any color name tcell
 # resolves (e.g. "grey"). The fields below are named after their base16/
 # base24 scheme slot (e.g. "base08"), so this section reads the same as a
@@ -172,7 +174,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [ansi_palette.web]
 tint_enabled = true
 override_enabled = true
-tint = ""
+tint = "embedded:ansi"
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green
