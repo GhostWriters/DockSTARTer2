@@ -431,9 +431,10 @@ func handleTintStatus(ctx context.Context) error {
 		if row.c.Tint == "" {
 			logger.Notice(ctx, "\t\t{{|Var|}}(none){{[-]}}")
 		} else {
+			logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", row.c.Tint)
 			meta := describeTintRef(ctx, row.c.Tint)
 			if meta.Unreadable {
-				logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}} (unreadable)", meta.Name)
+				logger.Notice(ctx, "\t\t(unreadable)")
 			} else {
 				logger.Notice(ctx, "\t\tScheme:  {{|Var|}}%s{{[-]}}", meta.Name)
 				if meta.Author != "" {
