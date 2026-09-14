@@ -10,6 +10,7 @@ import (
 
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 )
@@ -362,6 +363,37 @@ func describeTintRef(ctx context.Context, ref string) tintStatusMeta {
 	return tintStatusMeta{Name: meta.Name, Author: meta.Author, Variant: meta.Variant}
 }
 
+// formatTintRefSource returns ref (see config.AnsiColors.Tint's doc comment
+// for the prefix convention) as hyperlinked semstyle tag markup for --tint's
+// status display, when there's somewhere sensible to point it:
+//   - "file:<path>" links to the file itself.
+//   - "user:<name>" links to the file under the user tint folder, displayed
+//     as "user:<name>" the same way console.FormatUserFilePath renders any
+//     other user-folder reference.
+//   - "repo:<name>" links to the file's canonical location on GitHub
+//     (see RepoTintSourceURL) rather than DS2's own local clone -- that
+//     clone is an implementation-detail cache, not somewhere a user has
+//     reason to open.
+//   - "embedded:<name>" has no real, independently-meaningful location to
+//     link to (it's compiled into the binary), so it's left as plain text.
+func formatTintRefSource(ctx context.Context, ref string) string {
+	switch {
+	case strings.HasPrefix(ref, "file:"):
+		return console.FormatFilePath(strings.TrimPrefix(ref, "file:"))
+	case strings.HasPrefix(ref, "user:"):
+		name := strings.TrimPrefix(ref, "user:")
+		return console.FormatUserFilePath(paths.GetTintsDir(), filepath.Join(paths.GetTintsDir(), name+".yaml"))
+	case strings.HasPrefix(ref, "repo:"):
+		name := strings.TrimPrefix(ref, "repo:")
+		if url, ok := RepoTintSourceURL(ctx, name); ok {
+			return console.FormatLink("Var", ref, url)
+		}
+		return "{{|Var|}}" + ref + "{{[-]}}"
+	default:
+		return "{{|Var|}}" + ref + "{{[-]}}"
+	}
+}
+
 // HandleTint implements --tint: no args prints each connection type's
 // current tint state (enabled/disabled and scheme, if any) plus whether
 // ANSI color overrides are enabled and any that are explicitly set via
@@ -431,7 +463,7 @@ func handleTintStatus(ctx context.Context) error {
 		if row.c.Tint == "" {
 			logger.Notice(ctx, "\t\t{{|Var|}}(none){{[-]}}")
 		} else {
-			logger.Notice(ctx, "\t\tSource:  {{|Var|}}%s{{[-]}}", row.c.Tint)
+			logger.Notice(ctx, "\t\tSource:  %s", formatTintRefSource(ctx, row.c.Tint))
 			meta := describeTintRef(ctx, row.c.Tint)
 			if meta.Unreadable {
 				logger.Notice(ctx, "\t\t(unreadable)")

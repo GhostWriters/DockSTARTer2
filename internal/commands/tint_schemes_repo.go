@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -45,4 +46,26 @@ func ensureTintedThemingSchemesRepo(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("cloning %s: %w", tintedThemingSchemesRepo, err)
 	}
 	return dir, nil
+}
+
+// RepoTintSourceURL returns the GitHub blob URL for name's scheme file --
+// for --tint's status display, hyperlinking a "repo:<name>" source to the
+// canonical upstream file rather than DS2's own local clone (an
+// implementation-detail cache, not somewhere a user has reason to look).
+// Checks the same base24-then-base16 preference ResolveRepoTintData
+// resolves the scheme's actual data from, so the link always points at
+// whichever file that data really came from. ok is false if name isn't
+// found in either subfolder.
+func RepoTintSourceURL(ctx context.Context, name string) (url string, ok bool) {
+	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+	if err != nil {
+		return "", false
+	}
+	for _, sub := range []string{"base24", "base16"} {
+		if _, err := os.Stat(filepath.Join(repoDir, sub, name+".yaml")); err == nil {
+			return fmt.Sprintf("https://github.com/%s/blob/%s/%s/%s.yaml",
+				tintedThemingSchemesRepo, tintedThemingSchemesBranch, sub, name), true
+		}
+	}
+	return "", false
 }
