@@ -256,6 +256,18 @@ func ParseBase16Scheme(data []byte) (AnsiColors, error) {
 		Base17: firstNonEmpty(p.Base17, p.Base0E),
 		Base15: firstNonEmpty(p.Base15, p.Base0C),
 		Base07: p.Base07,
+
+		// No ANSI terminal assignment -- stored as-is (possibly empty) so an
+		// explicit value survives; a tint derives a stand-in when empty (see
+		// semstyle.Palette.slot's fallback logic).
+		Base01: p.Base01,
+		Base02: p.Base02,
+		Base04: p.Base04,
+		Base06: p.Base06,
+		Base09: p.Base09,
+		Base0F: p.Base0F,
+		Base10: p.Base10,
+		Base11: p.Base11,
 	}, nil
 }
 

@@ -18,6 +18,7 @@ import (
 var ansiColorSlotNames = []string{
 	"base00", "base08", "base0b", "base0a", "base0d", "base0e", "base0c", "base05",
 	"base03", "base12", "base14", "base13", "base16", "base17", "base15", "base07",
+	"base01", "base02", "base04", "base06", "base09", "base0f", "base10", "base11",
 }
 
 // ansiColorSlotField returns a pointer to slot's field on c, accepting
@@ -61,6 +62,22 @@ func ansiColorSlotField(c *config.AnsiColors, slot string) *string {
 		return &c.Base15
 	case "bright-white", "base07":
 		return &c.Base07
+	case "base01":
+		return &c.Base01
+	case "base02":
+		return &c.Base02
+	case "base04":
+		return &c.Base04
+	case "base06":
+		return &c.Base06
+	case "base09":
+		return &c.Base09
+	case "base0f":
+		return &c.Base0F
+	case "base10":
+		return &c.Base10
+	case "base11":
+		return &c.Base11
 	default:
 		return nil
 	}

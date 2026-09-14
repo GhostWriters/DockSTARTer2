@@ -128,11 +128,22 @@ func colorsToPalette(colors config.AnsiColors) (palette semstyle.Palette, empty 
 		r, g, b, _ := semstyle.ToColor(v).RGBA()
 		hex[i] = fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 	}
+	extraHex := func(v string) string {
+		if v == "" {
+			return ""
+		}
+		r, g, b, _ := semstyle.ToColor(v).RGBA()
+		return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
+	}
 	return semstyle.Palette{
 		Black: hex[0], Red: hex[1], Green: hex[2], Yellow: hex[3],
 		Blue: hex[4], Magenta: hex[5], Cyan: hex[6], White: hex[7],
 		BrightBlack: hex[8], BrightRed: hex[9], BrightGreen: hex[10], BrightYellow: hex[11],
 		BrightBlue: hex[12], BrightMagenta: hex[13], BrightCyan: hex[14], BrightWhite: hex[15],
+		Base01: extraHex(colors.Base01), Base02: extraHex(colors.Base02),
+		Base04: extraHex(colors.Base04), Base06: extraHex(colors.Base06),
+		Base09: extraHex(colors.Base09), Base0F: extraHex(colors.Base0F),
+		Base10: extraHex(colors.Base10), Base11: extraHex(colors.Base11),
 	}, empty
 }
 

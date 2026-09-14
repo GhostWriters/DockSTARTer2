@@ -228,6 +228,20 @@ type AnsiColors struct {
 	Base17 string `toml:"base17"` // bright magenta
 	Base15 string `toml:"base15"` // bright cyan
 	Base07 string `toml:"base07"` // bright white
+
+	// The 8 base16/base24 slots with no ANSI terminal assignment
+	// (backgrounds and the "orange"/"brown" categories). Stored so an
+	// explicit scheme/config value survives instead of being discarded;
+	// left empty, the active tint derives a stand-in from the 16 fields
+	// above instead (see semstyle.Palette.slot's fallback logic).
+	Base01 string `toml:"base01"`
+	Base02 string `toml:"base02"`
+	Base04 string `toml:"base04"`
+	Base06 string `toml:"base06"`
+	Base09 string `toml:"base09"`
+	Base0F string `toml:"base0f"`
+	Base10 string `toml:"base10"`
+	Base11 string `toml:"base11"`
 }
 
 // ForConnType returns the palette override for connType ("local", "ssh", or
@@ -283,6 +297,14 @@ func (c AnsiColors) WithDefaults(fallback AnsiColors) AnsiColors {
 		Base17: fill(c.Base17, fallback.Base17),
 		Base15: fill(c.Base15, fallback.Base15),
 		Base07: fill(c.Base07, fallback.Base07),
+		Base01: fill(c.Base01, fallback.Base01),
+		Base02: fill(c.Base02, fallback.Base02),
+		Base04: fill(c.Base04, fallback.Base04),
+		Base06: fill(c.Base06, fallback.Base06),
+		Base09: fill(c.Base09, fallback.Base09),
+		Base0F: fill(c.Base0F, fallback.Base0F),
+		Base10: fill(c.Base10, fallback.Base10),
+		Base11: fill(c.Base11, fallback.Base11),
 	}
 }
 
