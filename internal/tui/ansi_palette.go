@@ -3,7 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
+	"sync"
 
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
@@ -155,29 +155,49 @@ func colorsToPalette(colors config.AnsiColors) (palette semstyle.Palette, empty 
 	}, empty
 }
 
+// tintWarnOnce dedupes resolveAnsiColors' warnings to once per distinct
+// broken Tint ref per process run -- RegisterConnTypeTints re-resolves on
+// every session Init and bare CLI invocation, and a still-missing file
+// would otherwise warn on every single one of those for as long as it
+// stays broken.
+var (
+	tintWarnOnceMu sync.Mutex
+	tintWarnedRefs = map[string]bool{}
+)
+
+func warnTintOnce(ctx context.Context, ref, format string, args ...any) {
+	tintWarnOnceMu.Lock()
+	already := tintWarnedRefs[ref]
+	tintWarnedRefs[ref] = true
+	tintWarnOnceMu.Unlock()
+	if !already {
+		logger.Warn(ctx, format, args...)
+	}
+}
+
 // resolveAnsiColors layers colors' own explicit fields over its configured
 // Tint (if set), so an individually-set field always wins over the scheme.
 //
-// A Tint source that simply doesn't exist is silently ignored -- falls back
-// to colors' own explicit fields (or no tint at all if those are empty
-// too), same as if Tint were never set. Anything else wrong with it
-// (permission denied, malformed YAML) warns, since that points at a real
-// problem with a scheme the user did configure, not just an unset/cleared
-// default.
+// Any failure to load or parse it warns (once per ref per process run, see
+// warnTintOnce) and falls back to colors' own explicit fields (or no tint
+// at all if those are empty too) -- --tint itself only ever persists a
+// Tint value it already confirmed exists and parses (see HandleTint), so a
+// resolution failure here always means the scheme moved, was deleted, or
+// otherwise changed out from under an existing, once-valid configuration,
+// not an unset default (colors.Tint == "" is handled separately, above,
+// and never reaches this far).
 func resolveAnsiColors(ctx context.Context, colors config.AnsiColors) config.AnsiColors {
 	if colors.Tint == "" {
 		return colors
 	}
 	data, err := resolveTintRef(ctx, colors.Tint)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			logger.Warn(ctx, "ansi_palette: could not load tint %q: %v", colors.Tint, err)
-		}
+		warnTintOnce(ctx, colors.Tint, "ansi_palette: could not load tint %q: %v", colors.Tint, err)
 		return colors
 	}
 	scheme, err := config.ParseBase16Scheme(data)
 	if err != nil {
-		logger.Warn(ctx, "ansi_palette: could not parse tint %q: %v", colors.Tint, err)
+		warnTintOnce(ctx, colors.Tint, "ansi_palette: could not parse tint %q: %v", colors.Tint, err)
 		return colors
 	}
 	return colors.WithDefaults(scheme)
