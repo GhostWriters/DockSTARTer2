@@ -41,7 +41,10 @@ compose_folder = "${XDG_CONFIG_HOME}/compose"
 port = 40022                       # e.g. 22
 
 [server.web]
-port = 40080                       # e.g. 80
+port     = 40080                   # e.g. 80
+tls      = "self-signed"           # "self-signed", "cert", or "none" (plain HTTP)
+tls_cert = ""                      # path to a certificate file, when tls = "cert"
+tls_key  = ""                      # path to the certificate's private key, when tls = "cert"
 
 [server.auth]
 mode          = "none"             # "none", "password", or "pubkey"
@@ -58,3 +61,141 @@ auto_setcap  = false               # keep CAP_CHOWN/CAP_FOWNER applied to the bi
 setcap_asked = false               # set automatically once the one-time auto_setcap question has
                                    # been answered; the question is skipped when auto_setcap is
                                    # already true (e.g. enabled here by hand)
+
+# ── ANSI palette overrides ────────────────────────────────────────────────────
+# Optional per-connection-type overrides for the 16 standard ANSI colors plus
+# base24's 8 extra slots with no ANSI terminal assignment (base01/02/04/06/
+# 09/0f/10/11 -- background shades and the "orange"/"brown" categories),
+# substituted internally at session start rather than relying on the
+# terminal's own palette. Empty (the default) means no override -- colors
+# render exactly as today; for the 8 extra slots specifically, a value is
+# derived from the 16 standard ones instead when empty (see
+# semstyle.Palette.slot's fallback logic), so they still resolve to something
+# reasonable when a scheme/config doesn't set them explicitly. Most relevant
+# for "web": its client has no user-configured palette the way a real
+# local/SSH terminal (WezTerm, etc.) does, so a theme's named colors (e.g.
+# "white"/"black", which compile to plain ANSI codes rather than literal RGB)
+# may render off from pure values unless overridden here -- which is why
+# "web" below ships with tint = "embedded:ansi" set by default (local/ssh
+# don't, since a real terminal already supplies a usable palette).
+# Each value accepts hex ("#ffffff"), an ANSI name, or any color name tcell
+# resolves (e.g. "grey"). The fields below are named after their base16/
+# base24 scheme slot (e.g. "base08"), so this section reads the same as a
+# scheme file's own "palette:" block -- copy a value from either straight
+# into the other. The 16 standard slots also have a classic ANSI name (see
+# the comment beside each) that works identically anywhere a slot name is
+# accepted (here, or --ansi-override's <slot> argument) -- both spellings are
+# the exact same color, not two separate ones; base0X is just this file's own
+# canonical name for it. tint points to a tinted-theming base16/base24 scheme
+# to seed every slot at once; any field set explicitly below still wins over
+# it for that one slot (settable individually via --ansi-override; "none"
+# clears one). Set via `--tint <ref> [types]`; accepts "file:<path>" (an
+# arbitrary scheme YAML file), "user:<name>" (one under the user tint
+# folder, alongside user themes), "embedded:<name>" (one of DS2's own
+# bundled schemes -- see --tint-list-embedded), or "repo:<name>" (a name
+# from the real tinted-theming/schemes repo -- see --tint-list-repo; also
+# the meaning of a bare, unprefixed name). tint_enabled and
+# override_enabled independently turn
+# tint and the fields below on or off as a group, without discarding
+# either (set via --theme-tint/--theme-no-tint and
+# --theme-ansi-override/--theme-no-ansi-override) -- either can be off
+# regardless of the other.
+[ansi_palette]
+# apply_to_cli: whether a bare, non-interactive command (e.g. `ds2 --tint`)
+# also renders with local's tint, in addition to the interactive local TUI
+# (which always does). Set false for a plain/script-friendly CLI while
+# keeping the tinted look in the TUI (set via --theme-cli-tint /
+# --theme-no-cli-tint).
+apply_to_cli = true
+# apply_to_programbox: whether a ProgramBox dialog's streamed command output
+# (e.g. `docker compose up` progress) renders with the session's tint, or
+# with the terminal's own native palette instead (set via
+# --theme-programbox-tint / --theme-no-programbox-tint).
+apply_to_programbox = true
+
+[ansi_palette.local]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[ansi_palette.ssh]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[ansi_palette.web]
+tint_enabled = true
+override_enabled = true
+tint = "embedded:ansi"
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)

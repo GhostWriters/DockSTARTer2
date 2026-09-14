@@ -183,7 +183,7 @@ func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// Arrow Key Navigation within Header
 	// We handle this regardless of m.dialog != nil because the header should trap its keys if focused
 	if m.backdrop.Header.GetFocus() != displayengine.HeaderFocusNone {
-		isWeb := m.backdrop.Header.ConnType == "web"
+		isWeb := m.backdrop.Header.ConnType == "web" && displayengine.WebDisplaySettingsEnabled
 		// Left-to-right order: WebDisplay (hostname, web only) -> Flags -> App -> Tmpl.
 		if key.Matches(msg, displayengine.Keys.Right) {
 			switch m.backdrop.Header.GetFocus() {

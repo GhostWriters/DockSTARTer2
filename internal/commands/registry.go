@@ -216,6 +216,18 @@ var Registry = map[string]Def{
 	"--theme-tab-layout":          {Title: "Set Tab Layout", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-markdown-hyperlinks": {Title: "Set Markdown Hyperlinks Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-hyperlinks":          {Title: "Set Hyperlinks Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--tint":                      {Title: "Set ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--tint-list-repo":            {Title: "List Tint Repo Schemes", ConsoleSafe: true},
+	"--tint-list-embedded":        {Title: "List Bundled Tint Schemes", ConsoleSafe: true},
+	"--theme-tint":                {Title: "Enable ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-tint":             {Title: "Disable ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-cli-tint":            {Title: "Enable CLI ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-cli-tint":         {Title: "Disable CLI ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-programbox-tint":     {Title: "Enable ProgramBox ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-programbox-tint":  {Title: "Disable ProgramBox ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--ansi-override":             {Title: "Set ANSI Color Override", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-ansi-override":       {Title: "Enable ANSI Color Overrides", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
+	"--theme-no-ansi-override":    {Title: "Disable ANSI Color Overrides", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--config-panel":              {Title: "Set Panel Mode", ConfigChanging: true, ConsoleBlocked: true},
 }
 

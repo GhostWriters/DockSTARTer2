@@ -51,7 +51,7 @@ func headerUpdate(h *displayengine.HeaderModel, msg tea.Msg) (tea.Model, tea.Cmd
 		if msg.ID == displayengine.IDStatusBar {
 			// Scroll wheel cycles left-to-right: hostname/WebDisplay (web only) -> Flags
 			// -> App version -> Tmpl version.
-			isWeb := h.ConnType == "web"
+			isWeb := h.ConnType == "web" && displayengine.WebDisplaySettingsEnabled
 			entry := displayengine.HeaderFocusFlags
 			if isWeb {
 				entry = displayengine.HeaderFocusWebDisplay

@@ -25,6 +25,7 @@ import (
 	"DockSTARTer2/internal/webmsg"
 
 	tea "charm.land/bubbletea/v2"
+	semstyle "github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/colorprofile"
 	"golang.org/x/term"
 )
@@ -401,6 +402,43 @@ func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer 
 	return clientIP, connType, viaOwnServer
 }
 
+// resolveColorProfile determines the color profile to render this session
+// with -- see semstyle.RunWithProfile's doc comment for why a --server-daemon
+// serving several sessions can't just rely on the process-wide profile
+// detected once at its own launch (that says nothing about what any given
+// connecting client can actually render).
+//
+//   - "web": always TrueColor. The web frontend is a real xterm.js instance
+//     in a modern browser -- same "assume max capability" reasoning already
+//     used elsewhere for it (e.g. Sixel graphics support).
+//   - "ssh": derived from this session's own negotiated TERM (ssh_handler.go
+//     sets "TERM=<ptyReq.Term>" in Environ) and COLORTERM, if the client
+//     forwarded it (most don't by default). Uses colorprofile.Env, not
+//     colorprofile.Detect -- Detect's isatty check needs a real local file
+//     descriptor to call Fd() on, which an SSH session's own io.Writer
+//     doesn't have; Env skips that check and goes straight to the
+//     TERM/COLORTERM heuristic, which is exactly what's available here.
+//   - anything else (local, or a bare CLI invocation): the existing
+//     process-wide profile is already correct, since that's a fresh
+//     process per invocation/session, launched from the very terminal
+//     being rendered to.
+func resolveColorProfile(connType string, environ []string) colorprofile.Profile {
+	switch connType {
+	case "web":
+		return colorprofile.TrueColor
+	case "ssh":
+		var env []string
+		for _, e := range environ {
+			if strings.HasPrefix(e, "TERM=") || strings.HasPrefix(e, "COLORTERM=") {
+				env = append(env, e)
+			}
+		}
+		return colorprofile.Env(env)
+	default:
+		return semstyle.GetPreferredProfile()
+	}
+}
+
 // parseSessionKey extracts the per-connection session identifier the SSH/web
 // listener registered (DS2_SESSION_ID, set by ssh_handler.go's
 // RegisterSession), used for edit-lock re-entry (see sessionlocks.
@@ -449,6 +487,33 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(clientIP)
 	isSSH := pOpts.Input != nil
+
+	// Register AND activate connType's tint before any of the startup
+	// construction below (Initialize's displayengine.InitStyles, screen
+	// construction, NewAppModel) -- AppModel.Init() also registers this same
+	// tint (harmless, idempotent), but registering alone was never enough:
+	// nothing before the Bubble Tea run loop starts ever made it the
+	// *active* tint, so anything resolved/cached during this startup
+	// window (most visibly displayengine.CurrentStyles, via InitStyles)
+	// baked in untinted and stayed that way until something later forced a
+	// recompute (e.g. Appearance's Apply, via invalidateAllCaches).
+	// Restored before p.Run() below, NOT deferred across it: AppModel.
+	// Update/View each activate this same tint per-render via
+	// ActivateSessionRenderContext, which would deadlock on semstyle's
+	// single (non-reentrant) tint mutex if this scope were still held.
+	restoreStartupTint := BeginTintFor(connType)
+	// Safety net for an early return below (e.g. Initialize failing) --
+	// endStartupTintScope is also called explicitly once construction
+	// finishes; safe to call twice, since a nil restoreStartupTint (after
+	// the first call) makes the second a no-op.
+	endStartupTintScope := func() {
+		if restoreStartupTint != nil {
+			restoreStartupTint()
+			restoreStartupTint = nil
+		}
+	}
+	defer endStartupTintScope()
+	RegisterConnTypeTints(ctx, connType, config.LoadAppConfig().AnsiColors.ForConnType(connType))
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
 	console.EnableVirtualTerminalProcessing()
@@ -521,7 +586,11 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	}
 
 	// Create the app model
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, sessionKey, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), clientIP, connType, sessionKey, pOpts.Environ, startScreen, initialStack...)
+
+	// End the startup tint scope now that everything constructed above has
+	// seen the tint active -- see restoreStartupTint's doc comment.
+	endStartupTintScope()
 
 	if console.IsPuTTY() {
 		logger.Info(ctx, "PuTTY terminal detected")
@@ -652,10 +721,6 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 
 	captureExePath()
 
-	if err := Initialize(ctx); err != nil {
-		return err
-	}
-
 	isRootSession = isRoot
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
 	sessionKey := parseSessionKey(pOpts.Environ)
@@ -663,6 +728,24 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
+
+	// See Start's matching comment: activate ctype's tint for the
+	// Initialize/screen-construction/NewAppModel span below, released
+	// before p.Run() (AppModel.Update/View activate it again themselves,
+	// per render).
+	restoreStartupTint := BeginTintFor(ctype)
+	endStartupTintScope := func() {
+		if restoreStartupTint != nil {
+			restoreStartupTint()
+			restoreStartupTint = nil
+		}
+	}
+	defer endStartupTintScope()
+	RegisterConnTypeTints(ctx, ctype, config.LoadAppConfig().AnsiColors.ForConnType(ctype))
+
+	if err := Initialize(ctx); err != nil {
+		return err
+	}
 
 	onClose := func() tea.Msg { return NavigateBackMsg{} }
 	startScreen := editorFactory(appName, onClose, !isRoot, ctype)
@@ -683,7 +766,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		}
 	}
 
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen, initialStack...)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, pOpts.Environ, startScreen, initialStack...)
+	endStartupTintScope()
 	p = NewProgram(model, pOpts)
 	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
 	model.panel.SetPromptFunc(sessionPromptFunc(p))
@@ -770,6 +854,26 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 	captureExePath()
 
+	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
+	sessionKey := parseSessionKey(pOpts.Environ)
+	console.SetViaOwnServer(viaOwnServer)
+	console.SetClientIP(ip)
+	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
+
+	// See Start's matching comment: activate ctype's tint for the
+	// Initialize/screen-construction/NewAppModel span below, released
+	// before p.Run() (AppModel.Update/View activate it again themselves,
+	// per render).
+	restoreStartupTint := BeginTintFor(ctype)
+	endStartupTintScope := func() {
+		if restoreStartupTint != nil {
+			restoreStartupTint()
+			restoreStartupTint = nil
+		}
+	}
+	defer endStartupTintScope()
+	RegisterConnTypeTints(ctx, ctype, config.LoadAppConfig().AnsiColors.ForConnType(ctype))
+
 	if err := Initialize(ctx); err != nil {
 		return err
 	}
@@ -840,12 +944,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 	startScreen := varEditorFactory(varName, displayAppName, appDesc, file, origVal, opts, helpText, docMarkdown, docAppName, onSave, tea.Quit)
 
-	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
-	sessionKey := parseSessionKey(pOpts.Environ)
-	console.SetViaOwnServer(viaOwnServer)
-	console.SetClientIP(ip)
-	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
-	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, startScreen)
+	model := NewAppModel(ctx, displayengine.CurrentConfig(), ip, ctype, sessionKey, pOpts.Environ, startScreen)
+	endStartupTintScope()
 	p = NewProgram(model, pOpts)
 	model.panel.SetConfirmFunc(sessionConfirmFunc(p))
 	model.panel.SetPromptFunc(sessionPromptFunc(p))

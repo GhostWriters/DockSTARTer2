@@ -9,7 +9,7 @@ import (
 // excludes dot-prefixed files (e.g. themes/.TEMPLATE.ds2theme) from the
 // build.
 //
-//go:embed all:defaults all:themes
+//go:embed all:defaults all:themes all:tint_themes
 var embeddedFS embed.FS
 
 // GetDefaultConfig returns the content of the default dockstarter2.toml file.
@@ -21,6 +21,32 @@ func GetDefaultConfig() ([]byte, error) {
 func GetTheme(name string) ([]byte, error) {
 	// embed.FS always uses forward slashes regardless of OS.
 	return embeddedFS.ReadFile("themes/" + name + ".ds2theme")
+}
+
+// GetTintTheme reads a bundled base16 scheme YAML file from the embedded
+// tint_themes folder by name (no ".yaml" suffix), or an error if name isn't
+// one of ListTintThemes. Resolved by --tint's "embedded:<name>" reference --
+// if tinted-theming ever publishes an equivalent scheme upstream, removing
+// the file here just makes that reference 404 for the name, with a bare
+// (or "repo:") reference picking it up from the real repo instead.
+func GetTintTheme(name string) ([]byte, error) {
+	return embeddedFS.ReadFile("tint_themes/" + name + ".yaml")
+}
+
+// ListTintThemes returns all scheme names bundled in the embedded
+// tint_themes folder.
+func ListTintThemes() ([]string, error) {
+	entries, err := embeddedFS.ReadDir("tint_themes")
+	if err != nil {
+		return nil, err
+	}
+	var schemes []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+			schemes = append(schemes, strings.TrimSuffix(e.Name(), ".yaml"))
+		}
+	}
+	return schemes, nil
 }
 
 // ListThemes returns all themes found in the embedded filesystem. Dot-prefixed

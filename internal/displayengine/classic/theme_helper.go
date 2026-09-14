@@ -217,7 +217,12 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	}
 
 	resetStyle := ctx.Dialog
-	cacheKey := "theme|" + text + "|" + resetStyle.String() + "|" + ctx.Prefix
+	// Includes the active tint key (see semstyle.ActiveTintKey's doc
+	// comment) so a cache hit never returns a rendering from a different
+	// tint (or no tint) than the one active right now -- concurrent
+	// sessions with different tints, or the same session's tint changing,
+	// would otherwise return stale colors for identical text.
+	cacheKey := "theme|" + text + "|" + resetStyle.String() + "|" + ctx.Prefix + "|" + semstyle.ActiveTintKey()
 
 	cacheMu.RLock()
 	if cached, ok := renderCache[cacheKey]; ok {
@@ -242,8 +247,10 @@ func RenderConsoleTextCtx(text string, ctx StyleContext) string {
 	}
 
 	resetStyle := ctx.Dialog
-	// Create a cache key from the text AND the style
-	cacheKey := "console|" + text + "|" + resetStyle.String()
+	// Create a cache key from the text, the style, and the active tint
+	// (see semstyle.ActiveTintKey's doc comment and RenderThemeTextCtx's
+	// matching cacheKey comment above).
+	cacheKey := "console|" + text + "|" + resetStyle.String() + "|" + semstyle.ActiveTintKey()
 
 	cacheMu.RLock()
 	if cached, ok := renderCache[cacheKey]; ok {

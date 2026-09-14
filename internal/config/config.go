@@ -45,6 +45,17 @@ func defaultConfigBytes() []byte {
 // legacyPresent. Set by the theme package to avoid a config->theme cycle.
 var ThemeDefaultsOverlayHook func(conf *AppConfig, legacyPresent map[string]bool)
 
+// ServerTLSDefaultHook, if set, is called every time an existing DS2 config
+// file is loaded (not on first-run/legacy migration, which has nothing to
+// preserve), right after present is known. It backfills server.web.tls for a
+// file saved before that field existed -- present["TLS"] is false in exactly
+// that one-time case, since SaveAppConfig always writes every field's
+// current value, so a file that already carries "tls" (from any save after
+// this shipped) is left alone forever after. Set by the serve package
+// (which knows whether the web server is already configured/running or
+// installed as a system service) to avoid a config->serve cycle.
+var ServerTLSDefaultHook func(conf *AppConfig, present map[string]bool)
+
 // DefaultConfig returns an AppConfig populated purely from the embedded defaults TOML.
 func DefaultConfig() AppConfig {
 	var conf AppConfig
@@ -67,10 +78,11 @@ func isMigrationMode(ctx context.Context) bool {
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
-	UI     UIConfig     `toml:"ui"`
-	Paths  PathConfig   `toml:"paths"`
-	Server ServerConfig `toml:"server"`
-	System SystemConfig `toml:"system"`
+	UI         UIConfig          `toml:"ui"`
+	Paths      PathConfig        `toml:"paths"`
+	Server     ServerConfig      `toml:"server"`
+	System     SystemConfig      `toml:"system"`
+	AnsiColors AnsiPaletteConfig `toml:"ansi_palette"`
 
 	// These are helper fields for runtime use, not saved to TOML
 	Arch       string     `toml:"-"`
@@ -109,9 +121,208 @@ type SSHConfig struct {
 	Port int `toml:"port"` // TCP port for the SSH server (0 = disabled)
 }
 
-// WebConfig holds settings for the optional xterm.js web frontend.
+// WebConfig holds settings for the optional sip-based web frontend.
 type WebConfig struct {
-	Port int `toml:"port"` // TCP port for the HTTP/WebSocket server (0 = disabled)
+	Port int `toml:"port"` // TCP port for the web server (0 = disabled)
+
+	// TLS selects how the web server serves connections:
+	//   "self-signed" (default, or empty) -- sip generates and manages its
+	//     own self-signed certificate. Browsers show a one-time warning.
+	//   "cert" -- use the certificate/key at TLSCert/TLSKey.
+	//   "none" -- plain HTTP, no encryption. Anyone on the network path can
+	//     read (and, with auth.mode = "password", capture) traffic.
+	TLS     string `toml:"tls"`
+	TLSCert string `toml:"tls_cert"` // Path to a certificate file, when tls = "cert"
+	TLSKey  string `toml:"tls_key"`  // Path to the certificate's private key, when tls = "cert"
+}
+
+// AnsiPaletteConfig holds optional overrides for the standard 16-color ANSI
+// palette, registered with semstyle as a per-connType tint at session start
+// (see tui.RegisterConnTypeTints) so a theme's named colors (e.g.
+// semstyle's "white"/"black", which otherwise compile to plain ANSI codes)
+// render as literal RGB regardless of the connecting terminal's own
+// default palette -- most relevant for the web frontend, whose client has
+// no user-configured palette of its own the way a real local/SSH terminal
+// (WezTerm, Ghostty, etc.) does. Colors are substituted internally rather
+// than sent as a terminal palette override, since not every terminal
+// honors one.
+//
+// Each of Local/SSH/Web is independently optional and empty by default --
+// this never touches a user's own terminal color scheme unless configured.
+type AnsiPaletteConfig struct {
+	// ApplyToCLI controls whether a bare, non-interactive CLI invocation
+	// (e.g. `ds2 --tint`) also renders with Local's tint, in addition to
+	// the interactive local TUI (which always does) -- set via
+	// --theme-cli-tint, cleared via --theme-no-cli-tint. Only relevant to
+	// Local: a bare CLI invocation is always a local shell process (see
+	// cmd.Execute's only caller, main.go), never reachable over SSH or
+	// web. Defaults true (the embedded default config sets it) so CLI
+	// output matches the TUI unless explicitly turned off -- e.g. for a
+	// user who wants the polished look interactively but plain,
+	// script/log-friendly output from one-shot commands.
+	ApplyToCLI bool `toml:"apply_to_cli"`
+
+	// ApplyToProgramBox controls whether a ProgramBox dialog's streamed
+	// command output (e.g. `docker compose up` progress) renders with the
+	// session's tint -- set via --theme-programbox-tint, cleared via
+	// --theme-no-programbox-tint. Independent of ApplyToCLI: this is about
+	// output streamed into a TUI dialog, which happens for local, SSH, and
+	// web sessions alike, not just a bare local CLI invocation. Off gives
+	// the two options a user might want: ProgramBox output tinted to match
+	// the rest of the (tinted) TUI, or left rendering with the terminal's
+	// own native palette like a plain command run directly would. Defaults
+	// true (the embedded default config sets it).
+	ApplyToProgramBox bool `toml:"apply_to_programbox"`
+
+	Local AnsiColors `toml:"local"`
+	SSH   AnsiColors `toml:"ssh"`
+	Web   AnsiColors `toml:"web"`
+}
+
+// AnsiColors holds the 16 standard ANSI palette slots. Each field accepts
+// anything semstyle.ToColor understands: a hex value ("#ffffff"), one of
+// the 16 ANSI names, or any broader color name tcell resolves (e.g.
+// "grey"). Empty leaves that slot at the terminal's own default.
+type AnsiColors struct {
+	// TintEnabled turns applying Tint on or off without discarding it --
+	// set via --theme-tint, cleared via --theme-no-tint. Independent of
+	// OverrideEnabled/the 16 explicit fields below. The embedded default
+	// config sets this true.
+	TintEnabled bool `toml:"tint_enabled"`
+
+	// OverrideEnabled turns applying the 16 explicit fields below on or
+	// off as a group, without discarding any of them -- set via
+	// --theme-ansi-override, cleared via --theme-no-ansi-override. A
+	// single slot can still be cleared individually regardless of this
+	// (set it to "none" via --ansi-override). Independent of
+	// TintEnabled/Tint. The embedded default config sets this true.
+	OverrideEnabled bool `toml:"override_enabled"`
+
+	// Tint is an optional reference to a tinted-theming base16/base24
+	// scheme -- its colors seed this palette per tinted-theming's
+	// documented terminal mapping (see config.ParseBase16Scheme). Any of
+	// the 16 fields below set explicitly here still wins over the scheme
+	// for that one slot. Set via `--tint <ref> [types]`; same
+	// "<kind>:<name-or-path>" convention as ui.theme's "user:"/"file:"
+	// prefixes, extended with two more sources (see resolveTintRef in
+	// internal/tui and ResolveTintRefData in internal/commands):
+	//   - "file:<path>"    an arbitrary scheme YAML file, read live
+	//   - "user:<name>"    a user-supplied file under paths.GetTintsDir()
+	//   - "embedded:<name>" one of DS2's own bundled schemes (see
+	//                       assets.GetTintTheme/--tint-list-embedded)
+	//   - "repo:<name>"    a named scheme from a local clone of
+	//                      github.com/tinted-theming/schemes (see
+	//                      --tint-list-repo); also the meaning of a bare,
+	//                      unprefixed name, since most schemes live there
+	// "user:"/"embedded:" work out of the box with nothing to download or
+	// copy first, so either is safe to set as a shipped default; "repo:"
+	// (or a bare name) triggers a one-time clone on first resolution if
+	// that clone doesn't exist yet. Empty ("") or "none:" clears it -- not
+	// bare "none" (no colon), which stays a valid, if unlikely, "repo:none"
+	// scheme name instead of being reserved as a keyword.
+	Tint string `toml:"tint"`
+
+	// Named after their base16/base24 slot (see tinted-theming/base24's
+	// styling.md) rather than the classic ANSI name, so this section reads
+	// the same as a scheme YAML file's own "palette:" block -- copy a value
+	// from either straight into the other. Every name below is still
+	// recognized as an equivalent alias wherever a color name is accepted
+	// (semstyle.ToColorCtx, --ansi-override, etc.); base0X is canonical here
+	// purely for this file's own field/serialization identity.
+	Base00 string `toml:"base00"` // black
+	Base08 string `toml:"base08"` // red
+	Base0B string `toml:"base0b"` // green
+	Base0A string `toml:"base0a"` // yellow
+	Base0D string `toml:"base0d"` // blue
+	Base0E string `toml:"base0e"` // magenta
+	Base0C string `toml:"base0c"` // cyan
+	Base05 string `toml:"base05"` // white
+	Base03 string `toml:"base03"` // bright black
+	Base12 string `toml:"base12"` // bright red
+	Base14 string `toml:"base14"` // bright green
+	Base13 string `toml:"base13"` // bright yellow
+	Base16 string `toml:"base16"` // bright blue
+	Base17 string `toml:"base17"` // bright magenta
+	Base15 string `toml:"base15"` // bright cyan
+	Base07 string `toml:"base07"` // bright white
+
+	// The 8 base16/base24 slots with no ANSI terminal assignment
+	// (backgrounds and the "orange"/"brown" categories). Stored so an
+	// explicit scheme/config value survives instead of being discarded;
+	// left empty, the active tint derives a stand-in from the 16 fields
+	// above instead (see semstyle.Palette.slot's fallback logic).
+	Base01 string `toml:"base01"`
+	Base02 string `toml:"base02"`
+	Base04 string `toml:"base04"`
+	Base06 string `toml:"base06"`
+	Base09 string `toml:"base09"`
+	Base0F string `toml:"base0f"`
+	Base10 string `toml:"base10"`
+	Base11 string `toml:"base11"`
+}
+
+// ForConnType returns the palette override for connType ("local", "ssh", or
+// "web"), or a zero-value AnsiColors (no overrides) for anything else.
+func (c AnsiPaletteConfig) ForConnType(connType string) AnsiColors {
+	switch connType {
+	case "local":
+		return c.Local
+	case "ssh":
+		return c.SSH
+	case "web":
+		return c.Web
+	default:
+		return AnsiColors{}
+	}
+}
+
+// Slots returns the palette's 16 entries in ANSI index order (0-15), paired
+// with their configured override value (possibly empty).
+func (c AnsiColors) Slots() [16]string {
+	return [16]string{
+		c.Base00, c.Base08, c.Base0B, c.Base0A,
+		c.Base0D, c.Base0E, c.Base0C, c.Base05,
+		c.Base03, c.Base12, c.Base14, c.Base13,
+		c.Base16, c.Base17, c.Base15, c.Base07,
+	}
+}
+
+// WithDefaults returns c with any empty slot filled from fallback (e.g. a
+// Tint-derived palette), leaving every slot c sets explicitly untouched --
+// an explicit value always wins over a scheme's.
+func (c AnsiColors) WithDefaults(fallback AnsiColors) AnsiColors {
+	fill := func(v, d string) string {
+		if v == "" {
+			return d
+		}
+		return v
+	}
+	return AnsiColors{
+		Base00: fill(c.Base00, fallback.Base00),
+		Base08: fill(c.Base08, fallback.Base08),
+		Base0B: fill(c.Base0B, fallback.Base0B),
+		Base0A: fill(c.Base0A, fallback.Base0A),
+		Base0D: fill(c.Base0D, fallback.Base0D),
+		Base0E: fill(c.Base0E, fallback.Base0E),
+		Base0C: fill(c.Base0C, fallback.Base0C),
+		Base05: fill(c.Base05, fallback.Base05),
+		Base03: fill(c.Base03, fallback.Base03),
+		Base12: fill(c.Base12, fallback.Base12),
+		Base14: fill(c.Base14, fallback.Base14),
+		Base13: fill(c.Base13, fallback.Base13),
+		Base16: fill(c.Base16, fallback.Base16),
+		Base17: fill(c.Base17, fallback.Base17),
+		Base15: fill(c.Base15, fallback.Base15),
+		Base07: fill(c.Base07, fallback.Base07),
+		Base01: fill(c.Base01, fallback.Base01),
+		Base02: fill(c.Base02, fallback.Base02),
+		Base04: fill(c.Base04, fallback.Base04),
+		Base06: fill(c.Base06, fallback.Base06),
+		Base09: fill(c.Base09, fallback.Base09),
+		Base0F: fill(c.Base0F, fallback.Base0F),
+		Base10: fill(c.Base10, fallback.Base10),
+		Base11: fill(c.Base11, fallback.Base11),
+	}
 }
 
 // AuthConfig holds authentication settings for the SSH server.
@@ -510,7 +721,14 @@ func LoadAppConfig() AppConfig {
 	} else {
 		// Overlay user config on top of defaults.
 		// Use Robust unmarshaling to handle any loose types from manual edits
-		if _, err := UnmarshalRobust(data, &conf); err == nil {
+		if present, err := UnmarshalRobust(data, &conf); err == nil {
+			// Backfill a field new to the schema for a file saved before it
+			// existed -- see ServerTLSDefaultHook's doc comment. Only for an
+			// existing file being loaded here, never on first-run/legacy
+			// migration above, which has nothing of this user's to preserve.
+			if ServerTLSDefaultHook != nil {
+				ServerTLSDefaultHook(&conf, present)
+			}
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.
@@ -687,6 +905,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["SSHPort"] = true
 			case "server.web.port":
 				present["WebPort"] = true
+			case "server.web.tls":
+				present["TLS"] = true
 			case "server.auth.mode":
 				present["AuthMode"] = true
 			}

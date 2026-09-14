@@ -155,6 +155,14 @@ func GetTemplatesDir() string {
 	return filepath.Join(xdg.StateHome, appName, "templates", "DockSTARTer-Templates")
 }
 
+// GetTintedThemingSchemesDir returns the absolute path to a local clone of
+// the tinted-theming/schemes repo (github.com/tinted-theming/schemes),
+// used by --tint's "repo:" reference (and its default) to resolve a scheme
+// name to its YAML file without a network round-trip on every call.
+func GetTintedThemingSchemesDir() string {
+	return filepath.Join(GetStateDir(), "tinted-theming-schemes")
+}
+
 // GetTemplatesEnvFile returns the absolute path to the global .env template
 // at the DockSTARTer-Templates repo root -- fetched/cached the same way as
 // every per-app template file, so DS1 and DS2 read the exact same file.
@@ -403,6 +411,16 @@ func GetConfigDir() string {
 // other user-supplied content (see GetUserAppsDir).
 func GetThemesDir() string {
 	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.ThemesDirName)
+}
+
+// GetTintsDir returns the absolute path to the user ANSI palette tint
+// (tinted-theming base16/base24 scheme YAML) directory, under the
+// user-content folder alongside GetThemesDir. A scheme file dropped here is
+// selectable by bare name from ansi_palette.<connType>.tint, the same way
+// GetThemesDir's files are selectable via "user:<name>" for ui.theme -- see
+// resolveTintData.
+func GetTintsDir() string {
+	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.TintsDirName)
 }
 
 // GetUserAppsDir returns the absolute path to the user app templates

@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
@@ -46,11 +47,13 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 		sub = group.Args[0]
 	}
 	// Arg layout differs by subcommand:
-	//   start   [sshPort [webPort]]
-	//   stop    [port]                         — port=0 or "" stops all
-	//   restart [port [newSshPort [newWebPort]]] — port=0 or "" targets single instance
-	//   install [sshPort [webPort]]
-	//   enable  [sshPort [webPort]]
+	//   start     [sshPort [webPort]]
+	//   start-ssh [sshPort]                     — forces web off regardless of config
+	//   start-web [webPort]                     — forces SSH off regardless of config
+	//   stop      [port]                        — port=0 or "" stops all
+	//   restart   [port [newSshPort [newWebPort]]] — port=0 or "" targets single instance
+	//   install   [sshPort [webPort]]
+	//   enable    [sshPort [webPort]]
 	tail := group.Args[min(1, len(group.Args)):]
 
 	var sshPort, webPort, targetPort int
@@ -66,6 +69,13 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 			targetPort, _ = strconv.Atoi(tail[0])
 		}
 		sshPort, webPort = parsePortArgs(tail[min(1, len(tail)):])
+	case "start-ssh":
+		sshPort, _ = parsePortArgs(tail)
+	case "start-web":
+		webPort = -1
+		if len(tail) > 0 && tail[0] != "" {
+			webPort, _ = strconv.Atoi(tail[0])
+		}
 	default:
 		sshPort, webPort = parsePortArgs(tail)
 	}
@@ -75,6 +85,10 @@ func handleServer(ctx context.Context, group *CommandGroup, state *CmdState, con
 		return handleServerStatus(ctx, conf)
 	case "start":
 		return handleServerStart(ctx, conf, sshPort, webPort)
+	case "start-ssh":
+		return handleServerStart(ctx, conf, sshPort, 0)
+	case "start-web":
+		return handleServerStart(ctx, conf, 0, webPort)
 	case "stop":
 		return handleServerStop(ctx, state, targetPort)
 	case "restart":
@@ -105,24 +119,24 @@ func handleServerStatus(ctx context.Context, conf *config.AppConfig) error {
 }
 
 // handleServerStart spawns the server as a background daemon process.
-// It validates the config before attempting to start.
+// It validates the config before attempting to start. sshPort/webPort are
+// -1 for "use config", 0 for "explicitly disabled" (e.g. from
+// --server start-web forcing the other off), or a positive port number.
 func handleServerStart(ctx context.Context, conf *config.AppConfig, sshPort, webPort int) error {
-	// -1 means "not specified" — fall back to config.
 	if sshPort < 0 {
 		sshPort = conf.Server.SSH.Port
 	}
-	if sshPort == 0 {
-		logger.Warn(ctx, "server.ssh.port is not set in dockstarter2.toml — cannot start server.")
+	if webPort < 0 {
+		webPort = conf.Server.Web.Port
+	}
+	if sshPort == 0 && webPort == 0 {
+		logger.Warn(ctx, "Neither server.ssh.port nor server.web.port is set in dockstarter2.toml — cannot start server.")
 		return nil
 	}
-	if webPort < 0 {
-		webPort = conf.Server.Web.Port // -1 = not specified, use config
-	}
-	// webPort == 0 means explicitly disabled — no web server
 
-	// Check if already running on the target port.
+	// Check if already running on either target port.
 	for _, info := range sessionlocks.Sessions.ListServerInfos() {
-		if info.Port == sshPort {
+		if (sshPort > 0 && info.Port == sshPort) || (webPort > 0 && info.WebPort == webPort) {
 			logger.Notice(ctx, "Server is already running on port %d (PID %d).", info.Port, info.PID)
 			return nil
 		}
@@ -135,14 +149,14 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig, sshPort, web
 
 	var portArgs []string
 	if sshPort != conf.Server.SSH.Port || webPort != conf.Server.Web.Port {
-		// Only embed ports in the daemon args when explicitly overriding config.
-		portArgs = append(portArgs, strconv.Itoa(sshPort))
-		if webPort > 0 {
-			portArgs = append(portArgs, strconv.Itoa(webPort))
-		}
+		// Only embed ports in the daemon args when explicitly overriding
+		// config -- both are passed together (even when one is 0) so the
+		// daemon can tell "disabled" apart from "keep config" (see
+		// handleServeDaemon's parsePortArgs handling).
+		portArgs = append(portArgs, strconv.Itoa(sshPort), strconv.Itoa(webPort))
 	}
 
-	logger.Notice(ctx, "Starting server in the background on SSH port %d%s.", sshPort, fmtWebPort(webPort))
+	logger.Notice(ctx, "Starting server in the background%s.", fmtServerPorts(sshPort, webPort))
 	proc, err := serve.SpawnDaemon(execPath, portArgs)
 	if err != nil {
 		return fmt.Errorf("spawning server daemon: %w", err)
@@ -151,12 +165,20 @@ func handleServerStart(ctx context.Context, conf *config.AppConfig, sshPort, web
 	return nil
 }
 
-// fmtWebPort returns a display string for the web port, or empty if none.
-func fmtWebPort(webPort int) string {
-	if webPort > 0 {
-		return fmt.Sprintf(", web port %d", webPort)
+// fmtServerPorts formats a " on SSH port X, web port Y" style suffix,
+// including only whichever of sshPort/webPort is actually enabled (> 0).
+func fmtServerPorts(sshPort, webPort int) string {
+	var parts []string
+	if sshPort > 0 {
+		parts = append(parts, fmt.Sprintf("SSH port %d", sshPort))
 	}
-	return ""
+	if webPort > 0 {
+		parts = append(parts, fmt.Sprintf("web port %d", webPort))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " on " + strings.Join(parts, ", ")
 }
 
 // handleServeDaemon is the internal handler for --server-daemon.
@@ -172,13 +194,16 @@ func handleServeDaemon(ctx context.Context, group *CommandGroup, conf *config.Ap
 	console.NonInteractive = slices.Contains(console.DaemonArgs, "--non-interactive")
 	startMenu := extractNavArg(group.Args)
 	sshPort, webPort := parsePortArgs(group.Args)
-	if sshPort > 0 {
+	// -1 means "not specified, keep config"; 0 means "explicitly disabled"
+	// (e.g. from --server start-web) and must actually zero out the config
+	// value, not just leave it alone.
+	if sshPort >= 0 {
 		conf.Server.SSH.Port = sshPort
 	}
-	if webPort > 0 {
+	if webPort >= 0 {
 		conf.Server.Web.Port = webPort
 	}
-	return serve.StartSSHServer(ctx, conf.Server, startMenu)
+	return serve.StartServer(ctx, conf.Server, startMenu)
 }
 
 // extractNavArg parses nav args appended after --server-daemon and returns
@@ -295,8 +320,8 @@ func handleServerInstall(ctx context.Context, sshPort, webPort int) error {
 	if err := serve.InstallService(execPath, sshPort, webPort); err != nil {
 		return err
 	}
-	if sshPort > 0 {
-		logger.Notice(ctx, "Service installed with SSH port %d%s. Run 'ds2 --server enable' to start it at boot.", sshPort, fmtWebPort(webPort))
+	if sshPort > 0 || webPort > 0 {
+		logger.Notice(ctx, "Service installed%s. Run 'ds2 --server enable' to start it at boot.", fmtServerPorts(sshPort, webPort))
 	} else {
 		logger.Notice(ctx, "Service installed (ports from config). Run 'ds2 --server enable' to start it at boot.")
 	}
@@ -321,8 +346,8 @@ func handleServerEnable(ctx context.Context, sshPort, webPort int) error {
 	if err := serve.EnableService(); err != nil {
 		return err
 	}
-	if sshPort > 0 {
-		logger.Notice(ctx, "Service enabled with SSH port %d%s — the server will start automatically at boot.", sshPort, fmtWebPort(webPort))
+	if sshPort > 0 || webPort > 0 {
+		logger.Notice(ctx, "Service enabled%s — the server will start automatically at boot.", fmtServerPorts(sshPort, webPort))
 	} else {
 		logger.Notice(ctx, "Service enabled (ports from config) — the server will start automatically at boot.")
 	}

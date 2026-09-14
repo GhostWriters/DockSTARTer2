@@ -305,7 +305,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				sub := expandedArgs[i]
 				validSubs := map[string]bool{
-					"status": true, "start": true, "stop": true, "restart": true,
+					"status": true, "start": true, "start-ssh": true, "start-web": true,
+					"stop": true, "restart": true,
 					"disconnect": true, "install": true, "uninstall": true,
 					"enable": true, "disable": true,
 				}
@@ -357,6 +358,45 @@ func Parse(args []string) ([]CommandGroup, error) {
 				} else {
 					break
 				}
+			}
+
+		case "--tint":
+			// Both args are optional: no args shows status, <ref> alone means
+			// "all" connection types, and <ref> <types> sets both -- same
+			// "ref" vocabulary as ui.theme ("user:"/"file:"/"embedded:"/
+			// "repo:"/bare-name).
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				}
+			}
+
+		case "--theme-tint", "--theme-no-tint", "--theme-ansi-override", "--theme-no-ansi-override":
+			// Connection type is optional here -- omitted means "all".
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
+		case "--ansi-override":
+			// <slot> <value> are both required; the trailing connection-type
+			// arg is optional (omitted means "all"), same as --tint.
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a color slot name.", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
+				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a value (a color, or \"none\" to clear).", cmd)}
+			}
+			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+			i++
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
 			}
 
 		case "--theme-extract-all":

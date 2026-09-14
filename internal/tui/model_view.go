@@ -45,7 +45,10 @@ type InputCursorProvider interface {
 	GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool)
 }
 
-// View implements tea.Model
+// View implements tea.Model. Checks IsTUIDying (which can block this
+// goroutine forever, see below) before wrapping the actual render in
+// ActivateSessionRenderContext -- must never take that lock and then block
+// forever, or every other concurrent session's rendering deadlocks with it.
 // Uses backdrop + overlay pattern (same as dialogs)
 func (m *AppModel) View() (v tea.View) {
 	if console.IsTUIDying() {
@@ -54,6 +57,15 @@ func (m *AppModel) View() (v tea.View) {
 		// which would hide the cursor after we've already restored it.
 		select {}
 	}
+	ActivateSessionRenderContext(m.connType, m.colorProfile, func() {
+		v = m.viewWithTint()
+	})
+	return v
+}
+
+// viewWithTint is View's actual rendering, run with this session's own
+// connType's tint active (see ActivateTintFor).
+func (m *AppModel) viewWithTint() (v tea.View) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Restore terminal immediately
