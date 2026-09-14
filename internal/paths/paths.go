@@ -157,8 +157,8 @@ func GetTemplatesDir() string {
 
 // GetTintedThemingSchemesDir returns the absolute path to a local clone of
 // the tinted-theming/schemes repo (github.com/tinted-theming/schemes),
-// used by --tint-repo to resolve a scheme name to its YAML file without a
-// network round-trip on every call.
+// used by --tint's "repo:" reference (and its default) to resolve a scheme
+// name to its YAML file without a network round-trip on every call.
 func GetTintedThemingSchemesDir() string {
 	return filepath.Join(GetStateDir(), "tinted-theming-schemes")
 }

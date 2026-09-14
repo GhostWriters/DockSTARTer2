@@ -12,7 +12,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
-// tintedThemingSchemesRepo/Branch is the source --tint-repo clones from.
+// tintedThemingSchemesRepo/Branch is the source ResolveRepoTintData clones
+// from (--tint's "repo:" reference, and its default).
 // Cloned once into DS2's state dir rather than fetched per call, mirroring
 // how DockSTARTer-Templates is cloned locally instead of re-fetched on
 // every use (see internal/update/update_templates.go).

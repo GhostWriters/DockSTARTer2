@@ -360,18 +360,18 @@ func Parse(args []string) ([]CommandGroup, error) {
 				}
 			}
 
-		case "--tint-repo", "--tint-file", "--tint-embedded", "--tint-user":
-			// <scheme-name-or-path> is required; the trailing connection-type
-			// arg is optional (omitted means "all"), same as --theme-tint/
-			// --theme-no-tint.
-			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
-				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a %s.", cmd, map[string]string{"--tint-repo": "scheme name", "--tint-file": "file path", "--tint-embedded": "scheme name", "--tint-user": "scheme name"}[cmd])}
-			}
-			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
-			i++
+		case "--tint":
+			// Both args are optional: no args shows status, <ref> alone means
+			// "all" connection types, and <ref> <types> sets both -- same
+			// "ref" vocabulary as ui.theme ("user:"/"file:"/"embedded:"/
+			// "repo:"/bare-name).
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++
+				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				}
 			}
 
 		case "--theme-tint", "--theme-no-tint", "--theme-ansi-override", "--theme-no-ansi-override":
@@ -383,8 +383,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 
 		case "--ansi-override":
 			// <slot> <value> are both required; the trailing connection-type
-			// arg is optional (omitted means "all"), same as --tint-repo/
-			// --tint-file.
+			// arg is optional (omitted means "all"), same as --tint.
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
 				return nil, &ParseError{Args: expandedArgs, Index: i - 1, FailingCommand: cmd, Message: fmt.Sprintf("Command %s requires a color slot name.", cmd)}
 			}

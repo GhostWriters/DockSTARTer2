@@ -89,12 +89,12 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # canonical name for it. tint points to a tinted-theming base16/base24 scheme
 # to seed every slot at once; any field set explicitly below still wins over
 # it for that one slot (settable individually via --ansi-override; "none"
-# clears one). Accepts "file:<path>" (an arbitrary scheme YAML file),
-# "user:<name>" (one under the user tint folder, alongside user themes --
-# see --tint-user), "embedded:<name>" (one of DS2's own bundled schemes --
-# see --tint-list-embedded/--tint-embedded; also the meaning of a bare,
-# unprefixed name), or "repo:<name>" (a name from the real tinted-theming/
-# schemes repo -- see --tint-list-repo/--tint-repo). tint_enabled and
+# clears one). Set via `--tint <ref> [types]`; accepts "file:<path>" (an
+# arbitrary scheme YAML file), "user:<name>" (one under the user tint
+# folder, alongside user themes), "embedded:<name>" (one of DS2's own
+# bundled schemes -- see --tint-list-embedded), or "repo:<name>" (a name
+# from the real tinted-theming/schemes repo -- see --tint-list-repo; also
+# the meaning of a bare, unprefixed name). tint_enabled and
 # override_enabled independently turn
 # tint and the fields below on or off as a group, without discarding
 # either (set via --theme-tint/--theme-no-tint and

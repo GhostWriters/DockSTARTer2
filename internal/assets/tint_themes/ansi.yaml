@@ -3,7 +3,7 @@ name: "ANSI"
 author: "DockSTARTer2"
 variant: "dark"
 # Standard xterm/ANSI 16-color values, expressed as a base24 scheme so it
-# loads through the same --tint-repo/--tint-file path as any other
+# loads through the same "--tint embedded:ansi" path as any other
 # tinted-theming scheme, and so every color gets a real, distinct bright
 # variant (base12-base17) instead of base16's fallback of reusing the
 # normal color -- see ParseBase16Scheme's doc comment for the mapping.
@@ -12,8 +12,8 @@ variant: "dark"
 # their values here are unused by the 16-slot mapping and just plausible
 # fill.
 # If tinted-theming ever publishes an equivalent upstream scheme, this file
-# can be removed and --tint-repo will resolve the name from the real repo
-# clone instead.
+# can be removed and a bare/"repo:" --tint reference will resolve the name
+# from the real repo clone instead.
 palette:
   base00: "#000000" # black
   base01: "#262626"

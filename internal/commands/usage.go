@@ -559,22 +559,20 @@ func GetUsage(target string, noHeading bool) string {
 			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
 		)
 	}
-	if match("--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-user", "--tint-list-repo", "--tint-list-embedded") {
+	if match("--tint", "--tint-list-repo", "--tint-list-embedded") {
 		printStr(
 			"{{|UsageCommand|}}--tint{{[-]}}",
 			"	Show the current ANSI palette tint status for local/ssh/web",
-			"{{|UsageCommand|}}--tint-repo{{[-]}} {{|UsageOption|}}<scheme-name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Set an ANSI palette tint by downloading a tinted-theming base16 scheme (github.com/tinted-theming/schemes). No connection type means all.",
-			"{{|UsageCommand|}}--tint-file{{[-]}} {{|UsageOption|}}<path>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Set an ANSI palette tint from a local base16 scheme YAML file. No connection type means all.",
-			"{{|UsageCommand|}}--tint-embedded{{[-]}} {{|UsageOption|}}<name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Set an ANSI palette tint from one of DS2's own bundled base16 schemes (see --tint-list-embedded). No connection type means all.",
-			"{{|UsageCommand|}}--tint-user{{[-]}} {{|UsageOption|}}<name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Set an ANSI palette tint from a scheme file in the user tint folder. No connection type means all.",
+			"{{|UsageCommand|}}--tint{{[-]}} {{|UsageOption|}}<ref>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Set an ANSI palette tint. No connection type means all. <ref> is one of:",
+			"	{{|UsageOption|}}<scheme-name>{{[-]}} or {{|UsageOption|}}repo:<scheme-name>{{[-]}} -- downloads a tinted-theming base16 scheme (github.com/tinted-theming/schemes; see --tint-list-repo)",
+			"	{{|UsageOption|}}embedded:<name>{{[-]}} -- one of DS2's own bundled base16 schemes (see --tint-list-embedded)",
+			"	{{|UsageOption|}}user:<name>{{[-]}} -- a scheme file in the user tint folder",
+			"	{{|UsageOption|}}file:<path>{{[-]}} -- a local base16 scheme YAML file",
 			"{{|UsageCommand|}}--tint-list-repo{{[-]}}",
-			"	List the base16 scheme names available from the tinted-theming/schemes repo (for --tint-repo)",
+			"	List the base16 scheme names available from the tinted-theming/schemes repo",
 			"{{|UsageCommand|}}--tint-list-embedded{{[-]}}",
-			"	List the base16 scheme names bundled with DS2 (for --tint-embedded)",
+			"	List the base16 scheme names bundled with DS2",
 		)
 	}
 	if match("--theme-tint", "--theme-no-tint") {

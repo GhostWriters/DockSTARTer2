@@ -202,21 +202,22 @@ type AnsiColors struct {
 	// scheme -- its colors seed this palette per tinted-theming's
 	// documented terminal mapping (see config.ParseBase16Scheme). Any of
 	// the 16 fields below set explicitly here still wins over the scheme
-	// for that one slot. Same "<kind>:<name-or-path>" convention as
-	// ui.theme's "user:"/"file:" prefixes, extended with two more sources
-	// (see resolveTintRef in internal/tui):
+	// for that one slot. Set via `--tint <ref> [types]`; same
+	// "<kind>:<name-or-path>" convention as ui.theme's "user:"/"file:"
+	// prefixes, extended with two more sources (see resolveTintRef in
+	// internal/tui and ResolveTintRefData in internal/commands):
 	//   - "file:<path>"    an arbitrary scheme YAML file, read live
 	//   - "user:<name>"    a user-supplied file under paths.GetTintsDir()
 	//   - "embedded:<name>" one of DS2's own bundled schemes (see
-	//                       assets.GetTintTheme/--tint-list-embedded);
-	//                       also the meaning of a bare, unprefixed name
+	//                       assets.GetTintTheme/--tint-list-embedded)
 	//   - "repo:<name>"    a named scheme from a local clone of
 	//                      github.com/tinted-theming/schemes (see
-	//                      --tint-repo/--tint-list-repo)
+	//                      --tint-list-repo); also the meaning of a bare,
+	//                      unprefixed name, since most schemes live there
 	// "user:"/"embedded:" work out of the box with nothing to download or
 	// copy first, so either is safe to set as a shipped default; "repo:"
-	// triggers a one-time clone on first resolution if that clone doesn't
-	// exist yet.
+	// (or a bare name) triggers a one-time clone on first resolution if
+	// that clone doesn't exist yet.
 	Tint string `toml:"tint"`
 
 	// Named after their base16/base24 slot (see tinted-theming/base24's

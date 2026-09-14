@@ -4,36 +4,22 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
-	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
 
 	semstyle "github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/colorprofile"
 )
 
-// resolveTintRef reads ref's scheme bytes -- see config.AnsiColors.Tint's
-// doc comment for the "file:"/"user:"/"embedded:"/"repo:" prefix
-// convention (a bare, unprefixed name means "embedded:<name>").
+// resolveTintRef reads ref's scheme bytes -- see
+// commands.ResolveTintRefData (config.AnsiColors.Tint's doc comment has the
+// "file:"/"user:"/"embedded:"/"repo:" prefix convention).
 func resolveTintRef(ctx context.Context, ref string) ([]byte, error) {
-	switch {
-	case strings.HasPrefix(ref, "file:"):
-		return os.ReadFile(strings.TrimPrefix(ref, "file:"))
-	case strings.HasPrefix(ref, "user:"):
-		return os.ReadFile(filepath.Join(paths.GetTintsDir(), strings.TrimPrefix(ref, "user:")+".yaml"))
-	case strings.HasPrefix(ref, "embedded:"):
-		return assets.GetTintTheme(strings.TrimPrefix(ref, "embedded:"))
-	case strings.HasPrefix(ref, "repo:"):
-		return commands.ResolveRepoTintData(ctx, strings.TrimPrefix(ref, "repo:"))
-	default:
-		return assets.GetTintTheme(ref)
-	}
+	data, _, err := commands.ResolveTintRefData(ctx, ref)
+	return data, err
 }
 
 // tintKeyForConnType returns the semstyle tint registration key for

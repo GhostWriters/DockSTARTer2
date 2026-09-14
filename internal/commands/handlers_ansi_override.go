@@ -86,7 +86,7 @@ func ansiColorSlotField(c *config.AnsiColors, slot string) *string {
 // HandleAnsiOverride implements --ansi-override <slot> <value> [types],
 // setting one of the 16 standard ANSI colors directly on
 // ansi_palette.<connType> -- independent of, and layered over, any tint
-// configured via --tint-repo/--tint-file (see config.AnsiColors.
+// configured via --tint (see config.AnsiColors.
 // WithDefaults). value "none" (or an empty string) clears the override for
 // that slot, falling back to any tint's own value. types is optional --
 // omitted means "all". See HandleThemeAnsiOverrideOnOff for the bulk

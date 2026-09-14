@@ -133,9 +133,10 @@ func parseBase16Palette(data []byte) (base16Palette, error) {
 // Base16SchemeMeta holds a base16 scheme's own descriptive metadata (not
 // its colors) -- name/author/variant as the scheme's own file declares
 // them (variant is empty for a legacy-format file, which has no such
-// field), for display purposes (see HandleTintStatus). Not necessarily the
-// same as the slug passed to --tint-repo (a scheme's own "name" field is
-// free text, e.g. "Default Dark", not always the file's slug).
+// field), for display purposes (see --tint's status display). Not
+// necessarily the same as the name in a "repo:<name>" Tint reference (a
+// scheme's own "name" field is free text, e.g. "Default Dark", not always
+// the file's slug).
 type Base16SchemeMeta struct {
 	Name    string
 	Slug    string

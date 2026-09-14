@@ -25,11 +25,10 @@ func GetTheme(name string) ([]byte, error) {
 
 // GetTintTheme reads a bundled base16 scheme YAML file from the embedded
 // tint_themes folder by name (no ".yaml" suffix), or an error if name isn't
-// one of ListTintThemes. Checked by --tint-repo before falling back to the
-// cloned tinted-theming/schemes repo, so a name shipped here always
-// resolves even before that repo is cloned -- and if tinted-theming ever
-// publishes an equivalent scheme upstream, removing the file here just
-// falls through to that instead.
+// one of ListTintThemes. Resolved by --tint's "embedded:<name>" reference --
+// if tinted-theming ever publishes an equivalent scheme upstream, removing
+// the file here just makes that reference 404 for the name, with a bare
+// (or "repo:") reference picking it up from the real repo instead.
 func GetTintTheme(name string) ([]byte, error) {
 	return embeddedFS.ReadFile("tint_themes/" + name + ".yaml")
 }
