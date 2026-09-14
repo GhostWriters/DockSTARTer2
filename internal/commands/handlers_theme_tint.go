@@ -363,6 +363,16 @@ func describeTintRef(ctx context.Context, ref string) tintStatusMeta {
 	return tintStatusMeta{Name: meta.Name, Author: meta.Author, Variant: meta.Variant}
 }
 
+// formatEnabledState returns "enabled"/"disabled" as semstyle tag markup,
+// styled with the theme's own Yes/No semantic tags (the same ones a y/n
+// prompt answer uses) rather than plain text.
+func formatEnabledState(enabled bool) string {
+	if enabled {
+		return "{{|Yes|}}enabled{{[-]}}"
+	}
+	return "{{|No|}}disabled{{[-]}}"
+}
+
 // formatTintRefSource returns ref (see config.AnsiColors.Tint's doc comment
 // for the prefix convention) as hyperlinked semstyle tag markup for --tint's
 // status display, when there's somewhere sensible to point it:
@@ -438,15 +448,8 @@ func handleTintStatus(ctx context.Context) error {
 		{"web", conf.AnsiColors.Web},
 	}
 	for _, row := range rows {
-		state := "disabled"
-		if row.c.TintEnabled {
-			state = "enabled"
-		}
-
-		overrideState := "disabled"
-		if row.c.OverrideEnabled {
-			overrideState = "enabled"
-		}
+		state := formatEnabledState(row.c.TintEnabled)
+		overrideState := formatEnabledState(row.c.OverrideEnabled)
 		var overrides []string
 		for _, slot := range ansiColorSlotNames {
 			if v := *ansiColorSlotField(&row.c, slot); v != "" {
