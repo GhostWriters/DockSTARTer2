@@ -412,13 +412,16 @@ func formatTintRefSource(ctx context.Context, ref string) string {
 // together they determine what actually renders for that connType. <ref>
 // [types] sets the tint instead -- see config.AnsiColors.Tint's doc comment
 // for the "file:"/"user:"/"embedded:"/"repo:" reference syntax (a bare name
-// means "repo:<name>"); types is optional, omitted means "all".
+// means "repo:<name>"); types is optional, omitted means "all". <ref>
+// "" (an explicitly empty argument) or "none:" clears the tint instead of
+// setting one -- not bare "none" (no colon), which stays a valid, if
+// unlikely, "repo:none" scheme name instead of being reserved as a keyword.
 func HandleTint(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) == 0 {
 		return handleTintStatus(ctx)
 	}
 
-	ref := canonicalTintRef(group.Args[0])
+	arg := group.Args[0]
 	typesArg := ""
 	if len(group.Args) > 1 {
 		typesArg = group.Args[1]
@@ -429,6 +432,20 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
+	if arg == "" || arg == "none:" {
+		conf := config.LoadAppConfig()
+		setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
+			c.Tint = ""
+		})
+		if err := config.SaveAppConfig(conf); err != nil {
+			logger.Error(ctx, "Failed to save tint setting: %v", err)
+			return err
+		}
+		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+		return nil
+	}
+
+	ref := canonicalTintRef(arg)
 	data, desc, err := ResolveTintRefData(ctx, ref)
 	if err != nil {
 		logger.Error(ctx, "%v", err)

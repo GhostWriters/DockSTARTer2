@@ -217,7 +217,9 @@ type AnsiColors struct {
 	// "user:"/"embedded:" work out of the box with nothing to download or
 	// copy first, so either is safe to set as a shipped default; "repo:"
 	// (or a bare name) triggers a one-time clone on first resolution if
-	// that clone doesn't exist yet.
+	// that clone doesn't exist yet. Empty ("") or "none:" clears it -- not
+	// bare "none" (no colon), which stays a valid, if unlikely, "repo:none"
+	// scheme name instead of being reserved as a keyword.
 	Tint string `toml:"tint"`
 
 	// Named after their base16/base24 slot (see tinted-theming/base24's

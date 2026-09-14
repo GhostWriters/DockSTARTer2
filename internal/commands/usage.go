@@ -569,6 +569,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	{{|UsageOption|}}embedded:<name>{{[-]}} -- one of DS2's own bundled base16 schemes (see --tint-list-embedded)",
 			"	{{|UsageOption|}}user:<name>{{[-]}} -- a scheme file in the user tint folder",
 			"	{{|UsageOption|}}file:<path>{{[-]}} -- a local base16 scheme YAML file",
+			"	{{|UsageOption|}}\"\"{{[-]}} or {{|UsageOption|}}none:{{[-]}} -- clears the tint",
 			"{{|UsageCommand|}}--tint-list-repo{{[-]}}",
 			"	List the base16 scheme names available from the tinted-theming/schemes repo",
 			"{{|UsageCommand|}}--tint-list-embedded{{[-]}}",
