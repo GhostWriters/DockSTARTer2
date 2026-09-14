@@ -25,6 +25,15 @@ const (
 	HeaderFocusWebDisplay
 )
 
+// WebDisplaySettingsEnabled gates the header's WebDisplay entry (hostname,
+// web sessions only) on top of the existing ConnType == "web" check. Off for
+// now: sip (the web terminal library) has no channel for the server to push
+// a live appearance change into an already-open session, so Apply in that
+// dialog can no longer reach the browser. The dialog/message plumbing
+// (WebDisplayDialog, ShowWebDisplaySettingsMsg) is left in place rather than
+// removed, in case a future sip release adds one.
+const WebDisplaySettingsEnabled = false
+
 // RefreshHeaderMsg signals the header to re-read flags and other dynamic data
 type RefreshHeaderMsg struct{}
 
@@ -224,7 +233,7 @@ func (m HeaderModel) renderLeft() string {
 	isFlagsFocused := m.focus == HeaderFocusFlags
 	// Web Display Settings' click target lives on the hostname (not the title) --
 	// only reachable for web sessions, matching GetHitRegions' gating.
-	isWebFocused := m.ConnType == "web" && m.focus == HeaderFocusWebDisplay
+	isWebFocused := WebDisplaySettingsEnabled && m.ConnType == "web" && m.focus == HeaderFocusWebDisplay
 
 	// 1. Hostname
 	var leftText string
@@ -377,7 +386,7 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	hostnameW := lipgloss.Width(m.hostname)
 	flagsW := leftW - hostnameW - 1
 
-	if m.ConnType == "web" {
+	if WebDisplaySettingsEnabled && m.ConnType == "web" {
 		regions = append(regions, HitRegion{
 			ID:     IDHeaderWebDisplay,
 			X:      offsetX,
