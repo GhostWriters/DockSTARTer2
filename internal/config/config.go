@@ -205,22 +205,29 @@ type AnsiColors struct {
 	// that one slot.
 	SchemeFile string `toml:"scheme_file"`
 
-	Black         string `toml:"black"`
-	Red           string `toml:"red"`
-	Green         string `toml:"green"`
-	Yellow        string `toml:"yellow"`
-	Blue          string `toml:"blue"`
-	Magenta       string `toml:"magenta"`
-	Cyan          string `toml:"cyan"`
-	White         string `toml:"white"`
-	BrightBlack   string `toml:"bright_black"`
-	BrightRed     string `toml:"bright_red"`
-	BrightGreen   string `toml:"bright_green"`
-	BrightYellow  string `toml:"bright_yellow"`
-	BrightBlue    string `toml:"bright_blue"`
-	BrightMagenta string `toml:"bright_magenta"`
-	BrightCyan    string `toml:"bright_cyan"`
-	BrightWhite   string `toml:"bright_white"`
+	// Named after their base16/base24 slot (see tinted-theming/base24's
+	// styling.md) rather than the classic ANSI name, so this section reads
+	// the same as a scheme YAML file's own "palette:" block -- copy a value
+	// from either straight into the other. Every name below is still
+	// recognized as an equivalent alias wherever a color name is accepted
+	// (semstyle.ToColorCtx, --ansi-override, etc.); base0X is canonical here
+	// purely for this file's own field/serialization identity.
+	Base00 string `toml:"base00"` // black
+	Base08 string `toml:"base08"` // red
+	Base0B string `toml:"base0b"` // green
+	Base0A string `toml:"base0a"` // yellow
+	Base0D string `toml:"base0d"` // blue
+	Base0E string `toml:"base0e"` // magenta
+	Base0C string `toml:"base0c"` // cyan
+	Base05 string `toml:"base05"` // white
+	Base03 string `toml:"base03"` // bright black
+	Base12 string `toml:"base12"` // bright red
+	Base14 string `toml:"base14"` // bright green
+	Base13 string `toml:"base13"` // bright yellow
+	Base16 string `toml:"base16"` // bright blue
+	Base17 string `toml:"base17"` // bright magenta
+	Base15 string `toml:"base15"` // bright cyan
+	Base07 string `toml:"base07"` // bright white
 }
 
 // ForConnType returns the palette override for connType ("local", "ssh", or
@@ -242,10 +249,10 @@ func (c AnsiPaletteConfig) ForConnType(connType string) AnsiColors {
 // with their configured override value (possibly empty).
 func (c AnsiColors) Slots() [16]string {
 	return [16]string{
-		c.Black, c.Red, c.Green, c.Yellow,
-		c.Blue, c.Magenta, c.Cyan, c.White,
-		c.BrightBlack, c.BrightRed, c.BrightGreen, c.BrightYellow,
-		c.BrightBlue, c.BrightMagenta, c.BrightCyan, c.BrightWhite,
+		c.Base00, c.Base08, c.Base0B, c.Base0A,
+		c.Base0D, c.Base0E, c.Base0C, c.Base05,
+		c.Base03, c.Base12, c.Base14, c.Base13,
+		c.Base16, c.Base17, c.Base15, c.Base07,
 	}
 }
 
@@ -260,22 +267,22 @@ func (c AnsiColors) WithDefaults(fallback AnsiColors) AnsiColors {
 		return v
 	}
 	return AnsiColors{
-		Black:         fill(c.Black, fallback.Black),
-		Red:           fill(c.Red, fallback.Red),
-		Green:         fill(c.Green, fallback.Green),
-		Yellow:        fill(c.Yellow, fallback.Yellow),
-		Blue:          fill(c.Blue, fallback.Blue),
-		Magenta:       fill(c.Magenta, fallback.Magenta),
-		Cyan:          fill(c.Cyan, fallback.Cyan),
-		White:         fill(c.White, fallback.White),
-		BrightBlack:   fill(c.BrightBlack, fallback.BrightBlack),
-		BrightRed:     fill(c.BrightRed, fallback.BrightRed),
-		BrightGreen:   fill(c.BrightGreen, fallback.BrightGreen),
-		BrightYellow:  fill(c.BrightYellow, fallback.BrightYellow),
-		BrightBlue:    fill(c.BrightBlue, fallback.BrightBlue),
-		BrightMagenta: fill(c.BrightMagenta, fallback.BrightMagenta),
-		BrightCyan:    fill(c.BrightCyan, fallback.BrightCyan),
-		BrightWhite:   fill(c.BrightWhite, fallback.BrightWhite),
+		Base00: fill(c.Base00, fallback.Base00),
+		Base08: fill(c.Base08, fallback.Base08),
+		Base0B: fill(c.Base0B, fallback.Base0B),
+		Base0A: fill(c.Base0A, fallback.Base0A),
+		Base0D: fill(c.Base0D, fallback.Base0D),
+		Base0E: fill(c.Base0E, fallback.Base0E),
+		Base0C: fill(c.Base0C, fallback.Base0C),
+		Base05: fill(c.Base05, fallback.Base05),
+		Base03: fill(c.Base03, fallback.Base03),
+		Base12: fill(c.Base12, fallback.Base12),
+		Base14: fill(c.Base14, fallback.Base14),
+		Base13: fill(c.Base13, fallback.Base13),
+		Base16: fill(c.Base16, fallback.Base16),
+		Base17: fill(c.Base17, fallback.Base17),
+		Base15: fill(c.Base15, fallback.Base15),
+		Base07: fill(c.Base07, fallback.Base07),
 	}
 }
 

@@ -599,7 +599,7 @@ func GetUsage(target string, noHeading bool) string {
 		printStr(
 			"{{|UsageCommand|}}--ansi-override{{[-]}} {{|UsageOption|}}<slot>{{[-]}} {{|UsageOption|}}<value>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Override one of the 16 standard ANSI colors directly, independent of any tint. <value> \"none\" clears it. No connection type means all.",
-			"	  <slot>: black, red, green, yellow, blue, magenta, cyan, white, or bright-<one of those>",
+			"	  <slot>: black, red, green, yellow, blue, magenta, cyan, white, or bright-<one of those>; or the equivalent base16/base24 slot name (base08 for red, etc.)",
 		)
 	}
 	if match("--theme-ansi-override", "--theme-no-ansi-override") {

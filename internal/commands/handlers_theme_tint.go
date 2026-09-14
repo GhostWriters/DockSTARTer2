@@ -137,9 +137,18 @@ func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	data, err := os.ReadFile(filepath.Join(repoDir, "base16", schemeName+".yaml"))
+	// Prefer base24 -- same scheme, but with real distinct bright colors
+	// (see ParseBase16Scheme's doc comment) instead of base16's fallback of
+	// reusing the normal color. Not every scheme has a base24 counterpart,
+	// so fall back to base16 when it doesn't.
+	data, err := os.ReadFile(filepath.Join(repoDir, "base24", schemeName+".yaml"))
 	if err != nil {
-		err := fmt.Errorf("scheme %q not found -- check the name against %s", schemeName, "https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
+		data, err = os.ReadFile(filepath.Join(repoDir, "base16", schemeName+".yaml"))
+	}
+	if err != nil {
+		err := fmt.Errorf("scheme %q not found -- check the name against %s or %s", schemeName,
+			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base24",
+			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
 		logger.Error(ctx, "%v", err)
 		return err
 	}
@@ -198,26 +207,40 @@ func HandleTintListEmbedded(ctx context.Context, _ *CommandGroup) error {
 	return nil
 }
 
-// HandleTintListRepo implements --tint-list-repo, listing the base16
-// scheme names available from the cloned tinted-theming/schemes repo
-// (usable with --tint-repo) -- cloning it on first use, same as --tint-repo
-// itself.
+// HandleTintListRepo implements --tint-list-repo, listing the scheme names
+// available from the cloned tinted-theming/schemes repo (usable with
+// --tint-repo) -- cloning it on first use, same as --tint-repo itself. A
+// name present in either base24/ or base16/ is listed once; --tint-repo
+// itself resolves it from whichever of the two actually has it, preferring
+// base24 (see HandleThemeTintRepo).
 func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	entries, err := os.ReadDir(filepath.Join(repoDir, "base16"))
-	if err != nil {
+	seen := make(map[string]bool)
+	var names []string
+	for _, sub := range []string{"base24", "base16"} {
+		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".yaml")
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	if len(names) == 0 {
+		err := fmt.Errorf("no schemes found in %q or %q", filepath.Join(repoDir, "base24"), filepath.Join(repoDir, "base16"))
 		logger.Error(ctx, "%v", err)
 		return err
-	}
-	var names []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-			names = append(names, strings.TrimSuffix(e.Name(), ".yaml"))
-		}
 	}
 	slices.Sort(names)
 	for _, name := range names {

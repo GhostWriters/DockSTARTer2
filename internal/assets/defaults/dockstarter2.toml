@@ -72,7 +72,14 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # plain ANSI codes rather than literal RGB) may render off from pure values
 # unless overridden here.
 # Each value accepts hex ("#ffffff"), an ANSI name, or any color name tcell
-# resolves (e.g. "grey"). scheme_file points to a tinted-theming base16
+# resolves (e.g. "grey"). The 16 fields below are named after their base16/
+# base24 scheme slot (e.g. "base08"), so this section reads the same as a
+# scheme file's own "palette:" block -- copy a value from either straight
+# into the other. Each also has a classic ANSI name (see the comment beside
+# it) that works identically anywhere a slot name is accepted (here, or
+# --ansi-override's <slot> argument) -- both spellings are the exact same
+# color, not two separate ones; base0X is just this file's own canonical
+# name for it. scheme_file points to a tinted-theming base16 or base24
 # scheme YAML file (https://github.com/tinted-theming/schemes) to seed all
 # 16 slots at once; any of the 16 fields set explicitly below still wins
 # over the scheme for that one slot (settable individually via
@@ -98,61 +105,61 @@ apply_to_programbox = true
 tint_enabled = true
 override_enabled = true
 scheme_file = ""
-black = ""
-red = ""
-green = ""
-yellow = ""
-blue = ""
-magenta = ""
-cyan = ""
-white = ""
-bright_black = ""
-bright_red = ""
-bright_green = ""
-bright_yellow = ""
-bright_blue = ""
-bright_magenta = ""
-bright_cyan = ""
-bright_white = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
 
 [ansi_palette.ssh]
 tint_enabled = true
 override_enabled = true
 scheme_file = ""
-black = ""
-red = ""
-green = ""
-yellow = ""
-blue = ""
-magenta = ""
-cyan = ""
-white = ""
-bright_black = ""
-bright_red = ""
-bright_green = ""
-bright_yellow = ""
-bright_blue = ""
-bright_magenta = ""
-bright_cyan = ""
-bright_white = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
 
 [ansi_palette.web]
 tint_enabled = true
 override_enabled = true
 scheme_file = ""
-black = ""
-red = ""
-green = ""
-yellow = ""
-blue = ""
-magenta = ""
-cyan = ""
-white = ""
-bright_black = ""
-bright_red = ""
-bright_green = ""
-bright_yellow = ""
-bright_blue = ""
-bright_magenta = ""
-bright_cyan = ""
-bright_white = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white

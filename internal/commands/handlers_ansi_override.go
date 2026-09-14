@@ -9,50 +9,58 @@ import (
 	"DockSTARTer2/internal/logger"
 )
 
-// ansiColorSlotNames lists the 16 standard ANSI color slot names accepted
-// by --ansi-override, in the same order as config.AnsiColors.Slots.
+// ansiColorSlotNames lists the 16 standard ANSI color slots' canonical
+// (base16/base24 slot) names, in the same order as config.AnsiColors.Slots
+// -- used for --tint's status display and ansiColorSlotField's error
+// message. --ansi-override itself also accepts each slot's classic ANSI
+// name (see ansiColorSlotField); this list intentionally only shows one
+// name per slot so the display doesn't repeat itself.
 var ansiColorSlotNames = []string{
-	"black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
-	"bright-black", "bright-red", "bright-green", "bright-yellow",
-	"bright-blue", "bright-magenta", "bright-cyan", "bright-white",
+	"base00", "base08", "base0b", "base0a", "base0d", "base0e", "base0c", "base05",
+	"base03", "base12", "base14", "base13", "base16", "base17", "base15", "base07",
 }
 
-// ansiColorSlotField returns a pointer to slot's field on c (case-
-// insensitive), or nil if slot isn't one of ansiColorSlotNames.
+// ansiColorSlotField returns a pointer to slot's field on c, accepting
+// either its base16/base24 slot name (config.AnsiColors' own canonical
+// field names, matching a scheme file's own "palette:" keys) or its classic
+// ANSI name (matching semstyle's own color-name aliasing, see
+// ansiColorIndex's doc comment in the semstyle module) -- both spellings
+// are exactly the same color, never two separate ones. Case-insensitive.
+// Returns nil if slot matches neither.
 func ansiColorSlotField(c *config.AnsiColors, slot string) *string {
 	switch strings.ToLower(slot) {
-	case "black":
-		return &c.Black
-	case "red":
-		return &c.Red
-	case "green":
-		return &c.Green
-	case "yellow":
-		return &c.Yellow
-	case "blue":
-		return &c.Blue
-	case "magenta":
-		return &c.Magenta
-	case "cyan":
-		return &c.Cyan
-	case "white":
-		return &c.White
-	case "bright-black":
-		return &c.BrightBlack
-	case "bright-red":
-		return &c.BrightRed
-	case "bright-green":
-		return &c.BrightGreen
-	case "bright-yellow":
-		return &c.BrightYellow
-	case "bright-blue":
-		return &c.BrightBlue
-	case "bright-magenta":
-		return &c.BrightMagenta
-	case "bright-cyan":
-		return &c.BrightCyan
-	case "bright-white":
-		return &c.BrightWhite
+	case "black", "base00":
+		return &c.Base00
+	case "red", "base08":
+		return &c.Base08
+	case "green", "base0b":
+		return &c.Base0B
+	case "yellow", "base0a":
+		return &c.Base0A
+	case "blue", "base0d":
+		return &c.Base0D
+	case "magenta", "base0e":
+		return &c.Base0E
+	case "cyan", "base0c":
+		return &c.Base0C
+	case "white", "base05":
+		return &c.Base05
+	case "bright-black", "base03":
+		return &c.Base03
+	case "bright-red", "base12":
+		return &c.Base12
+	case "bright-green", "base14":
+		return &c.Base14
+	case "bright-yellow", "base13":
+		return &c.Base13
+	case "bright-blue", "base16":
+		return &c.Base16
+	case "bright-magenta", "base17":
+		return &c.Base17
+	case "bright-cyan", "base15":
+		return &c.Base15
+	case "bright-white", "base07":
+		return &c.Base07
 	default:
 		return nil
 	}

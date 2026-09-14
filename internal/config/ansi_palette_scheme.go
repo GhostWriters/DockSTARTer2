@@ -13,7 +13,10 @@ import (
 
 // base16Palette mirrors the 16 base0X color fields shared by both base16
 // scheme formats -- see base16Scheme (current, spec-0.11) and
-// base16LegacyScheme (original spec) below.
+// base16LegacyScheme (original spec) below. Also carries base24's 8
+// extension fields (base10-base17, https://github.com/tinted-theming/base24/
+// blob/main/styling.md) -- empty for a genuinely base16 source, since only
+// the current (non-legacy) nested format is documented to ever carry them.
 type base16Palette struct {
 	Base00 string `yaml:"base00"`
 	Base01 string `yaml:"base01"`
@@ -31,6 +34,19 @@ type base16Palette struct {
 	Base0D string `yaml:"base0D"`
 	Base0E string `yaml:"base0E"`
 	Base0F string `yaml:"base0F"`
+
+	// base24 extension fields -- base10/base11 (darker backgrounds) have no
+	// ANSI terminal assignment and aren't mapped onto AnsiColors; the other
+	// 6 give red/yellow/green/cyan/blue/magenta a real, distinct bright
+	// color instead of base16's fallback of reusing the normal one.
+	Base10 string `yaml:"base10"`
+	Base11 string `yaml:"base11"`
+	Base12 string `yaml:"base12"`
+	Base13 string `yaml:"base13"`
+	Base14 string `yaml:"base14"`
+	Base15 string `yaml:"base15"`
+	Base16 string `yaml:"base16"`
+	Base17 string `yaml:"base17"`
 }
 
 // isZero reports whether every field is empty -- used to detect that a
@@ -194,14 +210,27 @@ func Slugify(name string) string {
 	return out.String()
 }
 
-// ParseBase16Scheme parses a tinted-theming base16 scheme YAML file's
-// contents -- current (spec-0.11, nested under "palette:") or legacy
+// firstNonEmpty returns a, or b if a is empty.
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// ParseBase16Scheme parses a tinted-theming base16 or base24 scheme YAML
+// file's contents -- current (spec-0.11, nested under "palette:") or legacy
 // (original spec, flat at the document root, unprefixed hex) format,
-// whichever matches (see parseBase16Palette) -- mapping it onto the
-// standard 16 ANSI terminal slots per tinted-theming/home's documented
-// terminal mapping (https://github.com/tinted-theming/home/blob/main/styling.md):
-// normal 0-7 = base00/08/0B/0A/0D/0E/0C/05, bright 8-15 =
-// base03/08/0B/0A/0D/0E/0C/07.
+// whichever matches (see parseBase16Palette) -- mapping it onto the standard
+// 16 ANSI terminal slots. Normal colors and the black/white bright pair
+// follow tinted-theming/home's documented terminal mapping (base00/08/0B/0A
+// /0D/0E/0C/05 normal, base03/07 bright black/white); the other 6 bright
+// colors use base24's own dedicated slots (base12/13/14/15/16/17) when the
+// source scheme sets them, falling back to base24's own documented
+// base16-compatibility table (https://github.com/tinted-theming/base24/blob
+// /main/styling.md#base24-fallbacks) -- reusing the matching normal
+// color -- for a base16-only source, exactly as before this fallback
+// existed.
 func ParseBase16Scheme(data []byte) (AnsiColors, error) {
 	p, err := parseBase16Palette(data)
 	if err != nil {
@@ -211,22 +240,22 @@ func ParseBase16Scheme(data []byte) (AnsiColors, error) {
 		return AnsiColors{}, fmt.Errorf("no base16 palette found (neither the current \"palette:\"-nested format nor the legacy flat format matched)")
 	}
 	return AnsiColors{
-		Black:         p.Base00,
-		Red:           p.Base08,
-		Green:         p.Base0B,
-		Yellow:        p.Base0A,
-		Blue:          p.Base0D,
-		Magenta:       p.Base0E,
-		Cyan:          p.Base0C,
-		White:         p.Base05,
-		BrightBlack:   p.Base03,
-		BrightRed:     p.Base08,
-		BrightGreen:   p.Base0B,
-		BrightYellow:  p.Base0A,
-		BrightBlue:    p.Base0D,
-		BrightMagenta: p.Base0E,
-		BrightCyan:    p.Base0C,
-		BrightWhite:   p.Base07,
+		Base00: p.Base00,
+		Base08: p.Base08,
+		Base0B: p.Base0B,
+		Base0A: p.Base0A,
+		Base0D: p.Base0D,
+		Base0E: p.Base0E,
+		Base0C: p.Base0C,
+		Base05: p.Base05,
+		Base03: p.Base03,
+		Base12: firstNonEmpty(p.Base12, p.Base08),
+		Base14: firstNonEmpty(p.Base14, p.Base0B),
+		Base13: firstNonEmpty(p.Base13, p.Base0A),
+		Base16: firstNonEmpty(p.Base16, p.Base0D),
+		Base17: firstNonEmpty(p.Base17, p.Base0E),
+		Base15: firstNonEmpty(p.Base15, p.Base0C),
+		Base07: p.Base07,
 	}, nil
 }
 
