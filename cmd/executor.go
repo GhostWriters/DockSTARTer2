@@ -118,7 +118,48 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// --theme-cli-tint/--theme-no-cli-tint group earlier in this same
 		// invocation must take effect starting with its own confirmation
 		// message, not just on the next separate invocation.
-		if freshAnsiColors.ApplyToCLI {
+		//
+		// Skipped whenever this group's task() runs its own Bubble Tea
+		// Program -- p.Run()'s Update/View loop calls
+		// ActivateSessionRenderContext/ActivateTintFor on every render (see
+		// model_update.go/model_view.go), which would deadlock trying to
+		// Lock() semstyle's single (non-reentrant) tint mutex while this
+		// same goroutine already holds it here. That covers two shapes:
+		// a command whose handler directly calls tui.Start/StartEditor/
+		// StartVarEditor (or serve.StartServer for --server/--server-daemon,
+		// which spins up sessions via tui.Start/StartForSession), and any
+		// command at all run with -g/--gui, which routes through
+		// tui.RunCommand -> RunProgramBox's own Program. For --server-daemon
+		// specifically this isn't just a brief nested-lock stall either: its
+		// task blocks until the daemon shuts down, so Execute's own deferred
+		// release of cliTintRestore would never run, permanently holding the
+		// mutex and deadlocking every SSH/web session's own BeginTintFor
+		// call the moment one connects. Keep the named-command set in sync
+		// with cmd.Execute's dispatch switch below -- any case whose handler
+		// ends up calling one of those Start functions belongs in it too.
+		hasGUIFlag := false
+		for _, flag := range group.Flags {
+			if flag == "-g" || flag == "--gui" {
+				hasGUIFlag = true
+				break
+			}
+		}
+		launchesOwnProgram := hasGUIFlag || map[string]bool{
+			"-M": true, "--menu": true,
+			"-S": true, "--select": true, "--menu-config-app-select": true, "--menu-app-select": true,
+			"--edit-global": true, "--start-edit-global": true, "--edit-app": true, "--start-edit-app": true,
+			"--env-edit": true, "--env-edit-lower": true,
+			"--server": true, "--server-daemon": true,
+		}[commands.BaseCommand(group.Command)]
+		if launchesOwnProgram {
+			// Release rather than leave held -- an earlier group in this
+			// same invocation (e.g. --theme-cli-tint --server-daemon) may
+			// have already acquired it.
+			if cliTintRestore != nil {
+				cliTintRestore()
+				cliTintRestore = nil
+			}
+		} else if freshAnsiColors.ApplyToCLI {
 			if cliTintRestore == nil {
 				cliTintRestore = tui.BeginTintFor("local")
 			}
