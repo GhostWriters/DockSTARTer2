@@ -78,7 +78,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-menu-brackets", "--theme-no-menu-brackets",
 			"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-list-repo", "--tint-list-embedded", "--theme-tint", "--theme-no-tint", "--theme-cli-tint", "--theme-no-cli-tint", "--theme-programbox-tint", "--theme-no-programbox-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-user", "--tint-list-repo", "--tint-list-embedded", "--theme-tint", "--theme-no-tint", "--theme-cli-tint", "--theme-no-cli-tint", "--theme-programbox-tint", "--theme-no-programbox-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
 			"--theme-spinner", "--theme-no-spinner", "--env-appfiles":
 		default:
 			shouldValidate = true
@@ -303,6 +303,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				return HandleThemeTintFile(innerCtx, &group)
 			case "--tint-embedded":
 				return HandleThemeTintEmbedded(innerCtx, &group)
+			case "--tint-user":
+				return HandleThemeTintUser(innerCtx, &group)
 			case "--tint-list-repo":
 				return HandleTintListRepo(innerCtx, &group)
 			case "--tint-list-embedded":

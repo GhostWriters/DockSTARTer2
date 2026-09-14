@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"unicode"
@@ -269,14 +268,4 @@ func ParseBase16Scheme(data []byte) (AnsiColors, error) {
 		Base10: p.Base10,
 		Base11: p.Base11,
 	}, nil
-}
-
-// LoadBase16Scheme reads and parses a tinted-theming base16 scheme YAML
-// file from path. See ParseBase16Scheme for the mapping used.
-func LoadBase16Scheme(path string) (AnsiColors, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return AnsiColors{}, err
-	}
-	return ParseBase16Scheme(data)
 }

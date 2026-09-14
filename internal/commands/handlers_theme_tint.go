@@ -49,14 +49,6 @@ func parseOptionalConnTypeList(s string) ([]string, error) {
 	return parseConnTypeList(s)
 }
 
-// tintStateFile returns the path a connType's downloaded/copied scheme file
-// is stored at -- one persistent copy per connection type in DS2's state
-// dir, independent of wherever the original source (a URL or another local
-// path) came from.
-func tintStateFile(connType string) string {
-	return filepath.Join(paths.GetStateDir(), "ansi_tint_"+connType+".yaml")
-}
-
 // setAnsiColorsField applies fn to the AnsiColors for each of connTypes on
 // conf, in place.
 func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*config.AnsiColors)) {
@@ -72,31 +64,21 @@ func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*con
 	}
 }
 
-// applyTint validates data as a base16 scheme, then for each of connTypes:
-// copies it to that connection type's state file and points
-// ansi_palette.<connType>.scheme_file at it. Does not touch disabled --
-// --tint-repo/-file only pick which scheme is configured, not
-// whether it's applied; use --theme-tint/--theme-no-tint for that.
-func applyTint(ctx context.Context, connTypes []string, data []byte, source string) error {
+// applyTintRef validates data as a base16 scheme, then points
+// ansi_palette.<connType>.tint at ref (e.g. "embedded:ansi", "repo:dracula",
+// "file:/path/to/scheme.yaml") for each of connTypes. Does not touch
+// enabled/disabled -- --tint-repo/-embedded/-file only pick which scheme is
+// configured, not whether it's applied; use --theme-tint/--theme-no-tint for
+// that.
+func applyTintRef(ctx context.Context, connTypes []string, data []byte, ref, source string) error {
 	if _, err := config.ParseBase16Scheme(data); err != nil {
 		return fmt.Errorf("%s does not look like a valid base16 scheme: %w", source, err)
 	}
 
-	if err := os.MkdirAll(paths.GetStateDir(), 0700); err != nil {
-		return fmt.Errorf("creating state directory: %w", err)
-	}
-
 	conf := config.LoadAppConfig()
-	for _, ct := range connTypes {
-		dest := tintStateFile(ct)
-		if err := os.WriteFile(dest, data, 0600); err != nil {
-			return fmt.Errorf("writing tint file for %s: %w", ct, err)
-		}
-		setAnsiColorsField(&conf, []string{ct}, func(c *config.AnsiColors) {
-			c.SchemeFile = tintStateFile(ct)
-		})
-	}
-
+	setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
+		c.Tint = ref
+	})
 	if err := config.SaveAppConfig(conf); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
@@ -107,6 +89,32 @@ func applyTint(ctx context.Context, connTypes []string, data []byte, source stri
 	}
 	logger.Notice(ctx, "ANSI palette tint set to %s for: {{|Var|}}%s{{[-]}}", desc, strings.Join(connTypes, ", "))
 	return nil
+}
+
+// ResolveRepoTintData reads a named scheme's bytes from a local clone of
+// tinted-theming/schemes (cloned on first use, see
+// ensureTintedThemingSchemesRepo) -- the shared lookup behind --tint-repo
+// and the "repo:<name>" Tint reference (see internal/tui's resolveTintRef).
+// Prefers base24 -- same scheme, but with real distinct bright colors (see
+// ParseBase16Scheme's doc comment) instead of base16's fallback of reusing
+// the normal color. Not every scheme has a base24 counterpart, so falls
+// back to base16 when it doesn't.
+func ResolveRepoTintData(ctx context.Context, name string) ([]byte, error) {
+	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(filepath.Join(repoDir, "base24", name+".yaml"))
+	if err == nil {
+		return data, nil
+	}
+	data, err = os.ReadFile(filepath.Join(repoDir, "base16", name+".yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("scheme %q not found -- check the name against %s or %s", name,
+			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base24",
+			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
+	}
+	return data, nil
 }
 
 // HandleThemeTintRepo implements --tint-repo <scheme-name> [types],
@@ -131,29 +139,13 @@ func HandleThemeTintRepo(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+	data, err := ResolveRepoTintData(ctx, schemeName)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
 
-	// Prefer base24 -- same scheme, but with real distinct bright colors
-	// (see ParseBase16Scheme's doc comment) instead of base16's fallback of
-	// reusing the normal color. Not every scheme has a base24 counterpart,
-	// so fall back to base16 when it doesn't.
-	data, err := os.ReadFile(filepath.Join(repoDir, "base24", schemeName+".yaml"))
-	if err != nil {
-		data, err = os.ReadFile(filepath.Join(repoDir, "base16", schemeName+".yaml"))
-	}
-	if err != nil {
-		err := fmt.Errorf("scheme %q not found -- check the name against %s or %s", schemeName,
-			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base24",
-			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
-		logger.Error(ctx, "%v", err)
-		return err
-	}
-
-	return applyTint(ctx, connTypes, data, "'"+schemeName+"'")
+	return applyTintRef(ctx, connTypes, data, "repo:"+schemeName, "'"+schemeName+"'")
 }
 
 // HandleThemeTintEmbedded implements --tint-embedded <name> [types],
@@ -189,7 +181,37 @@ func HandleThemeTintEmbedded(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	return applyTint(ctx, connTypes, data, "'"+schemeName+"' (embedded)")
+	return applyTintRef(ctx, connTypes, data, "embedded:"+schemeName, "'"+schemeName+"' (embedded)")
+}
+
+// HandleThemeTintUser implements --tint-user <name> [types], applying a
+// user-supplied scheme YAML file from paths.GetTintsDir() (see
+// GetTintsDir's doc comment) as an ANSI palette tint. types is optional --
+// omitted means "all".
+func HandleThemeTintUser(ctx context.Context, group *CommandGroup) error {
+	if len(group.Args) < 1 {
+		logger.Error(ctx, "Usage: --tint-user <name> [local|ssh|web|all|a,b,c]")
+		return fmt.Errorf("missing arguments")
+	}
+	schemeName := group.Args[0]
+	typesArg := ""
+	if len(group.Args) > 1 {
+		typesArg = group.Args[1]
+	}
+	connTypes, err := parseOptionalConnTypeList(typesArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+
+	path := filepath.Join(paths.GetTintsDir(), schemeName+".yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		logger.Error(ctx, "Reading '{{|File|}}%s{{[-]}}': %v", path, err)
+		return err
+	}
+
+	return applyTintRef(ctx, connTypes, data, "user:"+schemeName, "'"+schemeName+"' (user)")
 }
 
 // HandleTintListEmbedded implements --tint-list-embedded, listing the
@@ -274,11 +296,11 @@ func HandleThemeTintFile(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	return applyTint(ctx, connTypes, data, "'"+path+"'")
+	return applyTintRef(ctx, connTypes, data, "file:"+path, "'"+path+"'")
 }
 
 // HandleThemeTintOnOff implements --theme-tint [types] and --theme-no-tint
-// [types], toggling whether an already-configured tint (SchemeFile) is
+// [types], toggling whether an already-configured tint (Tint) is
 // applied, without discarding it. Does not affect any --ansi-override
 // values, which are a separate mechanism (see HandleThemeAnsiOverrideOnOff
 // for their own on/off switch). types is optional on both -- omitted means
@@ -379,21 +401,34 @@ func describeSchemeData(data []byte) string {
 	return desc
 }
 
-// describeSchemeFile reads path's base16 scheme metadata for --tint's
-// status display -- the raw state-file path itself (see tintStateFile)
-// tells the user nothing, since it's just DS2's own per-connType copy, not
-// the scheme's original name. Falls back to the bare filename if the file
-// can't be read or parsed, so a broken/missing file is still visible
-// rather than silently blank.
-func describeSchemeFile(path string) string {
-	data, err := os.ReadFile(path)
+// describeTintRef reads ref's (see config.AnsiColors.Tint's doc comment)
+// base16 scheme metadata for --tint's status display -- the raw reference
+// itself tells the user little for "user:"/"embedded:"/"repo:" names, and
+// nothing extra for "file:" beyond the path they already configured. Falls
+// back to ref itself if the source can't be read or parsed, so a
+// broken/missing one is still visible rather than silently blank.
+func describeTintRef(ctx context.Context, ref string) string {
+	var data []byte
+	var err error
+	switch {
+	case strings.HasPrefix(ref, "file:"):
+		data, err = os.ReadFile(strings.TrimPrefix(ref, "file:"))
+	case strings.HasPrefix(ref, "user:"):
+		data, err = os.ReadFile(filepath.Join(paths.GetTintsDir(), strings.TrimPrefix(ref, "user:")+".yaml"))
+	case strings.HasPrefix(ref, "embedded:"):
+		data, err = assets.GetTintTheme(strings.TrimPrefix(ref, "embedded:"))
+	case strings.HasPrefix(ref, "repo:"):
+		data, err = ResolveRepoTintData(ctx, strings.TrimPrefix(ref, "repo:"))
+	default:
+		data, err = assets.GetTintTheme(ref)
+	}
 	if err != nil {
-		return filepath.Base(path) + " (unreadable)"
+		return ref + " (unreadable)"
 	}
 	if desc := describeSchemeData(data); desc != "" {
 		return desc
 	}
-	return filepath.Base(path)
+	return ref
 }
 
 // HandleTintStatus implements --tint, printing each connection type's
@@ -418,8 +453,8 @@ func HandleTintStatus(ctx context.Context, _ *CommandGroup) error {
 			state = "enabled"
 		}
 		scheme := "(none)"
-		if row.c.SchemeFile != "" {
-			scheme = describeSchemeFile(row.c.SchemeFile)
+		if row.c.Tint != "" {
+			scheme = describeTintRef(ctx, row.c.Tint)
 		}
 
 		overrideState := "disabled"

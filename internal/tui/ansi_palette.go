@@ -4,14 +4,37 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
+	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/theme"
 
 	semstyle "github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/colorprofile"
 )
+
+// resolveTintRef reads ref's scheme bytes -- see config.AnsiColors.Tint's
+// doc comment for the "file:"/"user:"/"embedded:"/"repo:" prefix
+// convention (a bare, unprefixed name means "embedded:<name>").
+func resolveTintRef(ctx context.Context, ref string) ([]byte, error) {
+	switch {
+	case strings.HasPrefix(ref, "file:"):
+		return os.ReadFile(strings.TrimPrefix(ref, "file:"))
+	case strings.HasPrefix(ref, "user:"):
+		return os.ReadFile(filepath.Join(paths.GetTintsDir(), strings.TrimPrefix(ref, "user:")+".yaml"))
+	case strings.HasPrefix(ref, "embedded:"):
+		return assets.GetTintTheme(strings.TrimPrefix(ref, "embedded:"))
+	case strings.HasPrefix(ref, "repo:"):
+		return commands.ResolveRepoTintData(ctx, strings.TrimPrefix(ref, "repo:"))
+	default:
+		return assets.GetTintTheme(ref)
+	}
+}
 
 // tintKeyForConnType returns the semstyle tint registration key for
 // connType ("local", "ssh", or "web") -- kept separate per connType so
@@ -58,14 +81,13 @@ func RegisterConnTypeTints(ctx context.Context, connType string, colors config.A
 }
 
 // withoutExplicitFields returns colors with its 16 explicit color fields
-// cleared, keeping TintEnabled/OverrideEnabled/SchemeFile untouched -- used
-// to honor OverrideEnabled=false without also losing SchemeFile-derived
-// resolution.
+// cleared, keeping TintEnabled/OverrideEnabled/Tint untouched -- used to
+// honor OverrideEnabled=false without also losing Tint-derived resolution.
 func withoutExplicitFields(colors config.AnsiColors) config.AnsiColors {
 	return config.AnsiColors{
 		TintEnabled:     colors.TintEnabled,
 		OverrideEnabled: colors.OverrideEnabled,
-		SchemeFile:      colors.SchemeFile,
+		Tint:            colors.Tint,
 	}
 }
 
@@ -147,24 +169,29 @@ func colorsToPalette(colors config.AnsiColors) (palette semstyle.Palette, empty 
 	}, empty
 }
 
-// resolveAnsiColors layers colors' own explicit fields over its SchemeFile
-// (if set), so an individually-set field always wins over the scheme.
+// resolveAnsiColors layers colors' own explicit fields over its configured
+// Tint (if set), so an individually-set field always wins over the scheme.
 //
-// A SchemeFile that simply doesn't exist is silently ignored -- falls back
-// to colors' own explicit fields (or no tint at all if those are empty too),
-// same as if SchemeFile were never set. Anything else wrong with it
+// A Tint source that simply doesn't exist is silently ignored -- falls back
+// to colors' own explicit fields (or no tint at all if those are empty
+// too), same as if Tint were never set. Anything else wrong with it
 // (permission denied, malformed YAML) warns, since that points at a real
-// problem with a file the user did configure, not just an unset/cleared
+// problem with a scheme the user did configure, not just an unset/cleared
 // default.
 func resolveAnsiColors(ctx context.Context, colors config.AnsiColors) config.AnsiColors {
-	if colors.SchemeFile == "" {
+	if colors.Tint == "" {
 		return colors
 	}
-	scheme, err := config.LoadBase16Scheme(colors.SchemeFile)
+	data, err := resolveTintRef(ctx, colors.Tint)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.Warn(ctx, "ansi_palette: could not load scheme_file %q: %v", colors.SchemeFile, err)
+			logger.Warn(ctx, "ansi_palette: could not load tint %q: %v", colors.Tint, err)
 		}
+		return colors
+	}
+	scheme, err := config.ParseBase16Scheme(data)
+	if err != nil {
+		logger.Warn(ctx, "ansi_palette: could not parse tint %q: %v", colors.Tint, err)
 		return colors
 	}
 	return colors.WithDefaults(scheme)

@@ -413,6 +413,16 @@ func GetThemesDir() string {
 	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.ThemesDirName)
 }
 
+// GetTintsDir returns the absolute path to the user ANSI palette tint
+// (tinted-theming base16/base24 scheme YAML) directory, under the
+// user-content folder alongside GetThemesDir. A scheme file dropped here is
+// selectable by bare name from ansi_palette.<connType>.tint, the same way
+// GetThemesDir's files are selectable via "user:<name>" for ui.theme -- see
+// resolveTintData.
+func GetTintsDir() string {
+	return filepath.Join(GetConfigDir(), constants.UserDirName, constants.TintsDirName)
+}
+
 // GetUserAppsDir returns the absolute path to the user app templates
 // directory, under the user-content folder alongside GetThemesDir. Lets a
 // user add an app template DS2 doesn't ship, or locally override a

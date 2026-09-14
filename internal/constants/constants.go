@@ -12,6 +12,7 @@ const (
 	// folders (.apps, instances, timestamps, etc.).
 	UserDirName     = "user"
 	ThemesDirName   = "themes"
+	TintsDirName    = "tint"
 	AppsDirName     = "apps"
 	TempDirName     = "temp"
 	EnvFilesDirName = "env_files"

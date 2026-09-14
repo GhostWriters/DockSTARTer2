@@ -559,7 +559,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
 		)
 	}
-	if match("--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-list-repo", "--tint-list-embedded") {
+	if match("--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-user", "--tint-list-repo", "--tint-list-embedded") {
 		printStr(
 			"{{|UsageCommand|}}--tint{{[-]}}",
 			"	Show the current ANSI palette tint status for local/ssh/web",
@@ -569,6 +569,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Set an ANSI palette tint from a local base16 scheme YAML file. No connection type means all.",
 			"{{|UsageCommand|}}--tint-embedded{{[-]}} {{|UsageOption|}}<name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set an ANSI palette tint from one of DS2's own bundled base16 schemes (see --tint-list-embedded). No connection type means all.",
+			"{{|UsageCommand|}}--tint-user{{[-]}} {{|UsageOption|}}<name>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Set an ANSI palette tint from a scheme file in the user tint folder. No connection type means all.",
 			"{{|UsageCommand|}}--tint-list-repo{{[-]}}",
 			"	List the base16 scheme names available from the tinted-theming/schemes repo (for --tint-repo)",
 			"{{|UsageCommand|}}--tint-list-embedded{{[-]}}",

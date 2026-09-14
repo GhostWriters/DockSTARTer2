@@ -153,6 +153,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.Bool("tint-list-repo", false, "List the base16 scheme names available from the tinted-theming/schemes repo")
 	fs.Bool("tint-list-embedded", false, "List the base16 scheme names bundled with DS2")
 	fs.String("tint-file", "", "Set an ANSI palette tint from a local base16 scheme file (local/ssh/web/all, default all)")
+	fs.String("tint-user", "", "Set an ANSI palette tint from a scheme file in the user tint folder (local/ssh/web/all, default all)")
 	fs.String("theme-tint", "", "Enable an already-configured ANSI palette tint (local/ssh/web/all, default all)")
 	fs.String("theme-no-tint", "", "Disable an already-configured ANSI palette tint without discarding it (local/ssh/web/all, default all)")
 	fs.Bool("theme-cli-tint", false, "Enable ANSI palette tint for non-interactive CLI output (the interactive TUI is always tinted)")

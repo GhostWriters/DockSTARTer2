@@ -84,12 +84,17 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # the comment beside each) that works identically anywhere a slot name is
 # accepted (here, or --ansi-override's <slot> argument) -- both spellings are
 # the exact same color, not two separate ones; base0X is just this file's own
-# canonical name for it. scheme_file points to a tinted-theming base16 or
-# base24 scheme YAML file (https://github.com/tinted-theming/schemes) to seed
-# every slot at once; any field set explicitly below still wins over the
-# scheme for that one slot (settable individually via --ansi-override; "none"
-# clears one). tint_enabled and override_enabled independently turn
-# scheme_file and the fields below on or off as a group, without discarding
+# canonical name for it. tint points to a tinted-theming base16/base24 scheme
+# to seed every slot at once; any field set explicitly below still wins over
+# it for that one slot (settable individually via --ansi-override; "none"
+# clears one). Accepts "file:<path>" (an arbitrary scheme YAML file),
+# "user:<name>" (one under the user tint folder, alongside user themes --
+# see --tint-user), "embedded:<name>" (one of DS2's own bundled schemes --
+# see --tint-list-embedded/--tint-embedded; also the meaning of a bare,
+# unprefixed name), or "repo:<name>" (a name from the real tinted-theming/
+# schemes repo -- see --tint-list-repo/--tint-repo). tint_enabled and
+# override_enabled independently turn
+# tint and the fields below on or off as a group, without discarding
 # either (set via --theme-tint/--theme-no-tint and
 # --theme-ansi-override/--theme-no-ansi-override) -- either can be off
 # regardless of the other.
@@ -109,7 +114,7 @@ apply_to_programbox = true
 [ansi_palette.local]
 tint_enabled = true
 override_enabled = true
-scheme_file = ""
+tint = ""
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green
@@ -138,7 +143,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [ansi_palette.ssh]
 tint_enabled = true
 override_enabled = true
-scheme_file = ""
+tint = ""
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green
@@ -167,7 +172,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [ansi_palette.web]
 tint_enabled = true
 override_enabled = true
-scheme_file = ""
+tint = ""
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green

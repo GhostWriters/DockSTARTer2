@@ -184,9 +184,9 @@ type AnsiPaletteConfig struct {
 // the 16 ANSI names, or any broader color name tcell resolves (e.g.
 // "grey"). Empty leaves that slot at the terminal's own default.
 type AnsiColors struct {
-	// TintEnabled turns applying SchemeFile on or off without discarding
-	// it -- set via --theme-tint, cleared via --theme-no-tint. Independent
-	// of OverrideEnabled/the 16 explicit fields below. The embedded default
+	// TintEnabled turns applying Tint on or off without discarding it --
+	// set via --theme-tint, cleared via --theme-no-tint. Independent of
+	// OverrideEnabled/the 16 explicit fields below. The embedded default
 	// config sets this true.
 	TintEnabled bool `toml:"tint_enabled"`
 
@@ -195,15 +195,29 @@ type AnsiColors struct {
 	// --theme-ansi-override, cleared via --theme-no-ansi-override. A
 	// single slot can still be cleared individually regardless of this
 	// (set it to "none" via --ansi-override). Independent of
-	// TintEnabled/SchemeFile. The embedded default config sets this true.
+	// TintEnabled/Tint. The embedded default config sets this true.
 	OverrideEnabled bool `toml:"override_enabled"`
 
-	// SchemeFile is an optional path to a tinted-theming base16 scheme YAML
-	// file (https://github.com/tinted-theming/schemes) -- its 16 colors seed
-	// this palette per tinted-theming's documented terminal mapping. Any of
-	// the 16 fields below set explicitly here still wins over the scheme for
-	// that one slot.
-	SchemeFile string `toml:"scheme_file"`
+	// Tint is an optional reference to a tinted-theming base16/base24
+	// scheme -- its colors seed this palette per tinted-theming's
+	// documented terminal mapping (see config.ParseBase16Scheme). Any of
+	// the 16 fields below set explicitly here still wins over the scheme
+	// for that one slot. Same "<kind>:<name-or-path>" convention as
+	// ui.theme's "user:"/"file:" prefixes, extended with two more sources
+	// (see resolveTintRef in internal/tui):
+	//   - "file:<path>"    an arbitrary scheme YAML file, read live
+	//   - "user:<name>"    a user-supplied file under paths.GetTintsDir()
+	//   - "embedded:<name>" one of DS2's own bundled schemes (see
+	//                       assets.GetTintTheme/--tint-list-embedded);
+	//                       also the meaning of a bare, unprefixed name
+	//   - "repo:<name>"    a named scheme from a local clone of
+	//                      github.com/tinted-theming/schemes (see
+	//                      --tint-repo/--tint-list-repo)
+	// "user:"/"embedded:" work out of the box with nothing to download or
+	// copy first, so either is safe to set as a shipped default; "repo:"
+	// triggers a one-time clone on first resolution if that clone doesn't
+	// exist yet.
+	Tint string `toml:"tint"`
 
 	// Named after their base16/base24 slot (see tinted-theming/base24's
 	// styling.md) rather than the classic ANSI name, so this section reads
@@ -271,8 +285,8 @@ func (c AnsiColors) Slots() [16]string {
 }
 
 // WithDefaults returns c with any empty slot filled from fallback (e.g. a
-// SchemeFile-derived palette), leaving every slot c sets explicitly
-// untouched -- an explicit value always wins over a scheme's.
+// Tint-derived palette), leaving every slot c sets explicitly untouched --
+// an explicit value always wins over a scheme's.
 func (c AnsiColors) WithDefaults(fallback AnsiColors) AnsiColors {
 	fill := func(v, d string) string {
 		if v == "" {

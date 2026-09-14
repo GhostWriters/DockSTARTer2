@@ -85,7 +85,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks",
 			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-list-repo", "--tint-list-embedded", "--theme-tint", "--theme-no-tint", "--theme-cli-tint", "--theme-no-cli-tint", "--theme-programbox-tint", "--theme-no-programbox-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--tint", "--tint-repo", "--tint-file", "--tint-embedded", "--tint-user", "--tint-list-repo", "--tint-list-embedded", "--theme-tint", "--theme-no-tint", "--theme-cli-tint", "--theme-no-cli-tint", "--theme-programbox-tint", "--theme-no-programbox-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
 			"--env-appfiles":
 			// Skip validation for meta/config commands
 		default:
@@ -399,6 +399,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--tint-embedded":
 				ranCommand = true
 				return commands.HandleThemeTintEmbedded(subCtx, &group)
+			case "--tint-user":
+				ranCommand = true
+				return commands.HandleThemeTintUser(subCtx, &group)
 			case "--tint-list-repo":
 				ranCommand = true
 				return commands.HandleTintListRepo(subCtx, &group)
