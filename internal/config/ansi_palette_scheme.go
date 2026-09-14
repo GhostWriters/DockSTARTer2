@@ -99,7 +99,7 @@ func parseBase16Palette(data []byte) (base16Palette, error) {
 	if err := yaml.Unmarshal(data, &legacy); err != nil {
 		return base16Palette{}, err
 	}
-	if legacy.base16Palette.isZero() {
+	if legacy.isZero() {
 		return base16Palette{}, nil
 	}
 	p := legacy.base16Palette
