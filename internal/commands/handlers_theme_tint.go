@@ -218,15 +218,17 @@ func embeddedTintLabel(name string) string {
 // the cloned tinted-theming/schemes repo (usable with --tint's "repo:"
 // reference) as "<system>-<slug>" -- --tint's own scheme-ID form to force a
 // subfolder (see repoSchemeSubfolders). A slug present in both base24/ and
-// base16/ is listed twice, once per system, since both forms resolve to a
-// real, distinct file. Sorted by that prefixed form, so base16 and base24
-// schemes group separately.
+// base16/ is listed only as base24-<slug> -- the base16-<slug> form would
+// just resolve to the same base24 file's compatibility fallback anyway (see
+// ParseBase16Scheme), so it'd add nothing. Sorted by the prefixed form, so
+// base16 and base24 schemes group separately.
 func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
+	base24Slugs := make(map[string]bool)
 	var labels []string
 	for _, sub := range []string{"base24", "base16"} {
 		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
@@ -238,6 +240,11 @@ func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
 				continue
 			}
 			slug := strings.TrimSuffix(e.Name(), ".yaml")
+			if sub == "base24" {
+				base24Slugs[slug] = true
+			} else if base24Slugs[slug] {
+				continue
+			}
 			labels = append(labels, sub+"-"+slug)
 		}
 	}
