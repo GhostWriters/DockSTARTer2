@@ -214,6 +214,15 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 	// it here so that never happens -- bounded, same 5-second grace period
 	// as the SSH server's own shutdown above, so one wedged session can't
 	// block a restart forever.
+	//
+	// sync.WaitGroup has no cancellable wait, so the goroutine below is
+	// abandoned (not killed) if the timeout fires -- accepted rather than
+	// engineered around, since it's harmless here: StartServer has exactly
+	// one call site (cmd/executor_serve.go) and is never called again in
+	// the same process, whose very next step is always syscall.Exec
+	// (destroying every goroutine along with the rest of the process
+	// image) or exiting outright. Neither leaves anything for a stray
+	// goroutine to affect.
 	waited := make(chan struct{})
 	go func() {
 		tui.WaitForActiveSessions()

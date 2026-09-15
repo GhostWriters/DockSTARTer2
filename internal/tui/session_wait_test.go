@@ -20,6 +20,8 @@ func TestWaitForActiveSessionsBlocksUntilDone(t *testing.T) {
 	pB := &tea.Program{}
 	registerSession(pA)
 	registerSession(pB)
+	defer unregisterSession(pA)
+	defer unregisterSession(pB)
 
 	waited := make(chan struct{})
 	go func() {
