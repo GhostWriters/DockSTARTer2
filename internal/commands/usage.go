@@ -565,7 +565,7 @@ func GetUsage(target string, noHeading bool) string {
 			"	Show the current ANSI palette tint status for local/ssh/web",
 			"{{|UsageCommand|}}--tint{{[-]}} {{|UsageOption|}}<ref>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set an ANSI palette tint. No connection type means all. <ref> is one of:",
-			"	{{|UsageOption|}}<scheme-name>{{[-]}} or {{|UsageOption|}}repo:<scheme-name>{{[-]}} -- downloads a tinted-theming base16 scheme (github.com/tinted-theming/schemes; see --tint-list-repo)",
+			"	{{|UsageOption|}}<scheme-name>{{[-]}} or {{|UsageOption|}}repo:<scheme-name>{{[-]}} -- downloads a tinted-theming scheme (github.com/tinted-theming/schemes; see --tint-list-repo). Prefix <scheme-name> with {{|UsageOption|}}base16-{{[-]}}/{{|UsageOption|}}base24-{{[-]}} (tinty's own scheme-ID form, e.g. base16-mocha) to force which of the two",
 			"	{{|UsageOption|}}embedded:<name>{{[-]}} -- one of DS2's own bundled base16 schemes (see --tint-list-embedded)",
 			"	{{|UsageOption|}}user:<name>{{[-]}} -- a scheme file in the user tint folder",
 			"	{{|UsageOption|}}file:<path>{{[-]}} -- a local base16 scheme YAML file",

@@ -213,7 +213,12 @@ type AnsiColors struct {
 	//   - "repo:<name>"    a named scheme from a local clone of
 	//                      github.com/tinted-theming/schemes (see
 	//                      --tint-list-repo); also the meaning of a bare,
-	//                      unprefixed name, since most schemes live there
+	//                      unprefixed name, since most schemes live there.
+	//                      <name> may itself start with "base16-"/"base24-"
+	//                      (tinty's own scheme-ID convention, e.g.
+	//                      "repo:base16-mocha") to force which of the
+	//                      repo's two subfolders to read from, instead of
+	//                      the default base24-then-base16 preference
 	// "user:"/"embedded:" work out of the box with nothing to download or
 	// copy first, so either is safe to set as a shipped default; "repo:"
 	// (or a bare name) triggers a one-time clone on first resolution if

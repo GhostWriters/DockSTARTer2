@@ -95,27 +95,28 @@ func applyTintRef(ctx context.Context, connTypes []string, data []byte, ref, sou
 // tinted-theming/schemes (cloned on first use, see
 // ensureTintedThemingSchemesRepo) -- the shared lookup behind the
 // "repo:<name>" Tint reference (see ResolveTintRefData and internal/tui's
-// resolveTintRef), and its default (a bare, unprefixed name).
-// Prefers base24 -- same scheme, but with real distinct bright colors (see
+// resolveTintRef), and its default (a bare, unprefixed name). name may
+// carry an explicit "base16-"/"base24-" prefix (tinty's own scheme-ID
+// convention) to force which subfolder to read from; without one, prefers
+// base24 -- same scheme, but with real distinct bright colors (see
 // ParseBase16Scheme's doc comment) instead of base16's fallback of reusing
-// the normal color. Not every scheme has a base24 counterpart, so falls
-// back to base16 when it doesn't.
+// the normal color -- falling back to base16 when a scheme has no base24
+// counterpart (see repoSchemeSubfolders).
 func ResolveRepoTintData(ctx context.Context, name string) ([]byte, error) {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(filepath.Join(repoDir, "base24", name+".yaml"))
-	if err == nil {
-		return data, nil
+	slug, subs := repoSchemeSubfolders(name)
+	for _, sub := range subs {
+		data, err := os.ReadFile(filepath.Join(repoDir, sub, slug+".yaml"))
+		if err == nil {
+			return data, nil
+		}
 	}
-	data, err = os.ReadFile(filepath.Join(repoDir, "base16", name+".yaml"))
-	if err != nil {
-		return nil, fmt.Errorf("scheme %q not found -- check the name against %s or %s", name,
-			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base24",
-			"https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
-	}
-	return data, nil
+	return nil, fmt.Errorf("scheme %q not found -- check the name against %s or %s", name,
+		"https://github.com/tinted-theming/schemes/tree/spec-0.11/base24",
+		"https://github.com/tinted-theming/schemes/tree/spec-0.11/base16")
 }
 
 // ResolveTintRefData reads ref's scheme bytes -- see config.AnsiColors.Tint's
@@ -345,12 +346,20 @@ func describeSchemeData(data []byte) string {
 // be read or parsed, so a broken/missing one is still visible rather than
 // silently blank.
 type tintStatusMeta struct {
-	Name, Author, Variant string
-	Unreadable            bool
+	Name, Slug, Author, Variant string
+	Unreadable                  bool
 }
 
 // describeTintRef reads ref's (see config.AnsiColors.Tint's doc comment)
-// base16 scheme metadata for --tint's status display.
+// base16 scheme metadata for --tint's status display. Slug is
+// "<system>-<slug>" (e.g. "base16-gruvbox-dark") -- tinty's own scheme-ID
+// convention (e.g. "tinty apply base16-mocha"), which is also the form
+// --tint's "repo:" reference accepts to force a subfolder (see
+// repoSchemeSubfolders). Built from the scheme file's own "system" field
+// (see config.ParseBase16SchemeMeta) rather than from ref, so it's correct
+// even for a "file:"/"user:" source where ref itself carries no base16/
+// base24 information at all. Name is the scheme's free-text display name
+// (e.g. "Gruvbox Dark"), separate from this machine-readable identifier.
 func describeTintRef(ctx context.Context, ref string) tintStatusMeta {
 	data, _, err := ResolveTintRefData(ctx, ref)
 	if err != nil {
@@ -360,7 +369,11 @@ func describeTintRef(ctx context.Context, ref string) tintStatusMeta {
 	if err != nil || meta.Name == "" {
 		return tintStatusMeta{Name: ref}
 	}
-	return tintStatusMeta{Name: meta.Name, Author: meta.Author, Variant: meta.Variant}
+	slug := meta.Slug
+	if meta.System != "" && slug != "" {
+		slug = meta.System + "-" + slug
+	}
+	return tintStatusMeta{Name: meta.Name, Slug: slug, Author: meta.Author, Variant: meta.Variant}
 }
 
 // formatEnabledState returns "enabled"/"disabled" as semstyle tag markup,
@@ -489,6 +502,9 @@ func handleTintStatus(ctx context.Context) error {
 				logger.Notice(ctx, "\t\t(unreadable)")
 			} else {
 				logger.Notice(ctx, "\t\tScheme:  {{|Var|}}%s{{[-]}}", meta.Name)
+				if meta.Slug != "" {
+					logger.Notice(ctx, "\t\tSlug:    {{|Var|}}%s{{[-]}}", meta.Slug)
+				}
 				if meta.Author != "" {
 					logger.Notice(ctx, "\t\tAuthor:  {{|Var|}}%s{{[-]}}", meta.Author)
 				}

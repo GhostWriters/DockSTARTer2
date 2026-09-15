@@ -94,7 +94,9 @@ setcap_asked = false               # set automatically once the one-time auto_se
 # folder, alongside user themes), "embedded:<name>" (one of DS2's own
 # bundled schemes -- see --tint-list-embedded), or "repo:<name>" (a name
 # from the real tinted-theming/schemes repo -- see --tint-list-repo; also
-# the meaning of a bare, unprefixed name). tint_enabled and
+# the meaning of a bare, unprefixed name; prefix <name> with "base16-" or
+# "base24-", tinty's own scheme-ID form (e.g. "base16-mocha"), to force
+# which of the repo's two subfolders to read from). tint_enabled and
 # override_enabled independently turn
 # tint and the fields below on or off as a group, without discarding
 # either (set via --theme-tint/--theme-no-tint and
