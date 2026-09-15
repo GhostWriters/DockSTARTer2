@@ -188,8 +188,10 @@ var tintListSources = []string{"repo", "user", "embedded"}
 // argument: a comma-separated list of "repo:"/"user:"/"embedded:" prefixes
 // -- the trailing ":" is required so looksLikeTintSourceArg can tell a
 // source filter apart from a search term regardless of which of the two
-// optional args order it arrives in. An empty string means every source
-// (tintListSources).
+// optional args order it arrives in. "all:" is also accepted, explicitly
+// requesting the same set an omitted/empty argument already defaults to
+// (tintListSources) -- e.g. to combine with a search term ("--tint-table
+// all: dark") without the source itself doing any narrowing.
 func parseTintSources(s string) ([]string, error) {
 	if s == "" {
 		return tintListSources, nil
@@ -198,8 +200,11 @@ func parseTintSources(s string) ([]string, error) {
 	for _, part := range strings.Split(s, ",") {
 		part = strings.TrimSpace(part)
 		src, ok := strings.CutSuffix(part, ":")
+		if ok && src == "all" {
+			return tintListSources, nil
+		}
 		if !ok || !slices.Contains(tintListSources, src) {
-			return nil, fmt.Errorf("unknown tint source %q (valid: repo:, user:, embedded:, or a comma-separated list)", part)
+			return nil, fmt.Errorf("unknown tint source %q (valid: repo:, user:, embedded:, all:, or a comma-separated list)", part)
 		}
 		if !slices.Contains(sources, src) {
 			sources = append(sources, src)
@@ -210,8 +215,8 @@ func parseTintSources(s string) ([]string, error) {
 
 // looksLikeTintSourceArg reports whether s parses as a source-filter
 // argument (see parseTintSources) -- every comma-separated part ends with
-// ":". Used to tell --tint-list/--tint-table's two optional args apart
-// regardless of which order they're given in.
+// ":". Used to tell --tint-list/--tint-table's source and search args apart
+// regardless of how many there are or what order they're given in.
 func looksLikeTintSourceArg(s string) bool {
 	if s == "" {
 		return false
@@ -224,19 +229,22 @@ func looksLikeTintSourceArg(s string) bool {
 	return true
 }
 
-// splitTintArgs sorts --tint-list/--tint-table's up to two optional
-// positional args into (sourceArg, searchArg), order-independent: whichever
-// arg looksLikeTintSourceArg is the source filter, the other is the search
-// term.
+// splitTintArgs sorts --tint-list/--tint-table's args (any number, order-
+// independent) into (sourceArg, searchArg): every arg that
+// looksLikeTintSourceArg is joined with "," into the combined source
+// filter, and every other arg is joined with "," into the combined search
+// term list -- so "repo: user: ayu dark" and "repo:,user: ayu,dark" (or any
+// mix of the two) parse identically.
 func splitTintArgs(args []string) (sourceArg, searchArg string) {
+	var sourceParts, searchParts []string
 	for _, arg := range args {
 		if looksLikeTintSourceArg(arg) {
-			sourceArg = arg
-		} else {
-			searchArg = arg
+			sourceParts = append(sourceParts, arg)
+		} else if arg != "" {
+			searchParts = append(searchParts, arg)
 		}
 	}
-	return sourceArg, searchArg
+	return strings.Join(sourceParts, ","), strings.Join(searchParts, ",")
 }
 
 // tintFilter is --tint-list/--tint-table's optional search argument: an
@@ -247,7 +255,7 @@ func splitTintArgs(args []string) (sourceArg, searchArg string) {
 // empty tintFilter matches everything.
 type tintFilter struct {
 	System string   // "", "base16", or "base24"
-	Terms  []string // search terms (case-insensitive substrings), AND'd together
+	Terms  []string // search terms (whole-word, case-insensitive -- see tintSearchWords), AND'd together
 }
 
 // parseTintFilter parses s (e.g. "dark", "base24-ayu,dark") into a
@@ -430,8 +438,8 @@ func tintListLabels(ctx context.Context, source string) ([]string, error) {
 	}
 }
 
-// HandleTintList implements --tint-list, taking up to two optional args in
-// either order (see splitTintArgs): a "<repo:|user:|embedded:>[,...]"
+// HandleTintList implements --tint-list, taking any number of optional
+// args in any order (see splitTintArgs): a "<repo:|user:|embedded:|all:>[,...]"
 // source filter (every source when omitted -- see parseTintSources) and a
 // search term (see parseTintFilter). Lists scheme names as
 // "<system>-<name>", narrowed to slugs containing every comma-separated
@@ -632,8 +640,8 @@ func tintTableRows(ctx context.Context, source string, filter tintFilter) ([]tin
 	}
 }
 
-// HandleTintTable implements --tint-table, taking up to two optional args
-// in either order (see splitTintArgs): a "<repo:|user:|embedded:>[,...]"
+// HandleTintTable implements --tint-table, taking any number of optional
+// args in any order (see splitTintArgs): a "<repo:|user:|embedded:|all:>[,...]"
 // source filter (every source when omitted -- see parseTintSources) and a
 // search term (see parseTintFilter, tintFilter.matchesTerms). Shows a
 // Slug/Scheme/Variant/base16/base24 table (Author is omitted as a column --
