@@ -83,11 +83,9 @@ func applyTintRef(ctx context.Context, connTypes []string, data []byte, ref, sou
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	desc := source
-	if d := describeSchemeData(data); d != "" {
-		desc = d
-	}
-	logger.Notice(ctx, "ANSI palette tint set to %s for: {{|Var|}}%s{{[-]}}", desc, strings.Join(connTypes, ", "))
+	logger.Notice(ctx, "Applied %s color palette:", tintedThemingLink())
+	logger.Notice(ctx, "\t{{|Var|}}%s:{{[-]}}", strings.Join(connTypes, ", "))
+	printTintDetails(ctx, ref, "\t\t")
 	return nil
 }
 
@@ -180,34 +178,56 @@ func canonicalTintRef(ref string) string {
 
 // HandleTintListEmbedded implements --tint-list-embedded, listing the
 // base16 scheme names bundled with DS2 (usable with --tint's "embedded:"
-// reference).
+// reference) as "<system>-<name>" (e.g. "base24-ansi") -- display only, the
+// "embedded:" reference itself takes the bare name since DS2's bundled set
+// has no base16/base24 subfolder split to disambiguate. Sorted by that
+// prefixed form, so base16 and base24 schemes group separately.
 func HandleTintListEmbedded(ctx context.Context, _ *CommandGroup) error {
 	names, err := assets.ListTintThemes()
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	slices.Sort(names)
+	labels := make([]string, 0, len(names))
 	for _, name := range names {
-		fmt.Println(name)
+		labels = append(labels, embeddedTintLabel(name))
+	}
+	slices.Sort(labels)
+	for _, label := range labels {
+		fmt.Println(label)
 	}
 	return nil
 }
 
-// HandleTintListRepo implements --tint-list-repo, listing the scheme names
-// available from the cloned tinted-theming/schemes repo (usable with
-// --tint's "repo:" reference, and its default) -- cloning it on first use,
-// same as ResolveRepoTintData itself. A name present in either base24/ or
-// base16/ is listed once; ResolveRepoTintData resolves it from whichever of
-// the two actually has it, preferring base24.
+// embeddedTintLabel returns name as "<system>-<name>" using the scheme
+// file's own declared "system:" field, or the bare name if it can't be
+// read/parsed.
+func embeddedTintLabel(name string) string {
+	data, err := assets.GetTintTheme(name)
+	if err != nil {
+		return name
+	}
+	meta, err := config.ParseBase16SchemeMeta(data)
+	if err != nil || meta.System == "" {
+		return name
+	}
+	return meta.System + "-" + name
+}
+
+// HandleTintListRepo implements --tint-list-repo, listing every scheme in
+// the cloned tinted-theming/schemes repo (usable with --tint's "repo:"
+// reference) as "<system>-<slug>" -- --tint's own scheme-ID form to force a
+// subfolder (see repoSchemeSubfolders). A slug present in both base24/ and
+// base16/ is listed twice, once per system, since both forms resolve to a
+// real, distinct file. Sorted by that prefixed form, so base16 and base24
+// schemes group separately.
 func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	seen := make(map[string]bool)
-	var names []string
+	var labels []string
 	for _, sub := range []string{"base24", "base16"} {
 		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
 		if err != nil {
@@ -217,21 +237,18 @@ func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
 				continue
 			}
-			name := strings.TrimSuffix(e.Name(), ".yaml")
-			if !seen[name] {
-				seen[name] = true
-				names = append(names, name)
-			}
+			slug := strings.TrimSuffix(e.Name(), ".yaml")
+			labels = append(labels, sub+"-"+slug)
 		}
 	}
-	if len(names) == 0 {
+	if len(labels) == 0 {
 		err := fmt.Errorf("no schemes found in %q or %q", filepath.Join(repoDir, "base24"), filepath.Join(repoDir, "base16"))
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	slices.Sort(names)
-	for _, name := range names {
-		fmt.Println(name)
+	slices.Sort(labels)
+	for _, label := range labels {
+		fmt.Println(label)
 	}
 	return nil
 }
@@ -320,24 +337,6 @@ func HandleThemeProgramBoxTintOnOff(ctx context.Context, group *CommandGroup) er
 	return nil
 }
 
-// describeSchemeData formats a base16 scheme's own name/author/variant
-// metadata (e.g. "ANSI by DockSTARTer2 (dark)") for display, or "" if data
-// doesn't parse or has no name.
-func describeSchemeData(data []byte) string {
-	meta, err := config.ParseBase16SchemeMeta(data)
-	if err != nil || meta.Name == "" {
-		return ""
-	}
-	desc := meta.Name
-	if meta.Author != "" {
-		desc += " by " + meta.Author
-	}
-	if meta.Variant != "" {
-		desc += " (" + meta.Variant + ")"
-	}
-	return desc
-}
-
 // tintStatusMeta is ref's own scheme metadata for --tint's status display,
 // broken into its separate fields rather than one collapsed line -- the raw
 // reference itself tells the user little for "user:"/"embedded:"/"repo:"
@@ -376,6 +375,27 @@ func describeTintRef(ctx context.Context, ref string) tintStatusMeta {
 	return tintStatusMeta{Name: meta.Name, Slug: slug, Author: meta.Author, Variant: meta.Variant}
 }
 
+// printTintDetails prints ref's Source/Scheme/Slug/Author/Variant lines (or
+// an "(unreadable)" note), each prefixed with indent.
+func printTintDetails(ctx context.Context, ref, indent string) {
+	logger.Notice(ctx, "%sSource:  %s", indent, formatTintRefSource(ctx, ref))
+	meta := describeTintRef(ctx, ref)
+	if meta.Unreadable {
+		logger.Notice(ctx, "%s(unreadable)", indent)
+		return
+	}
+	if meta.Slug != "" {
+		logger.Notice(ctx, "%sSlug:    {{|Var|}}%s{{[-]}}", indent, meta.Slug)
+	}
+	logger.Notice(ctx, "%sScheme:  {{|Var|}}%s{{[-]}}", indent, meta.Name)
+	if meta.Author != "" {
+		logger.Notice(ctx, "%sAuthor:  {{|Var|}}%s{{[-]}}", indent, meta.Author)
+	}
+	if meta.Variant != "" {
+		logger.Notice(ctx, "%sVariant: {{|Var|}}%s{{[-]}}", indent, meta.Variant)
+	}
+}
+
 // formatEnabledState returns "enabled"/"disabled" as semstyle tag markup,
 // styled with the theme's own Yes/No semantic tags (the same ones a y/n
 // prompt answer uses) rather than plain text.
@@ -384,6 +404,13 @@ func formatEnabledState(enabled bool) string {
 		return "{{|Yes|}}enabled{{[-]}}"
 	}
 	return "{{|No|}}disabled{{[-]}}"
+}
+
+// tintedThemingLink returns "tinted-theming" as an ApplicationName-styled
+// hyperlink to the schemes repo, for display anywhere DS2 refers to the
+// project by name.
+func tintedThemingLink() string {
+	return console.FormatLink("ApplicationName", "tinted-theming", "https://github.com/"+tintedThemingSchemesRepo)
 }
 
 // formatTintRefSource returns ref (see config.AnsiColors.Tint's doc comment
@@ -496,22 +523,7 @@ func handleTintStatus(ctx context.Context) error {
 		if row.c.Tint == "" {
 			logger.Notice(ctx, "\t\t{{|Var|}}(none){{[-]}}")
 		} else {
-			logger.Notice(ctx, "\t\tSource:  %s", formatTintRefSource(ctx, row.c.Tint))
-			meta := describeTintRef(ctx, row.c.Tint)
-			if meta.Unreadable {
-				logger.Notice(ctx, "\t\t(unreadable)")
-			} else {
-				logger.Notice(ctx, "\t\tScheme:  {{|Var|}}%s{{[-]}}", meta.Name)
-				if meta.Slug != "" {
-					logger.Notice(ctx, "\t\tSlug:    {{|Var|}}%s{{[-]}}", meta.Slug)
-				}
-				if meta.Author != "" {
-					logger.Notice(ctx, "\t\tAuthor:  {{|Var|}}%s{{[-]}}", meta.Author)
-				}
-				if meta.Variant != "" {
-					logger.Notice(ctx, "\t\tVariant: {{|Var|}}%s{{[-]}}", meta.Variant)
-				}
-			}
+			printTintDetails(ctx, row.c.Tint, "\t\t")
 		}
 		logger.Notice(ctx, "\tOverrides (%s):", overrideState)
 		logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", overridesDesc)
