@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
@@ -269,20 +270,36 @@ func parseTintFilter(s string) tintFilter {
 	return f
 }
 
-// matchesTerms reports whether every one of f's search terms is found
-// (case-insensitive substring) in at least one of fields. True (vacuously)
-// when f has no terms.
+// tintSearchWords splits s into lowercase words on runs of anything that
+// isn't a letter or digit (spaces, "-", ",", parens, etc.), so search
+// matches whole words rather than any substring -- otherwise a term like
+// "ayu" would false-positive match inside an unrelated author name like
+// "Mayush".
+func tintSearchWords(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+}
+
+// matchesTerms reports whether every one of f's search terms is found as a
+// whole word (see tintSearchWords) somewhere in fields. A term that's
+// itself multiple words (e.g. "ayu-dark") requires all of its words to be
+// present, not adjacent or in order. True (vacuously) when f has no terms.
 func (f tintFilter) matchesTerms(fields ...string) bool {
-	for _, term := range f.Terms {
-		found := false
-		for _, field := range fields {
-			if strings.Contains(strings.ToLower(field), term) {
-				found = true
-				break
-			}
+	if len(f.Terms) == 0 {
+		return true
+	}
+	fieldWords := make(map[string]bool)
+	for _, field := range fields {
+		for _, w := range tintSearchWords(field) {
+			fieldWords[w] = true
 		}
-		if !found {
-			return false
+	}
+	for _, term := range f.Terms {
+		for _, w := range tintSearchWords(term) {
+			if !fieldWords[w] {
+				return false
+			}
 		}
 	}
 	return true
