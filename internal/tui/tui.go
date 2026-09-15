@@ -1034,13 +1034,12 @@ func sessionDone() {
 // async cleanup, still racing to run its ReleaseEditLockAs after sip
 // signals that session's context done) is simply gone, mid-flight. Sip's
 // own session shutdown (see internal/serve/web_sip.go) signals and cancels
-// but does not itself wait for that cleanup to finish, so without this,
-// the exact bug fixed for a mid-session sip reconnect could resurface
-// during a version-update-triggered restart if the timing is unlucky.
-// Callers should call this after requesting every session stop (e.g. after
-// StartServer's own server-shutdown sequence completes) and before
-// anything that tears down the process, so every session's cleanup is
-// guaranteed to have actually run first.
+// but does not itself wait for that cleanup to finish, so without this, a
+// stuck edit lock could survive a version-update-triggered restart if the
+// timing is unlucky. Callers should call this after requesting every
+// session stop (e.g. after StartServer's own server-shutdown sequence
+// completes) and before anything that tears down the process, so every
+// session's cleanup is guaranteed to have actually run first.
 func WaitForActiveSessions() {
 	sessionsWG.Wait()
 }
