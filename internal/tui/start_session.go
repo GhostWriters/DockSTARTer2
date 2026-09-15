@@ -107,6 +107,10 @@ func StartForSession(ctx context.Context, startMenu string, opts ProgramOptions)
 		// reconnect triggered from sip's own settings panel while the env
 		// editor is open) left it stuck until the whole daemon restarted.
 		sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
+		// Must be last: WaitForActiveSessions (see registerSession's doc
+		// comment) depends on this session's cleanup, edit-lock release
+		// included, having fully run before it's marked done.
+		sessionDone()
 	}
 
 	return p, finish, nil

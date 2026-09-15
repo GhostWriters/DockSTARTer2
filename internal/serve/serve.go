@@ -204,6 +204,27 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 			cancelInner()
 		}
 	}
+
+	// sip's own session shutdown (see StartSipWebServer/web_sip.go) signals
+	// and cancels each session but doesn't itself wait for that session's
+	// cleanup goroutine -- edit-lock release included -- to actually finish.
+	// A caller re-execing right after StartServer returns (see
+	// update.ReExec) replaces the process image outright via syscall.Exec,
+	// which would simply erase any such cleanup still in flight. Wait for
+	// it here so that never happens -- bounded, same 5-second grace period
+	// as the SSH server's own shutdown above, so one wedged session can't
+	// block a restart forever.
+	waited := make(chan struct{})
+	go func() {
+		tui.WaitForActiveSessions()
+		close(waited)
+	}()
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		logger.Warn(ctx, "Timed out waiting for active sessions to finish cleanup before restarting.")
+	}
+
 	return firstErr
 }
 
