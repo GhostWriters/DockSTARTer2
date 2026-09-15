@@ -287,9 +287,37 @@ func (m *SessionManager) AcquireEditLock(clientIP, connType, lockSource, transpo
 	return false
 }
 
+// ReleaseEditLock unconditionally releases the edit lock regardless of which
+// session (if any) holds it. Correct only for whole-process shutdown (see
+// Shutdown/EmergencyShutdown in internal/tui), where every session is ending
+// together and there's no "someone else's lock" to protect. A single
+// session's own end-of-life cleanup must use ReleaseEditLockAs instead -- a
+// server daemon serves many sessions from one process, and an unconditional
+// release there would clear a lock a *different*, still-running session
+// legitimately holds.
 func (m *SessionManager) ReleaseEditLock() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.releaseEditLockLocked()
+}
+
+// ReleaseEditLockAs releases the edit lock only if sessionKey is the session
+// currently holding it -- a no-op otherwise, including when no lock is held
+// at all. Use this for a single session's own cleanup (see ReleaseEditLock's
+// doc comment for why the unconditional form is wrong there).
+func (m *SessionManager) ReleaseEditLockAs(sessionKey string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.heldByLocked(sessionKey) {
+		return
+	}
+	m.releaseEditLockLocked()
+}
+
+// releaseEditLockLocked is ReleaseEditLock's actual body, shared with
+// ReleaseEditLockAs once it's confirmed release is appropriate. Caller must
+// already hold m.mu.
+func (m *SessionManager) releaseEditLockLocked() {
 	if !m.editActive {
 		return
 	}

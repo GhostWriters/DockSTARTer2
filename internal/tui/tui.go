@@ -534,7 +534,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	defer func() { logger.TUIMode = false }()
 
 	logger.Info(ctx, "TUI Starting.")
-	defer sessionlocks.Sessions.ReleaseEditLock()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	captureExePath()
 
@@ -549,7 +549,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Global panic recovery
 	defer func() {
 		if r := recover(); r != nil {
-			shutdownSelf(p, exited)
+			shutdownSelf(p, exited, sessionKey)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
@@ -625,7 +625,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Listen for context cancellation to shutdown program
 	go func() {
 		<-ctx.Done()
-		shutdownSelf(p, exited)
+		shutdownSelf(p, exited, sessionKey)
 	}()
 
 	// Run the program
@@ -689,6 +689,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	if len(opts) > 0 {
 		pOpts = opts[0]
 	}
+	sessionKey := parseSessionKey(pOpts.Environ)
 	isSSH := pOpts.Input != nil
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
@@ -713,17 +714,16 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	var exited chan struct{}
 	defer func() {
 		if r := recover(); r != nil {
-			shutdownSelf(p, exited)
+			shutdownSelf(p, exited, sessionKey)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
-	defer sessionlocks.Sessions.ReleaseEditLock()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	captureExePath()
 
 	isRootSession = isRoot
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
-	sessionKey := parseSessionKey(pOpts.Environ)
 	activeConnType = ctype
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
@@ -782,7 +782,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
-		shutdownSelf(p, exited)
+		shutdownSelf(p, exited, sessionKey)
 	}()
 
 	finalModel, err := p.Run()
@@ -834,6 +834,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	if len(progOpts) > 0 {
 		pOpts = progOpts[0]
 	}
+	sessionKey := parseSessionKey(pOpts.Environ)
 	isSSH := pOpts.Input != nil
 
 	console.SetTUIEnabled(true)
@@ -846,16 +847,15 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	var exited chan struct{}
 	defer func() {
 		if r := recover(); r != nil {
-			shutdownSelf(p, exited)
+			shutdownSelf(p, exited, sessionKey)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
-	defer sessionlocks.Sessions.ReleaseEditLock()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	captureExePath()
 
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
-	sessionKey := parseSessionKey(pOpts.Environ)
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
@@ -960,7 +960,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
-		shutdownSelf(p, exited)
+		shutdownSelf(p, exited, sessionKey)
 	}()
 
 	finalModel, err := p.Run()
@@ -1007,7 +1007,11 @@ func unregisterSession(p *tea.Program) {
 // exit, unaffected by any other concurrently running session. Used for a
 // session's own panic recovery and context-cancellation shutdown -- p/exited
 // may still be nil if the panic happened before the program was created.
-func shutdownSelf(p *tea.Program, exited chan struct{}) {
+// sessionKey scopes the edit-lock release to this session only (see
+// sessionlocks.ReleaseEditLockAs) -- a server daemon runs many sessions in
+// one process, so an unconditional release here could clear a lock a
+// different, still-running session legitimately holds.
+func shutdownSelf(p *tea.Program, exited chan struct{}, sessionKey string) {
 	if p == nil {
 		return
 	}
@@ -1015,7 +1019,7 @@ func shutdownSelf(p *tea.Program, exited chan struct{}) {
 	if exited != nil {
 		<-exited
 	}
-	sessionlocks.Sessions.ReleaseEditLock()
+	sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 }
 
 // Shutdown quits every currently active TUI session and waits for each to
@@ -1481,7 +1485,7 @@ func doTriggerComposeUpdate(clientIP, connType, sessionKey string) tea.Msg {
 	}
 	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
@@ -1506,7 +1510,7 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 	question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		choice := dialog.Choice("Docker Compose", question, "Stop", "Down", "Cancel")
@@ -1545,7 +1549,7 @@ func doTriggerDockerPrune(clientIP, connType, sessionKey string) tea.Msg {
 		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 	}
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
 			logger.Error(ctx, "%v", err)
