@@ -216,10 +216,11 @@ func embeddedTintLabel(name string) string {
 
 // HandleTintTableRepo implements --tint-table-repo, listing every distinct
 // slug in the cloned tinted-theming/schemes repo as one table row: the bare
-// slug, which of base16/base24 it's available in, and the descriptive
-// metadata (Scheme/Author/Variant, same fields --tint's status shows) read
-// from whichever format is preferred for that slug (base24, falling back to
-// base16 -- see ParseBase16Scheme's doc comment). Sorted by slug.
+// slug, which of base16/base24 it's available in, and its Scheme/Variant
+// (Author is omitted -- its GitHub-profile links push most rows well past a
+// normal terminal width) read from whichever format is preferred for that
+// slug (base24, falling back to base16 -- see ParseBase16Scheme's doc
+// comment). Sorted by slug.
 func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
@@ -259,7 +260,7 @@ func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
 	}
 	slices.Sort(slugs)
 
-	headers := []string{"Slug", "base16", "base24", "Scheme", "Author", "Variant"}
+	headers := []string{"Slug", "base16", "base24", "Scheme", "Variant"}
 	var data []string
 	for _, slug := range slugs {
 		a := availability[slug]
@@ -271,13 +272,13 @@ func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
 			col24 = "base24"
 		}
 		schemeData, err := ResolveRepoTintData(ctx, slug)
-		name, author, variant := "", "", ""
+		name, variant := "", ""
 		if err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(schemeData); err == nil {
-				name, author, variant = meta.Name, meta.Author, meta.Variant
+				name, variant = meta.Name, meta.Variant
 			}
 		}
-		data = append(data, slug, col16, col24, name, author, variant)
+		data = append(data, slug, col16, col24, name, variant)
 	}
 
 	console.PrintTableCtx(ctx, headers, data, true)
