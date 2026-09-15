@@ -154,8 +154,9 @@ func startRestartWatcher(ctx context.Context) {
 					}
 				}
 				if update.RestartPending && isRestartSafe() {
-					triggerPendingRestart(ctx)
-					return
+					if triggerPendingRestart(ctx) {
+						return
+					}
 				}
 			}
 		}
@@ -194,8 +195,9 @@ func StartDaemonRestartWatcher(ctx context.Context) {
 					}
 				}
 				if update.RestartPending && !sessionlocks.Sessions.SelfRestartUnsafe() {
-					triggerDaemonRestart(ctx, exePath)
-					return
+					if triggerDaemonRestart(ctx, exePath) {
+						return
+					}
 				}
 			}
 		}
@@ -204,8 +206,12 @@ func StartDaemonRestartWatcher(ctx context.Context) {
 
 // triggerDaemonRestart is StartDaemonRestartWatcher's equivalent of
 // triggerPendingRestart, using an explicit exePath since there's no
-// per-session registeredExePath here.
-func triggerDaemonRestart(ctx context.Context, exePath string) {
+// per-session registeredExePath here. restarted reports whether it actually
+// called update.ReExec -- false means the installed-version file was stale
+// (the on-disk binary hadn't really changed), so the caller's poll loop
+// should keep running rather than treat this as the daemon's one restart
+// for its whole lifetime.
+func triggerDaemonRestart(ctx context.Context, exePath string) (restarted bool) {
 	update.RestartPending = false
 
 	onDiskVer := binaryVersionAt(exePath)
@@ -213,12 +219,13 @@ func triggerDaemonRestart(ctx context.Context, exePath string) {
 		if onDiskVer == version.Version {
 			_ = sessionlocks.Sessions.WriteInstalledVersion(exePath, onDiskVer)
 			Send(UpdateHeaderMsg{})
-			return
+			return false
 		}
 		_ = sessionlocks.Sessions.WriteInstalledVersion(exePath, onDiskVer)
 	}
 
 	_ = update.ReExec(ctx, exePath, daemonReExecArgs())
+	return true
 }
 
 // checkPendingRestart is called whenever the active screen changes. Under
@@ -264,8 +271,11 @@ func binaryVersionAt(exePath string) string {
 // triggerPendingRestart verifies the on-disk binary version before re-execing.
 // If the binary reports the same version we are already running, the version
 // file was stale — clear the pending flag and update the file instead of
-// restarting.
-func triggerPendingRestart(ctx context.Context) {
+// restarting. restarted reports whether it actually called update.ReExec;
+// see StartDaemonRestartWatcher's matching call for why its own poll loop
+// needs this instead of treating any call here as its one restart for the
+// whole process lifetime.
+func triggerPendingRestart(ctx context.Context) (restarted bool) {
 	update.RestartPending = false
 
 	// Double-check what the binary on disk actually reports.
@@ -275,7 +285,7 @@ func triggerPendingRestart(ctx context.Context) {
 			// Binary is actually the same version — stale version file, no restart needed.
 			_ = sessionlocks.Sessions.WriteInstalledVersion(registeredExePath, onDiskVer)
 			Send(UpdateHeaderMsg{})
-			return
+			return false
 		}
 		// Update the file to what the binary actually reports in case it drifted.
 		_ = sessionlocks.Sessions.WriteInstalledVersion(registeredExePath, onDiskVer)
@@ -292,6 +302,7 @@ func triggerPendingRestart(ctx context.Context) {
 	}
 
 	_ = update.ReExec(ctx, registeredExePath, reExecArgs)
+	return true
 }
 
 // captureExePath captures the resolved exe path at TUI start before any

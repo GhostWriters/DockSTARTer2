@@ -170,7 +170,9 @@ func newSipProgramHandler(parentCtx context.Context, startMenu string) sip.Progr
 					return
 				case <-ticker.C:
 					if sessionlocks.Sessions.IsDisconnectRequested() {
-						sessionlocks.Sessions.ClearDisconnectRequest()
+						if err := sessionlocks.Sessions.ClearDisconnectRequest(); err != nil {
+							logger.Warn(parentCtx, "Failed to clear disconnect-request file: %v", err)
+						}
 						logger.Info(parentCtx, "Graceful disconnect requested — closing web session from %s", clientIP)
 						p.Quit()
 						return

@@ -20,11 +20,10 @@ func newTestSessionManager(t *testing.T) *SessionManager {
 	return NewSessionManager()
 }
 
-// TestReleaseEditLockAsScopedToOwner verifies the fix for a sip web session
-// that ends while holding the edit lock (e.g. the browser's own gear panel
-// triggering Apply-and-Reconnect while the env editor is open) -- its
-// cleanup must release only its own lock, not one a different, still-active
-// session legitimately holds in the same daemon process.
+// TestReleaseEditLockAsScopedToOwner verifies that a session ending (e.g.
+// the browser's own gear panel triggering Apply-and-Reconnect while the env
+// editor is open) releases only its own edit lock, not one a different,
+// still-active session legitimately holds in the same daemon process.
 func TestReleaseEditLockAsScopedToOwner(t *testing.T) {
 	m := newTestSessionManager(t)
 
