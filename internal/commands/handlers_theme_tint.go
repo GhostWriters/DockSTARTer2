@@ -197,18 +197,21 @@ func parseTintSources(s string) ([]string, error) {
 		return tintListSources, nil
 	}
 	var sources []string
+	all := false
 	for _, part := range strings.Split(s, ",") {
 		part = strings.TrimSpace(part)
 		src, ok := strings.CutSuffix(part, ":")
-		if ok && src == "all" {
-			return tintListSources, nil
-		}
-		if !ok || !slices.Contains(tintListSources, src) {
+		if !ok || (src != "all" && !slices.Contains(tintListSources, src)) {
 			return nil, fmt.Errorf("unknown tint source %q (valid: repo:, user:, embedded:, all:, or a comma-separated list)", part)
 		}
-		if !slices.Contains(sources, src) {
+		if src == "all" {
+			all = true
+		} else if !slices.Contains(sources, src) {
 			sources = append(sources, src)
 		}
+	}
+	if all {
+		return tintListSources, nil
 	}
 	return sources, nil
 }
@@ -262,12 +265,17 @@ type tintFilter struct {
 // parseTintFilter parses s (e.g. "dark", "ayu,base24") into a tintFilter --
 // each comma-separated part is classified independently, so a bare
 // "base16"/"base24" narrows System regardless of its position among the
-// other terms.
-func parseTintFilter(s string) tintFilter {
+// other terms. Errors if both "base16" and "base24" are given -- a scheme
+// can't be both, so silently keeping only the last one would hide what's
+// really a contradictory, always-empty search rather than accept it.
+func parseTintFilter(s string) (tintFilter, error) {
 	var f tintFilter
 	for _, term := range strings.Split(s, ",") {
 		term = strings.ToLower(strings.TrimSpace(term))
 		if term == "base16" || term == "base24" {
+			if f.System != "" && f.System != term {
+				return tintFilter{}, fmt.Errorf("search terms %q and %q are contradictory -- a scheme can't be both", f.System, term)
+			}
 			f.System = term
 			continue
 		}
@@ -275,7 +283,7 @@ func parseTintFilter(s string) tintFilter {
 			f.Terms = append(f.Terms, term)
 		}
 	}
-	return f
+	return f, nil
 }
 
 // tintSearchWords splits s into lowercase words on runs of anything that
@@ -289,25 +297,55 @@ func tintSearchWords(s string) []string {
 	})
 }
 
-// matchesTerms reports whether every one of f's search terms is found as a
-// whole word (see tintSearchWords) somewhere in fields. A term that's
-// itself multiple words (e.g. "ayu-dark") requires all of its words to be
-// present, not adjacent or in order. True (vacuously) when f has no terms.
+// containsWordSequence reports whether seq appears as a contiguous,
+// in-order run within words (both already lowercased).
+func containsWordSequence(words, seq []string) bool {
+	if len(seq) == 0 {
+		return true
+	}
+	for start := 0; start+len(seq) <= len(words); start++ {
+		match := true
+		for j, w := range seq {
+			if words[start+j] != w {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesTerms reports whether every one of f's search terms is found in
+// at least one of fields. A single-word term matches if that word appears
+// anywhere in the field (see tintSearchWords); a term that's itself
+// multiple words (e.g. "ayu-dark", from a term with an internal "-" or
+// space) matches only where those words appear together, in order, in the
+// *same* field -- so "ayu-dark" finds the scheme literally named that,
+// rather than any scheme with "ayu" and "dark" somewhere unrelated (that
+// looser search is still available by giving "ayu" and "dark" as separate
+// terms, e.g. "ayu,dark"). True (vacuously) when f has no terms.
 func (f tintFilter) matchesTerms(fields ...string) bool {
 	if len(f.Terms) == 0 {
 		return true
 	}
-	fieldWords := make(map[string]bool)
+	var fieldWords [][]string
 	for _, field := range fields {
-		for _, w := range tintSearchWords(field) {
-			fieldWords[w] = true
-		}
+		fieldWords = append(fieldWords, tintSearchWords(field))
 	}
 	for _, term := range f.Terms {
-		for _, w := range tintSearchWords(term) {
-			if !fieldWords[w] {
-				return false
+		termWords := tintSearchWords(term)
+		found := false
+		for _, words := range fieldWords {
+			if containsWordSequence(words, termWords) {
+				found = true
+				break
 			}
+		}
+		if !found {
+			return false
 		}
 	}
 	return true
@@ -455,7 +493,11 @@ func HandleTintList(ctx context.Context, group *CommandGroup) error {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	filter := parseTintFilter(filterArg)
+	filter, err := parseTintFilter(filterArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
 
 	var labels []string
 	for _, source := range sources {
@@ -656,7 +698,11 @@ func HandleTintTable(ctx context.Context, group *CommandGroup) error {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	filter := parseTintFilter(filterArg)
+	filter, err := parseTintFilter(filterArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
 
 	var rows []tintTableRow
 	for _, source := range sources {
