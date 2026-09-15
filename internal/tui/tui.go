@@ -67,6 +67,15 @@ var (
 	sessionsMu     sync.Mutex
 	activeSessions = map[*tea.Program]chan struct{}{}
 
+	// sessionsWG counts sessions that have started but not yet finished their
+	// own full cleanup (including releasing the edit lock, if they hold it --
+	// see WaitForActiveSessions' doc comment for why that specific ordering
+	// matters). Add(1) happens alongside registerSession; Done() happens
+	// after a session's cleanup has fully run, not merely after
+	// unregisterSession, since edit-lock release can happen after that point
+	// in some paths (e.g. StartForSession's finish).
+	sessionsWG sync.WaitGroup
+
 	// webOutbound is a channel for sending JSON messages to the browser (web sessions only).
 	webOutbound chan<- []byte
 
@@ -534,7 +543,6 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	defer func() { logger.TUIMode = false }()
 
 	logger.Info(ctx, "TUI Starting.")
-	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	captureExePath()
 
@@ -606,6 +614,11 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Register this session so Shutdown (re-exec) can find it, and so
 	// shutdownSelf above has something to quit/wait on.
 	exited = registerSession(p)
+	// sessionDone declared before ReleaseEditLockAs so it runs after it (see
+	// registerSession's doc comment) -- Go defers unwind in reverse
+	// declaration order.
+	defer sessionDone()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	// Forward window resize events from remote sessions (no-op for local terminal)
 	startWindowSizeForwarder(ctx, p, pOpts)
@@ -718,7 +731,6 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
-	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	captureExePath()
 
@@ -773,6 +785,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	model.panel.SetPromptFunc(sessionPromptFunc(p))
 	model.SetProgram(p)
 	exited = registerSession(p)
+	defer sessionDone()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
@@ -851,7 +865,6 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
-	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	captureExePath()
 
@@ -951,6 +964,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	model.panel.SetPromptFunc(sessionPromptFunc(p))
 	model.SetProgram(p)
 	exited = registerSession(p)
+	defer sessionDone()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
@@ -986,13 +1001,48 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 // registerSession records a newly started program as active and returns the
 // channel that will be closed once its Run() call returns. Called by
-// Start/StartEditor/StartVarEditor once their *tea.Program exists.
+// Start/StartEditor/StartVarEditor/StartForSession once their *tea.Program
+// exists. Also marks the session as pending in sessionsWG (see
+// WaitForActiveSessions); the caller must guarantee a matching completion
+// once that session's own cleanup (not just unregisterSession) has fully
+// run -- Start/StartEditor/StartVarEditor do this via a first-declared
+// defer sessionDone() so it's the last defer to run; StartForSession's
+// finish does it as literally the last statement.
 func registerSession(p *tea.Program) chan struct{} {
 	exited := make(chan struct{})
 	sessionsMu.Lock()
 	activeSessions[p] = exited
 	sessionsMu.Unlock()
+	sessionsWG.Add(1)
 	return exited
+}
+
+// sessionDone marks one registerSession call as fully complete -- see
+// registerSession's doc comment for the completion-ordering contract each
+// caller must honor.
+func sessionDone() {
+	sessionsWG.Done()
+}
+
+// WaitForActiveSessions blocks until every session that has ever called
+// registerSession has finished its own full cleanup, edit-lock release
+// included.
+//
+// This exists for the re-exec path (see update.ReExec): main() calls
+// syscall.Exec once run() returns, which replaces the process image
+// outright -- any goroutine that hasn't finished yet (e.g. a session's own
+// async cleanup, still racing to run its ReleaseEditLockAs after sip
+// signals that session's context done) is simply gone, mid-flight. Sip's
+// own session shutdown (see internal/serve/web_sip.go) signals and cancels
+// but does not itself wait for that cleanup to finish, so without this,
+// the exact bug fixed for a mid-session sip reconnect could resurface
+// during a version-update-triggered restart if the timing is unlucky.
+// Callers should call this after requesting every session stop (e.g. after
+// StartServer's own server-shutdown sequence completes) and before
+// anything that tears down the process, so every session's cleanup is
+// guaranteed to have actually run first.
+func WaitForActiveSessions() {
+	sessionsWG.Wait()
 }
 
 // unregisterSession removes a session from the active set once its Run()
