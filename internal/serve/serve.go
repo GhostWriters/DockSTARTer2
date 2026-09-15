@@ -262,7 +262,9 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 	// than leaving it to strand the next session that ever connects, to
 	// this instance or another one sharing the same state directory.
 	if selfRequestedDisconnect.Load() {
-		sessionlocks.Sessions.ClearDisconnectRequest()
+		if err := sessionlocks.Sessions.ClearDisconnectRequest(); err != nil {
+			logger.Warn(ctx, "Failed to clear disconnect-request file: %v", err)
+		}
 	}
 
 	return firstErr
@@ -432,7 +434,9 @@ func StopServer(ctx context.Context, force bool, targetPort int) error {
 	}
 	if targetPort == 0 {
 		sessionlocks.Sessions.ForceRelease()
-		sessionlocks.Sessions.ClearDisconnectRequest()
+		if err := sessionlocks.Sessions.ClearDisconnectRequest(); err != nil {
+			logger.Warn(ctx, "Failed to clear disconnect-request file: %v", err)
+		}
 	}
 	logger.Notice(ctx, "Server stopped.")
 	return nil

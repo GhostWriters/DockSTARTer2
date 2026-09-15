@@ -62,8 +62,7 @@ func (m *SessionManager) forceDisconnect(pid int) error {
 		_ = signalProcess(proc)
 	}
 	m.ForceRelease()
-	m.ClearDisconnectRequest()
-	return nil
+	return m.ClearDisconnectRequest()
 }
 
 // SessionManager tracks the active session state and manages lock files.
@@ -851,8 +850,17 @@ func (m *SessionManager) RequestDisconnect() error {
 	return os.WriteFile(m.disconnectReqPath, []byte{}, 0644)
 }
 
-func (m *SessionManager) ClearDisconnectRequest() {
-	_ = os.Remove(m.disconnectReqPath)
+// ClearDisconnectRequest removes the disconnect-request file. Returns nil if
+// it didn't exist to begin with (already-cleared is not an error); any
+// other failure (e.g. a read-only state directory) is returned rather than
+// swallowed, since a caller that can't confirm this actually succeeded has
+// no way to know the flag might still be there to strand the next session
+// that connects.
+func (m *SessionManager) ClearDisconnectRequest() error {
+	if err := os.Remove(m.disconnectReqPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func (m *SessionManager) IsDisconnectRequested() bool {
