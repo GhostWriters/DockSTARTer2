@@ -382,17 +382,13 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		case "--tint-list", "--tint-table":
-			// Both args are optional, and may come in either order --
-			// splitTintArgs sorts them by shape (a source filter's parts
-			// all end with ":"). Just capture up to two non-flag tokens
-			// here.
-			for count := 0; count < 2; count++ {
-				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
-					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
-					i++
-				} else {
-					break
-				}
+			// Any number of args, all optional, in any order -- splitTintArgs
+			// sorts each by shape (a source filter's parts all end with
+			// ":") and joins same-kind ones together. Just capture every
+			// non-flag token here.
+			for i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
 			}
 
 		case "--ansi-override":
