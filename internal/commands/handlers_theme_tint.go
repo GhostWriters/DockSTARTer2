@@ -247,31 +247,31 @@ func splitTintArgs(args []string) (sourceArg, searchArg string) {
 	return strings.Join(sourceParts, ","), strings.Join(searchParts, ",")
 }
 
-// tintFilter is --tint-list/--tint-table's optional search argument: an
-// optional "base16-"/"base24-" prefix (narrowing to just that system, same
-// prefix --tint's "repo:" reference accepts) plus a comma-separated list
-// of search terms, all of which must match (AND) -- e.g. "ayu,dark" or
-// "Kempson,dark" finds a scheme only if every term is found somewhere. An
-// empty tintFilter matches everything.
+// tintFilter is --tint-list/--tint-table's optional search argument: a
+// comma-separated list of search terms, all of which must match (AND) --
+// e.g. "ayu,dark" or "Kempson,dark" finds a scheme only if every term is
+// found somewhere. A bare "base16"/"base24" term narrows to just that
+// system (same vocabulary --tint's "repo:" reference accepts as a
+// "base16-"/"base24-" prefix) instead of counting as a word to search for.
+// An empty tintFilter matches everything.
 type tintFilter struct {
 	System string   // "", "base16", or "base24"
 	Terms  []string // search terms (whole-word, case-insensitive -- see tintSearchWords), AND'd together
 }
 
-// parseTintFilter parses s (e.g. "dark", "base24-ayu,dark") into a
-// tintFilter -- the "base16-"/"base24-" prefix, if present, is stripped
-// before splitting the rest on ",", so it applies once to the whole filter
-// rather than becoming part of the first term.
+// parseTintFilter parses s (e.g. "dark", "ayu,base24") into a tintFilter --
+// each comma-separated part is classified independently, so a bare
+// "base16"/"base24" narrows System regardless of its position among the
+// other terms.
 func parseTintFilter(s string) tintFilter {
-	system := ""
-	if v, ok := strings.CutPrefix(s, "base24-"); ok {
-		system, s = "base24", v
-	} else if v, ok := strings.CutPrefix(s, "base16-"); ok {
-		system, s = "base16", v
-	}
-	f := tintFilter{System: system}
+	var f tintFilter
 	for _, term := range strings.Split(s, ",") {
-		if term = strings.ToLower(strings.TrimSpace(term)); term != "" {
+		term = strings.ToLower(strings.TrimSpace(term))
+		if term == "base16" || term == "base24" {
+			f.System = term
+			continue
+		}
+		if term != "" {
 			f.Terms = append(f.Terms, term)
 		}
 	}
@@ -442,13 +442,12 @@ func tintListLabels(ctx context.Context, source string) ([]string, error) {
 // args in any order (see splitTintArgs): a "<repo:|user:|embedded:|all:>[,...]"
 // source filter (every source when omitted -- see parseTintSources) and a
 // search term (see parseTintFilter). Lists scheme names as
-// "<system>-<name>", narrowed to slugs containing every comma-separated
-// search term (see tintFilter.matchesTerms; a label carries no other
-// metadata to search by, unlike --tint-table's rows), itself optionally
-// "base16-"/"base24-" prefixed to also narrow by system. When more than
-// one source is listed, each label is further prefixed "<source>:" (e.g.
-// "repo:base16-mocha") to stay unambiguous; a single source's output has
-// no such prefix.
+// "<system>-<name>", narrowed to slugs containing every search term (see
+// tintFilter.matchesTerms; a label carries no other metadata to search by,
+// unlike --tint-table's rows) -- a bare "base16"/"base24" term narrows by
+// system instead. When more than one source is listed, each label is
+// further prefixed "<source>:" (e.g. "repo:base16-mocha") to stay
+// unambiguous; a single source's output has no such prefix.
 func HandleTintList(ctx context.Context, group *CommandGroup) error {
 	sourceArg, filterArg := splitTintArgs(group.Args)
 	sources, err := parseTintSources(sourceArg)
