@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/version"
 
 	sip "github.com/Gaurav-Gosain/sip"
 
@@ -47,6 +49,7 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 	sipCfg := sip.DefaultConfig()
 	sipCfg.Host = "0.0.0.0"
 	sipCfg.Port = strconv.Itoa(cfg.Web.Port)
+	sipCfg.Appearance.Title = webPageTitle()
 
 	switch cfg.Web.TLS {
 	case "cert":
@@ -81,6 +84,17 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 	srv := sip.NewServer(sipCfg)
 	logger.Notice(ctx, "Web server started on port %d", cfg.Web.Port)
 	return srv.ServeWithProgram(ctx, newSipProgramHandler(ctx, startMenu))
+}
+
+// webPageTitle is the browser tab title: the OS hostname distinguishes
+// instances sharing one reverse-proxy domain, where location.hostname alone
+// can't.
+func webPageTitle() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return version.ApplicationName
+	}
+	return fmt.Sprintf("%s (%s)", version.ApplicationName, hostname)
 }
 
 // captureUserAgentMiddleware stashes the connecting browser's User-Agent
