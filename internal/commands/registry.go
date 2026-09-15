@@ -218,6 +218,7 @@ var Registry = map[string]Def{
 	"--theme-hyperlinks":          {Title: "Set Hyperlinks Mode", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--tint":                      {Title: "Set ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--tint-list-repo":            {Title: "List Tint Repo Schemes", ConsoleSafe: true},
+	"--tint-table-repo":           {Title: "Tint Repo Schemes Table", ConsoleSafe: true},
 	"--tint-list-embedded":        {Title: "List Bundled Tint Schemes", ConsoleSafe: true},
 	"--theme-tint":                {Title: "Enable ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-tint":             {Title: "Disable ANSI Palette Tint", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},

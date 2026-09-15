@@ -214,6 +214,76 @@ func embeddedTintLabel(name string) string {
 	return meta.System + "-" + name
 }
 
+// HandleTintTableRepo implements --tint-table-repo, listing every distinct
+// slug in the cloned tinted-theming/schemes repo as one table row: the bare
+// slug, which of base16/base24 it's available in, and the descriptive
+// metadata (Scheme/Author/Variant, same fields --tint's status shows) read
+// from whichever format is preferred for that slug (base24, falling back to
+// base16 -- see ParseBase16Scheme's doc comment). Sorted by slug.
+func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
+	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+
+	availability := make(map[string]struct{ base16, base24 bool })
+	for _, sub := range []string{"base16", "base24"} {
+		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+				continue
+			}
+			slug := strings.TrimSuffix(e.Name(), ".yaml")
+			a := availability[slug]
+			if sub == "base16" {
+				a.base16 = true
+			} else {
+				a.base24 = true
+			}
+			availability[slug] = a
+		}
+	}
+	if len(availability) == 0 {
+		err := fmt.Errorf("no schemes found in %q or %q", filepath.Join(repoDir, "base24"), filepath.Join(repoDir, "base16"))
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+
+	slugs := make([]string, 0, len(availability))
+	for slug := range availability {
+		slugs = append(slugs, slug)
+	}
+	slices.Sort(slugs)
+
+	headers := []string{"Slug", "base16", "base24", "Scheme", "Author", "Variant"}
+	var data []string
+	for _, slug := range slugs {
+		a := availability[slug]
+		col16, col24 := "", ""
+		if a.base16 {
+			col16 = "base16"
+		}
+		if a.base24 {
+			col24 = "base24"
+		}
+		schemeData, err := ResolveRepoTintData(ctx, slug)
+		name, author, variant := "", "", ""
+		if err == nil {
+			if meta, err := config.ParseBase16SchemeMeta(schemeData); err == nil {
+				name, author, variant = meta.Name, meta.Author, meta.Variant
+			}
+		}
+		data = append(data, slug, col16, col24, name, author, variant)
+	}
+
+	console.PrintTableCtx(ctx, headers, data, true)
+	return nil
+}
+
 // HandleTintListRepo implements --tint-list-repo, listing every scheme in
 // the cloned tinted-theming/schemes repo (usable with --tint's "repo:"
 // reference) as "<system>-<slug>" -- --tint's own scheme-ID form to force a

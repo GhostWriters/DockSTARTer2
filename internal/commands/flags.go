@@ -149,6 +149,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.Bool("theme-extract-all", false, "Extract all embedded themes to a directory")
 	fs.String("tint", "", "Show ANSI palette tint status for local/ssh/web, or set one: <ref> [local|ssh|web|all|a,b,c]")
 	fs.Bool("tint-list-repo", false, "List the base16 scheme names available from the tinted-theming/schemes repo")
+	fs.Bool("tint-table-repo", false, "Show a table of repo schemes: slug, base16/base24 availability, and description")
 	fs.Bool("tint-list-embedded", false, "List the base16 scheme names bundled with DS2")
 	fs.String("theme-tint", "", "Enable an already-configured ANSI palette tint (local/ssh/web/all, default all)")
 	fs.String("theme-no-tint", "", "Disable an already-configured ANSI palette tint without discarding it (local/ssh/web/all, default all)")
