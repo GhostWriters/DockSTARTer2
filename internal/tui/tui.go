@@ -67,6 +67,15 @@ var (
 	sessionsMu     sync.Mutex
 	activeSessions = map[*tea.Program]chan struct{}{}
 
+	// sessionsWG counts sessions that have started but not yet finished their
+	// own full cleanup (including releasing the edit lock, if they hold it --
+	// see WaitForActiveSessions' doc comment for why that specific ordering
+	// matters). Add(1) happens alongside registerSession; Done() happens
+	// after a session's cleanup has fully run, not merely after
+	// unregisterSession, since edit-lock release can happen after that point
+	// in some paths (e.g. StartForSession's finish).
+	sessionsWG sync.WaitGroup
+
 	// webOutbound is a channel for sending JSON messages to the browser (web sessions only).
 	webOutbound chan<- []byte
 
@@ -534,7 +543,6 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	defer func() { logger.TUIMode = false }()
 
 	logger.Info(ctx, "TUI Starting.")
-	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	captureExePath()
 
@@ -549,7 +557,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Global panic recovery
 	defer func() {
 		if r := recover(); r != nil {
-			shutdownSelf(p, exited)
+			shutdownSelf(p, exited, sessionKey)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
@@ -606,6 +614,11 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Register this session so Shutdown (re-exec) can find it, and so
 	// shutdownSelf above has something to quit/wait on.
 	exited = registerSession(p)
+	// sessionDone declared before ReleaseEditLockAs so it runs after it (see
+	// registerSession's doc comment) -- Go defers unwind in reverse
+	// declaration order.
+	defer sessionDone()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	// Forward window resize events from remote sessions (no-op for local terminal)
 	startWindowSizeForwarder(ctx, p, pOpts)
@@ -625,7 +638,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Listen for context cancellation to shutdown program
 	go func() {
 		<-ctx.Done()
-		shutdownSelf(p, exited)
+		shutdownSelf(p, exited, sessionKey)
 	}()
 
 	// Run the program
@@ -689,6 +702,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	if len(opts) > 0 {
 		pOpts = opts[0]
 	}
+	sessionKey := parseSessionKey(pOpts.Environ)
 	isSSH := pOpts.Input != nil
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
@@ -713,17 +727,15 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	var exited chan struct{}
 	defer func() {
 		if r := recover(); r != nil {
-			shutdownSelf(p, exited)
+			shutdownSelf(p, exited, sessionKey)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
-	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	captureExePath()
 
 	isRootSession = isRoot
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
-	sessionKey := parseSessionKey(pOpts.Environ)
 	activeConnType = ctype
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
@@ -773,6 +785,8 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	model.panel.SetPromptFunc(sessionPromptFunc(p))
 	model.SetProgram(p)
 	exited = registerSession(p)
+	defer sessionDone()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
@@ -782,7 +796,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
-		shutdownSelf(p, exited)
+		shutdownSelf(p, exited, sessionKey)
 	}()
 
 	finalModel, err := p.Run()
@@ -834,6 +848,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	if len(progOpts) > 0 {
 		pOpts = progOpts[0]
 	}
+	sessionKey := parseSessionKey(pOpts.Environ)
 	isSSH := pOpts.Input != nil
 
 	console.SetTUIEnabled(true)
@@ -846,16 +861,14 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	var exited chan struct{}
 	defer func() {
 		if r := recover(); r != nil {
-			shutdownSelf(p, exited)
+			shutdownSelf(p, exited, sessionKey)
 			logger.FatalWithStack(ctx, "TUI Panic: %v", r)
 		}
 	}()
-	defer sessionlocks.Sessions.ReleaseEditLock()
 
 	captureExePath()
 
 	ip, ctype, viaOwnServer := parseClientInfo(pOpts.Environ)
-	sessionKey := parseSessionKey(pOpts.Environ)
 	console.SetViaOwnServer(viaOwnServer)
 	console.SetClientIP(ip)
 	pOpts.RefreshRate = resolveRefreshRate(ctype, pOpts.WebToken)
@@ -951,6 +964,8 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	model.panel.SetPromptFunc(sessionPromptFunc(p))
 	model.SetProgram(p)
 	exited = registerSession(p)
+	defer sessionDone()
+	defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 
 	startWindowSizeForwarder(ctx, p, pOpts)
 
@@ -960,7 +975,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	startRestartWatcher(ctx)
 	go func() {
 		<-ctx.Done()
-		shutdownSelf(p, exited)
+		shutdownSelf(p, exited, sessionKey)
 	}()
 
 	finalModel, err := p.Run()
@@ -986,13 +1001,47 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 
 // registerSession records a newly started program as active and returns the
 // channel that will be closed once its Run() call returns. Called by
-// Start/StartEditor/StartVarEditor once their *tea.Program exists.
+// Start/StartEditor/StartVarEditor/StartForSession once their *tea.Program
+// exists. Also marks the session as pending in sessionsWG (see
+// WaitForActiveSessions); the caller must guarantee a matching completion
+// once that session's own cleanup (not just unregisterSession) has fully
+// run -- Start/StartEditor/StartVarEditor do this via a first-declared
+// defer sessionDone() so it's the last defer to run; StartForSession's
+// finish does it as literally the last statement.
 func registerSession(p *tea.Program) chan struct{} {
 	exited := make(chan struct{})
 	sessionsMu.Lock()
 	activeSessions[p] = exited
 	sessionsMu.Unlock()
+	sessionsWG.Add(1)
 	return exited
+}
+
+// sessionDone marks one registerSession call as fully complete -- see
+// registerSession's doc comment for the completion-ordering contract each
+// caller must honor.
+func sessionDone() {
+	sessionsWG.Done()
+}
+
+// WaitForActiveSessions blocks until every session that has ever called
+// registerSession has finished its own full cleanup, edit-lock release
+// included.
+//
+// This exists for the re-exec path (see update.ReExec): main() calls
+// syscall.Exec once run() returns, which replaces the process image
+// outright -- any goroutine that hasn't finished yet (e.g. a session's own
+// async cleanup, still racing to run its ReleaseEditLockAs after sip
+// signals that session's context done) is simply gone, mid-flight. Sip's
+// own session shutdown (see internal/serve/web_sip.go) signals and cancels
+// but does not itself wait for that cleanup to finish, so without this, a
+// stuck edit lock could survive a version-update-triggered restart if the
+// timing is unlucky. Callers should call this after requesting every
+// session stop (e.g. after StartServer's own server-shutdown sequence
+// completes) and before anything that tears down the process, so every
+// session's cleanup is guaranteed to have actually run first.
+func WaitForActiveSessions() {
+	sessionsWG.Wait()
 }
 
 // unregisterSession removes a session from the active set once its Run()
@@ -1007,7 +1056,11 @@ func unregisterSession(p *tea.Program) {
 // exit, unaffected by any other concurrently running session. Used for a
 // session's own panic recovery and context-cancellation shutdown -- p/exited
 // may still be nil if the panic happened before the program was created.
-func shutdownSelf(p *tea.Program, exited chan struct{}) {
+// sessionKey scopes the edit-lock release to this session only (see
+// sessionlocks.ReleaseEditLockAs) -- a server daemon runs many sessions in
+// one process, so an unconditional release here could clear a lock a
+// different, still-running session legitimately holds.
+func shutdownSelf(p *tea.Program, exited chan struct{}, sessionKey string) {
 	if p == nil {
 		return
 	}
@@ -1015,7 +1068,7 @@ func shutdownSelf(p *tea.Program, exited chan struct{}) {
 	if exited != nil {
 		<-exited
 	}
-	sessionlocks.Sessions.ReleaseEditLock()
+	sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 }
 
 // Shutdown quits every currently active TUI session and waits for each to
@@ -1481,7 +1534,7 @@ func doTriggerComposeUpdate(clientIP, connType, sessionKey string) tea.Msg {
 	}
 	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
@@ -1506,7 +1559,7 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 	question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		choice := dialog.Choice("Docker Compose", question, "Stop", "Down", "Cancel")
@@ -1545,7 +1598,7 @@ func doTriggerDockerPrune(clientIP, connType, sessionKey string) tea.Msg {
 		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 	}
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
 			logger.Error(ctx, "%v", err)

@@ -130,7 +130,9 @@ func tuiMiddleware(startMenu string) wish.Middleware {
 						return
 					case <-ticker.C:
 						if sessionlocks.Sessions.IsDisconnectRequested() {
-							sessionlocks.Sessions.ClearDisconnectRequest()
+							if err := sessionlocks.Sessions.ClearDisconnectRequest(); err != nil {
+								logger.Warn(ctx, "Failed to clear disconnect-request file: %v", err)
+							}
 							logger.Info(ctx, "Graceful disconnect requested — closing SSH session from %s", s.RemoteAddr())
 							cancel()
 							return

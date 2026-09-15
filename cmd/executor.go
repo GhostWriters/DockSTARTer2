@@ -442,12 +442,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 		// Block action commands when someone else is currently editing the configuration.
 		def := commandDefs[commands.BaseCommand(group.Command)]
+		cliSessionKey := fmt.Sprintf("cli-%d", os.Getpid())
 		if def.SessionLocked {
 			cliTransport := "local"
 			if os.Getenv("SSH_CONNECTION") != "" {
 				cliTransport = "ssh"
 			}
-			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli", cliTransport, fmt.Sprintf("cli-%d", os.Getpid())) {
+			if !sessionlocks.Sessions.AcquireEditLock("local", cmdStr, "cli", cliTransport, cliSessionKey) {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", cmdStr)
 				logger.Error(ctx, sessionlocks.EditLockLines(info, closing))
@@ -512,13 +513,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// groups — they are already included in the re-exec args.
 		if update.PendingReExec != nil {
 			if def.SessionLocked {
-				sessionlocks.Sessions.ReleaseEditLock()
+				sessionlocks.Sessions.ReleaseEditLockAs(cliSessionKey)
 			}
 			break
 		}
 
 		if def.SessionLocked {
-			sessionlocks.Sessions.ReleaseEditLock()
+			sessionlocks.Sessions.ReleaseEditLockAs(cliSessionKey)
 		}
 	}
 

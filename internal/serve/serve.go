@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -88,6 +89,21 @@ func serverAlreadyInUse() bool {
 // is configured, or if the one(s) that are fail to start (e.g. port already
 // in use, bad config).
 func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string) error { //nolint:cyclop
+	// selfRequestedDisconnect tracks whether *this* instance is the one that
+	// wrote the disconnect-request file (via the ReExec hook below, or the
+	// file-based stop-request watcher further down) -- RequestDisconnect
+	// writes one persistent, unscoped file shared by every daemon instance
+	// on this machine (this codebase explicitly supports more than one
+	// running at once, e.g. on different ports), so clearing it just
+	// because *some* daemon is starting up would risk discarding a request
+	// a different, still-running instance's own session poll loop (see
+	// ssh_handler.go/web_sip.go) hasn't had a chance to consume yet. Only
+	// the instance that actually issued the request may safely clear it,
+	// and only once every one of its own sessions has had a full
+	// opportunity to consume it -- see this function's tail, after
+	// WaitForActiveSessions.
+	var selfRequestedDisconnect atomic.Bool
+
 	// Register a shutdown hook so that when an update is applied from within a
 	// TUI session running inside this daemon, ReExec can cancel the server
 	// context and allow main() to pick up PendingReExec and exec the new binary.
@@ -95,7 +111,10 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 	defer cancelInner()
 	console.DaemonShutdown = cancelInner
 	defer func() { console.DaemonShutdown = nil }()
-	console.ServerDisconnect = func() { _ = sessionlocks.Sessions.RequestDisconnect() }
+	console.ServerDisconnect = func() {
+		selfRequestedDisconnect.Store(true)
+		_ = sessionlocks.Sessions.RequestDisconnect()
+	}
 	defer func() { console.ServerDisconnect = nil }()
 	ctx = innerCtx
 
@@ -183,6 +202,7 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 			case <-ticker.C:
 				if sessionlocks.Sessions.IsStopRequested() {
 					sessionlocks.Sessions.ClearStopRequest()
+					selfRequestedDisconnect.Store(true)
 					_ = sessionlocks.Sessions.RequestDisconnect()
 					cancelInner()
 					return
@@ -204,6 +224,49 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 			cancelInner()
 		}
 	}
+
+	// sip's own session shutdown (see StartSipWebServer/web_sip.go) signals
+	// and cancels each session but doesn't itself wait for that session's
+	// cleanup goroutine -- edit-lock release included -- to actually finish.
+	// A caller re-execing right after StartServer returns (see
+	// update.ReExec) replaces the process image outright via syscall.Exec,
+	// which would simply erase any such cleanup still in flight. Wait for
+	// it here so that never happens -- bounded, same 5-second grace period
+	// as the SSH server's own shutdown above, so one wedged session can't
+	// block a restart forever.
+	//
+	// sync.WaitGroup has no cancellable wait, so the goroutine below is
+	// abandoned (not killed) if the timeout fires -- accepted rather than
+	// engineered around, since it's harmless here: StartServer has exactly
+	// one call site (cmd/executor_serve.go) and is never called again in
+	// the same process, whose very next step is always syscall.Exec
+	// (destroying every goroutine along with the rest of the process
+	// image) or exiting outright. Neither leaves anything for a stray
+	// goroutine to affect.
+	waited := make(chan struct{})
+	go func() {
+		tui.WaitForActiveSessions()
+		close(waited)
+	}()
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		logger.Warn(ctx, "Timed out waiting for active sessions to finish cleanup before restarting.")
+	}
+
+	// Only clear the disconnect-request file if this instance is the one
+	// that wrote it (see selfRequestedDisconnect's doc comment above) --
+	// every one of its own sessions has now had a full opportunity to
+	// consume it during the wait just above, so a value still set at this
+	// point is this instance's own stale leftover, safe to discard rather
+	// than leaving it to strand the next session that ever connects, to
+	// this instance or another one sharing the same state directory.
+	if selfRequestedDisconnect.Load() {
+		if err := sessionlocks.Sessions.ClearDisconnectRequest(); err != nil {
+			logger.Warn(ctx, "Failed to clear disconnect-request file: %v", err)
+		}
+	}
+
 	return firstErr
 }
 
@@ -371,7 +434,9 @@ func StopServer(ctx context.Context, force bool, targetPort int) error {
 	}
 	if targetPort == 0 {
 		sessionlocks.Sessions.ForceRelease()
-		sessionlocks.Sessions.ClearDisconnectRequest()
+		if err := sessionlocks.Sessions.ClearDisconnectRequest(); err != nil {
+			logger.Warn(ctx, "Failed to clear disconnect-request file: %v", err)
+		}
 	}
 	logger.Notice(ctx, "Server stopped.")
 	return nil

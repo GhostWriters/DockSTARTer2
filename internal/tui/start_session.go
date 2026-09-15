@@ -6,6 +6,7 @@ import (
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/sessionlocks"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -98,6 +99,18 @@ func StartForSession(ctx context.Context, startMenu string, opts ProgramOptions)
 		close(exited)
 		unregisterSession(p)
 		model.Cleanup()
+		// Scoped to this session's own key -- a server daemon runs many
+		// sessions in one process, so an unconditional release would clear
+		// a lock a different, still-running session legitimately holds
+		// (see sessionlocks.ReleaseEditLockAs's doc comment). Without this,
+		// a session that ends while holding the edit lock (e.g. a browser
+		// reconnect triggered from sip's own settings panel while the env
+		// editor is open) left it stuck until the whole daemon restarted.
+		sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
+		// Must be last: WaitForActiveSessions (see registerSession's doc
+		// comment) depends on this session's cleanup, edit-lock release
+		// included, having fully run before it's marked done.
+		sessionDone()
 	}
 
 	return p, finish, nil
