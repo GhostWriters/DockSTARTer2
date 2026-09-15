@@ -347,7 +347,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		}
 
 		if def.SessionLocked {
-			sessionlocks.Sessions.ReleaseEditLock()
+			sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		}
 
 		if update.PendingReExec != nil {

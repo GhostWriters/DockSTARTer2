@@ -1485,7 +1485,7 @@ func doTriggerComposeUpdate(clientIP, connType, sessionKey string) tea.Msg {
 	}
 	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
@@ -1510,7 +1510,7 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 	question := "Would you like to {{|Highlight|}}Stop{{[-]}} all containers, or bring all containers {{|Highlight|}}Down{{[-]}}?\n\n{{|Highlight|}}Stop{{[-]}} will stop them, {{|Highlight|}}Down{{[-]}} will stop and remove them."
 	var dialog *ProgramBoxModel
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		choice := dialog.Choice("Docker Compose", question, "Stop", "Down", "Cancel")
@@ -1549,7 +1549,7 @@ func doTriggerDockerPrune(clientIP, connType, sessionKey string) tea.Msg {
 		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 	}
 	task := func(ctx context.Context, w io.Writer) error {
-		defer sessionlocks.Sessions.ReleaseEditLock()
+		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
 		if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
 			logger.Error(ctx, "%v", err)

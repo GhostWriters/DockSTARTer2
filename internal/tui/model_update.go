@@ -474,7 +474,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if prevScreen != nil && prevScreen.IsDestructive() {
 				sessionlocks.Sessions.UpdateEditLockConnType(prevScreen.Title())
 			} else {
-				sessionlocks.Sessions.ReleaseEditLock()
+				sessionlocks.Sessions.ReleaseEditLockAs(m.sessionKey)
 			}
 		}
 
