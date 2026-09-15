@@ -381,6 +381,19 @@ func Parse(args []string) ([]CommandGroup, error) {
 				i++
 			}
 
+		case "--tint-list", "--tint-table":
+			// Both args are optional: [<source filter>] [<name filter>] --
+			// omitted source means every source, omitted name means no
+			// filtering by name.
+			for count := 0; count < 2; count++ {
+				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				} else {
+					break
+				}
+			}
+
 		case "--ansi-override":
 			// <slot> <value> are both required; the trailing connection-type
 			// arg is optional (omitted means "all"), same as --tint.

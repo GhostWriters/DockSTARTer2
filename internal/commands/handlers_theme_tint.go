@@ -176,21 +176,232 @@ func canonicalTintRef(ref string) string {
 	return "repo:" + ref
 }
 
-// HandleTintListEmbedded implements --tint-list-embedded, listing the
-// base16 scheme names bundled with DS2 (usable with --tint's "embedded:"
-// reference) as "<system>-<name>" (e.g. "base24-ansi") -- display only, the
-// "embedded:" reference itself takes the bare name since DS2's bundled set
-// has no base16/base24 subfolder split to disambiguate. Sorted by that
-// prefixed form, so base16 and base24 schemes group separately.
-func HandleTintListEmbedded(ctx context.Context, _ *CommandGroup) error {
-	names, err := assets.ListTintThemes()
+// tintListSources is the source prefixes --tint-list/--tint-table accept in
+// their optional filter argument, in the order an unfiltered ("list every
+// source") call shows them -- "repo:"/"user:"/"embedded:" matches
+// canonicalTintRef's own prefix vocabulary; "file:" is excluded, since a
+// single file isn't a listable source.
+var tintListSources = []string{"repo", "user", "embedded"}
+
+// parseTintSources parses --tint-list/--tint-table's optional source-filter
+// argument: a comma-separated list of "repo:"/"user:"/"embedded:" prefixes.
+// An empty string means every source (tintListSources).
+func parseTintSources(s string) ([]string, error) {
+	if s == "" {
+		return tintListSources, nil
+	}
+	var sources []string
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		src, ok := strings.CutSuffix(part, ":")
+		if !ok || !slices.Contains(tintListSources, src) {
+			return nil, fmt.Errorf("unknown tint source %q (valid: repo:, user:, embedded:, or a comma-separated list)", part)
+		}
+		if !slices.Contains(sources, src) {
+			sources = append(sources, src)
+		}
+	}
+	return sources, nil
+}
+
+// tintFilter is --tint-list/--tint-table's optional search argument:
+// an optional "base16-"/"base24-" prefix (narrowing to just that system,
+// same prefix --tint's "repo:" reference accepts) plus a substring search
+// term. An empty tintFilter matches everything.
+type tintFilter struct {
+	System string // "", "base16", or "base24"
+	Query  string // substring to search for, case-insensitive
+}
+
+// parseTintFilter parses s (e.g. "dark", "base24-ayu") into a tintFilter.
+func parseTintFilter(s string) tintFilter {
+	system := ""
+	if v, ok := strings.CutPrefix(s, "base24-"); ok {
+		system, s = "base24", v
+	} else if v, ok := strings.CutPrefix(s, "base16-"); ok {
+		system, s = "base16", v
+	}
+	return tintFilter{System: system, Query: strings.ToLower(s)}
+}
+
+// matchesLabel reports whether f matches label (a tintListLabels entry,
+// "<system>-<slug>" or a bare slug for a source with no system prefix) --
+// searched by slug alone, since a label carries no other metadata.
+func (f tintFilter) matchesLabel(label string) bool {
+	system, slug := "", label
+	if v, ok := strings.CutPrefix(label, "base24-"); ok {
+		system, slug = "base24", v
+	} else if v, ok := strings.CutPrefix(label, "base16-"); ok {
+		system, slug = "base16", v
+	}
+	if f.System != "" && f.System != system {
+		return false
+	}
+	return strings.Contains(strings.ToLower(slug), f.Query)
+}
+
+// matchesRow reports whether f matches row (a tintTableRows entry) --
+// searched across Slug, Name, and Variant, so e.g. "dark" finds every
+// dark-variant scheme, not just ones with "dark" in their slug.
+func (f tintFilter) matchesRow(row tintTableRow) bool {
+	switch f.System {
+	case "base16":
+		if !row.HasBase16 {
+			return false
+		}
+	case "base24":
+		if !row.HasBase24 {
+			return false
+		}
+	}
+	if f.Query == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(row.Slug), f.Query) ||
+		strings.Contains(strings.ToLower(row.Name), f.Query) ||
+		strings.Contains(strings.ToLower(row.Variant), f.Query)
+}
+
+// tintFileLabel returns name as "<system>-<name>" using data's own declared
+// "system:" field, or the bare name if it can't be parsed.
+func tintFileLabel(name string, data []byte) string {
+	meta, err := config.ParseBase16SchemeMeta(data)
+	if err != nil || meta.System == "" {
+		return name
+	}
+	return meta.System + "-" + name
+}
+
+// embeddedTintLabel is tintFileLabel for one of DS2's own bundled schemes.
+func embeddedTintLabel(name string) string {
+	data, err := assets.GetTintTheme(name)
+	if err != nil {
+		return name
+	}
+	return tintFileLabel(name, data)
+}
+
+// dirTintFileLabels returns every *.yaml file directly under dir as
+// tintFileLabel(name, data) -- for a flat scheme folder (the user tint
+// folder) with no base16/base24 subfolder split. A missing dir is not an
+// error (no user schemes yet).
+func dirTintFileLabels(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var labels []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".yaml")
+		label := name
+		if data, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil {
+			label = tintFileLabel(name, data)
+		}
+		labels = append(labels, label)
+	}
+	return labels, nil
+}
+
+// repoTintFileLabels returns every scheme file in the cloned
+// tinted-theming/schemes repo as "<system>-<slug>" -- --tint's own
+// scheme-ID form to force a subfolder (see repoSchemeSubfolders). A slug
+// present in both base24/ and base16/ yields two labels, since both are
+// real, distinct files.
+func repoTintFileLabels(ctx context.Context) ([]string, error) {
+	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var labels []string
+	for _, sub := range []string{"base24", "base16"} {
+		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+				continue
+			}
+			slug := strings.TrimSuffix(e.Name(), ".yaml")
+			labels = append(labels, sub+"-"+slug)
+		}
+	}
+	return labels, nil
+}
+
+// tintListLabels returns source's file-level labels (see
+// repoTintFileLabels/dirTintFileLabels/embeddedTintLabel) for --tint-list.
+func tintListLabels(ctx context.Context, source string) ([]string, error) {
+	switch source {
+	case "repo":
+		return repoTintFileLabels(ctx)
+	case "user":
+		return dirTintFileLabels(paths.GetTintsDir())
+	case "embedded":
+		names, err := assets.ListTintThemes()
+		if err != nil {
+			return nil, err
+		}
+		labels := make([]string, 0, len(names))
+		for _, name := range names {
+			labels = append(labels, embeddedTintLabel(name))
+		}
+		return labels, nil
+	default:
+		return nil, fmt.Errorf("unknown tint source %q", source)
+	}
+}
+
+// HandleTintList implements --tint-list [<repo:|user:|embedded:>[,...]]
+// [<search>], listing scheme names as "<system>-<name>" from one or more
+// sources (every source when omitted -- see parseTintSources), optionally
+// narrowed to slugs containing search (itself optionally "base16-"/
+// "base24-" prefixed to also narrow by system -- see parseTintFilter).
+// When more than one source is listed, each label is further prefixed
+// "<source>:" (e.g. "repo:base16-mocha") to stay unambiguous; a single
+// source's output has no such prefix.
+func HandleTintList(ctx context.Context, group *CommandGroup) error {
+	sourceArg, filterArg := "", ""
+	if len(group.Args) > 0 {
+		sourceArg = group.Args[0]
+	}
+	if len(group.Args) > 1 {
+		filterArg = group.Args[1]
+	}
+	sources, err := parseTintSources(sourceArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	labels := make([]string, 0, len(names))
-	for _, name := range names {
-		labels = append(labels, embeddedTintLabel(name))
+	filter := parseTintFilter(filterArg)
+
+	var labels []string
+	for _, source := range sources {
+		sourceLabels, err := tintListLabels(ctx, source)
+		if err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
+		}
+		for _, label := range sourceLabels {
+			if !filter.matchesLabel(label) {
+				continue
+			}
+			if len(sources) > 1 {
+				label = source + ":" + label
+			}
+			labels = append(labels, label)
+		}
+	}
+	if len(labels) == 0 {
+		err := fmt.Errorf("no schemes found for source(s): %s", strings.Join(sources, ", "))
+		logger.Error(ctx, "%v", err)
+		return err
 	}
 	slices.Sort(labels)
 	for _, label := range labels {
@@ -199,35 +410,24 @@ func HandleTintListEmbedded(ctx context.Context, _ *CommandGroup) error {
 	return nil
 }
 
-// embeddedTintLabel returns name as "<system>-<name>" using the scheme
-// file's own declared "system:" field, or the bare name if it can't be
-// read/parsed.
-func embeddedTintLabel(name string) string {
-	data, err := assets.GetTintTheme(name)
-	if err != nil {
-		return name
-	}
-	meta, err := config.ParseBase16SchemeMeta(data)
-	if err != nil || meta.System == "" {
-		return name
-	}
-	return meta.System + "-" + name
+// tintTableRow is one --tint-table row: a slug-level view (unlike
+// tintListLabels' file-level one) -- a repo slug present in both base16/
+// and base24/ is one row with both availability flags set, not two rows.
+type tintTableRow struct {
+	Source               string
+	Slug, Name, Variant  string
+	HasBase16, HasBase24 bool
 }
 
-// HandleTintTableRepo implements --tint-table-repo, listing every distinct
-// slug in the cloned tinted-theming/schemes repo as one table row: the bare
-// slug, which of base16/base24 it's available in, and its Scheme/Variant
-// (Author is omitted -- its GitHub-profile links push most rows well past a
-// normal terminal width) read from whichever format is preferred for that
-// slug (base24, falling back to base16 -- see ParseBase16Scheme's doc
-// comment). Sorted by slug.
-func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
+// repoTintTableRows builds one tintTableRow per distinct repo slug, its
+// base16/base24 availability flags reflecting which subfolder(s) actually
+// have that slug, and Name/Variant read from whichever format is preferred
+// (base24, falling back to base16 -- see ParseBase16Scheme's doc comment).
+func repoTintTableRows(ctx context.Context) ([]tintTableRow, error) {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
-		logger.Error(ctx, "%v", err)
-		return err
+		return nil, err
 	}
-
 	availability := make(map[string]struct{ base16, base24 bool })
 	for _, sub := range []string{"base16", "base24"} {
 		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
@@ -248,79 +448,175 @@ func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
 			availability[slug] = a
 		}
 	}
-	if len(availability) == 0 {
-		err := fmt.Errorf("no schemes found in %q or %q", filepath.Join(repoDir, "base24"), filepath.Join(repoDir, "base16"))
-		logger.Error(ctx, "%v", err)
-		return err
-	}
-
 	slugs := make([]string, 0, len(availability))
 	for slug := range availability {
 		slugs = append(slugs, slug)
 	}
 	slices.Sort(slugs)
 
-	headers := []string{"Slug", "Scheme", "Variant", "base16", "base24"}
-	var data []string
+	rows := make([]tintTableRow, 0, len(slugs))
 	for _, slug := range slugs {
 		a := availability[slug]
-		col16, col24 := "", ""
-		if a.base16 {
-			col16 = "base16"
-		}
-		if a.base24 {
-			col24 = "base24"
-		}
-		schemeData, err := ResolveRepoTintData(ctx, slug)
-		name, variant := "", ""
-		if err == nil {
-			if meta, err := config.ParseBase16SchemeMeta(schemeData); err == nil {
-				name, variant = meta.Name, meta.Variant
+		row := tintTableRow{Source: "repo", Slug: slug, HasBase16: a.base16, HasBase24: a.base24}
+		if data, err := ResolveRepoTintData(ctx, slug); err == nil {
+			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
+				row.Name, row.Variant = meta.Name, meta.Variant
 			}
 		}
-		data = append(data, slug, name, variant, col16, col24)
+		rows = append(rows, row)
 	}
-
-	console.PrintTableCtx(ctx, headers, data, true)
-	return nil
+	return rows, nil
 }
 
-// HandleTintListRepo implements --tint-list-repo, listing every scheme in
-// the cloned tinted-theming/schemes repo (usable with --tint's "repo:"
-// reference) as "<system>-<slug>" -- --tint's own scheme-ID form to force a
-// subfolder (see repoSchemeSubfolders). A slug present in both base24/ and
-// base16/ is listed twice, once per system, since both forms resolve to a
-// real, distinct file. Sorted by that prefixed form, so base16 and base24
-// schemes group separately.
-func HandleTintListRepo(ctx context.Context, _ *CommandGroup) error {
-	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
+// dirTintTableRows builds one tintTableRow per *.yaml file directly under
+// dir (a flat scheme folder, so exactly one of HasBase16/HasBase24 is set,
+// from that file's own declared "system:" field), sorted by slug. A missing
+// dir is not an error (no user schemes yet).
+func dirTintTableRows(dir, source string) ([]tintTableRow, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var rows []tintTableRow
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		row := tintTableRow{Source: source, Slug: strings.TrimSuffix(e.Name(), ".yaml")}
+		if data, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil {
+			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
+				row.Name, row.Variant = meta.Name, meta.Variant
+				if meta.System == "base24" {
+					row.HasBase24 = true
+				} else {
+					row.HasBase16 = true
+				}
+			}
+		}
+		rows = append(rows, row)
+	}
+	slices.SortFunc(rows, func(a, b tintTableRow) int { return strings.Compare(a.Slug, b.Slug) })
+	return rows, nil
+}
+
+// embeddedTintTableRows is repoTintTableRows/dirTintTableRows for DS2's own
+// bundled schemes -- a flat set (exactly one of HasBase16/HasBase24 set,
+// from each file's own declared "system:" field), read from the embedded
+// filesystem rather than a real directory.
+func embeddedTintTableRows() ([]tintTableRow, error) {
+	names, err := assets.ListTintThemes()
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]tintTableRow, 0, len(names))
+	for _, name := range names {
+		row := tintTableRow{Source: "embedded", Slug: name}
+		if data, err := assets.GetTintTheme(name); err == nil {
+			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
+				row.Name, row.Variant = meta.Name, meta.Variant
+				if meta.System == "base24" {
+					row.HasBase24 = true
+				} else {
+					row.HasBase16 = true
+				}
+			}
+		}
+		rows = append(rows, row)
+	}
+	slices.SortFunc(rows, func(a, b tintTableRow) int { return strings.Compare(a.Slug, b.Slug) })
+	return rows, nil
+}
+
+// tintTableRows returns source's tintTableRow slice for --tint-table.
+func tintTableRows(ctx context.Context, source string) ([]tintTableRow, error) {
+	switch source {
+	case "repo":
+		return repoTintTableRows(ctx)
+	case "user":
+		return dirTintTableRows(paths.GetTintsDir(), "user")
+	case "embedded":
+		return embeddedTintTableRows()
+	default:
+		return nil, fmt.Errorf("unknown tint source %q", source)
+	}
+}
+
+// HandleTintTable implements --tint-table [<repo:|user:|embedded:>[,...]]
+// [<search>], showing a Slug/Scheme/Variant/base16/base24 table (Author is
+// omitted -- its GitHub-profile links push most rows well past a normal
+// terminal width) for one or more sources (every source when omitted --
+// see parseTintSources), optionally narrowed to rows whose slug, scheme
+// name, or variant contains search (see parseTintFilter/tintFilter.
+// matchesRow). A Source column is added only when more than one source is
+// selected; a single source's table has no such column.
+func HandleTintTable(ctx context.Context, group *CommandGroup) error {
+	sourceArg, filterArg := "", ""
+	if len(group.Args) > 0 {
+		sourceArg = group.Args[0]
+	}
+	if len(group.Args) > 1 {
+		filterArg = group.Args[1]
+	}
+	sources, err := parseTintSources(sourceArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	var labels []string
-	for _, sub := range []string{"base24", "base16"} {
-		entries, err := os.ReadDir(filepath.Join(repoDir, sub))
+	filter := parseTintFilter(filterArg)
+
+	var rows []tintTableRow
+	for _, source := range sources {
+		sourceRows, err := tintTableRows(ctx, source)
 		if err != nil {
-			continue
+			logger.Error(ctx, "%v", err)
+			return err
 		}
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
-				continue
+		for _, row := range sourceRows {
+			if filter.matchesRow(row) {
+				rows = append(rows, row)
 			}
-			slug := strings.TrimSuffix(e.Name(), ".yaml")
-			labels = append(labels, sub+"-"+slug)
 		}
 	}
-	if len(labels) == 0 {
-		err := fmt.Errorf("no schemes found in %q or %q", filepath.Join(repoDir, "base24"), filepath.Join(repoDir, "base16"))
+	if len(rows) == 0 {
+		err := fmt.Errorf("no schemes found for source(s): %s", strings.Join(sources, ", "))
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	slices.Sort(labels)
-	for _, label := range labels {
-		fmt.Println(label)
+
+	multi := len(sources) > 1
+	if multi {
+		slices.SortFunc(rows, func(a, b tintTableRow) int {
+			if c := strings.Compare(a.Source, b.Source); c != 0 {
+				return c
+			}
+			return strings.Compare(a.Slug, b.Slug)
+		})
 	}
+
+	headers := []string{"Slug", "Scheme", "Variant", "base16", "base24"}
+	if multi {
+		headers = append([]string{"Source"}, headers...)
+	}
+	var data []string
+	for _, row := range rows {
+		col16, col24 := "", ""
+		if row.HasBase16 {
+			col16 = "base16"
+		}
+		if row.HasBase24 {
+			col24 = "base24"
+		}
+		if multi {
+			data = append(data, row.Source, row.Slug, row.Name, row.Variant, col16, col24)
+		} else {
+			data = append(data, row.Slug, row.Name, row.Variant, col16, col24)
+		}
+	}
+
+	console.PrintTableCtx(ctx, headers, data, true)
 	return nil
 }
 
