@@ -88,6 +88,18 @@ func serverAlreadyInUse() bool {
 // is configured, or if the one(s) that are fail to start (e.g. port already
 // in use, bad config).
 func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string) error { //nolint:cyclop
+	// Discard a stale disconnect request left over from a previous instance
+	// of this daemon. RequestDisconnect (via update.ReExec, or the
+	// file-based stop request below) writes a persistent file that's only
+	// ever cleared by a currently-connected session's own poll loop
+	// noticing it (see ssh_handler.go/web_sip.go) -- if the restart that
+	// request was meant for happened while no session was connected to
+	// consume it, it survives on disk into this new process. Without this,
+	// the very next session to ever connect -- even one unrelated to that
+	// restart, possibly much later -- sees the stale flag on its first
+	// poll tick and quits itself before it renders a single frame.
+	sessionlocks.Sessions.ClearDisconnectRequest()
+
 	// Register a shutdown hook so that when an update is applied from within a
 	// TUI session running inside this daemon, ReExec can cancel the server
 	// context and allow main() to pick up PendingReExec and exec the new binary.
