@@ -260,7 +260,7 @@ func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
 	}
 	slices.Sort(slugs)
 
-	headers := []string{"Slug", "base16", "base24", "Scheme", "Variant"}
+	headers := []string{"Slug", "Scheme", "Variant", "base16", "base24"}
 	var data []string
 	for _, slug := range slugs {
 		a := availability[slug]
@@ -278,7 +278,7 @@ func HandleTintTableRepo(ctx context.Context, _ *CommandGroup) error {
 				name, variant = meta.Name, meta.Variant
 			}
 		}
-		data = append(data, slug, col16, col24, name, variant)
+		data = append(data, slug, name, variant, col16, col24)
 	}
 
 	console.PrintTableCtx(ctx, headers, data, true)
