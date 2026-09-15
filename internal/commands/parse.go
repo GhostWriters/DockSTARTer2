@@ -382,9 +382,10 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		case "--tint-list", "--tint-table":
-			// Both args are optional: [<source filter>] [<name filter>] --
-			// omitted source means every source, omitted name means no
-			// filtering by name.
+			// Both args are optional, and may come in either order --
+			// splitTintArgs sorts them by shape (a source filter's parts
+			// all end with ":"). Just capture up to two non-flag tokens
+			// here.
 			for count := 0; count < 2; count++ {
 				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
