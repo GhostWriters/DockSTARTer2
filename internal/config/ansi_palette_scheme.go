@@ -140,6 +140,7 @@ func parseBase16Palette(data []byte) (base16Palette, error) {
 type Base16SchemeMeta struct {
 	Name    string
 	Slug    string
+	System  string // "base16" or "base24" -- see ParseBase16SchemeMeta's doc comment
 	Author  string
 	Variant string
 }
@@ -149,7 +150,12 @@ type Base16SchemeMeta struct {
 // formats (see parseBase16Palette). Slug is the file's own "slug" field if
 // it has one, else Slugify(Name) -- per tinted-theming/home's builder.md:
 // "If it is not provided, a builder MUST infer it by slugifying the
-// scheme's name."
+// scheme's name." System is the file's own "system" field, or "base16" when
+// absent (the field postdates base16-only files, and the legacy format
+// predates base24 entirely) -- combined with Slug as "<system>-<slug>",
+// this is tinty's own scheme-ID convention (e.g. "tinty apply base16-mocha"),
+// the same form --tint's "repo:" reference accepts to force a subfolder
+// (see repoSchemeSubfolders).
 func ParseBase16SchemeMeta(data []byte) (Base16SchemeMeta, error) {
 	var current base16Scheme
 	if err := yaml.Unmarshal(data, &current); err != nil {
@@ -160,7 +166,11 @@ func ParseBase16SchemeMeta(data []byte) (Base16SchemeMeta, error) {
 		if slug == "" {
 			slug = Slugify(current.Name)
 		}
-		return Base16SchemeMeta{Name: current.Name, Slug: slug, Author: current.Author, Variant: current.Variant}, nil
+		system := current.System
+		if system == "" {
+			system = "base16"
+		}
+		return Base16SchemeMeta{Name: current.Name, Slug: slug, System: system, Author: current.Author, Variant: current.Variant}, nil
 	}
 
 	var legacy base16LegacyScheme
@@ -175,7 +185,7 @@ func ParseBase16SchemeMeta(data []byte) (Base16SchemeMeta, error) {
 	if slug == "" {
 		slug = Slugify(name)
 	}
-	return Base16SchemeMeta{Name: name, Slug: slug, Author: legacy.Author}, nil
+	return Base16SchemeMeta{Name: name, Slug: slug, System: "base16", Author: legacy.Author}, nil
 }
 
 // Slugify implements tinted-theming/home's documented slugify algorithm

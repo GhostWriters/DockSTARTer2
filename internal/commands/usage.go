@@ -559,21 +559,21 @@ func GetUsage(target string, noHeading bool) string {
 			"	Extract all embedded themes to a directory (use {{|UsageOption|}}user:{{[-]}} for the user themes folder)",
 		)
 	}
-	if match("--tint", "--tint-list-repo", "--tint-list-embedded") {
+	if match("--tint", "--tint-list", "--tint-table") {
 		printStr(
 			"{{|UsageCommand|}}--tint{{[-]}}",
 			"	Show the current ANSI palette tint status for local/ssh/web",
 			"{{|UsageCommand|}}--tint{{[-]}} {{|UsageOption|}}<ref>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set an ANSI palette tint. No connection type means all. <ref> is one of:",
-			"	{{|UsageOption|}}<scheme-name>{{[-]}} or {{|UsageOption|}}repo:<scheme-name>{{[-]}} -- downloads a tinted-theming base16 scheme (github.com/tinted-theming/schemes; see --tint-list-repo)",
-			"	{{|UsageOption|}}embedded:<name>{{[-]}} -- one of DS2's own bundled base16 schemes (see --tint-list-embedded)",
+			fmt.Sprintf("	{{|UsageOption|}}<scheme-name>{{[-]}} or {{|UsageOption|}}repo:<scheme-name>{{[-]}} -- downloads a %s scheme (see --tint-list/--tint-table). Prefix <scheme-name> with {{|UsageOption|}}base16-{{[-]}}/{{|UsageOption|}}base24-{{[-]}} (tinty's own scheme-ID form, e.g. base16-mocha) to force which of the two", tintedThemingLink()),
+			"	{{|UsageOption|}}embedded:<name>{{[-]}} -- one of DS2's own bundled base16 schemes",
 			"	{{|UsageOption|}}user:<name>{{[-]}} -- a scheme file in the user tint folder",
 			"	{{|UsageOption|}}file:<path>{{[-]}} -- a local base16 scheme YAML file",
 			"	{{|UsageOption|}}\"\"{{[-]}} or {{|UsageOption|}}none:{{[-]}} -- clears the tint",
-			"{{|UsageCommand|}}--tint-list-repo{{[-]}}",
-			"	List the base16 scheme names available from the tinted-theming/schemes repo",
-			"{{|UsageCommand|}}--tint-list-embedded{{[-]}}",
-			"	List the base16 scheme names bundled with DS2",
+			"{{|UsageCommand|}}--tint-list{{[-]}} [{{|UsageOption|}}<repo:|user:|embedded:>[,...]{{[-]}}] [{{|UsageOption|}}<search>{{[-]}}]",
+			"	List scheme names as {{|UsageOption|}}base16-{{[-]}}/{{|UsageOption|}}base24-{{[-]}}<scheme-name>, from the given source(s) (default: all; either arg may come first). More than one source prefixes each name \"<source>:\" to stay unambiguous. search is a comma-separated list of terms that must all match (a slug substring, case-insensitive), optionally itself {{|UsageOption|}}base16-{{[-]}}/{{|UsageOption|}}base24-{{[-]}} prefixed to also narrow by system (e.g. {{|UsageCommand|}}--tint-list{{[-]}} {{|UsageOption|}}repo:{{[-]}} {{|UsageOption|}}base24-ayu{{[-]}}).",
+			"{{|UsageCommand|}}--tint-table{{[-]}} [{{|UsageOption|}}<repo:|user:|embedded:>[,...]{{[-]}}] [{{|UsageOption|}}<search>{{[-]}}]",
+			"	Show a table of schemes: slug, description, base16/base24 availability, from the given source(s) (default: all; either arg may come first), optionally narrowed by search -- a comma-separated list of terms that must all match somewhere in the scheme's metadata (slug, name, variant, or author -- e.g. {{|UsageCommand|}}--tint-table{{[-]}} {{|UsageOption|}}ayu,dark{{[-]}} or {{|UsageOption|}}Kempson,light{{[-]}}). More than one source adds a Source column.",
 		)
 	}
 	if match("--theme-tint", "--theme-no-tint") {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
@@ -48,23 +49,41 @@ func ensureTintedThemingSchemesRepo(ctx context.Context) (string, error) {
 	return dir, nil
 }
 
+// repoSchemeSubfolders splits a repo scheme name into its slug and, if the
+// name carries an explicit "base16-"/"base24-" prefix (the identifier
+// format tinted-theming's own reference tool, tinty, uses -- e.g. "tinty
+// apply base16-mocha"), the one subfolder to look in. subs is that single
+// subfolder, or both in preference order (base24 first, for its real
+// distinct bright colors -- see ParseBase16Scheme's doc comment) when name
+// has no such prefix.
+func repoSchemeSubfolders(name string) (slug string, subs []string) {
+	if s, ok := strings.CutPrefix(name, "base24-"); ok {
+		return s, []string{"base24"}
+	}
+	if s, ok := strings.CutPrefix(name, "base16-"); ok {
+		return s, []string{"base16"}
+	}
+	return name, []string{"base24", "base16"}
+}
+
 // RepoTintSourceURL returns the GitHub blob URL for name's scheme file --
 // for --tint's status display, hyperlinking a "repo:<name>" source to the
 // canonical upstream file rather than DS2's own local clone (an
 // implementation-detail cache, not somewhere a user has reason to look).
-// Checks the same base24-then-base16 preference ResolveRepoTintData
-// resolves the scheme's actual data from, so the link always points at
+// Checks the same subfolder(s) ResolveRepoTintData resolves the scheme's
+// actual data from (see repoSchemeSubfolders), so the link always points at
 // whichever file that data really came from. ok is false if name isn't
-// found in either subfolder.
+// found in any of them.
 func RepoTintSourceURL(ctx context.Context, name string) (url string, ok bool) {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
 		return "", false
 	}
-	for _, sub := range []string{"base24", "base16"} {
-		if _, err := os.Stat(filepath.Join(repoDir, sub, name+".yaml")); err == nil {
+	slug, subs := repoSchemeSubfolders(name)
+	for _, sub := range subs {
+		if _, err := os.Stat(filepath.Join(repoDir, sub, slug+".yaml")); err == nil {
 			return fmt.Sprintf("https://github.com/%s/blob/%s/%s/%s.yaml",
-				tintedThemingSchemesRepo, tintedThemingSchemesBranch, sub, name), true
+				tintedThemingSchemesRepo, tintedThemingSchemesBranch, sub, slug), true
 		}
 	}
 	return "", false
