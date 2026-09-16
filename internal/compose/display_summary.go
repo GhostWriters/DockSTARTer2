@@ -190,7 +190,12 @@ func (p *consoleEventProcessor) logSummary() {
 	defer func() { p.maxLineWidth, p.maxTimerWidth = savedLineW, savedTimerW }()
 
 	// Final log always includes layer rows, regardless of the -v console flag.
+	// Passes the raw tag string, not pre-rendered ANSI -- logger.Notice defers
+	// rendering to its own writer handlers, each scoped to the right session's
+	// tint/profile; pre-rendering here would read semstyle's global profile
+	// unscoped to any session, racing against every other concurrently
+	// rendering one.
 	for _, line := range p.buildLines(logWidth, true) {
-		logger.Notice(ctx, pfx+semstyle.ToANSI(line))
+		logger.Notice(ctx, pfx+line)
 	}
 }

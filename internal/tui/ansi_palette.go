@@ -7,6 +7,7 @@ import (
 
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/theme"
 
@@ -22,12 +23,11 @@ func resolveTintRef(ctx context.Context, ref string) ([]byte, error) {
 	return data, err
 }
 
-// tintKeyForConnType returns the semstyle tint registration key for
-// connType ("local", "ssh", or "web") -- kept separate per connType so
-// local/SSH/web sessions never clobber each other's tint (see
-// registerConnTypeTints and activateTintFor).
+// tintKeyForConnType is console.TintKeyForConnType -- kept as a local alias
+// since every call site in this file already refers to the unqualified
+// name.
 func tintKeyForConnType(connType string) string {
-	return "ds2-tint-" + connType
+	return console.TintKeyForConnType(connType)
 }
 
 // RegisterConnTypeTints resolves colors for connType and registers it under
@@ -77,15 +77,15 @@ func withoutExplicitFields(colors config.AnsiColors) config.AnsiColors {
 	}
 }
 
-// ActivateTintFor makes connType's registered tint (see
-// RegisterConnTypeTints) the active one for the duration of fn (see
-// semstyle.RunWithTint), then restores whatever was active before. Wrap
-// every AppModel.Update/View call with this so DS2 renders reflect the
-// correct per-connType tint even with local/SSH/web sessions running
-// concurrently -- semstyle.RunWithTint's own lock serializes them against
-// each other so none sees another's key mid-render.
+// ActivateTintFor is console.ActivateTintFor -- makes connType's registered
+// tint (see RegisterConnTypeTints) the active one for the duration of fn,
+// then restores whatever was active before. Wrap every AppModel.Update/View
+// call with this so DS2 renders reflect the correct per-connType tint even
+// with local/SSH/web sessions running concurrently -- semstyle.RunWithTint's
+// own lock serializes them against each other so none sees another's key
+// mid-render.
 func ActivateTintFor(connType string, fn func()) {
-	semstyle.RunWithTint(tintKeyForConnType(connType), fn)
+	console.ActivateTintFor(connType, fn)
 }
 
 // BeginTintFor is ActivateTintFor split into a begin/restore pair (see
@@ -99,15 +99,14 @@ func BeginTintFor(connType string) (restore func()) {
 	return semstyle.BeginTint(tintKeyForConnType(connType))
 }
 
-// ActivateSessionRenderContext nests ActivateTintFor(connType, ...) inside
-// semstyle.RunWithProfile(profile, ...) for the duration of fn, so a
-// session's Update/View call renders with both its own connType's tint and
-// its own actual color profile (see resolveColorProfile) -- one call
-// instead of nesting both wrappers at every call site.
+// ActivateSessionRenderContext is console.ActivateSessionRenderContext --
+// nests ActivateTintFor(connType, ...) inside semstyle.RunWithProfile(
+// profile, ...) for the duration of fn, so a session's Update/View call
+// renders with both its own connType's tint and its own actual color
+// profile (see resolveColorProfile) -- one call instead of nesting both
+// wrappers at every call site.
 func ActivateSessionRenderContext(connType string, profile colorprofile.Profile, fn func()) {
-	semstyle.RunWithProfile(profile, func() {
-		ActivateTintFor(connType, fn)
-	})
+	console.ActivateSessionRenderContext(connType, profile, fn)
 }
 
 // DeactivateTint runs fn with no tint active (an empty key, semstyle's

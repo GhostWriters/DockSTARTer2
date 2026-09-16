@@ -1593,13 +1593,18 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 
 // doTriggerDockerPrune performs the actual edit-lock check and runs docker
 // system prune, using the acquiring session's own identity.
-func doTriggerDockerPrune(clientIP, connType, sessionKey string) tea.Msg {
+func doTriggerDockerPrune(clientIP, connType, sessionKey string, profile colorprofile.Profile) tea.Msg {
 	if !sessionlocks.Sessions.AcquireEditLock(clientIP, "Prune Docker System", "menu:docker-prune", connType, sessionKey) {
 		return ShowMessageDialogMsg{Title: "Resource Busy", Message: editLockBusyMsg(sessionlocks.Sessions.ReadEditInfo(), ""), Type: MessageError}
 	}
 	task := func(ctx context.Context, w io.Writer) error {
 		defer sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		ctx = console.WithTUIWriter(ctx, w)
+		// So LogPruneReport (called deep inside docker.Prune, off this task's
+		// own goroutine) can render its report correctly scoped to this
+		// session instead of reading semstyle's global profile/tint unscoped --
+		// see console.RenderWithSessionContext.
+		ctx = console.WithSessionRenderContext(ctx, connType, profile)
 		if err := docker.Prune(ctx, console.AssumeYes()); err != nil {
 			logger.Error(ctx, "%v", err)
 			return err

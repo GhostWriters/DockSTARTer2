@@ -626,14 +626,17 @@ func (p *consoleEventProcessor) render() {
 		}
 	}
 
-	// noViewport (program box) mode: call updateFn to replace lines in the TUI viewport.
+	// noViewport (program box) mode: call updateFn to replace lines in the TUI
+	// viewport. Sends raw tag strings, not pre-rendered ANSI -- updateFn (see
+	// console.ReplaceOutputFuncFromContext/ReplaceOutputLinesFn) ultimately
+	// reaches ProgramBoxModel's pbRenderFn, which renders each line itself
+	// from inside that session's own properly tint/profile-scoped Update()
+	// call. Rendering here instead would read semstyle's global profile from
+	// this ticker goroutine, unscoped to any particular session, racing
+	// against every other concurrently rendering session.
 	if p.noViewport {
 		if p.updateFn != nil && !slices.Equal(lines, p.lastSentLines) {
-			ansiLines := make([]string, len(lines))
-			for i, l := range lines {
-				ansiLines[i] = semstyle.ToANSI(l)
-			}
-			p.updateFn(ansiLines)
+			p.updateFn(lines)
 			p.lastSentLines = lines
 		}
 		return

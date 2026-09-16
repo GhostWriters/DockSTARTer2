@@ -101,7 +101,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return doTriggerComposeStop(m.clientIP, m.connType, m.sessionKey) }
 
 	case triggerDockerPruneMsg:
-		return m, func() tea.Msg { return doTriggerDockerPrune(m.clientIP, m.connType, m.sessionKey) }
+		return m, func() tea.Msg { return doTriggerDockerPrune(m.clientIP, m.connType, m.sessionKey, m.colorProfile) }
 
 	case displayengine.LockStateChangedMsg:
 		// Broadcast lock changes to both the active screen and any open dialog
