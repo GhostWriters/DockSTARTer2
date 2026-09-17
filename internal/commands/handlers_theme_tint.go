@@ -120,11 +120,11 @@ func ResolveRepoTintData(ctx context.Context, name string) ([]byte, error) {
 
 // ResolveTintRefData reads ref's scheme bytes -- see config.AnsiColors.Tint's
 // doc comment for the "file:"/"user:"/"embedded:"/"repo:" prefix convention.
-// A bare, unprefixed name means "repo:<name>": most schemes come from
-// tinted-theming/schemes, DS2's own bundled set is small and rarely what a
-// bare name means. desc is a short human-readable label for error/notice
-// messages, distinct from ref itself (a plain path or name reads oddly
-// prefixed with its own "file:"/"repo:" tag).
+// A bare, unprefixed ref is not handled here -- see ResolveTintArg, which
+// searches user:/embedded:/repo: for it since which one it means can't be
+// determined without trying each. desc is a short human-readable label for
+// error/notice messages, distinct from ref itself (a plain path or name
+// reads oddly prefixed with its own "file:"/"repo:" tag).
 func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc string, err error) {
 	switch {
 	case strings.HasPrefix(ref, "file:"):
@@ -153,28 +153,50 @@ func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc stri
 	}
 }
 
-// canonicalTintRef normalizes ref to always carry an explicit prefix (a bare
-// name becomes "repo:<name>", per ResolveTintRefData's doc comment), so
-// what's persisted to ansi_palette.<connType>.tint is never ambiguous even
-// if the default source were to change later. A "file:" path is also
-// resolved to absolute -- same reasoning as HandleTheme's own "file:"
-// handling: a relative path is only meaningful relative to wherever this
-// command happened to run, and would silently break the next time DS2
-// resolves the config from a different working directory (e.g. as a
-// daemon).
-func canonicalTintRef(ref string) string {
-	if path, ok := strings.CutPrefix(ref, "file:"); ok {
-		if abs, err := filepath.Abs(path); err == nil {
-			return "file:" + abs
+// tintBareNameSearchOrder is the source prefixes a bare, unprefixed --tint
+// name is tried against, in order -- most specific (a scheme the user
+// placed themselves) to least (the shared upstream repo everything else
+// falls back to).
+var tintBareNameSearchOrder = []string{"user:", "embedded:", "repo:"}
+
+// ResolveTintArg resolves arg (a --tint command-line argument) to its
+// canonical, always-prefixed ref (see config.AnsiColors.Tint's doc comment)
+// and scheme data in one step. A "file:" ref is resolved to an absolute
+// path -- same reasoning as HandleTheme's own "file:" handling: a relative
+// path is only meaningful relative to wherever this command happened to
+// run, and would silently break the next time DS2 resolves the config from
+// a different working directory (e.g. as a daemon). An already-prefixed
+// "user:"/"embedded:"/"repo:" ref is resolved as-is. A bare name is tried
+// against each of tintBareNameSearchOrder in turn, returning the first
+// that resolves -- which prefix it's found under becomes ref's canonical
+// prefix, so what's persisted to ansi_palette.<connType>.tint is never
+// ambiguous even if a later search finds it under a different source.
+func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, desc string, err error) {
+	if path, ok := strings.CutPrefix(arg, "file:"); ok {
+		if abs, absErr := filepath.Abs(path); absErr == nil {
+			path = abs
 		}
-		return ref
+		ref = "file:" + path
+		data, desc, err = ResolveTintRefData(ctx, ref)
+		return ref, data, desc, err
 	}
-	for _, p := range []string{"user:", "embedded:", "repo:"} {
-		if strings.HasPrefix(ref, p) {
-			return ref
+	for _, p := range tintBareNameSearchOrder {
+		if strings.HasPrefix(arg, p) {
+			data, desc, err = ResolveTintRefData(ctx, arg)
+			return arg, data, desc, err
 		}
 	}
-	return "repo:" + ref
+
+	var errs []string
+	for _, p := range tintBareNameSearchOrder {
+		d, ds, e := ResolveTintRefData(ctx, p+arg)
+		if e == nil {
+			return p + arg, d, ds, nil
+		}
+		errs = append(errs, e.Error())
+	}
+	return "repo:" + arg, nil, "", fmt.Errorf("scheme %q not found as %s (%s)",
+		arg, strings.Join(tintBareNameSearchOrder, ", "), strings.Join(errs, "; "))
 }
 
 // tintListSources is the source prefixes --tint-list/--tint-table accept in
@@ -985,8 +1007,7 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 		return nil
 	}
 
-	ref := canonicalTintRef(arg)
-	data, desc, err := ResolveTintRefData(ctx, ref)
+	ref, data, desc, err := ResolveTintArg(ctx, arg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
