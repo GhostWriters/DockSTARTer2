@@ -466,13 +466,25 @@ func (s *ServerOptionsScreen) disconnectAction(force bool, enabled bool) tea.Cmd
 
 func (s *ServerOptionsScreen) handleApply() tea.Cmd {
 	doApply := func() tea.Msg {
-		if err := config.SaveAppConfig(s.config); err != nil {
+		// Applies only this screen's own Server settings onto a freshly-loaded
+		// copy (see config.UpdateAppConfig), rather than saving s.config (a
+		// snapshot from whenever this screen last loaded or saved) wholesale
+		// -- every updateServerOptionMsg mutation above touches only
+		// cfg.Server.*, so anything else changed by a different session while
+		// this screen was open would otherwise be clobbered back to its value
+		// as of that stale snapshot.
+		newServer := s.config.Server
+		fresh, err := config.UpdateAppConfig(func(c *config.AppConfig) {
+			c.Server = newServer
+		})
+		if err != nil {
 			return tui.ShowMessageDialogMsg{
 				Title:   "Save Failed",
 				Message: fmt.Sprintf("Could not save server settings: %v", err),
 				Type:    tui.MessageError,
 			}
 		}
+		s.config = fresh
 		return tui.ShowMessageDialogMsg{
 			Title:   "Settings Saved",
 			Message: "Server settings saved. Restart the SSH server for changes to take effect.",

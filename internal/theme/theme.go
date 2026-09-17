@@ -166,8 +166,11 @@ func EnsureThemeExtracted(themeNameOrURI string) (string, error) {
 // If prefix is provided, semantic tags are registered with that prefix (e.g. "Preview_Screen")
 // without affecting the global active theme (Current).
 func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
-	// 0. Clear previous registration for this namespace to avoid tag leakage
-	Unload(prefix)
+	// Clearing this namespace's previous registration happens atomically
+	// with the new theme's registration, inside registerThemeData -- not
+	// as a separate step here -- so a concurrent render (another session,
+	// mid-Update/View) can never observe the gap between the two (see
+	// semstyle.ReplaceThemeTags).
 
 	// 1. Initialize with defaults
 	Default(prefix)
@@ -563,9 +566,21 @@ func registerThemeData(data []byte, prefix string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	for key, styleValue := range resolved {
-		semstyle.RegisterThemeTagRaw(semtheme.PrefixTag(prefix, key), styleValue)
+
+	populate := func(register func(name, rawValue string)) {
+		for key, styleValue := range resolved {
+			register(semtheme.PrefixTag(prefix, key), styleValue)
+		}
 	}
+	// Clears this namespace's existing tags and registers the new ones in
+	// one atomic step (see semstyle.ReplaceThemeTags) -- a concurrent
+	// render on another goroutine can never observe a state in between.
+	if prefix == "" {
+		semstyle.ReplaceThemeTags(nil, populate)
+	} else {
+		semstyle.ReplaceThemeTagsWithPrefix(prefixTag(prefix, ""), populate)
+	}
+
 	if prefix == "" {
 		semstyle.BuildColorMap()
 	}
