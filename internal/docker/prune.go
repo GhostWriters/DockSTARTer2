@@ -105,15 +105,7 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	if report.SpaceReclaimed > 0 || len(report.ImagesDeleted) > 0 ||
 		len(report.NetworksDeleted) > 0 || len(report.VolumesDeleted) > 0 ||
 		len(report.ContainersDeleted) > 0 || report.hasErrors() {
-		// LogPruneReport builds its whole report as already-rendered ANSI
-		// (unlike compose's live display, which defers rendering to the raw
-		// tags the TUI itself later resolves) -- render it inside the
-		// caller's own session context if one is attached (see
-		// console.RenderWithSessionContext), rather than reading semstyle's
-		// global profile/tint unscoped from this goroutine.
-		console.RenderWithSessionContext(ctx, func() {
-			LogPruneReport(ctx, report, imageServices)
-		})
+		LogPruneReport(ctx, report, imageServices)
 	}
 
 	return nil

@@ -84,7 +84,17 @@ const (
 // showLayers forced true rather than reusing the (possibly layer-less)
 // display lines for both.
 func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string][]string) {
-	dispLines, errs := buildPruneLines(r, imageServices, console.GlobalVerbose)
+	// buildPruneLines is the only part that needs a session's render context
+	// (see console.RenderWithSessionContext) -- it's pure string-building,
+	// no I/O. The write loop below must run outside it: when out is a
+	// ProgramBox's TUI writer (an io.Pipe), each Fprintln blocks until
+	// bubbletea's main loop reads it via Update(), which is itself wrapped
+	// in the same render context on every tick -- holding that context
+	// across the write would deadlock this goroutine against the main loop.
+	var dispLines, errs []string
+	console.RenderWithSessionContext(ctx, func() {
+		dispLines, errs = buildPruneLines(r, imageServices, console.GlobalVerbose)
+	})
 	if len(dispLines) == 0 && len(errs) == 0 {
 		return
 	}
@@ -103,7 +113,10 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	if tuiW := console.GetTUIWriter(ctx); tuiW != nil {
 		logCtx = logger.WithSuppressWriter(logCtx, tuiW)
 	}
-	logLines, _ := buildPruneLines(r, imageServices, true)
+	var logLines []string
+	console.RenderWithSessionContext(ctx, func() {
+		logLines, _ = buildPruneLines(r, imageServices, true)
+	})
 	const pfx = "\t{{|RunningCommand|}}docker:{{[-]}} "
 	for _, line := range logLines {
 		logger.Notice(logCtx, pfx+"%s", semstyle.ToPlain(line))
