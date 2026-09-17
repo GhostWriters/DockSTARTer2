@@ -1295,9 +1295,16 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		// snapshot.
 		refreshRateChanged := s.config.UI.RefreshRate != s.baseConfig.UI.RefreshRate
 		newUI := s.config.UI
-		fresh, _ := config.UpdateAppConfig(func(c *config.AppConfig) {
+		fresh, err := config.UpdateAppConfig(func(c *config.AppConfig) {
 			c.UI = newUI
 		})
+		if err != nil {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Save Failed",
+				Message: fmt.Sprintf("Could not save appearance settings: %v", err),
+				Type:    tui.MessageError,
+			}
+		}
 		s.config = fresh
 		s.baseConfig = s.config
 

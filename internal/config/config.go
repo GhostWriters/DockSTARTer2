@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"DockSTARTer2/internal/assets"
@@ -842,6 +843,18 @@ func SaveAppConfig(conf AppConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
+// updateAppConfigMu serializes UpdateAppConfig's load-mutate-save sequence
+// against itself, so two concurrent callers (e.g. two TUI sessions under
+// the same --server-daemon process, each updating a different field) can't
+// both load the same on-disk config, apply their own mutation, and then
+// have the second SaveAppConfig silently overwrite the first caller's
+// change instead of building on top of it. This covers every UpdateAppConfig
+// caller within this one process; it does not extend across separate OS
+// processes (e.g. a bare CLI invocation racing the daemon), which has
+// never been guarded against here -- SaveAppConfig itself has no
+// cross-process lock.
+var updateAppConfigMu sync.Mutex
+
 // UpdateAppConfig loads the current on-disk config, applies mutate to it,
 // and saves the result -- a single load-mutate-save step, rather than a
 // caller holding its own separately-loaded copy across some intervening
@@ -852,6 +865,9 @@ func SaveAppConfig(conf AppConfig) error {
 // so a concurrent, unrelated change from elsewhere survives. Returns the
 // saved config so the caller can adopt it as its own new baseline.
 func UpdateAppConfig(mutate func(*AppConfig)) (AppConfig, error) {
+	updateAppConfigMu.Lock()
+	defer updateAppConfigMu.Unlock()
+
 	conf := LoadAppConfig()
 	mutate(&conf)
 	if err := SaveAppConfig(conf); err != nil {
