@@ -26,8 +26,8 @@ github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679 h1:qNT7
 github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679/go.mod h1:blbwPQh4DTlCZEfk1BLU4oMIhLda2U+A840Uag9DsZw=
 github.com/Gaurav-Gosain/sip v0.8.1 h1:isGeNlCRQ4gty550ZE1E/m9iLMlG9GoMxXeof2gCNvo=
 github.com/Gaurav-Gosain/sip v0.8.1/go.mod h1:BcZ9zeThJlrDnn1M/iKDZQQi7VncXapcSbgFJH7gbN8=
-github.com/GhostWriters/semstyle v0.2.21 h1:mfa0eIQXSh1m6R3PYX2qckOECUA/jx0SGuJIUUSun9w=
-github.com/GhostWriters/semstyle v0.2.21/go.mod h1:wrQNHzQZeTWflY/DgTMmQ10uXpzYRDD7L0Y/Xer1ZSE=
+github.com/GhostWriters/semstyle v0.2.22 h1:LAYkQ3sa95dZ9Evn6sJFWDJWJI2jWZz8DMD/UeSGHYA=
+github.com/GhostWriters/semstyle v0.2.22/go.mod h1:wrQNHzQZeTWflY/DgTMmQ10uXpzYRDD7L0Y/Xer1ZSE=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
@@ -161,8 +161,6 @@ github.com/dlclark/regexp2 v1.12.0 h1:0j4c5qQmnC6XOWNjP3PIXURXN2gWx76rd3KvgdPkCz
 github.com/dlclark/regexp2 v1.12.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/dlclark/regexp2/v2 v2.8.0 h1:CekDhPLGfm+GAJmPVFIG+5dqMIQPkyHJll7BbdneDfw=
 github.com/dlclark/regexp2/v2 v2.8.0/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
-github.com/docker/cli v29.8.0+incompatible h1:ih0c2jq/nN7QfES8zIfwSzIhRScjs4ehER+kZ60aeSk=
-github.com/docker/cli v29.8.0+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli v29.8.1+incompatible h1:qYL1bCp6cRw2SB1xmLlIOPyV171dilw9W2Jew38vy9c=
 github.com/docker/cli v29.8.1+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/compose/v5 v5.5.1 h1:saWlMxB0tfQ+FVUlWGIUjLvR0jF5cfTU18KI5zKLD/M=

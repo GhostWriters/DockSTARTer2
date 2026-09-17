@@ -1284,9 +1284,28 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 			s.config.UI.Theme = themeSelected
 		}
 
-		// 2. Save Config
+		// 2. Save Config via UpdateAppConfig, applying only this screen's
+		// own UI settings onto a freshly-loaded copy, rather than saving
+		// s.config (a snapshot from whenever this screen last loaded or
+		// saved) wholesale. This screen never touches any other AppConfig
+		// field (see the s.config.UI assignments above and in
+		// display_options_update.go), so anything else -- e.g. a tint set
+		// from a different session while this screen was open -- would
+		// otherwise be clobbered back to its value as of that stale
+		// snapshot.
 		refreshRateChanged := s.config.UI.RefreshRate != s.baseConfig.UI.RefreshRate
-		_ = config.SaveAppConfig(s.config)
+		newUI := s.config.UI
+		fresh, err := config.UpdateAppConfig(func(c *config.AppConfig) {
+			c.UI = newUI
+		})
+		if err != nil {
+			return tui.ShowMessageDialogMsg{
+				Title:   "Save Failed",
+				Message: fmt.Sprintf("Could not save appearance settings: %v", err),
+				Type:    tui.MessageError,
+			}
+		}
+		s.config = fresh
 		s.baseConfig = s.config
 
 		var previewCmd tea.Cmd
