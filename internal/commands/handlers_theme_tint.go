@@ -120,11 +120,16 @@ func ResolveRepoTintData(ctx context.Context, name string) ([]byte, error) {
 
 // ResolveTintRefData reads ref's scheme bytes -- see config.AnsiColors.Tint's
 // doc comment for the "file:"/"user:"/"embedded:"/"repo:" prefix convention.
-// A bare, unprefixed ref is not handled here -- see ResolveTintArg, which
-// searches user:/embedded:/repo: for it since which one it means can't be
-// determined without trying each. desc is a short human-readable label for
-// error/notice messages, distinct from ref itself (a plain path or name
-// reads oddly prefixed with its own "file:"/"repo:" tag).
+// Its default case treats a bare, unprefixed ref as "repo:<ref>" with no
+// search -- kept only so an already-persisted config.AnsiColors.Tint value
+// saved before ResolveTintArg existed still resolves the same way it always
+// did. --tint's own command-line argument handling goes through
+// ResolveTintArg instead, which searches user:/embedded:/repo: for a bare
+// name (since which one it means can't be determined without trying each)
+// and always persists the result with its actual prefix, so a freshly-set
+// Tint value never reaches this fallback. desc is a short human-readable
+// label for error/notice messages, distinct from ref itself (a plain path
+// or name reads oddly prefixed with its own "file:"/"repo:" tag).
 func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc string, err error) {
 	switch {
 	case strings.HasPrefix(ref, "file:"):
