@@ -205,26 +205,31 @@ type AnsiColors struct {
 	// for that one slot. Set via `--tint <ref> [types]`; same
 	// "<kind>:<name-or-path>" convention as ui.theme's "user:"/"file:"
 	// prefixes, extended with two more sources (see resolveTintRef in
-	// internal/tui and ResolveTintRefData in internal/commands):
+	// internal/tui and ResolveTintRefData/ResolveTintArg in
+	// internal/commands):
 	//   - "file:<path>"    an arbitrary scheme YAML file, read live
 	//   - "user:<name>"    a user-supplied file under paths.GetTintsDir()
 	//   - "embedded:<name>" one of DS2's own bundled schemes (see
 	//                       assets.GetTintTheme/--tint-list-embedded)
 	//   - "repo:<name>"    a named scheme from a local clone of
 	//                      github.com/tinted-theming/schemes (see
-	//                      --tint-list-repo); also the meaning of a bare,
-	//                      unprefixed name, since most schemes live there.
-	//                      <name> may itself start with "base16-"/"base24-"
-	//                      (tinty's own scheme-ID convention, e.g.
-	//                      "repo:base16-mocha") to force which of the
-	//                      repo's two subfolders to read from, instead of
-	//                      the default base24-then-base16 preference
-	// "user:"/"embedded:" work out of the box with nothing to download or
-	// copy first, so either is safe to set as a shipped default; "repo:"
-	// (or a bare name) triggers a one-time clone on first resolution if
-	// that clone doesn't exist yet. Empty ("") or "none:" clears it -- not
-	// bare "none" (no colon), which stays a valid, if unlikely, "repo:none"
-	// scheme name instead of being reserved as a keyword.
+	//                      --tint-list/--tint-table). <name> may itself
+	//                      start with "base16-"/"base24-" (tinty's own
+	//                      scheme-ID convention, e.g. "repo:base16-mocha")
+	//                      to force which of the repo's two subfolders to
+	//                      read from, instead of the default
+	//                      base24-then-base16 preference
+	// A bare, unprefixed name is resolved by trying "user:", then
+	// "embedded:", then "repo:" (see ResolveTintArg) -- whichever it's
+	// found under becomes what's actually persisted here, so e.g. a
+	// user-supplied scheme named the same as a bundled one takes
+	// precedence, without needing "user:" spelled out. "user:"/"embedded:"
+	// work out of the box with nothing to download or copy first, so
+	// either is safe to set as a shipped default; "repo:" (or a bare name
+	// that falls through to it) triggers a one-time clone on first
+	// resolution if that clone doesn't exist yet. Empty ("") or "none:"
+	// clears it -- not bare "none" (no colon), which stays a valid, if
+	// unlikely, scheme name instead of being reserved as a keyword.
 	Tint string `toml:"tint"`
 
 	// Named after their base16/base24 slot (see tinted-theming/base24's
