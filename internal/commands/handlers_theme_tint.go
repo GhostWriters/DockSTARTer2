@@ -215,16 +215,38 @@ func validateCLIConnTypeScope(typesArg string, elements []string) error {
 // the same way as any other malformed command line (usage text, caret
 // pointing at the offending argument), instead of only surfacing once the
 // command actually runs.
-func checkCLIConnTypeScope(expandedArgs []string, cmd string, index int, typeElementArgs []string) error {
+func checkCLIConnTypeScope(expandedArgs []string, cmd string, baseIndex int, typeElementArgs []string) error {
 	typesArg, elementsArg := splitTintTypeElementArgs(typeElementArgs)
 	elements, err := parseOptionalElementList(elementsArg)
 	if err != nil {
-		return &ParseError{Args: expandedArgs, Index: index, FailingCommand: cmd, Message: err.Error()}
+		return &ParseError{Args: expandedArgs, Index: baseIndex + len(typeElementArgs) - 1, FailingCommand: cmd, Message: err.Error()}
 	}
 	if err := validateCLIConnTypeScope(typesArg, elements); err != nil {
-		return &ParseError{Args: expandedArgs, Index: index, FailingCommand: cmd, Message: err.Error()}
+		return &ParseError{Args: expandedArgs, Index: baseIndex + offendingConnTypeArgIndex(typeElementArgs), FailingCommand: cmd, Message: err.Error()}
 	}
 	return nil
+}
+
+// offendingConnTypeArgIndex finds which of typeElementArgs is the
+// connection-type arg naming something other than "local" -- the one
+// validateCLIConnTypeScope's error is actually about -- so the ParseError's
+// caret points at it specifically, not just at the last captured arg.
+// Falls back to the last arg's index if none is found (shouldn't happen for
+// any caller that only invokes this after validateCLIConnTypeScope has
+// already returned an error, but keeps this safe to call standalone too).
+func offendingConnTypeArgIndex(typeElementArgs []string) int {
+	for i, arg := range typeElementArgs {
+		isType, isElement := classifyTintArg(arg)
+		if !isType || isElement {
+			continue
+		}
+		for _, part := range strings.Split(arg, ",") {
+			if strings.TrimSuffix(strings.TrimSpace(part), ":") != "local" {
+				return i
+			}
+		}
+	}
+	return len(typeElementArgs) - 1
 }
 
 // setAnsiElementField applies fn to each of elements' AnsiElementColors, for

@@ -374,8 +374,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 					break
 				}
 			}
-			if len(currentGroup.Args) > 1 {
-				if err := checkCLIConnTypeScope(expandedArgs, cmd, i-1, currentGroup.Args[1:]); err != nil {
+			if typeElementArgs := currentGroup.Args[1:]; len(typeElementArgs) > 0 {
+				if err := checkCLIConnTypeScope(expandedArgs, cmd, i-len(typeElementArgs), typeElementArgs); err != nil {
 					return nil, err
 				}
 			}
@@ -391,8 +391,10 @@ func Parse(args []string) ([]CommandGroup, error) {
 					break
 				}
 			}
-			if err := checkCLIConnTypeScope(expandedArgs, cmd, i-1, currentGroup.Args); err != nil {
-				return nil, err
+			if len(currentGroup.Args) > 0 {
+				if err := checkCLIConnTypeScope(expandedArgs, cmd, i-len(currentGroup.Args), currentGroup.Args); err != nil {
+					return nil, err
+				}
 			}
 
 		case "--tint-list", "--tint-table":
