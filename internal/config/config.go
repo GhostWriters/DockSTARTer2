@@ -259,14 +259,11 @@ type AnsiElementColors struct {
 // each is a plain, self-contained AnsiElementColors, so a fresh install's
 // shipped defaults (or a config migration) is the only place "programbox/
 // cli start out matching menu" is ever decided; once set, an element never
-// implicitly follows another's later changes, and there's no "unset" state
-// to reason about (deliberately -- a pointer-based inherit-until-touched
-// design was tried and dropped: once any CLI command touches an element,
-// even to disable it, there was no way back to "inherit" again, since
-// nothing ever clears the pointer). Set an element's palette via
-// `--tint <ref> [connType-list] [element-list]`, naming "programbox"/"cli"
-// in element-list (see tintElements in internal/commands); an omitted
-// element-list targets every element.
+// implicitly follows another's later changes, and there is no "unset"
+// state for any element to fall back to menu through. Set an element's
+// palette via `--tint <ref> [connType-list] [element-list]`, naming
+// "programbox"/"cli" in element-list (see tintElements in
+// internal/commands); an omitted element-list targets every element.
 type AnsiColors struct {
 	// Tagged "menu" so it nests as its own table ([ansi_palette.web.menu]),
 	// symmetric with ProgramBox/CLI below, rather than sitting inline at
@@ -781,6 +778,75 @@ func migrateAnsiPaletteMenuNesting(data []byte, conf *AppConfig) {
 	migrate(&conf.AnsiColors.Web, legacy.AnsiPalette.Web, false, programBoxOff)
 }
 
+// migrateAnsiPaletteInheritGap closes a gap from a brief released window
+// (v2.20260924.1, commit 3d5f554d) where AnsiColors.ProgramBox/CLI were
+// still *AnsiElementColors (nil meant "inherit menu's palette"), before
+// that pointer/inherit design was replaced with the current plain, always-
+// independent fields (see AnsiColors' own doc comment). A config saved by
+// that release has "menu" present but "programbox"/"cli" genuinely absent
+// from the file for any connType whose menu was never explicitly given a
+// programbox/cli override -- under the released code that absence meant
+// "same as menu"; under the current code it decodes to an empty, untinted
+// zero value instead, since there's no more inherit step at read time.
+// Freezing menu's own current values into the absent slots reproduces
+// exactly what inherit used to render, so upgrading past that release
+// doesn't silently un-tint a programbox/cli that was previously inheriting
+// a real tint from its own menu.
+//
+// Detection is self-describing, no schema-version tracking needed: every
+// config write from this point on always includes all three elements
+// (plain fields, never omitted), so "menu present, programbox/cli keys
+// genuinely missing from the file" can only mean a config last saved by
+// that one released binary (or a hand-edited file choosing to omit them,
+// which gets the same reasonable treatment). A no-op for any other config
+// shape -- older pre-nesting files are handled by
+// migrateAnsiPaletteMenuNesting above, and a config already carrying real
+// programbox/cli tables (from this or a later release) is left untouched.
+func migrateAnsiPaletteInheritGap(data []byte, conf *AppConfig) {
+	var raw struct {
+		AnsiPalette map[string]map[string]any `toml:"ansi_palette"`
+	}
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return
+	}
+	for _, ct := range []string{"local", "ssh", "web"} {
+		section, ok := raw.AnsiPalette[ct]
+		if !ok {
+			continue
+		}
+		if _, hasMenu := section["menu"]; !hasMenu {
+			continue
+		}
+		c := ansiColorsPtrConfig(conf, ct)
+		if c == nil {
+			continue
+		}
+		if _, hasProgramBox := section["programbox"]; !hasProgramBox {
+			c.ProgramBox = c.AnsiElementColors
+		}
+		if _, hasCLI := section["cli"]; !hasCLI {
+			c.CLI = c.AnsiElementColors
+		}
+	}
+}
+
+// ansiColorsPtrConfig returns a pointer to conf's AnsiColors for connType,
+// or nil for an unrecognized connType -- config-package-local counterpart
+// to internal/commands' own ansiColorsPtr (kept separate since neither
+// package imports the other's unexported helpers).
+func ansiColorsPtrConfig(conf *AppConfig, connType string) *AnsiColors {
+	switch connType {
+	case "local":
+		return &conf.AnsiColors.Local
+	case "ssh":
+		return &conf.AnsiColors.SSH
+	case "web":
+		return &conf.AnsiColors.Web
+	default:
+		return nil
+	}
+}
+
 func LoadAppConfig() AppConfig {
 	var conf AppConfig
 	// Start from embedded defaults so every key has a known baseline value.
@@ -851,6 +917,7 @@ func LoadAppConfig() AppConfig {
 				ServerTLSDefaultHook(&conf, present)
 			}
 			migrateAnsiPaletteMenuNesting(data, &conf)
+			migrateAnsiPaletteInheritGap(data, &conf)
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.
