@@ -361,24 +361,30 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		case "--tint":
-			// Both args are optional: no args shows status, <ref> alone means
-			// "all" connection types, and <ref> <types> sets both -- same
-			// "ref" vocabulary as ui.theme ("user:"/"file:"/"embedded:"/
-			// "repo:"/bare-name).
-			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
-				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
-				i++
+			// <ref> plus up to two more args, in any order (see
+			// splitTintTypeElementArgs -- an element arg ends with ":",
+			// a connection-type arg doesn't); either or both may be omitted,
+			// meaning "all". <ref> uses the same vocabulary as ui.theme
+			// ("user:"/"file:"/"embedded:"/"repo:"/bare-name).
+			for range 3 {
 				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 					i++
+				} else {
+					break
 				}
 			}
 
 		case "--theme-tint", "--theme-no-tint", "--theme-ansi-override", "--theme-no-ansi-override":
-			// Connection type is optional here -- omitted means "all".
-			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
-				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
-				i++
+			// Up to two args, in any order (see splitTintTypeElementArgs);
+			// either or both may be omitted, meaning "all".
+			for range 2 {
+				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				} else {
+					break
+				}
 			}
 
 		case "--tint-list", "--tint-table":

@@ -16,16 +16,26 @@ import (
 	"DockSTARTer2/internal/paths"
 )
 
+// tintConnTypes is the vocabulary --tint/--theme-tint/--theme-no-tint/
+// --theme-ansi-override/--theme-no-ansi-override's connection-type argument
+// accepts, used by classifyTintArg to tell a types arg apart from an
+// elements arg (see tintElements) by content rather than shape -- the two
+// vocabularies are small and disjoint, so a bare name unambiguously belongs
+// to one or the other.
+var tintConnTypes = []string{"local", "ssh", "web", "all"}
+
 // parseConnTypeList parses a --tint/--theme-tint/--theme-no-tint command's
 // connection-type argument: "all", a single conn type, or a comma-separated
-// list of them.
+// list of them. A trailing ":" on any part is accepted and stripped (e.g.
+// "local:" same as "local") -- optional, for symmetry with elements (see
+// parseElementList), which also accept but don't require one.
 func parseConnTypeList(s string) ([]string, error) {
-	if s == "all" {
+	if strings.TrimSuffix(s, ":") == "all" {
 		return []string{"local", "ssh", "web"}, nil
 	}
 	var types []string
 	for _, part := range strings.Split(s, ",") {
-		part = strings.TrimSpace(part)
+		part = strings.TrimSuffix(strings.TrimSpace(part), ":")
 		switch part {
 		case "local", "ssh", "web":
 			if !slices.Contains(types, part) {
@@ -52,7 +62,9 @@ func parseOptionalConnTypeList(s string) ([]string, error) {
 }
 
 // setAnsiColorsField applies fn to the AnsiColors for each of connTypes on
-// conf, in place.
+// conf, in place. Used only by commands that always target the "menu"
+// element (--theme-tint/--theme-no-tint); --tint itself (element-aware)
+// uses setAnsiElementField instead.
 func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*config.AnsiColors)) {
 	for _, ct := range connTypes {
 		switch ct {
@@ -66,26 +78,132 @@ func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*con
 	}
 }
 
-// applyTintRef validates data as a base16 scheme, then points
-// ansi_palette.<connType>.tint at ref (e.g. "embedded:ansi", "repo:dracula",
-// "file:/path/to/scheme.yaml") for each of connTypes. Does not touch
-// enabled/disabled -- --tint only picks which scheme is configured, not
-// whether it's applied; use --theme-tint/--theme-no-tint for that.
-func applyTintRef(ctx context.Context, connTypes []string, data []byte, ref, source string) error {
+// tintElements is the vocabulary --tint's own optional element-list argument
+// accepts -- "menu" (DS2's own menus/dialogs/panels, a connType's implicit
+// element), "programbox" (streamed command output), "cli" (a bare,
+// non-interactive invocation -- only ever consulted for "local", see
+// config.AnsiColors' CLI field doc comment). No "all" keyword: an omitted
+// element-list already means every element (see parseOptionalElementList),
+// so one would only be redundant.
+var tintElements = []string{"menu", "programbox", "cli"}
+
+// parseElementList parses --tint's optional element-list argument: a single
+// element name or a comma-separated list of them (see tintElements). A
+// trailing ":" on any part is accepted and stripped (e.g. "menu:" same as
+// "menu") -- optional, not required: classifyTintArg tells an element arg
+// apart from a connection-type arg by content (the two vocabularies are
+// disjoint), not by requiring one to be colon-suffixed and the other not.
+func parseElementList(s string) ([]string, error) {
+	var elements []string
+	for _, part := range strings.Split(s, ",") {
+		name := strings.TrimSuffix(strings.TrimSpace(part), ":")
+		if !slices.Contains(tintElements, name) {
+			return nil, fmt.Errorf("unknown element %q (valid: %s, or a comma-separated list)", part, strings.Join(tintElements, ", "))
+		}
+		if !slices.Contains(elements, name) {
+			elements = append(elements, name)
+		}
+	}
+	if len(elements) == 0 {
+		return nil, fmt.Errorf("no element given (valid: %s, or a comma-separated list)", strings.Join(tintElements, ", "))
+	}
+	return elements, nil
+}
+
+// parseOptionalElementList is parseElementList, but an empty string (the
+// argument wasn't given at all) means every element in tintElements.
+func parseOptionalElementList(s string) ([]string, error) {
+	if s == "" {
+		return tintElements, nil
+	}
+	return parseElementList(s)
+}
+
+// classifyTintArg reports whether s (one whole --tint/--theme-tint/
+// --theme-no-tint/--theme-ansi-override/--theme-no-ansi-override arg, e.g.
+// "local,ssh" or "menu:,cli") parses entirely as connection-type names
+// (isType) and/or entirely as element names (isElement) -- each comma part
+// checked against tintConnTypes/tintElements with an optional trailing ":"
+// stripped first (see parseConnTypeList/parseElementList), so "local:" and
+// "local" both count as a type. tintConnTypes and tintElements share no
+// names, so a valid arg is never both; an arg matching neither is neither
+// (left for parseConnTypeList/parseElementList's own error to name it).
+func classifyTintArg(s string) (isType, isElement bool) {
+	parts := strings.Split(s, ",")
+	if len(parts) == 0 {
+		return false, false
+	}
+	isType, isElement = true, true
+	for _, part := range parts {
+		name := strings.TrimSuffix(strings.TrimSpace(part), ":")
+		if !slices.Contains(tintConnTypes, name) {
+			isType = false
+		}
+		if !slices.Contains(tintElements, name) {
+			isElement = false
+		}
+	}
+	return isType, isElement
+}
+
+// splitTintTypeElementArgs sorts args (--tint's trailing args, or
+// --theme-tint/--theme-no-tint/--theme-ansi-override/
+// --theme-no-ansi-override's only args) into (typesArg, elementsArg), in any
+// order -- classifyTintArg tells them apart by content. An arg recognized as
+// an element but not a type goes to elementsArg; everything else (a type, or
+// anything unrecognized, whose error parseConnTypeList/parseElementList will
+// report) goes to typesArg, same bucket an unrecognized arg landed in before
+// elements existed.
+func splitTintTypeElementArgs(args []string) (typesArg, elementsArg string) {
+	var typeParts, elementParts []string
+	for _, arg := range args {
+		if arg == "" {
+			continue
+		}
+		isType, isElement := classifyTintArg(arg)
+		if isElement && !isType {
+			elementParts = append(elementParts, arg)
+		} else {
+			typeParts = append(typeParts, arg)
+		}
+	}
+	return strings.Join(typeParts, ","), strings.Join(elementParts, ",")
+}
+
+// setAnsiElementField applies fn to each of elements' AnsiElementColors, for
+// each of connTypes on conf, in place (see config.AnsiColors.ElementPtr).
+func setAnsiElementField(conf *config.AppConfig, connTypes, elements []string, fn func(*config.AnsiElementColors)) {
+	setAnsiColorsField(conf, connTypes, func(c *config.AnsiColors) {
+		for _, element := range elements {
+			fn(c.ElementPtr(element))
+		}
+	})
+}
+
+// applyTintRef validates data as a base16 scheme, then points each of
+// elements' tint (e.g. "embedded:ansi", "repo:dracula",
+// "file:/path/to/scheme.yaml") at ref, for each of connTypes. Also sets
+// TintEnabled -- unlike the "menu" element (whose TintEnabled already
+// defaults true, toggled independently via --theme-tint/--theme-no-tint), a
+// freshly-created "programbox"/"cli" override starts disabled (see
+// config.AnsiColors.ElementPtr), so a scheme set here would otherwise never
+// actually render.
+func applyTintRef(ctx context.Context, connTypes, elements []string, data []byte, ref, source string) error {
 	if _, err := config.ParseBase16Scheme(data); err != nil {
 		return fmt.Errorf("%s does not look like a valid base16 scheme: %w", source, err)
 	}
 
 	conf := config.LoadAppConfig()
-	setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
-		c.Tint = ref
+	setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+		e.Tint = ref
+		e.TintEnabled = true
 	})
 	if err := config.SaveAppConfig(conf); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
 	logger.Notice(ctx, "Applied %s color palette:", tintedThemingLink())
-	logger.Notice(ctx, "\t{{|Var|}}%s:{{[-]}}", strings.Join(connTypes, ", "))
+	logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
 	printTintDetails(ctx, ref, "\t\t")
 	return nil
 }
@@ -780,18 +898,22 @@ func HandleTintTable(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-// HandleThemeTintOnOff implements --theme-tint [types] and --theme-no-tint
-// [types], toggling whether an already-configured tint (Tint) is
-// applied, without discarding it. Does not affect any --ansi-override
-// values, which are a separate mechanism (see HandleThemeAnsiOverrideOnOff
-// for their own on/off switch). types is optional on both -- omitted means
-// "all".
+// HandleThemeTintOnOff implements --theme-tint [types] [elements] and
+// --theme-no-tint [types] [elements], toggling whether an element's
+// already-configured tint (Tint) is applied, without discarding it. Does
+// not affect any --ansi-override values, which are a separate mechanism
+// (see HandleThemeAnsiOverrideOnOff for their own on/off switch). types and
+// elements are both optional, in either order (see
+// splitTintTypeElementArgs) -- omitted means "all" for each (see
+// tintElements for the element vocabulary).
 func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
-	typesArg := ""
-	if len(group.Args) > 0 {
-		typesArg = group.Args[0]
-	}
+	typesArg, elementsArg := splitTintTypeElementArgs(group.Args)
 	connTypes, err := parseOptionalConnTypeList(typesArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	elements, err := parseOptionalElementList(elementsArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
@@ -800,8 +922,8 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 	enabled := group.Command == "--theme-tint"
 
 	conf := config.LoadAppConfig()
-	setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
-		c.TintEnabled = enabled
+	setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+		e.TintEnabled = enabled
 	})
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save tint setting: %v", err)
@@ -809,57 +931,9 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 	}
 
 	if enabled {
-		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
 	} else {
-		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
-	}
-	return nil
-}
-
-// HandleThemeCLITintOnOff implements --theme-cli-tint and
-// --theme-no-cli-tint, toggling whether a bare, non-interactive CLI
-// invocation also renders with local's tint (config.AnsiPaletteConfig.
-// ApplyToCLI), in addition to the interactive local TUI (which always
-// does). Takes no connType argument -- a bare CLI invocation is always
-// local (see cmd.Execute's only caller, main.go).
-func HandleThemeCLITintOnOff(ctx context.Context, group *CommandGroup) error {
-	enabled := group.Command == "--theme-cli-tint"
-
-	conf := config.LoadAppConfig()
-	conf.AnsiColors.ApplyToCLI = enabled
-	if err := config.SaveAppConfig(conf); err != nil {
-		logger.Error(ctx, "Failed to save CLI tint setting: %v", err)
-		return err
-	}
-
-	if enabled {
-		logger.Notice(ctx, "ANSI palette tint enabled for non-interactive CLI output.")
-	} else {
-		logger.Notice(ctx, "ANSI palette tint disabled for non-interactive CLI output (the interactive TUI is unaffected).")
-	}
-	return nil
-}
-
-// HandleThemeProgramBoxTintOnOff implements --theme-programbox-tint and
-// --theme-no-programbox-tint, toggling whether a ProgramBox dialog's
-// streamed command output renders with the session's tint
-// (config.AnsiPaletteConfig.ApplyToProgramBox) or with the terminal's own
-// native palette instead. Takes no connType argument -- it affects every
-// connType's ProgramBox dialogs the same way.
-func HandleThemeProgramBoxTintOnOff(ctx context.Context, group *CommandGroup) error {
-	enabled := group.Command == "--theme-programbox-tint"
-
-	conf := config.LoadAppConfig()
-	conf.AnsiColors.ApplyToProgramBox = enabled
-	if err := config.SaveAppConfig(conf); err != nil {
-		logger.Error(ctx, "Failed to save ProgramBox tint setting: %v", err)
-		return err
-	}
-
-	if enabled {
-		logger.Notice(ctx, "ANSI palette tint enabled for ProgramBox output.")
-	} else {
-		logger.Notice(ctx, "ANSI palette tint disabled for ProgramBox output (it will render with the terminal's own palette).")
+		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
 	}
 	return nil
 }
@@ -977,23 +1051,31 @@ func formatTintRefSource(ctx context.Context, ref string) string {
 // --ansi-override -- a separate mechanism from the tint (see
 // HandleAnsiOverride/HandleThemeAnsiOverrideOnOff), shown here too since
 // together they determine what actually renders for that connType. <ref>
-// [types] sets the tint instead -- see config.AnsiColors.Tint's doc comment
-// for the "file:"/"user:"/"embedded:"/"repo:" reference syntax (a bare name
-// means "repo:<name>"); types is optional, omitted means "all". <ref>
-// "" (an explicitly empty argument) or "none:" clears the tint instead of
-// setting one -- not bare "none" (no colon), which stays a valid, if
-// unlikely, "repo:none" scheme name instead of being reserved as a keyword.
+// [types] [elements] sets the tint instead, in either order (see
+// splitTintTypeElementArgs -- an element arg ends with ":", e.g.
+// "programbox:", telling it apart from a types arg regardless of position)
+// -- see config.AnsiColors.Tint's doc comment for the "file:"/"user:"/
+// "embedded:"/"repo:" reference syntax (a bare name means "repo:<name>");
+// types is optional, omitted means "all". elements is optional too (see
+// tintElements), omitted means every element -- so a bare "--tint <ref>"
+// sets every connType's every element.
+// <ref> "" (an explicitly empty argument) or "none:" clears the tint
+// instead of setting one -- not bare "none" (no colon), which stays a
+// valid, if unlikely, "repo:none" scheme name instead of being reserved as
+// a keyword.
 func HandleTint(ctx context.Context, group *CommandGroup) error {
 	if len(group.Args) == 0 {
 		return handleTintStatus(ctx)
 	}
 
 	arg := group.Args[0]
-	typesArg := ""
-	if len(group.Args) > 1 {
-		typesArg = group.Args[1]
-	}
+	typesArg, elementsArg := splitTintTypeElementArgs(group.Args[1:])
 	connTypes, err := parseOptionalConnTypeList(typesArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	elements, err := parseOptionalElementList(elementsArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
@@ -1001,14 +1083,14 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 
 	if arg == "" || arg == "none:" {
 		conf := config.LoadAppConfig()
-		setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
-			c.Tint = ""
+		setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+			e.Tint = ""
 		})
 		if err := config.SaveAppConfig(conf); err != nil {
 			logger.Error(ctx, "Failed to save tint setting: %v", err)
 			return err
 		}
-		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
 		return nil
 	}
 
@@ -1017,9 +1099,15 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 		logger.Error(ctx, "%v", err)
 		return err
 	}
-	return applyTintRef(ctx, connTypes, data, ref, desc)
+	return applyTintRef(ctx, connTypes, elements, data, ref, desc)
 }
 
+// handleTintStatus prints each connType's per-element tint/override state.
+// "menu" is always shown (a connType's implicit element, never unset).
+// "programbox"/"cli" are shown only when they carry their own override --
+// otherwise they render identically to menu (see config.AnsiColors.Element),
+// and a line saying so for every connType would be mostly noise; their
+// absence here already means "same as menu, see above".
 func handleTintStatus(ctx context.Context) error {
 	conf := config.LoadAppConfig()
 	rows := []struct {
@@ -1031,28 +1119,41 @@ func handleTintStatus(ctx context.Context) error {
 		{"web", conf.AnsiColors.Web},
 	}
 	for _, row := range rows {
-		state := formatEnabledState(row.c.TintEnabled)
-		overrideState := formatEnabledState(row.c.OverrideEnabled)
-		var overrides []string
-		for _, slot := range ansiColorSlotNames {
-			if v := *ansiColorSlotField(&row.c, slot); v != "" {
-				overrides = append(overrides, slot+"="+v)
-			}
-		}
-		overridesDesc := "(none set)"
-		if len(overrides) > 0 {
-			overridesDesc = strings.Join(overrides, ", ")
-		}
-
 		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
-		logger.Notice(ctx, "\tTint (%s):", state)
-		if row.c.Tint == "" {
-			logger.Notice(ctx, "\t\t{{|Var|}}(none){{[-]}}")
-		} else {
-			printTintDetails(ctx, row.c.Tint, "\t\t")
+		printTintElementStatus(ctx, "menu", row.c.AnsiElementColors)
+		if row.c.ProgramBox != nil {
+			printTintElementStatus(ctx, "programbox", *row.c.ProgramBox)
 		}
-		logger.Notice(ctx, "\tOverrides (%s):", overrideState)
-		logger.Notice(ctx, "\t\t{{|Var|}}%s{{[-]}}", overridesDesc)
+		if row.c.CLI != nil {
+			printTintElementStatus(ctx, "cli", *row.c.CLI)
+		}
 	}
 	return nil
+}
+
+// printTintElementStatus prints one element's tint/override state -- see
+// handleTintStatus.
+func printTintElementStatus(ctx context.Context, element string, e config.AnsiElementColors) {
+	state := formatEnabledState(e.TintEnabled)
+	overrideState := formatEnabledState(e.OverrideEnabled)
+	var overrides []string
+	for _, slot := range ansiColorSlotNames {
+		if v := *ansiColorSlotField(&config.AnsiColors{AnsiElementColors: e}, slot); v != "" {
+			overrides = append(overrides, slot+"="+v)
+		}
+	}
+	overridesDesc := "(none set)"
+	if len(overrides) > 0 {
+		overridesDesc = strings.Join(overrides, ", ")
+	}
+
+	logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}}:", element)
+	logger.Notice(ctx, "\t\tTint (%s):", state)
+	if e.Tint == "" {
+		logger.Notice(ctx, "\t\t\t{{|Var|}}(none){{[-]}}")
+	} else {
+		printTintDetails(ctx, e.Tint, "\t\t\t")
+	}
+	logger.Notice(ctx, "\t\tOverrides (%s):", overrideState)
+	logger.Notice(ctx, "\t\t\t{{|Var|}}%s{{[-]}}", overridesDesc)
 }

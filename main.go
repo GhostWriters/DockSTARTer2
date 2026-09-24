@@ -339,12 +339,12 @@ func run() (exitCode int) {
 	// baseline to compare against, even after a manual binary replacement.
 	sessionlocks.Sessions.SeedInstalledVersion(exePath, version.Version)
 
-	// Activate local's tint (if configured and AnsiPaletteConfig.ApplyToCLI)
-	// for the pre-flight checks below (update/status warnings) -- this scope
-	// ends before cmd.Execute is called; Execute manages its own activation
-	// from there, re-checked fresh per command group (see its doc comment),
-	// since a --theme-cli-tint command run as one of those groups must not
-	// have to wait for a separate invocation to take effect.
+	// Activate local's "cli" element tint for the pre-flight checks below
+	// (update/status warnings) -- this scope ends before cmd.Execute is
+	// called; Execute manages its own activation from there, re-checked
+	// fresh per command group (see its doc comment), since a --tint command
+	// targeting "cli" run as one of those groups must not have to wait for a
+	// separate invocation to take effect.
 	// A begin/restore pair rather than one wrapping closure (see
 	// tui.BeginTintFor's doc comment) since this span has early returns
 	// scattered through it (setcap re-exec, fatal template-clone errors)
@@ -364,14 +364,12 @@ func run() (exitCode int) {
 		}
 	}
 	defer endCLITintScope()
-	if cliConf := config.LoadAppConfig(); cliConf.AnsiColors.ApplyToCLI {
-		// Activate first, then register: the console logger's
-		// [LEVEL]/timestamp styles are rebuilt fresh on every "ansi" log
-		// line (see TagProcessorHandler.Handle), which only reflects the
-		// correct tint if the key is already the active one by then.
-		restoreTint = tui.BeginTintFor("local")
-		tui.RegisterConnTypeTints(ctx, "local", cliConf.AnsiColors.Local)
-	}
+	// Activate first, then register: the console logger's
+	// [LEVEL]/timestamp styles are rebuilt fresh on every "ansi" log line
+	// (see TagProcessorHandler.Handle), which only reflects the correct tint
+	// if the key is already the active one by then.
+	restoreTint = tui.BeginTintForElement("local", "cli")
+	tui.RegisterConnTypeTints(ctx, "local", config.LoadAppConfig().AnsiColors.Local)
 
 	stopStartupSpinner := console.StartSpinner()
 

@@ -151,40 +151,19 @@ type WebConfig struct {
 // Each of Local/SSH/Web is independently optional and empty by default --
 // this never touches a user's own terminal color scheme unless configured.
 type AnsiPaletteConfig struct {
-	// ApplyToCLI controls whether a bare, non-interactive CLI invocation
-	// (e.g. `ds2 --tint`) also renders with Local's tint, in addition to
-	// the interactive local TUI (which always does) -- set via
-	// --theme-cli-tint, cleared via --theme-no-cli-tint. Only relevant to
-	// Local: a bare CLI invocation is always a local shell process (see
-	// cmd.Execute's only caller, main.go), never reachable over SSH or
-	// web. Defaults true (the embedded default config sets it) so CLI
-	// output matches the TUI unless explicitly turned off -- e.g. for a
-	// user who wants the polished look interactively but plain,
-	// script/log-friendly output from one-shot commands.
-	ApplyToCLI bool `toml:"apply_to_cli"`
-
-	// ApplyToProgramBox controls whether a ProgramBox dialog's streamed
-	// command output (e.g. `docker compose up` progress) renders with the
-	// session's tint -- set via --theme-programbox-tint, cleared via
-	// --theme-no-programbox-tint. Independent of ApplyToCLI: this is about
-	// output streamed into a TUI dialog, which happens for local, SSH, and
-	// web sessions alike, not just a bare local CLI invocation. Off gives
-	// the two options a user might want: ProgramBox output tinted to match
-	// the rest of the (tinted) TUI, or left rendering with the terminal's
-	// own native palette like a plain command run directly would. Defaults
-	// true (the embedded default config sets it).
-	ApplyToProgramBox bool `toml:"apply_to_programbox"`
-
 	Local AnsiColors `toml:"local"`
 	SSH   AnsiColors `toml:"ssh"`
 	Web   AnsiColors `toml:"web"`
 }
 
-// AnsiColors holds the 16 standard ANSI palette slots. Each field accepts
-// anything semstyle.ToColor understands: a hex value ("#ffffff"), one of
-// the 16 ANSI names, or any broader color name tcell resolves (e.g.
-// "grey"). Empty leaves that slot at the terminal's own default.
-type AnsiColors struct {
+// AnsiElementColors holds one UI element's resolved ANSI palette state --
+// the 16 standard ANSI slots plus base16/base24's 8 extra slots. Each
+// field accepts anything semstyle.ToColor understands: a hex value
+// ("#ffffff"), one of the 16 ANSI names, or any broader color name tcell
+// resolves (e.g. "grey"). Empty leaves that slot at the terminal's own
+// default. See AnsiColors for how an element's own palette relates to its
+// connType's other elements.
+type AnsiElementColors struct {
 	// TintEnabled turns applying Tint on or off without discarding it --
 	// set via --theme-tint, cleared via --theme-no-tint. Independent of
 	// OverrideEnabled/the 16 explicit fields below. The embedded default
@@ -272,6 +251,81 @@ type AnsiColors struct {
 	Base11 string `toml:"base11"`
 }
 
+// AnsiColors holds one connType's ("local"/"ssh"/"web") full ANSI tint
+// configuration: AnsiElementColors, embedded, is the "menu" element --
+// DS2's own menus, dialogs, and panels -- always present. ProgramBox and
+// CLI are two further elements, each independently optional: nil means
+// that element inherits menu's palette exactly; set means that element
+// renders with its own, unrelated palette instead. Set an element's
+// palette via `--tint <ref> [connType-list] [element-list]`, naming
+// "programbox"/"cli" in element-list (see tintElements in
+// internal/commands); an omitted element-list targets every element.
+type AnsiColors struct {
+	// Tagged "menu" so it nests as its own table ([ansi_palette.web.menu]),
+	// symmetric with ProgramBox/CLI below, rather than sitting inline at
+	// [ansi_palette.web] -- embedding still promotes its fields for Go code
+	// (c.TintEnabled, &c.Base00, etc., used throughout --ansi-override/
+	// --theme-tint), unaffected by the tag, which only controls the TOML
+	// table name.
+	AnsiElementColors `toml:"menu"`
+
+	// ProgramBox is a streamed command dialog's own palette (e.g. `docker
+	// compose up` progress in a ProgramBox) -- independent of menu's, so a
+	// user can have the menu system tinted while command output renders
+	// with the terminal's own native palette, or the reverse.
+	ProgramBox *AnsiElementColors `toml:"programbox,omitempty"`
+
+	// CLI is a bare, non-interactive invocation's own palette (e.g. `ds2
+	// --tint` run directly from a shell, not through the interactive
+	// TUI). Only ever consulted for "local" -- a bare CLI invocation is
+	// always a local shell process (see cmd.Execute's only caller,
+	// main.go), never reachable over SSH or web -- but kept on SSH/Web
+	// too so all three connTypes share one struct shape.
+	CLI *AnsiElementColors `toml:"cli,omitempty"`
+}
+
+// Element returns element's own resolved palette -- its override if one is
+// set, else menu's. "menu", "", and any name Element doesn't recognize all
+// return menu's. See ElementPtr to target a specific element for writing.
+func (c AnsiColors) Element(element string) AnsiElementColors {
+	switch element {
+	case "programbox":
+		if c.ProgramBox != nil {
+			return *c.ProgramBox
+		}
+	case "cli":
+		if c.CLI != nil {
+			return *c.CLI
+		}
+	}
+	return c.AnsiElementColors
+}
+
+// ElementPtr returns a pointer to element's own fields, for writing.
+// "menu"/"" (and anything ElementPtr doesn't recognize) returns
+// &c.AnsiElementColors directly; "programbox"/"cli" allocate that
+// element's override (a blank AnsiElementColors -- not a copy of menu's
+// current state, so a freshly-created override starts out rendering with
+// the terminal's own native palette, same as menu itself would with
+// nothing configured) the first time it's targeted, then return that same
+// override on every later call.
+func (c *AnsiColors) ElementPtr(element string) *AnsiElementColors {
+	switch element {
+	case "programbox":
+		if c.ProgramBox == nil {
+			c.ProgramBox = &AnsiElementColors{}
+		}
+		return c.ProgramBox
+	case "cli":
+		if c.CLI == nil {
+			c.CLI = &AnsiElementColors{}
+		}
+		return c.CLI
+	default:
+		return &c.AnsiElementColors
+	}
+}
+
 // ForConnType returns the palette override for connType ("local", "ssh", or
 // "web"), or a zero-value AnsiColors (no overrides) for anything else.
 func (c AnsiPaletteConfig) ForConnType(connType string) AnsiColors {
@@ -289,7 +343,7 @@ func (c AnsiPaletteConfig) ForConnType(connType string) AnsiColors {
 
 // Slots returns the palette's 16 entries in ANSI index order (0-15), paired
 // with their configured override value (possibly empty).
-func (c AnsiColors) Slots() [16]string {
+func (c AnsiElementColors) Slots() [16]string {
 	return [16]string{
 		c.Base00, c.Base08, c.Base0B, c.Base0A,
 		c.Base0D, c.Base0E, c.Base0C, c.Base05,
@@ -301,14 +355,14 @@ func (c AnsiColors) Slots() [16]string {
 // WithDefaults returns c with any empty slot filled from fallback (e.g. a
 // Tint-derived palette), leaving every slot c sets explicitly untouched --
 // an explicit value always wins over a scheme's.
-func (c AnsiColors) WithDefaults(fallback AnsiColors) AnsiColors {
+func (c AnsiElementColors) WithDefaults(fallback AnsiElementColors) AnsiElementColors {
 	fill := func(v, d string) string {
 		if v == "" {
 			return d
 		}
 		return v
 	}
-	return AnsiColors{
+	return AnsiElementColors{
 		Base00: fill(c.Base00, fallback.Base00),
 		Base08: fill(c.Base08, fallback.Base08),
 		Base0B: fill(c.Base0B, fallback.Base0B),
@@ -671,6 +725,59 @@ func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Prin
 	return true
 }
 
+// migrateAnsiPaletteMenuNesting moves a pre-nesting config file's flat
+// ansi_palette.<connType> tint/color fields (tint_enabled, override_enabled,
+// tint, base00, ...) into that connType's new "menu" table (see AnsiColors'
+// own doc comment) -- the normal typed decode silently drops them, since
+// they have no matching field at that path anymore, leaving
+// conf.AnsiColors.<ConnType>.AnsiElementColors at the embedded baseline
+// instead of the file's own values. Also converts the removed
+// apply_to_cli/apply_to_programbox booleans into an explicit disabled
+// override for the affected element(s) when previously set false -- nil,
+// the new default, would otherwise mean "inherit menu", wrongly
+// re-enabling tinting for an element a user had turned off.
+//
+// A no-op for a file that already has a "menu" table: reading data a
+// second time into a struct shaped like the pre-nesting file (flat
+// AnsiElementColors fields directly under ansi_palette.<connType>) leaves
+// every field zero-valued for such a file, since its actual values sit one
+// level deeper, under .menu -- correctly caught by the zero-value check
+// below, so this only ever migrates something for a file saved before
+// menu/programbox/cli elements existed.
+func migrateAnsiPaletteMenuNesting(data []byte, conf *AppConfig) {
+	var legacy struct {
+		AnsiPalette struct {
+			Local             AnsiElementColors `toml:"local"`
+			SSH               AnsiElementColors `toml:"ssh"`
+			Web               AnsiElementColors `toml:"web"`
+			ApplyToCLI        *bool             `toml:"apply_to_cli"`
+			ApplyToProgramBox *bool             `toml:"apply_to_programbox"`
+		} `toml:"ansi_palette"`
+	}
+	if err := toml.Unmarshal(data, &legacy); err != nil {
+		return
+	}
+
+	var zero AnsiElementColors
+	migrate := func(dst *AnsiColors, src AnsiElementColors) {
+		if src != zero {
+			dst.AnsiElementColors = src
+		}
+	}
+	migrate(&conf.AnsiColors.Local, legacy.AnsiPalette.Local)
+	migrate(&conf.AnsiColors.SSH, legacy.AnsiPalette.SSH)
+	migrate(&conf.AnsiColors.Web, legacy.AnsiPalette.Web)
+
+	if legacy.AnsiPalette.ApplyToCLI != nil && !*legacy.AnsiPalette.ApplyToCLI {
+		conf.AnsiColors.Local.CLI = &AnsiElementColors{}
+	}
+	if legacy.AnsiPalette.ApplyToProgramBox != nil && !*legacy.AnsiPalette.ApplyToProgramBox {
+		conf.AnsiColors.Local.ProgramBox = &AnsiElementColors{}
+		conf.AnsiColors.SSH.ProgramBox = &AnsiElementColors{}
+		conf.AnsiColors.Web.ProgramBox = &AnsiElementColors{}
+	}
+}
+
 func LoadAppConfig() AppConfig {
 	var conf AppConfig
 	// Start from embedded defaults so every key has a known baseline value.
@@ -740,6 +847,7 @@ func LoadAppConfig() AppConfig {
 			if ServerTLSDefaultHook != nil {
 				ServerTLSDefaultHook(&conf, present)
 			}
+			migrateAnsiPaletteMenuNesting(data, &conf)
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.

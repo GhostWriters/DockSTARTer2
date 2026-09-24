@@ -44,14 +44,13 @@ var commandDefs = commands.Registry
 // It handles flag application, command switching, and state resetting.
 //
 // The pre-flight checks (update/status warnings) that run before this is
-// called activate/release local's tint on their own, further up in main.go's
-// run() (if AnsiPaletteConfig.ApplyToCLI); that scope ends before Execute
-// starts. Execute manages its own activation from there, independently,
-// re-checking ApplyToCLI fresh at the top of every group (see the loop
-// below) -- a --theme-cli-tint/--theme-no-cli-tint command run as one group
-// in this same invocation must be reflected starting with ITS OWN
-// confirmation message and every later group, not just on the next separate
-// invocation.
+// called activate/release local's "cli" element tint on their own, further
+// up in main.go's run(); that scope ends before Execute starts. Execute
+// manages its own activation from there, independently, re-registering
+// fresh at the top of every group (see the loop below) -- a --tint command
+// targeting the "cli" element, run as one group in this same invocation,
+// must be reflected starting with ITS OWN confirmation message and every
+// later group, not just on the next separate invocation.
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
 	tui.RegisterConnTypeTints(ctx, "local", conf.AnsiColors.ForConnType("local"))
@@ -85,7 +84,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks",
 			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-extract", "--theme-extract-all", "--tint", "--tint-list", "--tint-table", "--theme-tint", "--theme-no-tint", "--theme-cli-tint", "--theme-no-cli-tint", "--theme-programbox-tint", "--theme-no-programbox-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
+			"--theme-extract", "--theme-extract-all", "--tint", "--tint-list", "--tint-table", "--theme-tint", "--theme-no-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
 			"--env-appfiles":
 			// Skip validation for meta/config commands
 		default:
@@ -114,10 +113,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		freshAnsiColors := config.LoadAppConfig().AnsiColors
 		tui.RegisterConnTypeTints(ctx, "local", freshAnsiColors.ForConnType("local"))
 
-		// Same reasoning, for the ApplyToCLI on/off switch itself: a
-		// --theme-cli-tint/--theme-no-cli-tint group earlier in this same
-		// invocation must take effect starting with its own confirmation
-		// message, not just on the next separate invocation.
+		// Same reasoning, for the "cli" element's own activation: a --tint
+		// group earlier in this same invocation targeting "cli" must take
+		// effect starting with its own confirmation message, not just on the
+		// next separate invocation.
 		//
 		// Skipped whenever this group's task() runs its own Bubble Tea
 		// Program -- p.Run()'s Update/View loop calls
@@ -153,19 +152,14 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}[commands.BaseCommand(group.Command)]
 		if launchesOwnProgram {
 			// Release rather than leave held -- an earlier group in this
-			// same invocation (e.g. --theme-cli-tint --server-daemon) may
+			// same invocation (e.g. --tint ... cli: --server-daemon) may
 			// have already acquired it.
 			if cliTintRestore != nil {
 				cliTintRestore()
 				cliTintRestore = nil
 			}
-		} else if freshAnsiColors.ApplyToCLI {
-			if cliTintRestore == nil {
-				cliTintRestore = tui.BeginTintFor("local")
-			}
-		} else if cliTintRestore != nil {
-			cliTintRestore()
-			cliTintRestore = nil
+		} else if cliTintRestore == nil {
+			cliTintRestore = tui.BeginTintForElement("local", "cli")
 		}
 
 		// Reset global state for this command set
@@ -399,12 +393,6 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--theme-tint", "--theme-no-tint":
 				ranCommand = true
 				return commands.HandleThemeTintOnOff(subCtx, &group)
-			case "--theme-cli-tint", "--theme-no-cli-tint":
-				ranCommand = true
-				return commands.HandleThemeCLITintOnOff(subCtx, &group)
-			case "--theme-programbox-tint", "--theme-no-programbox-tint":
-				ranCommand = true
-				return commands.HandleThemeProgramBoxTintOnOff(subCtx, &group)
 			case "--ansi-override":
 				ranCommand = true
 				return commands.HandleAnsiOverride(subCtx, &group)

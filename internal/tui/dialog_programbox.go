@@ -199,20 +199,14 @@ func (m *ProgramBoxModel) okButtons() []displayengine.ButtonDef {
 }
 
 // pbRenderFn returns the render function used by streamvp for the program
-// box. Renders untinted (see DeactivateTint) when
-// config.AnsiPaletteConfig.ApplyToProgramBox is off, so the streamed
-// command output looks like the terminal's own native palette instead of
-// the session's tint, even while nested inside an otherwise-tinted render
-// pass.
+// box. Renders under the "programbox" element's own tint (see
+// ActivateTintForElement) -- its own palette if the active session
+// configured one, else it inherits the session's menu tint unchanged.
 func pbRenderFn() func(string) string {
 	styles := displayengine.GetStyles()
-	applyTint := displayengine.CurrentConfig().AnsiColors.ApplyToProgramBox
 	return func(raw string) string {
-		if applyTint {
-			return displayengine.RenderConsoleText(raw, styles.Console)
-		}
 		var rendered string
-		DeactivateTint(func() {
+		ActivateTintForElement("programbox", func() {
 			rendered = displayengine.RenderConsoleText(raw, styles.Console)
 		})
 		return rendered

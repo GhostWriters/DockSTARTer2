@@ -30,34 +30,57 @@ func tintKeyForConnType(connType string) string {
 	return console.TintKeyForConnType(connType)
 }
 
-// RegisterConnTypeTints resolves colors for connType and registers it under
-// that connType's own semstyle tint key (see tintKeyForConnType).
+// ansiElements is every element a connType's tint can be independently set
+// for -- "menu" (registered under connType's own key, see
+// tintKeyForConnType) is the base/implicit element; "programbox"/"cli" each
+// register under their own suffixed key too (see
+// console.TintKeyForConnTypeElement and RegisterConnTypeTints), resolving to
+// menu's own palette when they carry no override of their own.
+var ansiElements = []string{"menu", "programbox", "cli"}
+
+// RegisterConnTypeTints resolves colors for connType and registers each of
+// its elements (see ansiElements) under that element's own semstyle tint
+// key (see console.TintKeyForConnTypeElement) -- always all three, even
+// when programbox/cli carry no override of their own, so BeginTintForElement
+// (which activates a specific element's key directly, with no "fall back to
+// whatever's currently active" step the way ActivateTintForElement has) has
+// a real registration to find; colors.Element already resolves an
+// unoverridden element to menu's own palette, so an unoverridden element
+// simply re-registers that identical palette under its own key.
 // Re-resolves and re-registers on every call (each new session's Init(),
 // typically, or a bare CLI invocation's Execute) so a config change (e.g.
-// via --theme-tint/--ansi-override) takes effect for the next
-// session/invocation, same as before this connType-scoped tint mechanism
-// existed. Does not activate the tint; see ActivateTintFor for that.
+// via --theme-tint/--ansi-override/--tint) takes effect for the next
+// session/invocation. Does not activate any tint; see ActivateTintFor/
+// ActivateTintForElement/BeginTintForElement for that.
+func RegisterConnTypeTints(ctx context.Context, connType string, colors config.AnsiColors) {
+	for _, element := range ansiElements {
+		registerElementTint(ctx, connType, element, colors.Element(element))
+	}
+}
+
+// registerElementTint resolves and registers one element's own palette --
+// see RegisterConnTypeTints, which this factors the per-element work out of.
 //
-// colors.TintEnabled and colors.OverrideEnabled (see their doc comments)
+// element.TintEnabled and element.OverrideEnabled (see their doc comments)
 // independently gate the SchemeFile-derived part and the 16 explicit
 // fields, respectively -- either can be on/off regardless of the other, so
 // e.g. disabling the tint (--theme-no-tint) never affects an override
 // (--ansi-override), and vice versa.
 //
 // This replaces the standard ANSI SGR codes a theme's named colors compile
-// to with the literal RGB values colors resolves to, at the point semstyle
+// to with the literal RGB values element resolves to, at the point semstyle
 // converts color names to escape codes -- rather than sending the
 // connecting terminal a palette override, since not every terminal honors
 // one.
-func RegisterConnTypeTints(ctx context.Context, connType string, colors config.AnsiColors) {
-	key := tintKeyForConnType(connType)
-	if !colors.OverrideEnabled {
-		colors = withoutExplicitFields(colors)
+func registerElementTint(ctx context.Context, connType, elementName string, element config.AnsiElementColors) {
+	key := console.TintKeyForConnTypeElement(connType, elementName)
+	if !element.OverrideEnabled {
+		element = withoutExplicitFields(element)
 	}
-	if colors.TintEnabled {
-		colors = resolveAnsiColors(ctx, colors)
+	if element.TintEnabled {
+		element = resolveAnsiColors(ctx, element)
 	}
-	palette, empty := colorsToPalette(colors)
+	palette, empty := colorsToPalette(element)
 	if empty {
 		semstyle.UnregisterTint(key)
 	} else {
@@ -66,14 +89,14 @@ func RegisterConnTypeTints(ctx context.Context, connType string, colors config.A
 	theme.ClearSemanticCache()
 }
 
-// withoutExplicitFields returns colors with its 16 explicit color fields
+// withoutExplicitFields returns element with its 16 explicit color fields
 // cleared, keeping TintEnabled/OverrideEnabled/Tint untouched -- used to
 // honor OverrideEnabled=false without also losing Tint-derived resolution.
-func withoutExplicitFields(colors config.AnsiColors) config.AnsiColors {
-	return config.AnsiColors{
-		TintEnabled:     colors.TintEnabled,
-		OverrideEnabled: colors.OverrideEnabled,
-		Tint:            colors.Tint,
+func withoutExplicitFields(element config.AnsiElementColors) config.AnsiElementColors {
+	return config.AnsiElementColors{
+		TintEnabled:     element.TintEnabled,
+		OverrideEnabled: element.OverrideEnabled,
+		Tint:            element.Tint,
 	}
 }
 
@@ -99,6 +122,24 @@ func BeginTintFor(connType string) (restore func()) {
 	return semstyle.BeginTint(tintKeyForConnType(connType))
 }
 
+// BeginTintForElement is BeginTintFor targeting a specific element (see
+// ansiElements) rather than implicitly "menu" -- for a bare CLI
+// invocation's "cli" element, which (unlike menu) has no session
+// Update/View loop to wrap with ActivateTintForElement, so it needs this
+// begin/restore-pair form for the same early-return-scattered-startup
+// reason BeginTintFor itself exists.
+func BeginTintForElement(connType, element string) (restore func()) {
+	return semstyle.BeginTint(console.TintKeyForConnTypeElement(connType, element))
+}
+
+// ActivateTintForElement is console.ActivateTintForElement -- makes
+// element's registered tint (see RegisterConnTypeTints) active for the
+// duration of fn, derived from whichever connType's key is already active
+// from the enclosing ActivateTintFor/ActivateSessionRenderContext call.
+func ActivateTintForElement(element string, fn func()) {
+	console.ActivateTintForElement(element, fn)
+}
+
 // ActivateSessionRenderContext is console.ActivateSessionRenderContext --
 // nests ActivateTintFor(connType, ...) inside semstyle.RunWithProfile(
 // profile, ...) for the duration of fn, so a session's Update/View call
@@ -112,18 +153,25 @@ func ActivateSessionRenderContext(connType string, profile colorprofile.Profile,
 // DeactivateTint runs fn with no tint active (an empty key, semstyle's
 // no-tint sentinel -- not tintKeyForConnType("")), then restores whatever
 // was active before, same as ActivateTintFor. For rendering that should
-// look like the terminal's own native palette even while nested inside an
-// otherwise-tinted render pass (e.g. a ProgramBox's streamed command
-// output when config.AnsiPaletteConfig.ApplyToProgramBox is off).
+// look like the terminal's own native palette regardless of any
+// otherwise-active tint.
+//
+// Uses semstyle.SetActiveTint/ActiveTintKey directly, not
+// semstyle.RunWithTint -- see ActivateTintForElement's doc comment for why:
+// this is meant to be callable from inside an already-locked
+// Update/View render pass, and RunWithTint's lock isn't reentrant.
 func DeactivateTint(fn func()) {
-	semstyle.RunWithTint("", fn)
+	prev := semstyle.ActiveTintKey()
+	semstyle.SetActiveTint("")
+	defer semstyle.SetActiveTint(prev)
+	fn()
 }
 
 // colorsToPalette converts colors' 16 slots (each accepting anything
 // semstyle.ToColor understands: hex, an ANSI name, or any broader color name
 // tcell resolves) into a semstyle.Palette of literal hex values. empty is
 // true if none of the 16 slots were set.
-func colorsToPalette(colors config.AnsiColors) (palette semstyle.Palette, empty bool) {
+func colorsToPalette(colors config.AnsiElementColors) (palette semstyle.Palette, empty bool) {
 	slots := colors.Slots()
 	hex := make([]string, len(slots))
 	empty = true
@@ -185,7 +233,7 @@ func warnTintOnce(ctx context.Context, ref, format string, args ...any) {
 // otherwise changed out from under an existing, once-valid configuration,
 // not an unset default (colors.Tint == "" is handled separately, above,
 // and never reaches this far).
-func resolveAnsiColors(ctx context.Context, colors config.AnsiColors) config.AnsiColors {
+func resolveAnsiColors(ctx context.Context, colors config.AnsiElementColors) config.AnsiElementColors {
 	if colors.Tint == "" {
 		return colors
 	}

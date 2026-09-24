@@ -563,14 +563,15 @@ func GetUsage(target string, noHeading bool) string {
 		printStr(
 			"{{|UsageCommand|}}--tint{{[-]}}",
 			"	Show the current ANSI palette tint status for local/ssh/web",
-			"{{|UsageCommand|}}--tint{{[-]}} {{|UsageOption|}}<ref>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Set an ANSI palette tint. No connection type means all. <ref> is one of:",
+			"{{|UsageCommand|}}--tint{{[-]}} {{|UsageOption|}}<ref>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}] [{{|UsageOption|}}<menu|programbox|cli|a,b,c>{{[-]}}]",
+			"	Set an ANSI palette tint. Connection type and element may be given in either order; either or both may be omitted, meaning all. A trailing \":\" (e.g. \"programbox:\") is accepted but not required. <ref> is one of:",
 			"	{{|UsageOption|}}<scheme-name>{{[-]}} -- searches {{|UsageOption|}}user:{{[-]}}, then {{|UsageOption|}}embedded:{{[-]}}, then {{|UsageOption|}}repo:{{[-]}} (below) for a matching name, using whichever is found first",
 			"	{{|UsageOption|}}user:<name>{{[-]}} -- a scheme file in the user tint folder",
 			"	{{|UsageOption|}}embedded:<name>{{[-]}} -- one of DS2's own bundled base16 schemes",
 			fmt.Sprintf("	{{|UsageOption|}}repo:<scheme-name>{{[-]}} -- downloads a %s scheme (see --tint-list/--tint-table). Prefix <scheme-name> with {{|UsageOption|}}base16-{{[-]}}/{{|UsageOption|}}base24-{{[-]}} (tinty's own scheme-ID form, e.g. base16-mocha) to force which of the two", tintedThemingLink()),
 			"	{{|UsageOption|}}file:<path>{{[-]}} -- a local base16 scheme YAML file",
 			"	{{|UsageOption|}}\"\"{{[-]}} or {{|UsageOption|}}none:{{[-]}} -- clears the tint",
+			"	{{|UsageOption|}}menu{{[-]}} is DS2's own menus/dialogs/panels; {{|UsageOption|}}programbox{{[-]}} is a streamed command dialog's output; {{|UsageOption|}}cli{{[-]}} is a bare, non-interactive invocation (only meaningful for {{|UsageOption|}}local{{[-]}}). An element with no tint of its own renders like {{|UsageOption|}}menu{{[-]}}.",
 			"{{|UsageCommand|}}--tint-list{{[-]}} [{{|UsageOption|}}<repo:|user:|embedded:|all:>{{[-]}} ...] [{{|UsageOption|}}<search-word>{{[-]}} ...]",
 			"	List scheme names as {{|UsageOption|}}base16-{{[-]}}/{{|UsageOption|}}base24-{{[-]}}<scheme-name>, from the given source(s) (default: all; args may repeat, mix commas and spaces, and come in any order). More than one source prefixes each name \"<source>:\" to stay unambiguous. Every search word given must match a whole word (case-insensitive) in the slug; a bare {{|UsageOption|}}base16{{[-]}}/{{|UsageOption|}}base24{{[-]}} word narrows by system instead (e.g. {{|UsageCommand|}}--tint-list{{[-]}} {{|UsageOption|}}repo:{{[-]}} {{|UsageOption|}}ayu{{[-]}} {{|UsageOption|}}base24{{[-]}}).",
 			"{{|UsageCommand|}}--tint-table{{[-]}} [{{|UsageOption|}}<repo:|user:|embedded:|all:>{{[-]}} ...] [{{|UsageOption|}}<search-word>{{[-]}} ...]",
@@ -579,22 +580,10 @@ func GetUsage(target string, noHeading bool) string {
 	}
 	if match("--theme-tint", "--theme-no-tint") {
 		printStr(
-			"{{|UsageCommand|}}--theme-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Enable an already-configured ANSI palette tint. No arg means all.",
-			"{{|UsageCommand|}}--theme-no-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Disable an already-configured ANSI palette tint without discarding it. No arg means all.",
-		)
-	}
-	if match("--theme-cli-tint", "--theme-no-cli-tint") {
-		printStr(
-			"{{|UsageCommand|}}--theme-cli-tint{{[-]}} | {{|UsageCommand|}}--theme-no-cli-tint{{[-]}}",
-			"	Enable/disable ANSI palette tint for non-interactive CLI output (e.g. `ds2 --tint`). The interactive local TUI is always tinted regardless.",
-		)
-	}
-	if match("--theme-programbox-tint", "--theme-no-programbox-tint") {
-		printStr(
-			"{{|UsageCommand|}}--theme-programbox-tint{{[-]}} | {{|UsageCommand|}}--theme-no-programbox-tint{{[-]}}",
-			"	Enable/disable ANSI palette tint for a ProgramBox dialog's streamed command output (e.g. `docker compose up` progress). Disabled renders with the terminal's own native palette instead.",
+			"{{|UsageCommand|}}--theme-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}] [{{|UsageOption|}}<menu|programbox|cli|a,b,c>{{[-]}}]",
+			"	Enable an already-configured ANSI palette tint. Either arg may be omitted (meaning all) or given in either order. A trailing \":\" on an element (e.g. \"programbox:\") is accepted but not required.",
+			"{{|UsageCommand|}}--theme-no-tint{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}] [{{|UsageOption|}}<menu|programbox|cli|a,b,c>{{[-]}}]",
+			"	Disable an already-configured ANSI palette tint without discarding it. Same optional, either-order args as --theme-tint.",
 		)
 	}
 	if match("--ansi-override") {
@@ -606,10 +595,10 @@ func GetUsage(target string, noHeading bool) string {
 	}
 	if match("--theme-ansi-override", "--theme-no-ansi-override") {
 		printStr(
-			"{{|UsageCommand|}}--theme-ansi-override{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Enable already-configured ANSI color overrides. No arg means all.",
-			"{{|UsageCommand|}}--theme-no-ansi-override{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
-			"	Disable ANSI color overrides without discarding them. No arg means all.",
+			"{{|UsageCommand|}}--theme-ansi-override{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}] [{{|UsageOption|}}<menu|programbox|cli|a,b,c>{{[-]}}]",
+			"	Enable already-configured ANSI color overrides. Either arg may be omitted (meaning all) or given in either order. A trailing \":\" on an element (e.g. \"programbox:\") is accepted but not required.",
+			"{{|UsageCommand|}}--theme-no-ansi-override{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}] [{{|UsageOption|}}<menu|programbox|cli|a,b,c>{{[-]}}]",
+			"	Disable ANSI color overrides without discarding them. Same optional, either-order args as --theme-ansi-override.",
 		)
 	}
 	if match("--theme-spinner-speed") {
