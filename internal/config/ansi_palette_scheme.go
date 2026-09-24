@@ -241,15 +241,15 @@ func firstNonEmpty(a, b string) string {
 // /main/styling.md#base24-fallbacks) -- reusing the matching normal
 // color -- for a base16-only source, exactly as before this fallback
 // existed.
-func ParseBase16Scheme(data []byte) (AnsiColors, error) {
+func ParseBase16Scheme(data []byte) (AnsiElementColors, error) {
 	p, err := parseBase16Palette(data)
 	if err != nil {
-		return AnsiColors{}, err
+		return AnsiElementColors{}, err
 	}
 	if p.isZero() {
-		return AnsiColors{}, fmt.Errorf("no base16 palette found (neither the current \"palette:\"-nested format nor the legacy flat format matched)")
+		return AnsiElementColors{}, fmt.Errorf("no base16 palette found (neither the current \"palette:\"-nested format nor the legacy flat format matched)")
 	}
-	return AnsiColors{
+	return AnsiElementColors{
 		Base00: p.Base00,
 		Base08: p.Base08,
 		Base0B: p.Base0B,

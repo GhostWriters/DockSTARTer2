@@ -134,19 +134,24 @@ func HandleAnsiOverride(ctx context.Context, group *CommandGroup) error {
 	return nil
 }
 
-// HandleThemeAnsiOverrideOnOff implements --theme-ansi-override [types] and
-// --theme-no-ansi-override [types], toggling whether all 16 explicit
-// ansi_palette fields are applied as a group, without discarding any of
-// them (config.AnsiColors.OverrideEnabled) -- independent of the tint's own
-// --theme-tint/--theme-no-tint switch. A single slot can still be cleared
-// individually regardless of this (--ansi-override <slot> none). types is
-// optional -- omitted means "all".
+// HandleThemeAnsiOverrideOnOff implements --theme-ansi-override [types]
+// [elements] and --theme-no-ansi-override [types] [elements], toggling
+// whether an element's 16 explicit color fields are applied as a group,
+// without discarding any of them (config.AnsiElementColors.OverrideEnabled)
+// -- independent of the tint's own --theme-tint/--theme-no-tint switch. A
+// single slot can still be cleared individually regardless of this
+// (--ansi-override <slot> none, which only ever targets "menu" -- see its
+// own doc comment). types and elements are both optional, in either order
+// (see splitTintTypeElementArgs) -- omitted means "all" for each (see
+// tintElements for the element vocabulary).
 func HandleThemeAnsiOverrideOnOff(ctx context.Context, group *CommandGroup) error {
-	typesArg := ""
-	if len(group.Args) > 0 {
-		typesArg = group.Args[0]
-	}
+	typesArg, elementsArg := splitTintTypeElementArgs(group.Args)
 	connTypes, err := parseOptionalConnTypeList(typesArg)
+	if err != nil {
+		logger.Error(ctx, "%v", err)
+		return err
+	}
+	elements, err := parseOptionalElementList(elementsArg)
 	if err != nil {
 		logger.Error(ctx, "%v", err)
 		return err
@@ -155,8 +160,8 @@ func HandleThemeAnsiOverrideOnOff(ctx context.Context, group *CommandGroup) erro
 	enabled := group.Command == "--theme-ansi-override"
 
 	conf := config.LoadAppConfig()
-	setAnsiColorsField(&conf, connTypes, func(c *config.AnsiColors) {
-		c.OverrideEnabled = enabled
+	setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+		e.OverrideEnabled = enabled
 	})
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save ANSI override setting: %v", err)
@@ -164,9 +169,9 @@ func HandleThemeAnsiOverrideOnOff(ctx context.Context, group *CommandGroup) erro
 	}
 
 	if enabled {
-		logger.Notice(ctx, "ANSI color overrides enabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+		logger.Notice(ctx, "ANSI color overrides enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
 	} else {
-		logger.Notice(ctx, "ANSI color overrides disabled for: {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "))
+		logger.Notice(ctx, "ANSI color overrides disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
 	}
 	return nil
 }

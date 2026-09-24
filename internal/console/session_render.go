@@ -17,6 +17,48 @@ func TintKeyForConnType(connType string) string {
 	return "ds2-tint-" + connType
 }
 
+// TintKeyForConnTypeElement returns the semstyle tint registration key for
+// one connType's element ("menu" -- also what TintKeyForConnType alone
+// returns, since menu is a connType's implicit/default element -- or
+// "programbox"/"cli"). Kept distinct per element so e.g. a session's menu
+// chrome and its ProgramBox output can carry independent tints.
+func TintKeyForConnTypeElement(connType, element string) string {
+	if element == "" || element == "menu" {
+		return TintKeyForConnType(connType)
+	}
+	return TintKeyForConnType(connType) + "-" + element
+}
+
+// ActivateTintForElement makes element's tint (see TintKeyForConnTypeElement)
+// active for the duration of fn, derived from whichever connType's key is
+// already active (set by the enclosing session's own
+// ActivateSessionRenderContext/ActivateTintFor) -- so a caller rendering one
+// specific element (e.g. a ProgramBox) doesn't need to know or thread
+// through its own connType, only which element it is.
+//
+// Deliberately uses semstyle.SetActiveTint/ActiveTintKey directly, NOT
+// semstyle.RunWithTint -- this is meant to be called from inside an
+// AppModel.Update/View call, which ActivateSessionRenderContext/
+// ActivateTintFor has already wrapped in RunWithTint's own lock on the same
+// goroutine (see model_update.go/model_view.go). RunWithTint's lock is a
+// plain, non-reentrant sync.Mutex, so calling it again here would deadlock
+// permanently on its own Lock() -- a goroutine blocked on itself, with no
+// way to interrupt it. Safe without that lock precisely because it's
+// always nested inside a call already holding it -- no other well-behaved
+// caller (every other caller goes through RunWithTint/BeginTint) can be
+// concurrently mutating the active tint while this goroutine holds that
+// lock.
+func ActivateTintForElement(element string, fn func()) {
+	key := semstyle.ActiveTintKey()
+	if key != "" && element != "" && element != "menu" {
+		key += "-" + element
+	}
+	prev := semstyle.ActiveTintKey()
+	semstyle.SetActiveTint(key)
+	defer semstyle.SetActiveTint(prev)
+	fn()
+}
+
 // ActivateTintFor makes connType's registered tint the active one for the
 // duration of fn, then restores whatever was active before -- see
 // semstyle.RunWithTint's own doc comment for the locking/serialization this
