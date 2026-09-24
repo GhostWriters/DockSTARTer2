@@ -160,9 +160,10 @@ func HandleThemeAnsiOverrideOnOff(ctx context.Context, group *CommandGroup) erro
 	enabled := group.Command == "--theme-ansi-override"
 
 	conf := config.LoadAppConfig()
-	setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+	skipped := setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
 		e.OverrideEnabled = enabled
 	})
+	noticeSkippedCLI(ctx, skipped)
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save ANSI override setting: %v", err)
 		return err

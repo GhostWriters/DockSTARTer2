@@ -374,6 +374,11 @@ func Parse(args []string) ([]CommandGroup, error) {
 					break
 				}
 			}
+			if len(currentGroup.Args) > 1 {
+				if err := checkCLIConnTypeScope(expandedArgs, cmd, i-1, currentGroup.Args[1:]); err != nil {
+					return nil, err
+				}
+			}
 
 		case "--theme-tint", "--theme-no-tint", "--theme-ansi-override", "--theme-no-ansi-override":
 			// Up to two args, in any order (see splitTintTypeElementArgs);
@@ -385,6 +390,9 @@ func Parse(args []string) ([]CommandGroup, error) {
 				} else {
 					break
 				}
+			}
+			if err := checkCLIConnTypeScope(expandedArgs, cmd, i-1, currentGroup.Args); err != nil {
+				return nil, err
 			}
 
 		case "--tint-list", "--tint-table":
