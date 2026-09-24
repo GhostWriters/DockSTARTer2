@@ -183,11 +183,10 @@ func setAnsiElementField(conf *config.AppConfig, connTypes, elements []string, f
 // applyTintRef validates data as a base16 scheme, then points each of
 // elements' tint (e.g. "embedded:ansi", "repo:dracula",
 // "file:/path/to/scheme.yaml") at ref, for each of connTypes. Also sets
-// TintEnabled -- unlike the "menu" element (whose TintEnabled already
-// defaults true, toggled independently via --theme-tint/--theme-no-tint), a
-// freshly-created "programbox"/"cli" override starts disabled (see
-// config.AnsiColors.ElementPtr), so a scheme set here would otherwise never
-// actually render.
+// TintEnabled, so setting a scheme here always actually renders it --
+// otherwise a "programbox"/"cli" element whose TintEnabled happened to be
+// false (e.g. never explicitly enabled) would silently keep ignoring the
+// new scheme.
 func applyTintRef(ctx context.Context, connTypes, elements []string, data []byte, ref, source string) error {
 	if _, err := config.ParseBase16Scheme(data); err != nil {
 		return fmt.Errorf("%s does not look like a valid base16 scheme: %w", source, err)
@@ -1102,12 +1101,10 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 	return applyTintRef(ctx, connTypes, elements, data, ref, desc)
 }
 
-// handleTintStatus prints each connType's per-element tint/override state.
-// "menu" is always shown (a connType's implicit element, never unset).
-// "programbox"/"cli" are shown only when they carry their own override --
-// otherwise they render identically to menu (see config.AnsiColors.Element),
-// and a line saying so for every connType would be mostly noise; their
-// absence here already means "same as menu, see above".
+// handleTintStatus prints each connType's per-element tint/override state --
+// menu, programbox, and cli, always all three (see config.AnsiColors' own
+// doc comment: elements never inherit from each other, so there's no
+// "same as menu, not shown" case to collapse away).
 func handleTintStatus(ctx context.Context) error {
 	conf := config.LoadAppConfig()
 	rows := []struct {
@@ -1121,12 +1118,8 @@ func handleTintStatus(ctx context.Context) error {
 	for _, row := range rows {
 		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
 		printTintElementStatus(ctx, "menu", row.c.AnsiElementColors)
-		if row.c.ProgramBox != nil {
-			printTintElementStatus(ctx, "programbox", *row.c.ProgramBox)
-		}
-		if row.c.CLI != nil {
-			printTintElementStatus(ctx, "cli", *row.c.CLI)
-		}
+		printTintElementStatus(ctx, "programbox", row.c.ProgramBox)
+		printTintElementStatus(ctx, "cli", row.c.CLI)
 	}
 	return nil
 }

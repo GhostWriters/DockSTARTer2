@@ -34,21 +34,18 @@ func tintKeyForConnType(connType string) string {
 // for -- "menu" (registered under connType's own key, see
 // tintKeyForConnType) is the base/implicit element; "programbox"/"cli" each
 // register under their own suffixed key too (see
-// console.TintKeyForConnTypeElement and RegisterConnTypeTints), resolving to
-// menu's own palette when they carry no override of their own.
+// console.TintKeyForConnTypeElement and RegisterConnTypeTints), each a
+// fully independent palette (see config.AnsiColors' own doc comment --
+// elements never inherit from one another at render time).
 var ansiElements = []string{"menu", "programbox", "cli"}
 
 // RegisterConnTypeTints resolves colors for connType and registers each of
 // its elements (see ansiElements) under that element's own semstyle tint
-// key (see console.TintKeyForConnTypeElement) -- always all three, even
-// when programbox/cli carry no override of their own, so BeginTintForElement
-// (which activates a specific element's key directly, with no "fall back to
-// whatever's currently active" step the way ActivateTintForElement has) has
-// a real registration to find; colors.Element already resolves an
-// unoverridden element to menu's own palette, so an unoverridden element
-// simply re-registers that identical palette under its own key.
-// Re-resolves and re-registers on every call (each new session's Init(),
-// typically, or a bare CLI invocation's Execute) so a config change (e.g.
+// key (see console.TintKeyForConnTypeElement), so BeginTintForElement
+// (which activates a specific element's key directly) always has a real
+// registration to find. Re-resolves and re-registers on every call (each
+// new session's Init(), typically, or a bare CLI invocation's Execute) so
+// a config change (e.g.
 // via --theme-tint/--ansi-override/--tint) takes effect for the next
 // session/invocation. Does not activate any tint; see ActivateTintFor/
 // ActivateTintForElement/BeginTintForElement for that.
