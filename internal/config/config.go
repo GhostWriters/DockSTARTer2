@@ -252,11 +252,15 @@ type AnsiElementColors struct {
 }
 
 // AnsiColors holds one connType's ("local"/"ssh"/"web") full ANSI tint
-// configuration: AnsiElementColors, embedded, is the "menu" element --
-// DS2's own menus, dialogs, and panels -- always present. ProgramBox and
-// CLI are two further elements, each independently optional: nil means
-// that element inherits menu's palette exactly; set means that element
-// renders with its own, unrelated palette instead. Set an element's
+// configuration: three independent, always-present elements -- "menu"
+// (AnsiElementColors, embedded -- DS2's own menus, dialogs, and panels),
+// "programbox" (a streamed command dialog's output), and "cli" (a bare,
+// non-interactive invocation). No element inherits another's palette --
+// each is a plain, self-contained AnsiElementColors, so a fresh install's
+// shipped defaults (or a config migration) is the only place "programbox/
+// cli start out matching menu" is ever decided; once set, an element never
+// implicitly follows another's later changes, and there is no "unset"
+// state for any element to fall back to menu through. Set an element's
 // palette via `--tint <ref> [connType-list] [element-list]`, naming
 // "programbox"/"cli" in element-list (see tintElements in
 // internal/commands); an omitted element-list targets every element.
@@ -273,7 +277,7 @@ type AnsiColors struct {
 	// compose up` progress in a ProgramBox) -- independent of menu's, so a
 	// user can have the menu system tinted while command output renders
 	// with the terminal's own native palette, or the reverse.
-	ProgramBox *AnsiElementColors `toml:"programbox,omitempty"`
+	ProgramBox AnsiElementColors `toml:"programbox"`
 
 	// CLI is a bare, non-interactive invocation's own palette (e.g. `ds2
 	// --tint` run directly from a shell, not through the interactive
@@ -281,46 +285,32 @@ type AnsiColors struct {
 	// always a local shell process (see cmd.Execute's only caller,
 	// main.go), never reachable over SSH or web -- but kept on SSH/Web
 	// too so all three connTypes share one struct shape.
-	CLI *AnsiElementColors `toml:"cli,omitempty"`
+	CLI AnsiElementColors `toml:"cli"`
 }
 
-// Element returns element's own resolved palette -- its override if one is
-// set, else menu's. "menu", "", and any name Element doesn't recognize all
-// return menu's. See ElementPtr to target a specific element for writing.
+// Element returns element's own palette. "menu", "", and any name Element
+// doesn't recognize all return menu's. See ElementPtr to target a specific
+// element for writing.
 func (c AnsiColors) Element(element string) AnsiElementColors {
 	switch element {
 	case "programbox":
-		if c.ProgramBox != nil {
-			return *c.ProgramBox
-		}
+		return c.ProgramBox
 	case "cli":
-		if c.CLI != nil {
-			return *c.CLI
-		}
+		return c.CLI
+	default:
+		return c.AnsiElementColors
 	}
-	return c.AnsiElementColors
 }
 
 // ElementPtr returns a pointer to element's own fields, for writing.
 // "menu"/"" (and anything ElementPtr doesn't recognize) returns
-// &c.AnsiElementColors directly; "programbox"/"cli" allocate that
-// element's override (a blank AnsiElementColors -- not a copy of menu's
-// current state, so a freshly-created override starts out rendering with
-// the terminal's own native palette, same as menu itself would with
-// nothing configured) the first time it's targeted, then return that same
-// override on every later call.
+// &c.AnsiElementColors; "programbox"/"cli" return &c.ProgramBox/&c.CLI.
 func (c *AnsiColors) ElementPtr(element string) *AnsiElementColors {
 	switch element {
 	case "programbox":
-		if c.ProgramBox == nil {
-			c.ProgramBox = &AnsiElementColors{}
-		}
-		return c.ProgramBox
+		return &c.ProgramBox
 	case "cli":
-		if c.CLI == nil {
-			c.CLI = &AnsiElementColors{}
-		}
-		return c.CLI
+		return &c.CLI
 	default:
 		return &c.AnsiElementColors
 	}
@@ -731,11 +721,13 @@ func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Prin
 // own doc comment) -- the normal typed decode silently drops them, since
 // they have no matching field at that path anymore, leaving
 // conf.AnsiColors.<ConnType>.AnsiElementColors at the embedded baseline
-// instead of the file's own values. Also converts the removed
-// apply_to_cli/apply_to_programbox booleans into an explicit disabled
-// override for the affected element(s) when previously set false -- nil,
-// the new default, would otherwise mean "inherit menu", wrongly
-// re-enabling tinting for an element a user had turned off.
+// instead of the file's own values. Since elements don't inherit from each
+// other (see AnsiColors' own doc comment), the old single flat palette
+// becomes each of menu/programbox/cli's own starting value -- matching the
+// old behavior, where apply_to_cli/apply_to_programbox defaulting true
+// meant every context rendered with that same palette. When previously set
+// false, the affected element(s) are left at a blank/disabled
+// AnsiElementColors instead, matching what "off" meant before.
 //
 // A no-op for a file that already has a "menu" table: reading data a
 // second time into a struct shaped like the pre-nesting file (flat
@@ -759,22 +751,99 @@ func migrateAnsiPaletteMenuNesting(data []byte, conf *AppConfig) {
 	}
 
 	var zero AnsiElementColors
-	migrate := func(dst *AnsiColors, src AnsiElementColors) {
-		if src != zero {
-			dst.AnsiElementColors = src
+	migrate := func(dst *AnsiColors, src AnsiElementColors, cliOff, programBoxOff bool) {
+		if src == zero {
+			return
+		}
+		dst.AnsiElementColors = src
+		if programBoxOff {
+			dst.ProgramBox = AnsiElementColors{}
+		} else {
+			dst.ProgramBox = src
+		}
+		if cliOff {
+			dst.CLI = AnsiElementColors{}
+		} else {
+			dst.CLI = src
 		}
 	}
-	migrate(&conf.AnsiColors.Local, legacy.AnsiPalette.Local)
-	migrate(&conf.AnsiColors.SSH, legacy.AnsiPalette.SSH)
-	migrate(&conf.AnsiColors.Web, legacy.AnsiPalette.Web)
 
-	if legacy.AnsiPalette.ApplyToCLI != nil && !*legacy.AnsiPalette.ApplyToCLI {
-		conf.AnsiColors.Local.CLI = &AnsiElementColors{}
+	// ApplyToCLI only ever meant "local" (a bare CLI invocation is always a
+	// local shell process); ApplyToProgramBox applied to all three connTypes.
+	cliOff := legacy.AnsiPalette.ApplyToCLI != nil && !*legacy.AnsiPalette.ApplyToCLI
+	programBoxOff := legacy.AnsiPalette.ApplyToProgramBox != nil && !*legacy.AnsiPalette.ApplyToProgramBox
+
+	migrate(&conf.AnsiColors.Local, legacy.AnsiPalette.Local, cliOff, programBoxOff)
+	migrate(&conf.AnsiColors.SSH, legacy.AnsiPalette.SSH, false, programBoxOff)
+	migrate(&conf.AnsiColors.Web, legacy.AnsiPalette.Web, false, programBoxOff)
+}
+
+// migrateAnsiPaletteInheritGap closes a gap from a brief released window
+// (v2.20260924.1, commit 3d5f554d) where AnsiColors.ProgramBox/CLI were
+// still *AnsiElementColors (nil meant "inherit menu's palette"), before
+// that pointer/inherit design was replaced with the current plain, always-
+// independent fields (see AnsiColors' own doc comment). A config saved by
+// that release has "menu" present but "programbox"/"cli" genuinely absent
+// from the file for any connType whose menu was never explicitly given a
+// programbox/cli override -- under the released code that absence meant
+// "same as menu"; under the current code it decodes to an empty, untinted
+// zero value instead, since there's no more inherit step at read time.
+// Freezing menu's own current values into the absent slots reproduces
+// exactly what inherit used to render, so upgrading past that release
+// doesn't silently un-tint a programbox/cli that was previously inheriting
+// a real tint from its own menu.
+//
+// Detection is self-describing, no schema-version tracking needed: every
+// config write from this point on always includes all three elements
+// (plain fields, never omitted), so "menu present, programbox/cli keys
+// genuinely missing from the file" can only mean a config last saved by
+// that one released binary (or a hand-edited file choosing to omit them,
+// which gets the same reasonable treatment). A no-op for any other config
+// shape -- older pre-nesting files are handled by
+// migrateAnsiPaletteMenuNesting above, and a config already carrying real
+// programbox/cli tables (from this or a later release) is left untouched.
+func migrateAnsiPaletteInheritGap(data []byte, conf *AppConfig) {
+	var raw struct {
+		AnsiPalette map[string]map[string]any `toml:"ansi_palette"`
 	}
-	if legacy.AnsiPalette.ApplyToProgramBox != nil && !*legacy.AnsiPalette.ApplyToProgramBox {
-		conf.AnsiColors.Local.ProgramBox = &AnsiElementColors{}
-		conf.AnsiColors.SSH.ProgramBox = &AnsiElementColors{}
-		conf.AnsiColors.Web.ProgramBox = &AnsiElementColors{}
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return
+	}
+	for _, ct := range []string{"local", "ssh", "web"} {
+		section, ok := raw.AnsiPalette[ct]
+		if !ok {
+			continue
+		}
+		if _, hasMenu := section["menu"]; !hasMenu {
+			continue
+		}
+		c := ansiColorsPtrConfig(conf, ct)
+		if c == nil {
+			continue
+		}
+		if _, hasProgramBox := section["programbox"]; !hasProgramBox {
+			c.ProgramBox = c.AnsiElementColors
+		}
+		if _, hasCLI := section["cli"]; !hasCLI {
+			c.CLI = c.AnsiElementColors
+		}
+	}
+}
+
+// ansiColorsPtrConfig returns a pointer to conf's AnsiColors for connType,
+// or nil for an unrecognized connType -- config-package-local counterpart
+// to internal/commands' own ansiColorsPtr (kept separate since neither
+// package imports the other's unexported helpers).
+func ansiColorsPtrConfig(conf *AppConfig, connType string) *AnsiColors {
+	switch connType {
+	case "local":
+		return &conf.AnsiColors.Local
+	case "ssh":
+		return &conf.AnsiColors.SSH
+	case "web":
+		return &conf.AnsiColors.Web
+	default:
+		return nil
 	}
 }
 
@@ -848,6 +917,7 @@ func LoadAppConfig() AppConfig {
 				ServerTLSDefaultHook(&conf, present)
 			}
 			migrateAnsiPaletteMenuNesting(data, &conf)
+			migrateAnsiPaletteInheritGap(data, &conf)
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.

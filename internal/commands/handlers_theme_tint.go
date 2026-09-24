@@ -61,19 +61,29 @@ func parseOptionalConnTypeList(s string) ([]string, error) {
 	return parseConnTypeList(s)
 }
 
+// ansiColorsPtr returns a pointer to conf's AnsiColors for connType, or nil
+// for an unrecognized connType.
+func ansiColorsPtr(conf *config.AppConfig, connType string) *config.AnsiColors {
+	switch connType {
+	case "local":
+		return &conf.AnsiColors.Local
+	case "ssh":
+		return &conf.AnsiColors.SSH
+	case "web":
+		return &conf.AnsiColors.Web
+	default:
+		return nil
+	}
+}
+
 // setAnsiColorsField applies fn to the AnsiColors for each of connTypes on
 // conf, in place. Used only by commands that always target the "menu"
 // element (--theme-tint/--theme-no-tint); --tint itself (element-aware)
 // uses setAnsiElementField instead.
 func setAnsiColorsField(conf *config.AppConfig, connTypes []string, fn func(*config.AnsiColors)) {
 	for _, ct := range connTypes {
-		switch ct {
-		case "local":
-			fn(&conf.AnsiColors.Local)
-		case "ssh":
-			fn(&conf.AnsiColors.SSH)
-		case "web":
-			fn(&conf.AnsiColors.Web)
+		if c := ansiColorsPtr(conf, ct); c != nil {
+			fn(c)
 		}
 	}
 }
@@ -170,34 +180,132 @@ func splitTintTypeElementArgs(args []string) (typesArg, elementsArg string) {
 	return strings.Join(typeParts, ","), strings.Join(elementParts, ",")
 }
 
+// validateCLIConnTypeScope returns an error if elements includes "cli" and
+// typesArg explicitly names a connType other than "local" -- a bare,
+// non-interactive CLI invocation is always a local shell process (see
+// config.AnsiColors' CLI field doc comment), so targeting "cli" for ssh/web
+// by name (e.g. "--tint ... ssh cli:") is almost always a mistake, not an
+// intentional bulk sweep, and is worth catching immediately rather than
+// silently doing nothing for that connType. typesArg empty (omitted,
+// defaults to every connType) or "all"/"all:" are NOT errors here -- those
+// are the common "just set everything" case, where setAnsiElementField's
+// own silent per-connType filtering (see its doc comment) is the right
+// behavior instead, since erroring there would break the common flow.
+func validateCLIConnTypeScope(typesArg string, elements []string) error {
+	if !slices.Contains(elements, "cli") {
+		return nil
+	}
+	trimmed := strings.TrimSuffix(strings.TrimSpace(typesArg), ":")
+	if trimmed == "" || trimmed == "all" {
+		return nil
+	}
+	for _, part := range strings.Split(typesArg, ",") {
+		if strings.TrimSuffix(strings.TrimSpace(part), ":") != "local" {
+			return fmt.Errorf("\"cli\" only applies to local (a bare CLI invocation is always a local shell process) -- %q was explicitly given; omit the connection-type argument (defaults to all) or use \"all\" instead", typesArg)
+		}
+	}
+	return nil
+}
+
+// checkCLIConnTypeScope runs validateCLIConnTypeScope against an already-
+// captured command group's trailing type/element args (see
+// splitTintTypeElementArgs), converting any error into a ParseError -- used
+// by Parse itself (see its --tint/--theme-tint/etc. cases), so an invalid
+// "cli" + explicit-connType combination is caught at parse time, reported
+// the same way as any other malformed command line (usage text, caret
+// pointing at the offending argument), instead of only surfacing once the
+// command actually runs.
+func checkCLIConnTypeScope(expandedArgs []string, cmd string, baseIndex int, typeElementArgs []string) error {
+	typesArg, elementsArg := splitTintTypeElementArgs(typeElementArgs)
+	elements, err := parseOptionalElementList(elementsArg)
+	if err != nil {
+		return &ParseError{Args: expandedArgs, Index: baseIndex + len(typeElementArgs) - 1, FailingCommand: cmd, Message: err.Error()}
+	}
+	if err := validateCLIConnTypeScope(typesArg, elements); err != nil {
+		return &ParseError{Args: expandedArgs, Index: baseIndex + offendingConnTypeArgIndex(typeElementArgs), FailingCommand: cmd, Message: err.Error()}
+	}
+	return nil
+}
+
+// offendingConnTypeArgIndex finds which of typeElementArgs is the
+// connection-type arg naming something other than "local" -- the one
+// validateCLIConnTypeScope's error is actually about -- so the ParseError's
+// caret points at it specifically, not just at the last captured arg.
+// Falls back to the last arg's index if none is found (shouldn't happen for
+// any caller that only invokes this after validateCLIConnTypeScope has
+// already returned an error, but keeps this safe to call standalone too).
+func offendingConnTypeArgIndex(typeElementArgs []string) int {
+	for i, arg := range typeElementArgs {
+		isType, isElement := classifyTintArg(arg)
+		if !isType || isElement {
+			continue
+		}
+		for _, part := range strings.Split(arg, ",") {
+			if strings.TrimSuffix(strings.TrimSpace(part), ":") != "local" {
+				return i
+			}
+		}
+	}
+	return len(typeElementArgs) - 1
+}
+
 // setAnsiElementField applies fn to each of elements' AnsiElementColors, for
 // each of connTypes on conf, in place (see config.AnsiColors.ElementPtr).
-func setAnsiElementField(conf *config.AppConfig, connTypes, elements []string, fn func(*config.AnsiElementColors)) {
-	setAnsiColorsField(conf, connTypes, func(c *config.AnsiColors) {
+// "cli" is silently skipped for any connType but "local" (see
+// validateCLIConnTypeScope for the explicit-narrow-scope case, which errors
+// before this is ever called instead) -- ssh/web have no render path that
+// ever consults their own "cli" element. Returns the connTypes it was
+// skipped for (nil if none), so callers can tell the user (see e.g.
+// applyTintRef).
+func setAnsiElementField(conf *config.AppConfig, connTypes, elements []string, fn func(*config.AnsiElementColors)) []string {
+	wantsCLI := slices.Contains(elements, "cli")
+	var skippedCLIFor []string
+	for _, ct := range connTypes {
+		c := ansiColorsPtr(conf, ct)
+		if c == nil {
+			continue
+		}
+		if wantsCLI && ct != "local" {
+			skippedCLIFor = append(skippedCLIFor, ct)
+		}
 		for _, element := range elements {
+			if element == "cli" && ct != "local" {
+				continue
+			}
 			fn(c.ElementPtr(element))
 		}
-	})
+	}
+	return skippedCLIFor
+}
+
+// noticeSkippedCLI logs a notice when setAnsiElementField silently skipped
+// "cli" for one or more connTypes (see its own doc comment) -- skipped is
+// nil/empty for a no-op call.
+func noticeSkippedCLI(ctx context.Context, skipped []string) {
+	if len(skipped) == 0 {
+		return
+	}
+	logger.Notice(ctx, "\"cli\" only applies to {{|Var|}}local{{[-]}} (a bare CLI invocation is always a local shell process); skipped for: {{|Var|}}%s{{[-]}}", strings.Join(skipped, ", "))
 }
 
 // applyTintRef validates data as a base16 scheme, then points each of
 // elements' tint (e.g. "embedded:ansi", "repo:dracula",
 // "file:/path/to/scheme.yaml") at ref, for each of connTypes. Also sets
-// TintEnabled -- unlike the "menu" element (whose TintEnabled already
-// defaults true, toggled independently via --theme-tint/--theme-no-tint), a
-// freshly-created "programbox"/"cli" override starts disabled (see
-// config.AnsiColors.ElementPtr), so a scheme set here would otherwise never
-// actually render.
+// TintEnabled, so setting a scheme here always actually renders it --
+// otherwise a "programbox"/"cli" element whose TintEnabled happened to be
+// false (e.g. never explicitly enabled) would silently keep ignoring the
+// new scheme.
 func applyTintRef(ctx context.Context, connTypes, elements []string, data []byte, ref, source string) error {
 	if _, err := config.ParseBase16Scheme(data); err != nil {
 		return fmt.Errorf("%s does not look like a valid base16 scheme: %w", source, err)
 	}
 
 	conf := config.LoadAppConfig()
-	setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+	skipped := setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
 		e.Tint = ref
 		e.TintEnabled = true
 	})
+	noticeSkippedCLI(ctx, skipped)
 	if err := config.SaveAppConfig(conf); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
@@ -922,9 +1030,10 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 	enabled := group.Command == "--theme-tint"
 
 	conf := config.LoadAppConfig()
-	setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+	skipped := setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
 		e.TintEnabled = enabled
 	})
+	noticeSkippedCLI(ctx, skipped)
 	if err := config.SaveAppConfig(conf); err != nil {
 		logger.Error(ctx, "Failed to save tint setting: %v", err)
 		return err
@@ -1083,9 +1192,10 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 
 	if arg == "" || arg == "none:" {
 		conf := config.LoadAppConfig()
-		setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
+		skipped := setAnsiElementField(&conf, connTypes, elements, func(e *config.AnsiElementColors) {
 			e.Tint = ""
 		})
+		noticeSkippedCLI(ctx, skipped)
 		if err := config.SaveAppConfig(conf); err != nil {
 			logger.Error(ctx, "Failed to save tint setting: %v", err)
 			return err
@@ -1102,12 +1212,15 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 	return applyTintRef(ctx, connTypes, elements, data, ref, desc)
 }
 
-// handleTintStatus prints each connType's per-element tint/override state.
-// "menu" is always shown (a connType's implicit element, never unset).
-// "programbox"/"cli" are shown only when they carry their own override --
-// otherwise they render identically to menu (see config.AnsiColors.Element),
-// and a line saying so for every connType would be mostly noise; their
-// absence here already means "same as menu, see above".
+// handleTintStatus prints each connType's per-element tint/override state --
+// menu and programbox always (see config.AnsiColors' own doc comment:
+// elements never inherit from each other, so there's no "same as menu, not
+// shown" case to collapse away); cli only for "local", since it's the only
+// connType with a render path that ever consults it (see
+// setAnsiElementField's doc comment) -- ssh/web's own cli fields still
+// exist in the config (kept for one shared AnsiColors type across all three
+// connTypes) but are permanently inert, so showing them here would be
+// confusing (looks settable, never actually renders).
 func handleTintStatus(ctx context.Context) error {
 	conf := config.LoadAppConfig()
 	rows := []struct {
@@ -1121,11 +1234,9 @@ func handleTintStatus(ctx context.Context) error {
 	for _, row := range rows {
 		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
 		printTintElementStatus(ctx, "menu", row.c.AnsiElementColors)
-		if row.c.ProgramBox != nil {
-			printTintElementStatus(ctx, "programbox", *row.c.ProgramBox)
-		}
-		if row.c.CLI != nil {
-			printTintElementStatus(ctx, "cli", *row.c.CLI)
+		printTintElementStatus(ctx, "programbox", row.c.ProgramBox)
+		if row.label == "local" {
+			printTintElementStatus(ctx, "cli", row.c.CLI)
 		}
 	}
 	return nil
