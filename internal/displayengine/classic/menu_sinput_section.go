@@ -34,32 +34,13 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	ti.CharLimit = 128
 	ti.Focus()
 
-	styles := GetStyles()
-	bg := styles.Dialog.GetBackground()
-	tiStyles := textinput.DefaultStyles(true)
-	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Cursor.Color = TextCursorColor()
-	ti.SetStyles(tiStyles)
-
-	// Disabled counterpart of tiStyles above -- ResolveDisabledStyle("Item")
-	// matches styles.ItemNormal's own "Item" tag, same rule every other
-	// disabled element uses (explicit ItemDisabled if the theme defines one,
-	// else Item with Bold stripped and Dim applied).
-	disabledItemStyle, _ := ResolveDisabledStyle("Item")
-	tiStylesDisabled := textinput.DefaultStyles(true)
-	tiStylesDisabled.Focused.Prompt = disabledItemStyle.Background(bg)
-	tiStylesDisabled.Focused.Text = disabledItemStyle.Background(bg)
-	tiStylesDisabled.Blurred.Prompt = disabledItemStyle.Background(bg)
-	tiStylesDisabled.Blurred.Text = disabledItemStyle.Background(bg)
-	tiStylesDisabled.Cursor.Color = TextCursorColor()
+	ti.SetStyles(sinputStyles(false))
 
 	inp := sinput.New(ti)
 	inpPtr := &inp
 
 	m := NewMenuModel(id, title, "", nil)
+	m.textInput = true
 	m.SetSubMenuMode(true)
 	m.SetVariableHeight(false)
 	m.SetIsDialog(false)
@@ -69,18 +50,10 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.SetNoLeftMargin(true)
 
 	m.ContentRenderer = func(contentWidth int) string {
-		// tiStyles was baked into the input at construction time and never
-		// re-evaluated afterward -- unlike every other disabled element,
-		// which resolves its style fresh on each render, this needs an
-		// explicit re-check against the section's current disabled state
-		// (toggled later via SetDisabled) or a disabled section's input
-		// text never dims.
-		if m.disabled {
-			(*inpPtr).SetStyles(tiStylesDisabled)
-		} else {
-			(*inpPtr).SetStyles(tiStyles)
-		}
-		return styles.Dialog.
+		// Resolved on each render, so the input follows the active theme and
+		// the section's disabled state.
+		(*inpPtr).SetStyles(sinputStyles(m.disabled))
+		return GetStyles().Dialog.
 			Width(contentWidth).
 			Padding(0, 1).
 			Render((*inpPtr).View())
@@ -108,7 +81,7 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.SetUpdateInterceptor(func(msg tea.Msg, menu *MenuModel) (tea.Cmd, bool) {
 		switch msg := msg.(type) {
 		case tea.KeyPressMsg:
-			if key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab) || key.Matches(msg, Keys.Enter) {
+			if (key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab)) && !IsTypedText(msg) || key.Matches(msg, Keys.Enter) {
 				return nil, false
 			}
 			newInp, cmd := (*inpPtr).Update(msg)
@@ -177,4 +150,21 @@ func NewNumberSinputSection(id, title, initialValue string) (*MenuModel, *sinput
 // SinputSectionInit returns the Init cmd for a sinput section (blink cursor).
 func SinputSectionInit() tea.Cmd {
 	return sinput.Blink
+}
+
+// sinputStyles returns an input section's text styles for the active
+// theme: Item on the dialog background, or its disabled form (see
+// ResolveDisabledStyle).
+func sinputStyles(disabled bool) textinput.Styles {
+	styles := GetStyles()
+	item := styles.ItemNormal
+	if disabled {
+		item, _ = ResolveDisabledStyle("Item")
+	}
+	item = item.Background(styles.Dialog.GetBackground())
+	ts := textinput.DefaultStyles(true)
+	ts.Focused.Prompt, ts.Focused.Text = item, item
+	ts.Blurred.Prompt, ts.Blurred.Text = item, item
+	ts.Cursor.Color = TextCursorColor()
+	return ts
 }

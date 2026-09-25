@@ -176,6 +176,12 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, displayengine.Keys.ForceQuit):
 			return m, m.cancelOrConfirm()
 
+		case m.focus == addVarFocusInput && displayengine.IsTypedText(msg):
+			// "." and "," are typed, not focus shortcuts, in the input.
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
+
 		case key.Matches(msg, displayengine.Keys.Tab), key.Matches(msg, displayengine.Keys.CycleTab):
 			m.cycleFocus(+1)
 			return m, nil

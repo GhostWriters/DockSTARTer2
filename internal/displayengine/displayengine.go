@@ -281,6 +281,7 @@ var (
 	GetShadowBoxCtx                = classic.GetShadowBoxCtx
 	GetSolidBoxCtx                 = classic.GetSolidBoxCtx
 	GetStyles                      = classic.GetStyles
+	IsTypedText                    = classic.IsTypedText
 	StylesScopeKey                 = classic.StylesScopeKey
 	ActiveAppearance               = classic.ActiveAppearance
 	HandleScrollbarLayerHit        = classic.HandleScrollbarLayerHit

@@ -1,6 +1,8 @@
 package classic
 
 import (
+	"unicode"
+
 	"DockSTARTer2/internal/tui/components/sinput"
 
 	"charm.land/bubbles/v2/key"
@@ -121,6 +123,14 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		// Printable keys that are also focus shortcuts ("." and ",") are
+		// typed into a focused text input instead.
+		if m.focusedItem == FocusList && m.focusedSection >= 0 && m.focusedSection < n &&
+			IsTypedText(msg) && isTextInput(focusedLeaf(m.contentSections[m.focusedSection])) {
+			cmd := m.updateSection(m.focusedSection, msg)
+			m.InvalidateCache()
+			return m, cmd, true
+		}
 		if key.Matches(msg, Keys.CycleTab) && !anyFocusable {
 			// Pure information box (no focusable section, e.g. all plain-text)
 			// -- Tab has nothing to cycle to but the buttons, which already
@@ -291,12 +301,11 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 						}
 					}
 				}
-				var focusCmd tea.Cmd
-				if m.focusedSection != i {
-					m.focusedSection = i
-					m.focusedItem = FocusList
-				}
-				focusCmd = m.updateSectionFocus()
+				// A click in a section takes focus from the buttons, even when
+				// the section is already the current one (dual focus).
+				m.focusedSection = i
+				m.focusedItem = FocusList
+				focusCmd := m.updateSectionFocus()
 				cmd := m.updateSection(i, msg)
 				m.InvalidateCache()
 				return m, tea.Batch(focusCmd, cmd), true
@@ -864,4 +873,33 @@ func (m *MenuModel) SetFocusedSection(idx int) {
 		sec.SetSubFocused(i == idx)
 	}
 	m.InvalidateCache()
+}
+
+// IsTypedText reports whether msg types a printable character (as ".", ","
+// and letters do), rather than being a named key like Tab.
+func IsTypedText(msg tea.KeyPressMsg) bool {
+	r := []rune(msg.Text)
+	return len(r) == 1 && unicode.IsPrint(r[0])
+}
+
+// focusedLeaf returns the Content holding c's focus, descending through
+// nested Tab stops.
+func focusedLeaf(c Content) Content {
+	for {
+		sf, ok := c.(SubFocusable)
+		if !ok {
+			return c
+		}
+		items, i := sf.Items(), sf.SubFocusIndex()
+		if i < 0 || i >= len(items) || items[i] == c {
+			return c
+		}
+		c = items[i]
+	}
+}
+
+// isTextInput reports whether c is a text input section.
+func isTextInput(c Content) bool {
+	t, ok := c.(interface{ IsTextInput() bool })
+	return ok && t.IsTextInput()
 }

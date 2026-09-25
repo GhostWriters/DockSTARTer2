@@ -184,6 +184,7 @@ type MenuModel struct {
 	variableHeight  bool                                      // Allow list to expand naturally up to layout limits
 	Interceptor     func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
 	ContentRenderer func(contentWidth int) string             // Optional: replaces list content in viewSubMenu
+	textInput       bool                                      // A text input section (see NewSinputSection): typed keys go to it
 	onSubFocused    func() tea.Cmd                            // Optional: called when section gains sub-focus
 
 	// wantsAllMessages opts this section into updateSections' catch-all
@@ -806,6 +807,9 @@ func (m *MenuModel) MatchesID(msgID string) bool {
 // WantsHorizontalKeys reports true when this menu has a contentRenderer (the
 // sinput text-input kind), which consumes Left/Right itself for cursor
 // movement via its own interceptor. Part of the Content interface.
+// IsTextInput reports whether this is a text input section.
+func (m *MenuModel) IsTextInput() bool { return m.textInput }
+
 func (m *MenuModel) WantsHorizontalKeys() bool {
 	return m.ContentRenderer != nil
 }
