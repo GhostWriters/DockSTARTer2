@@ -8,8 +8,8 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/theme"
 
 	semstyle "github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/colorprofile"
@@ -83,7 +83,8 @@ func registerElementTint(ctx context.Context, connType, elementName string, elem
 	} else {
 		semstyle.RegisterTint(key, palette)
 	}
-	theme.ClearSemanticCache()
+	displayengine.InvalidateStyles()
+	invalidateShadowCache()
 }
 
 // withoutExplicitFields returns element with its 16 explicit color fields
@@ -116,7 +117,7 @@ func ActivateTintFor(connType string, fn func()) {
 // after which the whole invocation's console output -- not just command
 // dispatch -- reflects connType's tint.
 func BeginTintFor(connType string) (restore func()) {
-	return semstyle.BeginTint(tintKeyForConnType(connType))
+	return beginRenderScope(connType, tintKeyForConnType(connType))
 }
 
 // BeginTintForElement is BeginTintFor targeting a specific element (see
@@ -126,7 +127,18 @@ func BeginTintFor(connType string) (restore func()) {
 // begin/restore-pair form for the same early-return-scattered-startup
 // reason BeginTintFor itself exists.
 func BeginTintForElement(connType, element string) (restore func()) {
-	return semstyle.BeginTint(console.TintKeyForConnTypeElement(connType, element))
+	return beginRenderScope(connType, console.TintKeyForConnTypeElement(connType, element))
+}
+
+// beginRenderScope activates tintKey, connType's theme namespace, and
+// connType itself (see console.ActiveConnType) until restore is called.
+func beginRenderScope(connType, tintKey string) (restore func()) {
+	restoreScope := semstyle.BeginRenderScope(tintKey, console.ThemePrefixForConnType(connType))
+	restoreConnType := console.SetActiveConnType(connType)
+	return func() {
+		restoreConnType()
+		restoreScope()
+	}
 }
 
 // ActivateTintForElement is console.ActivateTintForElement -- makes

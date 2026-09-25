@@ -53,7 +53,7 @@ func (s *TitleSpinner) AdvanceSpinner(now time.Time) bool {
 // Indicators returns the left/right flanking characters, or "" when
 // inactive or spinners are globally disabled.
 func (s *TitleSpinner) Indicators() (left, right string) {
-	if !s.active || !console.SpinnerEnabled {
+	if !s.active || !console.SpinnerEnabled() {
 		return "", ""
 	}
 	ctx := GetActiveContext()

@@ -275,7 +275,7 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 		markerChar := ""
 		spinChar := ""
 		spinCharR := ""
-		if btn.Spinning && console.SpinnerEnabled {
+		if btn.Spinning && console.SpinnerEnabled() {
 			spinChar, spinCharR = console.TitleSpinnerFrames(btn.SpinnerFrame, ctx.LineCharacters)
 		} else if btn.Locked {
 			if ctx.LineCharacters {

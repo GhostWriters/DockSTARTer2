@@ -451,7 +451,7 @@ func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec
 	m.ConfigureWidgets(displayengine.WidgetRefresh, displayengine.WidgetHelp, displayengine.WidgetClose)
 
 	if len(tabs) >= 2 {
-		switch config.LoadAppConfig().UI.TabLayout {
+		switch config.LoadAppConfig().Appearance.ForConnType(m.connType).TabLayout {
 		case "sidebyside":
 			m.layoutMode = envLayoutSideBySide
 		case "stacked":

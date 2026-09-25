@@ -960,7 +960,7 @@ func (m *MenuModel) calculateLayout() {
 	innerBoxWidth := listWidth + GetLayout().BorderWidth()
 	buttonHeight := ButtonRowHeight(innerBoxWidth, 0, m.GetButtonSpecsForState()...)
 	shadowHeight := 0
-	hasShadow := currentConfig.UI.Shadow
+	hasShadow := ActiveAppearance().Shadow
 	if hasShadow {
 		shadowHeight = DialogShadowHeight
 	}
@@ -996,7 +996,7 @@ func (m *MenuModel) calculateLayout() {
 
 	// Large titlebar: deduct from list budget; drop titlebar first when space is tight.
 	// Submenus always use small titlebar regardless of config.
-	enabled := !m.subMenuMode && m.title != "" && currentConfig.UI.LargeTitleBars
+	enabled := !m.subMenuMode && m.title != "" && ActiveAppearance().LargeTitleBars
 	useLargeTitleBar, maxListHeight := DecideLargeTitleBar(enabled, maxListHeight, 3)
 	if useLargeTitleBar {
 		overhead += LargeTitleBarOverhead

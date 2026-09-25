@@ -114,7 +114,7 @@ func (b *ButtonRow) Update(msg tea.Msg) (tea.Cmd, bool) {
 // AdvanceSpinner advances the button spinner frame if its interval has
 // elapsed. Returns true if the frame changed. Called by the global tick.
 func (b *ButtonRow) AdvanceSpinner(now time.Time) bool {
-	if b.processingBtnID == "" || !console.SpinnerEnabled {
+	if b.processingBtnID == "" || !console.SpinnerEnabled() {
 		return false
 	}
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
@@ -165,7 +165,7 @@ func (b *ButtonRow) Specs(focused bool, focusedIndex int) []ButtonSpec {
 // (e.g. Active determined by dialog-specific state rather than a focused
 // index) but still wants ButtonRow's spinner state applied.
 func (b *ButtonRow) ApplySpinner(specs []ButtonSpec) []ButtonSpec {
-	if b.processingBtnID == "" || !console.SpinnerEnabled {
+	if b.processingBtnID == "" || !console.SpinnerEnabled() {
 		return specs
 	}
 	out := make([]ButtonSpec, len(specs))

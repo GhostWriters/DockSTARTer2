@@ -12,7 +12,7 @@ import (
 // component for panelInteractionActive/dialogInteractionActive to still
 // consider it active. Mirrors the frame budget below.
 func (m *AppModel) interactionWindow() time.Duration {
-	interval := time.Duration(m.config.UI.RefreshRate) * time.Millisecond
+	interval := time.Duration(m.config.Appearance.RefreshRate) * time.Millisecond
 	if interval <= 0 {
 		interval = 100 * time.Millisecond
 	}
@@ -46,7 +46,7 @@ func (m *AppModel) dialogInteractionActive() bool {
 // interactionRenderDue reports whether enough time has passed since the last
 // coalesced render to allow another one, and if so records now as the new
 // baseline. Mirrors the frame budget already driving the FPS ticker
-// (m.config.UI.RefreshRate), so a coalesced drag or scroll never renders
+// (m.config.Appearance.RefreshRate), so a coalesced drag or scroll never renders
 // more often than the ticker would flush to the terminal anyway.
 func (m *AppModel) interactionRenderDue() bool {
 	now := time.Now()

@@ -14,11 +14,13 @@ import (
 )
 
 // shadowBoxCache caches the most recently computed shadow box.
-// The shadow depends only on the content dimensions and context settings —
-// not the content itself — so we key on (width, height, shadowLevel, lineChars).
+// The shadow depends only on the content dimensions, context settings and the
+// active theme/tint scope — not the content itself — so we key on
+// (width, height, shadowLevel, lineChars, scope).
 var shadowBoxCache struct {
 	width, height, level int
 	lineChars            bool
+	scope                string
 	result               string
 }
 
@@ -28,6 +30,7 @@ func invalidateShadowCache() {
 	shadowBoxCache = struct {
 		width, height, level int
 		lineChars            bool
+		scope                string
 		result               string
 	}{}
 }
@@ -210,7 +213,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 					if l.GetZ() > maxZ {
 						maxZ = l.GetZ()
 					}
-					compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
+					compositorAddShadow(comp, l, screenZBase, m.config.Appearance.ForConnType(m.connType).Shadow)
 					comp.AddLayers(l)
 				}
 			} else {
@@ -218,7 +221,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 				if l.GetZ() > maxZ {
 					maxZ = l.GetZ()
 				}
-				compositorAddShadow(comp, l, screenZBase, m.config.UI.Shadow)
+				compositorAddShadow(comp, l, screenZBase, m.config.Appearance.ForConnType(m.connType).Shadow)
 				comp.AddLayers(l)
 			}
 
@@ -277,7 +280,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 				targetHeight = m.backdropHeight()
 			}
 
-			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
+			lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.Appearance.ForConnType(m.connType).Shadow, hasHalo, headerH)
 
 			// Record the topmost dialog's position for HandleContextMenuKey
 			// (keyboard context-menu shortcut) -- a centered dialog (e.g. Main
@@ -302,7 +305,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 					} else if hasHalo {
 						compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
 					} else {
-						compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
+						compositorAddShadow(comp, l, modalZBase, m.config.Appearance.ForConnType(m.connType).Shadow)
 					}
 					comp.AddLayers(l)
 				}
@@ -313,7 +316,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 				} else if hasHalo {
 					compositorAddHalo(comp, l, modalZBase, d.(HaloProvider).HaloColor())
 				} else {
-					compositorAddShadow(comp, l, modalZBase, m.config.UI.Shadow)
+					compositorAddShadow(comp, l, modalZBase, m.config.Appearance.ForConnType(m.connType).Shadow)
 				}
 				comp.AddLayers(l)
 			}
@@ -376,7 +379,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 					if hp, ok := topDialog.(HaloProvider); ok {
 						hasHalo = hp.HasHalo()
 					}
-					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.UI.Shadow, hasHalo, headerH)
+					lx, ly := layout.DialogPosition(mode, fgWidth, fgHeight, m.width, targetHeight, m.config.Appearance.ForConnType(m.connType).Shadow, hasHalo, headerH)
 					c := tea.NewCursor(lx+rx, ly+ry)
 					c.Shape = shape
 					// Only the bar (ready to type) blinks; block (overwrite)
@@ -462,9 +465,11 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 		return
 	}
 	ctx := displayengine.GetActiveContext()
+	scope := displayengine.StylesScopeKey()
 	var shadowBox string
 	if shadowBoxCache.width == w && shadowBoxCache.height == h &&
-		shadowBoxCache.level == ctx.ShadowLevel && shadowBoxCache.lineChars == ctx.LineCharacters {
+		shadowBoxCache.level == ctx.ShadowLevel && shadowBoxCache.lineChars == ctx.LineCharacters &&
+		shadowBoxCache.scope == scope {
 		shadowBox = shadowBoxCache.result
 	} else {
 		shadowBox = displayengine.GetShadowBoxCtx(content, ctx)
@@ -472,6 +477,7 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 		shadowBoxCache.height = h
 		shadowBoxCache.level = ctx.ShadowLevel
 		shadowBoxCache.lineChars = ctx.LineCharacters
+		shadowBoxCache.scope = scope
 		shadowBoxCache.result = shadowBox
 	}
 	if shadowBox != "" {

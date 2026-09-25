@@ -456,6 +456,7 @@ func (m *AppModel) Init() tea.Cmd {
 		// querying it too would be harmless but pointless.
 		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes))
 	}
-	RegisterConnTypeTints(m.ctx, m.connType, m.config.AnsiColors.ForConnType(m.connType))
+	RegisterConnTypeTints(m.ctx, m.connType, m.config.Appearance.ForConnType(m.connType).AnsiColors)
+	RegisterConnTypeTheme(m.ctx, m.connType, m.config)
 	return logger.BatchRecoverTUI(m.ctx, cmds...)
 }

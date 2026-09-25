@@ -213,3 +213,5 @@ require (
 	gotest.tools/v3 v3.5.2 // indirect
 	tags.cncf.io/container-device-interface v1.1.1 // indirect
 )
+
+replace github.com/GhostWriters/semstyle => ../semstyle

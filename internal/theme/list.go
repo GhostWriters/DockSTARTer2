@@ -27,7 +27,7 @@ type ThemeMetadata struct {
 }
 
 // List returns a list of available themes with their metadata. currentValue
-// is the active config.AppConfig.UI.Theme value (e.g. "user:MyTheme"),
+// is a connection type's config.Appearance.Theme value (e.g. "user:MyTheme"),
 // used only so a dot-prefixed user theme file that's somehow the active
 // selection still appears -- otherwise the Appearance menu would show no
 // entry at all matching the theme actually in use. Pass "" if the caller

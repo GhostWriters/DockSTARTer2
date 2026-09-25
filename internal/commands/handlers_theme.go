@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,17 +28,52 @@ func themeFilePath(arg string) string {
 	return strings.TrimPrefix(arg, "file:")
 }
 
+// splitThemeValueArgs separates a --theme/--theme-* command's optional value
+// from its optional connection-type list (see parseConnTypeList). A lone
+// argument is a type list if it parses as one, otherwise the value. An
+// omitted type list means every connection type.
+func splitThemeValueArgs(args []string) (value string, connTypes []string, err error) {
+	switch len(args) {
+	case 0:
+		return "", config.ConnTypes, nil
+	case 1:
+		if types, typeErr := parseConnTypeList(args[0]); typeErr == nil {
+			return "", types, nil
+		}
+		return args[0], config.ConnTypes, nil
+	default:
+		types, typeErr := parseConnTypeList(args[1])
+		if typeErr != nil {
+			return "", nil, typeErr
+		}
+		return args[0], types, nil
+	}
+}
+
+// reloadLocalTheme re-registers the unprefixed theme when connTypes includes
+// "local", whose theme it is.
+func reloadLocalTheme(conf config.AppConfig, connTypes []string) {
+	if slices.Contains(connTypes, "local") {
+		_, _ = theme.Load(conf.Appearance.Local.Theme, "")
+	}
+}
+
 func HandleTheme(ctx context.Context, group *CommandGroup) error {
 	switch group.Command {
 	case "-T", "--theme":
 		conf := config.LoadAppConfig()
-		if len(group.Args) == 0 {
-			logger.Notice(ctx, "Current theme is: {{|Theme|}}%s{{[-]}}", theme.ThemeDisplayName(conf.UI.Theme))
+		arg, connTypes, err := splitThemeValueArgs(group.Args)
+		if err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
+		}
+		if arg == "" {
+			for _, ct := range connTypes {
+				logger.Notice(ctx, "Current %s theme is: {{|Theme|}}%s{{[-]}}", config.ConnTypeLabel(ct), theme.ThemeDisplayName(conf.Appearance.ForConnType(ct).Theme))
+			}
 			logger.Notice(ctx, "Run '{{|UserCommand|}}%s --theme-list{{[-]}}' to see available themes.", version.CommandName)
 			return nil
 		}
-
-		arg := group.Args[0]
 
 		if isThemeFilePath(arg) {
 			absPath, err := filepath.Abs(themeFilePath(arg))
@@ -50,13 +86,15 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 				return err
 			}
 			configValue := "file:" + absPath
-			conf.UI.Theme = configValue
+			for _, ct := range connTypes {
+				conf.Appearance.Ptr(ct).Theme = configValue
+			}
 			if err := config.SaveAppConfig(conf); err != nil {
 				logger.Error(ctx, "Failed to save theme setting: %v", err)
 				return err
 			}
-			logger.Notice(ctx, "Theme set to file: "+console.FormatFolderPath(absPath))
-			_, _ = theme.Load(configValue, "")
+			logger.Notice(ctx, "Theme for %s set to file: "+console.FormatFolderPath(absPath), config.ConnTypeLabels(connTypes))
+			reloadLocalTheme(conf, connTypes)
 			return nil
 		}
 
@@ -73,37 +111,46 @@ func HandleTheme(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "Theme '{{|Theme|}}%s{{[-]}}' not found.", theme.ThemeDisplayName(newTheme))
 			return err
 		}
-		conf.UI.Theme = newTheme
+		var defaults *theme.ThemeDefaults
 		if tf, err := theme.GetThemeFile(newTheme); err == nil {
-			if defaults, derr := theme.FileDefaults(tf); derr == nil && defaults != nil {
-				changes := theme.ApplyThemeDefaults(&conf, *defaults)
-				if len(changes) > 0 {
-					var lines []string
-					for k, v := range changes {
-						var status string
-						switch v {
-						case "true":
-							status = "{{|Var|}}ON{{[-]}}"
-						case "false":
-							status = "{{|Var|}}OFF{{[-]}}"
-						default:
-							status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
-						}
-						lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
-					}
-					logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
-				}
+			if d, derr := theme.FileDefaults(tf); derr == nil {
+				defaults = d
 			}
+		}
+		var changes map[string]string
+		for _, ct := range connTypes {
+			a := conf.Appearance.Ptr(ct)
+			a.Theme = newTheme
+			if defaults != nil {
+				changes = theme.ApplyThemeDefaults(a, *defaults)
+			}
+		}
+		if len(changes) > 0 {
+			var lines []string
+			for k, v := range changes {
+				var status string
+				switch v {
+				case "true":
+					status = "{{|Var|}}ON{{[-]}}"
+				case "false":
+					status = "{{|Var|}}OFF{{[-]}}"
+				default:
+					status = fmt.Sprintf("{{|Var|}}%s{{[-]}}", v)
+				}
+				lines = append(lines, fmt.Sprintf("\t- %s: %s", k, status))
+			}
+			slices.Sort(lines)
+			logger.Notice(ctx, "Applying settings from theme file:\n%s", strings.Join(lines, "\n"))
 		}
 		if err := config.SaveAppConfig(conf); err != nil {
 			logger.Error(ctx, "Failed to save theme setting: %v", err)
 			return err
 		}
-		logger.Notice(ctx, "Theme updated to: {{|Theme|}}%s{{[-]}}", theme.ThemeDisplayName(newTheme))
-		_, _ = theme.Load(newTheme, "")
+		logger.Notice(ctx, "Theme for %s updated to: {{|Theme|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), theme.ThemeDisplayName(newTheme))
+		reloadLocalTheme(conf, connTypes)
 
 	case "--theme-list":
-		themes, err := theme.List(config.LoadAppConfig().UI.Theme)
+		themes, err := theme.List(config.LoadAppConfig().Appearance.Local.Theme)
 		if err != nil {
 			return err
 		}
@@ -160,86 +207,221 @@ func parseHyperlinks(ctx context.Context, arg string) (string, error) {
 	return "", fmt.Errorf("invalid hyperlinks mode")
 }
 
+// themeToggle is one on/off --theme-* command: which Appearance field it
+// sets, and to what.
+type themeToggle struct {
+	set func(a *config.Appearance, v bool)
+	on  bool
+}
+
+var (
+	setLineCharacters = func(a *config.Appearance, v bool) { a.LineCharacters = v }
+	setBorders        = func(a *config.Appearance, v bool) { a.Borders = v }
+	setLargeButtons   = func(a *config.Appearance, v bool) { a.LargeButtons = v }
+	setLargeTitleBars = func(a *config.Appearance, v bool) { a.LargeTitleBars = v }
+	setShadow         = func(a *config.Appearance, v bool) { a.Shadow = v }
+	setScrollbar      = func(a *config.Appearance, v bool) { a.Scrollbar = v }
+	setSpinner        = func(a *config.Appearance, v bool) { a.Spinner = v }
+	setMenuBrackets   = func(a *config.Appearance, v bool) { a.MenuBrackets = v }
+)
+
+// themeToggles holds every per-connection-type on/off --theme-* command.
+var themeToggles = map[string]themeToggle{
+	"--theme-lines":              {setLineCharacters, true},
+	"--theme-line":               {setLineCharacters, true},
+	"--theme-no-lines":           {setLineCharacters, false},
+	"--theme-no-line":            {setLineCharacters, false},
+	"--theme-borders":            {setBorders, true},
+	"--theme-border":             {setBorders, true},
+	"--theme-no-borders":         {setBorders, false},
+	"--theme-no-border":          {setBorders, false},
+	"--theme-large-buttons":      {setLargeButtons, true},
+	"--theme-no-large-buttons":   {setLargeButtons, false},
+	"--theme-large-titlebars":    {setLargeTitleBars, true},
+	"--theme-no-large-titlebars": {setLargeTitleBars, false},
+	"--theme-shadows":            {setShadow, true},
+	"--theme-shadow":             {setShadow, true},
+	"--theme-no-shadows":         {setShadow, false},
+	"--theme-no-shadow":          {setShadow, false},
+	"--theme-scrollbar":          {setScrollbar, true},
+	"--theme-scrollbars":         {setScrollbar, true},
+	"--theme-no-scrollbar":       {setScrollbar, false},
+	"--theme-no-scrollbars":      {setScrollbar, false},
+	"--theme-spinner":            {setSpinner, true},
+	"--theme-spinners":           {setSpinner, true},
+	"--theme-no-spinner":         {setSpinner, false},
+	"--theme-no-spinners":        {setSpinner, false},
+	"--theme-menu-brackets":      {setMenuBrackets, true},
+	"--theme-no-menu-brackets":   {setMenuBrackets, false},
+}
+
+// themeValueSetting is one per-connection-type --theme-* command taking a
+// value: how to show its current value, and how to parse and apply a new one.
+type themeValueSetting struct {
+	label string
+	get   func(a config.Appearance) string
+	parse func(ctx context.Context, arg string) (func(a *config.Appearance), error)
+}
+
+// stringSetting builds a themeValueSetting for a string Appearance field.
+func stringSetting(label string, field func(a *config.Appearance) *string, parse func(ctx context.Context, arg string) (string, error)) themeValueSetting {
+	return themeValueSetting{
+		label: label,
+		get:   func(a config.Appearance) string { return *field(&a) },
+		parse: func(ctx context.Context, arg string) (func(a *config.Appearance), error) {
+			v, err := parse(ctx, arg)
+			if err != nil {
+				return nil, err
+			}
+			return func(a *config.Appearance) { *field(a) = v }, nil
+		},
+	}
+}
+
+// themeValueSettings holds every per-connection-type --theme-* command that
+// takes a value.
+var themeValueSettings = map[string]themeValueSetting{
+	"--theme-shadow-level": {
+		label: "shadow level",
+		get:   func(a config.Appearance) string { return strconv.Itoa(a.ShadowLevel) },
+		parse: func(ctx context.Context, arg string) (func(a *config.Appearance), error) {
+			level, ok := parseShadowLevel(arg)
+			if !ok {
+				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid, or percentage e.g. 50%%)", arg)
+				return nil, fmt.Errorf("invalid shadow level")
+			}
+			return func(a *config.Appearance) {
+				a.ShadowLevel = level
+				a.Shadow = level > 0
+			}, nil
+		},
+	},
+	"--theme-border-color": {
+		label: "border color setting",
+		get:   func(a config.Appearance) string { return strconv.Itoa(a.BorderColor) },
+		parse: func(ctx context.Context, arg string) (func(a *config.Appearance), error) {
+			switch arg {
+			case "1", "2", "3":
+				n, _ := strconv.Atoi(arg)
+				return func(a *config.Appearance) { a.BorderColor = n }, nil
+			}
+			logger.Error(ctx, "Invalid border color: %s (use 1, 2, or 3)", arg)
+			return nil, fmt.Errorf("invalid border color")
+		},
+	},
+	"--theme-dialog-title": stringSetting("dialog title alignment",
+		func(a *config.Appearance) *string { return &a.DialogTitleAlign },
+		func(ctx context.Context, arg string) (string, error) {
+			return parseTitleAlign(ctx, arg, "dialog title")
+		}),
+	"--theme-submenu-title": stringSetting("submenu title alignment",
+		func(a *config.Appearance) *string { return &a.SubmenuTitleAlign },
+		func(ctx context.Context, arg string) (string, error) {
+			return parseTitleAlign(ctx, arg, "submenu title")
+		}),
+	"--theme-panel-title": stringSetting("panel title alignment",
+		func(a *config.Appearance) *string { return &a.PanelTitleAlign },
+		func(ctx context.Context, arg string) (string, error) { return parseTitleAlign(ctx, arg, "log title") }),
+	"--theme-checkbox-brackets": stringSetting("checkbox brackets mode",
+		func(a *config.Appearance) *string { return &a.CheckboxBrackets },
+		func(ctx context.Context, arg string) (string, error) { return parseBracketMode(ctx, arg, "checkbox") }),
+	"--theme-radio-brackets": stringSetting("radio brackets mode",
+		func(a *config.Appearance) *string { return &a.RadioBrackets },
+		func(ctx context.Context, arg string) (string, error) { return parseBracketMode(ctx, arg, "radio") }),
+	"--theme-tab-layout": stringSetting("tab layout",
+		func(a *config.Appearance) *string { return &a.TabLayout },
+		parseTabLayout),
+}
+
+// parseShadowLevel parses a --theme-shadow-level argument: 0-4, a level
+// name, or a percentage.
+func parseShadowLevel(arg string) (int, bool) {
+	switch strings.ToLower(arg) {
+	case "0", "off", "none", "false", "no":
+		return 0, true
+	case "1", "light":
+		return 1, true
+	case "2", "medium":
+		return 2, true
+	case "3", "dark":
+		return 3, true
+	case "4", "solid", "full":
+		return 4, true
+	}
+	var percent int
+	if strings.HasSuffix(arg, "%") {
+		if _, err := fmt.Sscanf(arg, "%d%%", &percent); err == nil {
+			switch {
+			case percent <= 12:
+				return 0, true
+			case percent <= 37:
+				return 1, true
+			case percent <= 62:
+				return 2, true
+			case percent <= 87:
+				return 3, true
+			default:
+				return 4, true
+			}
+		}
+	}
+	return 0, false
+}
+
 func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
-	switch group.Command {
-	case "--theme-lines", "--theme-line":
-		conf.UI.LineCharacters = true
-	case "--theme-no-lines", "--theme-no-line":
-		conf.UI.LineCharacters = false
-	case "--theme-borders", "--theme-border":
-		conf.UI.Borders = true
-	case "--theme-no-borders", "--theme-no-border":
-		conf.UI.Borders = false
-	case "--theme-large-buttons":
-		conf.UI.LargeButtons = true
-	case "--theme-no-large-buttons":
-		conf.UI.LargeButtons = false
-	case "--theme-large-titlebars":
-		conf.UI.LargeTitleBars = true
-	case "--theme-no-large-titlebars":
-		conf.UI.LargeTitleBars = false
-	case "--theme-shadows", "--theme-shadow":
-		conf.UI.Shadow = true
-	case "--theme-no-shadows", "--theme-no-shadow":
-		conf.UI.Shadow = false
-	case "--theme-shadow-level":
+
+	if toggle, ok := themeToggles[group.Command]; ok {
+		connTypes := config.ConnTypes
 		if len(group.Args) > 0 {
-			arg := strings.ToLower(group.Args[0])
-			switch arg {
-			case "0", "off", "none", "false", "no":
-				conf.UI.ShadowLevel = 0
-				conf.UI.Shadow = false
-			case "1", "light":
-				conf.UI.ShadowLevel = 1
-				conf.UI.Shadow = true
-			case "2", "medium":
-				conf.UI.ShadowLevel = 2
-				conf.UI.Shadow = true
-			case "3", "dark":
-				conf.UI.ShadowLevel = 3
-				conf.UI.Shadow = true
-			case "4", "solid", "full":
-				conf.UI.ShadowLevel = 4
-				conf.UI.Shadow = true
-			default:
-				if strings.HasSuffix(arg, "%") {
-					var percent int
-					if _, err := fmt.Sscanf(arg, "%d%%", &percent); err == nil {
-						if percent <= 12 {
-							conf.UI.ShadowLevel = 0
-							conf.UI.Shadow = false
-						} else if percent <= 37 {
-							conf.UI.ShadowLevel = 1
-							conf.UI.Shadow = true
-						} else if percent <= 62 {
-							conf.UI.ShadowLevel = 2
-							conf.UI.Shadow = true
-						} else if percent <= 87 {
-							conf.UI.ShadowLevel = 3
-							conf.UI.Shadow = true
-						} else {
-							conf.UI.ShadowLevel = 4
-							conf.UI.Shadow = true
-						}
-						break
-					}
-				}
-				logger.Error(ctx, "Invalid shadow level: %s (use 0-4, or: off, light, medium, dark, solid, or percentage e.g. 50%%)", arg)
-				return fmt.Errorf("invalid shadow level")
+			var err error
+			if connTypes, err = parseConnTypeList(group.Args[0]); err != nil {
+				logger.Error(ctx, "%v", err)
+				return err
 			}
-		} else {
-			logger.Display(ctx, "Current shadow level: %d", conf.UI.ShadowLevel)
+		}
+		for _, ct := range connTypes {
+			toggle.set(conf.Appearance.Ptr(ct), toggle.on)
+		}
+		if err := config.SaveAppConfig(conf); err != nil {
+			logger.Error(ctx, "Failed to save theme setting: %v", err)
+			return err
+		}
+		if def, ok := Registry[group.Command]; ok && def.Title != "" {
+			logger.Notice(ctx, "%s for %s.", strings.TrimSuffix(def.Title, "."), config.ConnTypeLabels(connTypes))
+		}
+		return nil
+	}
+
+	if setting, ok := themeValueSettings[group.Command]; ok {
+		value, connTypes, err := splitThemeValueArgs(group.Args)
+		if err != nil {
+			logger.Error(ctx, "%v", err)
+			return err
+		}
+		if value == "" {
+			for _, ct := range connTypes {
+				logger.Display(ctx, "Current %s %s: %s", config.ConnTypeLabel(ct), setting.label, setting.get(conf.Appearance.ForConnType(ct)))
+			}
 			return nil
 		}
-	case "--theme-scrollbar", "--theme-scrollbars":
-		conf.UI.Scrollbar = true
-	case "--theme-no-scrollbar", "--theme-no-scrollbars":
-		conf.UI.Scrollbar = false
-	case "--theme-spinner", "--theme-spinners":
-		conf.UI.Spinner = true
-	case "--theme-no-spinner", "--theme-no-spinners":
-		conf.UI.Spinner = false
+		apply, err := setting.parse(ctx, value)
+		if err != nil {
+			return err
+		}
+		for _, ct := range connTypes {
+			apply(conf.Appearance.Ptr(ct))
+		}
+		if err := config.SaveAppConfig(conf); err != nil {
+			logger.Error(ctx, "Failed to save theme setting: %v", err)
+			return err
+		}
+		logger.Notice(ctx, "%s%s for %s set to: {{|Var|}}%s{{[-]}}", strings.ToUpper(setting.label[:1]), setting.label[1:],
+			config.ConnTypeLabels(connTypes), setting.get(conf.Appearance.ForConnType(connTypes[0])))
+		return nil
+	}
+
+	switch group.Command {
 	case "--theme-spinner-speed":
 		if len(group.Args) == 0 {
 			logger.Error(ctx, "Usage: --theme-spinner-speed <milliseconds>")
@@ -250,131 +432,42 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "Invalid spinner speed: %s (use 50-5000 ms)", group.Args[0])
 			return fmt.Errorf("invalid spinner speed")
 		}
-		conf.UI.SpinnerSpeed = ms
+		conf.Appearance.SpinnerSpeed = ms
 	case "--theme-refresh-rate":
 		if len(group.Args) == 0 {
 			logger.Error(ctx, "Usage: --theme-refresh-rate <milliseconds>")
 			return fmt.Errorf("missing argument")
 		}
 		ms, err := strconv.Atoi(strings.TrimSpace(group.Args[0]))
-		if err != nil || ms < 16 || ms > 1000 {
-			logger.Error(ctx, "Invalid refresh rate: %s (use 16-1000 ms)", group.Args[0])
+		if err != nil || ms < config.MinRefreshRateMS || ms > config.MaxRefreshRateMS {
+			logger.Error(ctx, "Invalid refresh rate: %s (use %d-%d ms)", group.Args[0], config.MinRefreshRateMS, config.MaxRefreshRateMS)
 			return fmt.Errorf("invalid refresh rate")
 		}
-		conf.UI.RefreshRate = ms
-	case "--theme-border-color":
-		if len(group.Args) > 0 {
-			switch group.Args[0] {
-			case "1":
-				conf.UI.BorderColor = 1
-			case "2":
-				conf.UI.BorderColor = 2
-			case "3":
-				conf.UI.BorderColor = 3
-			default:
-				logger.Error(ctx, "Invalid border color: %s (use 1, 2, or 3)", group.Args[0])
-				return fmt.Errorf("invalid border color")
-			}
-		} else {
-			logger.Display(ctx, "Current border color setting: %d", conf.UI.BorderColor)
-			return nil
-		}
-	case "--theme-dialog-title":
-		if len(group.Args) > 0 {
-			v, err := parseTitleAlign(ctx, group.Args[0], "dialog title")
-			if err != nil {
-				return err
-			}
-			conf.UI.DialogTitleAlign = v
-		} else {
-			logger.Display(ctx, "Current dialog title alignment: %s", conf.UI.DialogTitleAlign)
-			return nil
-		}
-	case "--theme-submenu-title":
-		if len(group.Args) > 0 {
-			v, err := parseTitleAlign(ctx, group.Args[0], "submenu title")
-			if err != nil {
-				return err
-			}
-			conf.UI.SubmenuTitleAlign = v
-		} else {
-			logger.Display(ctx, "Current submenu title alignment: %s", conf.UI.SubmenuTitleAlign)
-			return nil
-		}
-	case "--theme-panel-title":
-		if len(group.Args) > 0 {
-			v, err := parseTitleAlign(ctx, group.Args[0], "log title")
-			if err != nil {
-				return err
-			}
-			conf.UI.PanelTitleAlign = v
-		} else {
-			logger.Display(ctx, "Current panel title alignment: %s", conf.UI.PanelTitleAlign)
-			return nil
-		}
-	case "--theme-checkbox-brackets":
-		if len(group.Args) > 0 {
-			v, err := parseBracketMode(ctx, group.Args[0], "checkbox")
-			if err != nil {
-				return err
-			}
-			conf.UI.CheckboxBrackets = v
-		} else {
-			logger.Display(ctx, "Current checkbox brackets mode: %s", conf.UI.CheckboxBrackets)
-			return nil
-		}
-	case "--theme-radio-brackets":
-		if len(group.Args) > 0 {
-			v, err := parseBracketMode(ctx, group.Args[0], "radio")
-			if err != nil {
-				return err
-			}
-			conf.UI.RadioBrackets = v
-		} else {
-			logger.Display(ctx, "Current radio brackets mode: %s", conf.UI.RadioBrackets)
-			return nil
-		}
-	case "--theme-menu-brackets":
-		conf.UI.MenuBrackets = true
-	case "--theme-no-menu-brackets":
-		conf.UI.MenuBrackets = false
+		conf.Appearance.RefreshRate = ms
 	case "--theme-show-preview":
-		conf.UI.ShowPreview = true
+		conf.Appearance.ShowPreview = true
 	case "--theme-no-show-preview":
-		conf.UI.ShowPreview = false
-	case "--theme-tab-layout":
-		if len(group.Args) > 0 {
-			v, err := parseTabLayout(ctx, group.Args[0])
-			if err != nil {
-				return err
-			}
-			conf.UI.TabLayout = v
-		} else {
-			logger.Display(ctx, "Current tab layout: %s", conf.UI.TabLayout)
-			return nil
-		}
+		conf.Appearance.ShowPreview = false
 	case "--theme-markdown-hyperlinks":
-		if len(group.Args) > 0 {
-			v, err := parseMarkdownHyperlinks(ctx, group.Args[0])
-			if err != nil {
-				return err
-			}
-			conf.UI.MarkdownHyperlinks = v
-		} else {
-			logger.Display(ctx, "Current markdown hyperlinks mode: %s", conf.UI.MarkdownHyperlinks)
+		if len(group.Args) == 0 {
+			logger.Display(ctx, "Current markdown hyperlinks mode: %s", conf.Appearance.MarkdownHyperlinks)
 			return nil
 		}
+		v, err := parseMarkdownHyperlinks(ctx, group.Args[0])
+		if err != nil {
+			return err
+		}
+		conf.Appearance.MarkdownHyperlinks = v
 	case "--theme-hyperlinks":
-		if len(group.Args) > 0 {
-			v, err := parseHyperlinks(ctx, group.Args[0])
-			if err != nil {
-				return err
-			}
-			conf.UI.Hyperlinks = v
-		} else {
-			logger.Display(ctx, "Current hyperlinks mode: %s", conf.UI.Hyperlinks)
+		if len(group.Args) == 0 {
+			logger.Display(ctx, "Current hyperlinks mode: %s", conf.Appearance.Hyperlinks)
 			return nil
 		}
+		v, err := parseHyperlinks(ctx, group.Args[0])
+		if err != nil {
+			return err
+		}
+		conf.Appearance.Hyperlinks = v
 	}
 
 	if err := config.SaveAppConfig(conf); err != nil {
@@ -382,58 +475,20 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	// Log a confirmation using the registry title for all simple toggle commands.
 	switch group.Command {
-	case "--theme-lines", "--theme-line", "--theme-no-lines", "--theme-no-line",
-		"--theme-borders", "--theme-border", "--theme-no-borders", "--theme-no-border",
-		"--theme-large-buttons", "--theme-no-large-buttons",
-		"--theme-large-titlebars", "--theme-no-large-titlebars",
-		"--theme-shadows", "--theme-shadow", "--theme-no-shadows", "--theme-no-shadow",
-		"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
-		"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
-		"--theme-menu-brackets", "--theme-no-menu-brackets",
-		"--theme-show-preview", "--theme-no-show-preview":
+	case "--theme-show-preview", "--theme-no-show-preview":
 		if def, ok := Registry[group.Command]; ok && def.Title != "" {
 			logger.Notice(ctx, "%s", def.Title)
 		}
+	case "--theme-spinner-speed":
+		logger.Notice(ctx, "Spinner speed set to: {{|Var|}}%dms{{[-]}}", conf.Appearance.SpinnerSpeed)
+	case "--theme-refresh-rate":
+		logger.Notice(ctx, "Refresh rate set to: {{|Var|}}%dms{{[-]}}", conf.Appearance.RefreshRate)
+	case "--theme-markdown-hyperlinks":
+		logger.Notice(ctx, "Markdown hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.Appearance.MarkdownHyperlinks)
+	case "--theme-hyperlinks":
+		logger.Notice(ctx, "Hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.Appearance.Hyperlinks)
 	}
-
-	if group.Command == "--theme-spinner-speed" && len(group.Args) > 0 {
-		logger.Notice(ctx, "Spinner speed set to: {{|Var|}}%sms{{[-]}}", group.Args[0])
-	}
-	if group.Command == "--theme-refresh-rate" && len(group.Args) > 0 {
-		logger.Notice(ctx, "Refresh rate set to: {{|Var|}}%sms{{[-]}}", group.Args[0])
-	}
-	if group.Command == "--theme-border-color" && len(group.Args) > 0 {
-		logger.Notice(ctx, "Border color set to: {{|Var|}}%s{{[-]}}", group.Args[0])
-	}
-	if group.Command == "--theme-tab-layout" && len(group.Args) > 0 {
-		logger.Notice(ctx, "Tab layout set to: {{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
-	}
-	if group.Command == "--theme-markdown-hyperlinks" && len(group.Args) > 0 {
-		logger.Notice(ctx, "Markdown hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.UI.MarkdownHyperlinks)
-	}
-	if group.Command == "--theme-hyperlinks" && len(group.Args) > 0 {
-		logger.Notice(ctx, "Hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.UI.Hyperlinks)
-	}
-	if group.Command == "--theme-shadow-level" && len(group.Args) > 0 {
-		var percent int
-		switch conf.UI.ShadowLevel {
-		case 0:
-			percent = 0
-		case 1:
-			percent = 25
-		case 2:
-			percent = 50
-		case 3:
-			percent = 75
-		case 4:
-			percent = 100
-		}
-		logger.Notice(ctx, "Shadow level set to %d%%.", percent)
-		logger.Notice(ctx, "Theme setting updated: %s", group.Command)
-	}
-
 	return nil
 }
 
@@ -537,7 +592,7 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 
 func HandleThemeTable(ctx context.Context) error {
 	headers := []string{"Theme", "Description", "Author"}
-	themes, err := theme.List(config.LoadAppConfig().UI.Theme)
+	themes, err := theme.List(config.LoadAppConfig().Appearance.Local.Theme)
 	if err != nil {
 		logger.Error(ctx, "Failed to list themes: %v", err)
 		return err

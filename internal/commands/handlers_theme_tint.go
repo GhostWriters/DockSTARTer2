@@ -65,12 +65,8 @@ func parseOptionalConnTypeList(s string) ([]string, error) {
 // for an unrecognized connType.
 func ansiColorsPtr(conf *config.AppConfig, connType string) *config.AnsiColors {
 	switch connType {
-	case "local":
-		return &conf.AnsiColors.Local
-	case "ssh":
-		return &conf.AnsiColors.SSH
-	case "web":
-		return &conf.AnsiColors.Web
+	case "local", "ssh", "web":
+		return &conf.Appearance.Ptr(connType).AnsiColors
 	default:
 		return nil
 	}
@@ -311,7 +307,7 @@ func applyTintRef(ctx context.Context, connTypes, elements []string, data []byte
 	}
 
 	logger.Notice(ctx, "Applied %s color palette:", tintedThemingLink())
-	logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+	logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	printTintDetails(ctx, ref, "\t\t")
 	return nil
 }
@@ -1040,9 +1036,9 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 	}
 
 	if enabled {
-		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	} else {
-		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	}
 	return nil
 }
@@ -1200,7 +1196,7 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "Failed to save tint setting: %v", err)
 			return err
 		}
-		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 		return nil
 	}
 
@@ -1227,12 +1223,12 @@ func handleTintStatus(ctx context.Context) error {
 		label string
 		c     config.AnsiColors
 	}{
-		{"local", conf.AnsiColors.Local},
-		{"ssh", conf.AnsiColors.SSH},
-		{"web", conf.AnsiColors.Web},
+		{"local", conf.Appearance.Local.AnsiColors},
+		{"ssh", conf.Appearance.SSH.AnsiColors},
+		{"web", conf.Appearance.Web.AnsiColors},
 	}
 	for _, row := range rows {
-		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
+		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", config.ConnTypeLabel(row.label))
 		printTintElementStatus(ctx, "menu", row.c.AnsiElementColors)
 		printTintElementStatus(ctx, "programbox", row.c.ProgramBox)
 		if row.label == "local" {

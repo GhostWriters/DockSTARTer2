@@ -45,10 +45,10 @@ func DefaultWebDisplaySettings() WebDisplaySettings {
 // defaultRefreshRate returns the Appearance menu's configured refresh rate,
 // falling back to the config package's default if unset.
 func defaultRefreshRate() int {
-	if rate := displayengine.CurrentConfig().UI.RefreshRate; rate > 0 {
+	if rate := displayengine.CurrentConfig().Appearance.RefreshRate; rate > 0 {
 		return rate
 	}
-	return config.DefaultConfig().UI.RefreshRate
+	return config.DefaultConfig().Appearance.RefreshRate
 }
 
 // refreshRateHelp is the helpline text shown while the Refresh Rate field is focused.
@@ -652,7 +652,7 @@ func (d *WebDisplayDialog) SetSize(width, height int) {
 	}
 	btnH := displayengine.ButtonRowHeight(contentW, 0, d.outer.GetButtonSpecsForState()...)
 	largeTitleOverhead := 0
-	if displayengine.CurrentConfig().UI.LargeTitleBars {
+	if displayengine.ActiveAppearance().LargeTitleBars {
 		largeTitleOverhead = displayengine.LargeTitleBarOverhead
 	}
 

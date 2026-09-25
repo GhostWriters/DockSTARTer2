@@ -1,7 +1,24 @@
 # DockSTARTer2 configuration file
 # Edit this file to customise your installation.
 
-[ui]
+# ── Appearance ────────────────────────────────────────────────────────────────
+# Settings directly under [appearance] are shared by every connection type.
+# [appearance.local], [appearance.ssh], and [appearance.web] each set their
+# own theme, the settings a theme can suggest defaults for, and their own
+# ANSI palette. "local" is DS2 run in a terminal on this machine (including
+# one reached through a normal SSH login); "ssh" and "web" are sessions
+# through DS2's own SSH and web servers. See `ds2 -h --theme` and
+# `ds2 -h --tint`.
+[appearance]
+spinner_speed        = 120         # milliseconds per spinner frame
+refresh_rate         = 60          # screen repaint interval in milliseconds
+panel_local          = "log"       # "none", "log", "console", or "system" (for local sessions)
+panel_remote         = "log"       # "none", "log", "console", or "system" (for ssh/web sessions)
+show_preview         = true        # default visibility of the Appearance Settings preview panel
+markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
+hyperlinks           = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags
+
+[appearance.local]
 theme                = "DockSTARTer"
 borders              = true
 large_buttons        = true
@@ -11,22 +28,330 @@ shadow               = true
 shadow_level         = 2           # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
 scrollbar            = true
 spinner              = true
-spinner_speed        = 120         # milliseconds per spinner frame
-refresh_rate         = 60          # screen repaint interval in milliseconds
 border_color         = 3           # 1=primary border colour, 2=secondary, 3=both
 dialog_title_align   = "center"    # "center" or "left"
 submenu_title_align  = "left"      # "center" or "left"
 panel_title_align    = "center"    # "center" or "left"
-panel_local          = "log"       # "none", "log", "console", or "system" (for local sessions)
-panel_remote         = "log"       # "none", "log", "console", or "system" (for ssh/web sessions)
 checkbox_brackets    = "always"    # "never", "selected", or "always" -- the focused row's brackets always show regardless
 radio_brackets       = "always"    # "never", "selected", or "always" -- the focused row's brackets always show regardless
 menu_brackets        = true        # wrap the focused menu item's tag in [brackets]
 line_number_brackets = true        # wrap the focused line's number in [brackets] in the env editor
 tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
-show_preview         = true        # default visibility of the Appearance Settings preview panel
-markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
-hyperlinks           = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags
+
+# ansi_palette: optional overrides for the 16 standard ANSI colors (plus 8
+# base24 extras with no ANSI slot). Empty means no override -- colors render
+# as normal. "web" ships tinted by default (its client has no palette of its
+# own to fall back on); local/ssh don't need to.
+#
+# Each connection type has three independent elements: "menu" (menus,
+# dialogs, panels), "programbox" (streamed command output), and "cli" (a
+# bare command-line invocation). tint seeds a whole element from a
+# tinted-theming scheme; fields set explicitly still win per-slot.
+# tint_enabled/override_enabled toggle tint/fields on or off as a group,
+# independently.
+#
+# See `ds2 -h --tint` and `ds2 -h --ansi-override` for full syntax
+# (reference prefixes, element/type targeting, slot names).
+[appearance.local.ansi_palette.menu]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.local.ansi_palette.programbox]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.local.ansi_palette.cli]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.ssh]
+theme                = "DockSTARTer"
+borders              = true
+large_buttons        = true
+large_title_bars     = true
+line_characters      = true
+shadow               = true
+shadow_level         = 2           # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
+scrollbar            = true
+spinner              = true
+border_color         = 3           # 1=primary border colour, 2=secondary, 3=both
+dialog_title_align   = "center"    # "center" or "left"
+submenu_title_align  = "left"      # "center" or "left"
+panel_title_align    = "center"    # "center" or "left"
+checkbox_brackets    = "always"    # "never", "selected", or "always" -- the focused row's brackets always show regardless
+radio_brackets       = "always"    # "never", "selected", or "always" -- the focused row's brackets always show regardless
+menu_brackets        = true        # wrap the focused menu item's tag in [brackets]
+line_number_brackets = true        # wrap the focused line's number in [brackets] in the env editor
+tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
+
+[appearance.ssh.ansi_palette.menu]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.ssh.ansi_palette.programbox]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.ssh.ansi_palette.cli]
+tint_enabled = true
+override_enabled = true
+tint = ""
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.web]
+theme                = "DockSTARTer"
+borders              = true
+large_buttons        = true
+large_title_bars     = true
+line_characters      = true
+shadow               = true
+shadow_level         = 2           # 0=off 1=light(░) 2=medium(▒) 3=dark(▓) 4=solid(█)
+scrollbar            = true
+spinner              = true
+border_color         = 3           # 1=primary border colour, 2=secondary, 3=both
+dialog_title_align   = "center"    # "center" or "left"
+submenu_title_align  = "left"      # "center" or "left"
+panel_title_align    = "center"    # "center" or "left"
+checkbox_brackets    = "always"    # "never", "selected", or "always" -- the focused row's brackets always show regardless
+radio_brackets       = "always"    # "never", "selected", or "always" -- the focused row's brackets always show regardless
+menu_brackets        = true        # wrap the focused menu item's tag in [brackets]
+line_number_brackets = true        # wrap the focused line's number in [brackets] in the env editor
+tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
+
+[appearance.web.ansi_palette.menu]
+tint_enabled = true
+override_enabled = true
+tint = "embedded:ansi"
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.web.ansi_palette.programbox]
+tint_enabled = true
+override_enabled = true
+tint = "embedded:ansi"
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
+
+[appearance.web.ansi_palette.cli]
+tint_enabled = true
+override_enabled = true
+tint = "embedded:ansi"
+base00 = "" # black
+base08 = "" # red
+base0b = "" # green
+base0a = "" # yellow
+base0d = "" # blue
+base0e = "" # magenta
+base0c = "" # cyan
+base05 = "" # white
+base03 = "" # bright black
+base12 = "" # bright red
+base14 = "" # bright green
+base13 = "" # bright yellow
+base16 = "" # bright blue
+base17 = "" # bright magenta
+base15 = "" # bright cyan
+base07 = "" # bright white
+base01 = "" # (no ANSI slot; darker background shade)
+base02 = "" # (no ANSI slot; darkest background shade)
+base04 = "" # (no ANSI slot; dark foreground shade)
+base06 = "" # (no ANSI slot; light foreground shade)
+base09 = "" # (no ANSI slot; orange)
+base0f = "" # (no ANSI slot; brown)
+base10 = "" # (no ANSI slot; base24 darker background)
+base11 = "" # (no ANSI slot; base24 darkest background)
 
 [paths]
 config_folder  = "${XDG_CONFIG_HOME}"
@@ -61,280 +386,3 @@ auto_setcap  = false               # keep CAP_CHOWN/CAP_FOWNER applied to the bi
 setcap_asked = false               # set automatically once the one-time auto_setcap question has
                                    # been answered; the question is skipped when auto_setcap is
                                    # already true (e.g. enabled here by hand)
-
-# ── ANSI palette overrides ──────────────────────────────────────────────
-# Optional per-connection-type overrides for the 16 standard ANSI colors
-# (plus 8 base24 extras with no ANSI slot). Empty means no override --
-# colors render as normal. "web" ships tinted by default (its client has
-# no palette of its own to fall back on); local/ssh don't need to.
-#
-# Each connType has a "menu" element (below), plus optional "programbox"/
-# "cli" elements with their own independent palette (unset = same as
-# menu). tint seeds a whole element from a tinted-theming scheme; fields
-# set explicitly still win per-slot. tint_enabled/override_enabled toggle
-# tint/fields on or off as a group, independently.
-#
-# See `ds2 -h --tint` and `ds2 -h --ansi-override` for full syntax
-# (reference prefixes, element/type targeting, slot names).
-[ansi_palette]
-
-[ansi_palette.local.menu]
-tint_enabled = true
-override_enabled = true
-tint = ""
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.local.programbox]
-tint_enabled = true
-override_enabled = true
-tint = ""
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.local.cli]
-tint_enabled = true
-override_enabled = true
-tint = ""
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.ssh.menu]
-tint_enabled = true
-override_enabled = true
-tint = ""
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.ssh.programbox]
-tint_enabled = true
-override_enabled = true
-tint = ""
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.ssh.cli]
-tint_enabled = true
-override_enabled = true
-tint = ""
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.web.menu]
-tint_enabled = true
-override_enabled = true
-tint = "embedded:ansi"
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.web.programbox]
-tint_enabled = true
-override_enabled = true
-tint = "embedded:ansi"
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)
-
-[ansi_palette.web.cli]
-tint_enabled = true
-override_enabled = true
-tint = "embedded:ansi"
-base00 = "" # black
-base08 = "" # red
-base0b = "" # green
-base0a = "" # yellow
-base0d = "" # blue
-base0e = "" # magenta
-base0c = "" # cyan
-base05 = "" # white
-base03 = "" # bright black
-base12 = "" # bright red
-base14 = "" # bright green
-base13 = "" # bright yellow
-base16 = "" # bright blue
-base17 = "" # bright magenta
-base15 = "" # bright cyan
-base07 = "" # bright white
-base01 = "" # (no ANSI slot; darker background shade)
-base02 = "" # (no ANSI slot; darkest background shade)
-base04 = "" # (no ANSI slot; dark foreground shade)
-base06 = "" # (no ANSI slot; light foreground shade)
-base09 = "" # (no ANSI slot; orange)
-base0f = "" # (no ANSI slot; brown)
-base10 = "" # (no ANSI slot; base24 darker background)
-base11 = "" # (no ANSI slot; base24 darkest background)

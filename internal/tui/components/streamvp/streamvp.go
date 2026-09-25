@@ -190,7 +190,7 @@ func (m *Model) ClearSpinner() {
 // the last advance. Returns true if the frame was updated. Used by the global
 // tick driver in the TUI app model instead of the per-instance SpinnerTickCmd.
 func (m *Model) AdvanceSpinner(now time.Time) bool {
-	if !m.CommandRunning || !console.SpinnerEnabled {
+	if !m.CommandRunning || !console.SpinnerEnabled() {
 		return false
 	}
 	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
@@ -213,7 +213,7 @@ func (m *Model) AdvanceSpinner(now time.Time) bool {
 // CurrentFrame returns the current spinner frame character, or "" if spinners
 // are disabled or CommandRunning is false.
 func (m *Model) CurrentFrame() string {
-	if !m.CommandRunning || !console.SpinnerEnabled {
+	if !m.CommandRunning || !console.SpinnerEnabled() {
 		return ""
 	}
 	lineChars := getLineCharacters()
@@ -291,5 +291,5 @@ func (m *Model) trimHistory() {
 var getLineCharacters = func() bool {
 	// Late-bound import avoids an import cycle: streamvp → tui.
 	// We read the global via the console package which has no cycle.
-	return console.LineCharacters
+	return console.LineCharacters()
 }

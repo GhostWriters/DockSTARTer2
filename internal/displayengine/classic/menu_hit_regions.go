@@ -390,7 +390,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	// 3b. Scrollbar hit regions (when scrollbar is active)
-	if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
+	if ActiveAppearance().Scrollbar && m.Scroll.Info.Needed {
 		var sbX int
 		switch {
 		case m.FlowColumns >= 2 && m.MaxFlowRows > 0:

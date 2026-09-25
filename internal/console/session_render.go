@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"sync"
 
 	"github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/colorprofile"
@@ -59,12 +60,43 @@ func ActivateTintForElement(element string, fn func()) {
 	fn()
 }
 
-// ActivateTintFor makes connType's registered tint the active one for the
-// duration of fn, then restores whatever was active before -- see
-// semstyle.RunWithTint's own doc comment for the locking/serialization this
-// relies on.
+// connThemePrefixes maps a connType to the semstyle theme namespace its own
+// theme is registered under; a connType with no entry renders with the
+// unprefixed (local) theme.
+var (
+	connThemePrefixesMu sync.RWMutex
+	connThemePrefixes   = map[string]string{}
+)
+
+// SetThemePrefixForConnType records the semstyle theme namespace connType's
+// theme is registered under ("" for the unprefixed theme).
+func SetThemePrefixForConnType(connType, prefix string) {
+	connThemePrefixesMu.Lock()
+	defer connThemePrefixesMu.Unlock()
+	if prefix == "" {
+		delete(connThemePrefixes, connType)
+		return
+	}
+	connThemePrefixes[connType] = prefix
+}
+
+// ThemePrefixForConnType returns the semstyle theme namespace connType
+// renders with ("" for the unprefixed theme).
+func ThemePrefixForConnType(connType string) string {
+	connThemePrefixesMu.RLock()
+	defer connThemePrefixesMu.RUnlock()
+	return connThemePrefixes[connType]
+}
+
+// ActivateTintFor makes connType's registered tint and theme namespace, and
+// connType itself (see ActiveConnType), the active ones for the duration of fn, then restores whatever was active
+// before -- see semstyle.RunWithRenderScope's own doc comment for the
+// locking/serialization this relies on.
 func ActivateTintFor(connType string, fn func()) {
-	semstyle.RunWithTint(TintKeyForConnType(connType), fn)
+	semstyle.RunWithRenderScope(TintKeyForConnType(connType), ThemePrefixForConnType(connType), func() {
+		defer SetActiveConnType(connType)()
+		fn()
+	})
 }
 
 // ActivateSessionRenderContext nests ActivateTintFor(connType, ...) inside
@@ -99,6 +131,29 @@ type sessionRenderInfo struct {
 // concurrently rendering session.
 func WithSessionRenderContext(ctx context.Context, connType string, profile colorprofile.Profile) context.Context {
 	return context.WithValue(ctx, sessionRenderKey{}, sessionRenderInfo{connType: connType, profile: profile})
+}
+
+// connTypeKey is the context key for WithConnType.
+type connTypeKey struct{}
+
+// WithConnType attaches the connType of the session that owns ctx, so work
+// running off the session's own render pass (a ProgramBox task, say) can
+// read that session's per-connType settings.
+func WithConnType(ctx context.Context, connType string) context.Context {
+	return context.WithValue(ctx, connTypeKey{}, connType)
+}
+
+// ConnTypeFromContext returns the connType attached to ctx by WithConnType
+// or WithSessionRenderContext, or "local" if ctx carries neither (a bare CLI
+// invocation).
+func ConnTypeFromContext(ctx context.Context) string {
+	if info, ok := ctx.Value(sessionRenderKey{}).(sessionRenderInfo); ok && info.connType != "" {
+		return info.connType
+	}
+	if ct, ok := ctx.Value(connTypeKey{}).(string); ok && ct != "" {
+		return ct
+	}
+	return "local"
 }
 
 // RenderWithSessionContext runs fn with ctx's attached session render

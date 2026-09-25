@@ -127,18 +127,17 @@ func Initialize(ctx context.Context) error {
 	registerCallbacks()
 
 	cfg := config.LoadAppConfig()
-	console.SpinnerEnabled = cfg.UI.Spinner
-	console.RefreshRate = cfg.UI.RefreshRate
-	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
-	console.LineCharacters = cfg.UI.LineCharacters
-	console.HyperlinksMode = cfg.UI.Hyperlinks
-	if deflts, err := theme.Load(cfg.UI.Theme, ""); err != nil {
+	cfg.Appearance.ApplyToConsole()
+	console.RefreshRate = cfg.Appearance.RefreshRate
+	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.Appearance.SpinnerSpeed, cfg.Appearance.RefreshRate)
+	console.HyperlinksMode = cfg.Appearance.Hyperlinks
+	if deflts, err := theme.Load(cfg.Appearance.Local.Theme, ""); err != nil {
 		if deflts == nil {
 			// Default theme itself failed to parse — unrecoverable
 			logger.FatalWithStack(ctx, "failed to load default theme: %v", err)
 		}
 		// Non-default theme fell back to default — log warning and continue
-		logger.Warn(ctx, "failed to load theme '%s', fell back to default: %v", cfg.UI.Theme, err)
+		logger.Warn(ctx, "failed to load theme '%s', fell back to default: %v", cfg.Appearance.Local.Theme, err)
 	}
 
 	// Initialize styles from theme
@@ -195,10 +194,10 @@ func resolveRefreshRate(connType, webToken string) int {
 			return clampRefreshRate(rate)
 		}
 	}
-	if displayengine.CurrentConfig().UI.RefreshRate > 0 {
-		return displayengine.CurrentConfig().UI.RefreshRate
+	if displayengine.CurrentConfig().Appearance.RefreshRate > 0 {
+		return displayengine.CurrentConfig().Appearance.RefreshRate
 	}
-	return config.DefaultConfig().UI.RefreshRate
+	return config.DefaultConfig().Appearance.RefreshRate
 }
 
 // clampRefreshRate bounds a browser-supplied refresh rate to the same
@@ -261,7 +260,9 @@ func SendWebMsg(msg []byte) {
 // keyboard-triggered open (unlike a mouse click on a rendered OSC8
 // hyperlink, which xterm.js intercepts client-side) has no click to catch.
 //
-// Local sessions open the URL directly via console.OpenURL.
+// Local sessions open the URL directly via console.OpenURL, unless the
+// terminal itself was reached through a real SSH login (see
+// localShellIsRemote) -- there's no display on this machine to open it on.
 //
 // SSH sessions have no WebSocket to relay through, and a mouse click only
 // reaches a local browser if the client terminal supports OSC8 (e.g.
@@ -283,11 +284,14 @@ func OpenAppLink(ctx context.Context, url string) tea.Cmd {
 			return nil
 		}
 	case "local":
-		return func() tea.Msg {
-			_ = console.OpenURL(ctx, url)
-			return nil
+		if !localShellIsRemote() {
+			return func() tea.Msg {
+				_ = console.OpenURL(ctx, url)
+				return nil
+			}
 		}
-	default: // "ssh"
+		fallthrough
+	default: // "ssh", or a local terminal reached through a real SSH login
 		return tea.Batch(
 			tea.SetClipboard(url),
 			func() tea.Msg {
@@ -299,6 +303,15 @@ func OpenAppLink(ctx context.Context, url string) tea.Cmd {
 			},
 		)
 	}
+}
+
+// localShellIsRemote reports whether this process's own terminal was reached
+// through a real SSH login (not DS2's own SSH server) -- a local session
+// there has no display on this machine. Telnet and other remote-shell
+// protocols have no equivalent de facto standard env var, so they can't be
+// detected this way.
+func localShellIsRemote() bool {
+	return os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != "" || os.Getenv("SSH_CLIENT") != ""
 }
 
 // GetWebDisplaySettings returns the browser's current display settings for this session.
@@ -369,15 +382,12 @@ func init() {
 }
 
 // parseClientInfo extracts IP and connection type from environment strings.
-// viaOwnServer reports whether the session arrived through one of DS2's own
-// listeners (wish SSH or web server) -- the only cases where DS2 knows for
-// certain the rendering terminal/browser is on a different machine.
-// Computed before the real-shell SSH fallback below, which folds "invoked
-// inside a real SSH login shell" into connType=="ssh" for a different
-// purpose (OpenAppLink's browser-opening decision) but must not affect
-// viaOwnServer -- a real SSH terminal may render file:// hyperlinks fine and
-// DS2 has no way to know, so "did this go through our own server" callers
-// should use viaOwnServer, not connType.
+// connType is "ssh" or "web" only for a session that arrived through one of
+// DS2's own listeners (wish SSH or web server); DS2 run directly in any
+// terminal on this machine -- including one reached through a real SSH
+// login -- is "local". viaOwnServer reports the same distinction, for
+// callers that only need to know whether the rendering terminal/browser is
+// known to be on a different machine.
 func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer bool) {
 	clientIP = "local"
 	connType = "local"
@@ -394,20 +404,6 @@ func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer 
 		}
 	}
 	viaOwnServer = connType != "local"
-	// A plain foreground invocation (the CLI binary run directly, not through
-	// DS2's own wish SSH server) never gets a synthetic environ with any of
-	// the markers above, but the process's real OS environment still reflects
-	// how its own shell was reached. If that shell came from an SSH login
-	// (e.g. Tabby/PuTTY/OpenSSH running the binary interactively rather than
-	// connecting to DS2's built-in SSH listener), treat it as ssh too --
-	// there's still no local display to open a browser on. Telnet and other
-	// remote-shell protocols have no equivalent de facto standard env var, so
-	// they can't be detected this way.
-	if connType == "local" {
-		if os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != "" || os.Getenv("SSH_CLIENT") != "" {
-			connType = "ssh"
-		}
-	}
 	return clientIP, connType, viaOwnServer
 }
 
@@ -500,16 +496,15 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	// Register AND activate connType's tint before any of the startup
 	// construction below (Initialize's displayengine.InitStyles, screen
 	// construction, NewAppModel) -- AppModel.Init() also registers this same
-	// tint (harmless, idempotent), but registering alone was never enough:
-	// nothing before the Bubble Tea run loop starts ever made it the
-	// *active* tint, so anything resolved/cached during this startup
-	// window (most visibly displayengine.CurrentStyles, via InitStyles)
-	// baked in untinted and stayed that way until something later forced a
-	// recompute (e.g. Appearance's Apply, via invalidateAllCaches).
+	// tint (harmless, idempotent), but registering alone isn't enough:
+	// anything resolved during this startup window that isn't keyed by the
+	// active tint would otherwise bake in untinted until something later
+	// forced a recompute (e.g. Appearance's Apply, via invalidateAllCaches).
 	// Restored before p.Run() below, NOT deferred across it: AppModel.
 	// Update/View each activate this same tint per-render via
 	// ActivateSessionRenderContext, which would deadlock on semstyle's
 	// single (non-reentrant) tint mutex if this scope were still held.
+	ctx = console.WithConnType(ctx, connType)
 	restoreStartupTint := BeginTintFor(connType)
 	// Safety net for an early return below (e.g. Initialize failing) --
 	// endStartupTintScope is also called explicitly once construction
@@ -522,7 +517,7 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 		}
 	}
 	defer endStartupTintScope()
-	RegisterConnTypeTints(ctx, connType, config.LoadAppConfig().AnsiColors.ForConnType(connType))
+	RegisterConnTypeTints(ctx, connType, config.LoadAppConfig().Appearance.ForConnType(connType).AnsiColors)
 
 	// Enable Virtual Terminal Processing (ANSI) on Windows early so color detection works
 	console.EnableVirtualTerminalProcessing()
@@ -745,6 +740,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 	// Initialize/screen-construction/NewAppModel span below, released
 	// before p.Run() (AppModel.Update/View activate it again themselves,
 	// per render).
+	ctx = console.WithConnType(ctx, ctype)
 	restoreStartupTint := BeginTintFor(ctype)
 	endStartupTintScope := func() {
 		if restoreStartupTint != nil {
@@ -753,7 +749,7 @@ func StartEditor(ctx context.Context, appName string, isRoot bool, opts ...Progr
 		}
 	}
 	defer endStartupTintScope()
-	RegisterConnTypeTints(ctx, ctype, config.LoadAppConfig().AnsiColors.ForConnType(ctype))
+	RegisterConnTypeTints(ctx, ctype, config.LoadAppConfig().Appearance.ForConnType(ctype).AnsiColors)
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -877,6 +873,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 	// Initialize/screen-construction/NewAppModel span below, released
 	// before p.Run() (AppModel.Update/View activate it again themselves,
 	// per render).
+	ctx = console.WithConnType(ctx, ctype)
 	restoreStartupTint := BeginTintFor(ctype)
 	endStartupTintScope := func() {
 		if restoreStartupTint != nil {
@@ -885,7 +882,7 @@ func StartVarEditor(ctx context.Context, appName, varName, file string, progOpts
 		}
 	}
 	defer endStartupTintScope()
-	RegisterConnTypeTints(ctx, ctype, config.LoadAppConfig().AnsiColors.ForConnType(ctype))
+	RegisterConnTypeTints(ctx, ctype, config.LoadAppConfig().Appearance.ForConnType(ctype).AnsiColors)
 
 	if err := Initialize(ctx); err != nil {
 		return err
@@ -1628,7 +1625,7 @@ func Send(msg tea.Msg) {
 // IsShadowEnabled returns whether shadow is currently enabled in the global config.
 // Use this for dialog chrome that should reflect the active setting, not preview changes.
 func IsShadowEnabled() bool {
-	return displayengine.CurrentConfig().UI.Shadow
+	return displayengine.ActiveAppearance().Shadow
 }
 
 // CloseDialog returns a command to close the current modal dialog

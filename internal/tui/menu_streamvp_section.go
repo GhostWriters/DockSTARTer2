@@ -92,7 +92,7 @@ func newStreamOutputSection(id string, box *ProgramBoxModel) *displayengine.Menu
 			},
 		})
 
-		if displayengine.CurrentConfig().UI.Scrollbar && box.Scroll.Info.Needed {
+		if displayengine.ActiveAppearance().Scrollbar && box.Scroll.Info.Needed {
 			sbX := offsetX + layout.SingleBorder() + box.sv.Width()
 			sbTopY := offsetY + layout.SingleBorder()
 			regions = append(regions, box.Scroll.HitRegions(sbX, sbTopY, baseZ+20, "Output")...)

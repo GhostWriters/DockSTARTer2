@@ -54,7 +54,7 @@ func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool
 		styleName = glamourstyles.DarkStyle
 	}
 
-	mode := config.LoadAppConfig().UI.MarkdownHyperlinks
+	mode := config.LoadAppConfig().Appearance.MarkdownHyperlinks
 	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
 	// Auto (link text + visible URL) and strips the resulting OSC8 escapes
 	// afterward, leaving plain readable text with no embedded hyperlink.

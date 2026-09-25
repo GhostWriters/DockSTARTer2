@@ -131,7 +131,7 @@ func HandleList(ctx context.Context, group *CommandGroup) error {
 			}
 			data = append(data, nice, deprecated, added, disabled)
 		}
-		console.PrintTableCtx(ctx, headers, data, conf.UI.LineCharacters)
+		console.PrintTableCtx(ctx, headers, data, conf.Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters)
 		return nil
 	case "--list-added":
 		result, err = appenv.ListAddedApps(ctx, envFile)
@@ -253,8 +253,8 @@ func HandleConfigPanel(ctx context.Context, group *CommandGroup) error {
 	}
 
 	conf := config.LoadAppConfig()
-	conf.UI.PanelLocal = mode
-	conf.UI.PanelRemote = mode
+	conf.Appearance.PanelLocal = mode
+	conf.Appearance.PanelRemote = mode
 	if err := config.SaveAppConfig(conf); err != nil {
 		return err
 	}

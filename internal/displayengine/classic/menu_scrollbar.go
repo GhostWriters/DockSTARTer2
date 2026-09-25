@@ -28,7 +28,7 @@ func DragDoneCmd(id string) tea.Cmd {
 const ScrollbarGutterWidth = 1
 
 // IsScrollbarEnabled reports whether the scrollbar is enabled in the current config.
-func IsScrollbarEnabled() bool { return currentConfig.UI.Scrollbar }
+func IsScrollbarEnabled() bool { return ActiveAppearance().Scrollbar }
 
 // ScrollbarInfo describes the geometry of a rendered scrollbar column.
 // It is returned by applyScrollbarColumnTracked so callers can compute hit regions.

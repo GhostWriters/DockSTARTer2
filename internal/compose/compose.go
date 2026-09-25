@@ -444,7 +444,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 				updateFn = console.ReplaceOutputLinesFn
 			}
 		}
-		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.UI.LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
+		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
 	}
 
 	srv, err := composev5.NewComposeService(dockerCLI,

@@ -62,7 +62,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 	}()
 
 	conf := config.LoadAppConfig()
-	_, _ = theme.Load(conf.UI.Theme, "")
+	_, _ = theme.Load(conf.Appearance.Local.Theme, "")
 	exitCode := 0
 
 	shouldValidate := false

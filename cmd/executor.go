@@ -53,18 +53,17 @@ var commandDefs = commands.Registry
 // later group, not just on the next separate invocation.
 func Execute(ctx context.Context, groups []CommandGroup) int {
 	conf := config.LoadAppConfig()
-	tui.RegisterConnTypeTints(ctx, "local", conf.AnsiColors.ForConnType("local"))
-	_, _ = theme.Load(conf.UI.Theme, "")
+	tui.RegisterConnTypeTints(ctx, "local", conf.Appearance.Local.AnsiColors)
+	_, _ = theme.Load(conf.Appearance.Local.Theme, "")
 	var cliTintRestore func()
 	defer func() {
 		if cliTintRestore != nil {
 			cliTintRestore()
 		}
 	}()
-	console.LineCharacters = conf.UI.LineCharacters
-	console.SpinnerEnabled = conf.UI.Spinner
-	console.SpinnerSpeed = conf.UI.SpinnerSpeed
-	console.HyperlinksMode = conf.UI.Hyperlinks
+	conf.Appearance.ApplyToConsole()
+	console.SpinnerSpeed = conf.Appearance.SpinnerSpeed
+	console.HyperlinksMode = conf.Appearance.Hyperlinks
 	exitCode := 0
 
 	// Validate override file for operational commands
@@ -110,8 +109,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// this a later group (e.g. --version) in the same invocation would
 		// still render with whatever was registered at startup, only
 		// picking up the change on the next separate invocation.
-		freshAnsiColors := config.LoadAppConfig().AnsiColors
-		tui.RegisterConnTypeTints(ctx, "local", freshAnsiColors.ForConnType("local"))
+		freshAnsiColors := config.LoadAppConfig().Appearance.Local.AnsiColors
+		tui.RegisterConnTypeTints(ctx, "local", freshAnsiColors)
 
 		// Same reasoning, for the "cli" element's own activation: a --tint
 		// group earlier in this same invocation targeting "cli" must take

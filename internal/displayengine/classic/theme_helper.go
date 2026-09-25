@@ -222,7 +222,7 @@ func RenderThemeTextCtx(text string, ctx StyleContext) string {
 	// tint (or no tint) than the one active right now -- concurrent
 	// sessions with different tints, or the same session's tint changing,
 	// would otherwise return stale colors for identical text.
-	cacheKey := "theme|" + text + "|" + resetStyle.String() + "|" + ctx.Prefix + "|" + semstyle.ActiveTintKey()
+	cacheKey := "theme|" + text + "|" + resetStyle.String() + "|" + ctx.Prefix + "|" + semstyle.ActiveThemePrefix() + "|" + semstyle.ActiveTintKey()
 
 	cacheMu.RLock()
 	if cached, ok := renderCache[cacheKey]; ok {

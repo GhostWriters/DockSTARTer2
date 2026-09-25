@@ -732,7 +732,7 @@ func (m *MenuModel) calculateSectionLayout() {
 		// embeds the title in the border line itself (tbs.Show is forced
 		// false for subMenuMode) -- so reserving LargeTitleBarOverhead rows
 		// here for one would leave a permanent gap nothing ever fills.
-		titleBarEnabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
+		titleBarEnabled := m.title != "" && ActiveAppearance().LargeTitleBars && !m.subMenuMode
 		if titleBarEnabled {
 			naturalInner += LargeTitleBarOverhead
 		}
@@ -769,7 +769,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	// keep its overhead using a much smaller, unrelated threshold while an
 	// expandable section (e.g. a scrollable list) still ends up squeezed
 	// well below what it actually needs.
-	enabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
+	enabled := m.title != "" && ActiveAppearance().LargeTitleBars && !m.subMenuMode
 	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, comfortThreshold)
 	if useLargeTitleBar {
 		innerHeight -= LargeTitleBarOverhead
@@ -824,7 +824,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	}
 
 	shadowHeight := 0
-	if currentConfig.UI.Shadow {
+	if ActiveAppearance().Shadow {
 		shadowHeight = DialogShadowHeight
 	}
 

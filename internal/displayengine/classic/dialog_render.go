@@ -20,7 +20,7 @@ const LargeTitleBarOverhead = 2
 // reserving LargeTitleBarOverhead. Returns the decision and the adjusted
 // budget (budget - LargeTitleBarOverhead if large, budget unchanged if not).
 //
-// enabled should be the caller's own currentConfig.UI.LargeTitleBars /
+// enabled should be the caller's own ActiveAppearance().LargeTitleBars /
 // ctx.LargeTitleBars check combined with any caller-specific precondition
 // (e.g. MenuModel's "!m.subMenuMode && m.title != \"\"") — those
 // preconditions stay at the call site since they're not part of the shared

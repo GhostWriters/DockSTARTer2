@@ -59,7 +59,7 @@ type DisplayOptionsScreen struct {
 	// affects behavior while this screen is open, not anything persisted.
 	loadThemeDefaults bool
 
-	// themeChangedFields holds the config.UIConfig struct field names whose
+	// themeChangedFields holds the config.Appearance struct field names whose
 	// value the most recent applyPreview call actually changed via the
 	// theme's own [defaults] table. Drives the transient "changed" marker
 	// (same glyph/tag as App Select's just-added/renamed marker) shown in
@@ -86,7 +86,7 @@ type displayOptionsAbortMsg struct{}
 // isRoot suppresses the Back button when this screen is the entry point.
 func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen {
 	cfg := config.LoadAppConfig()
-	current := cfg.UI.Theme // ConfigValue e.g. "DockSTARTer" or "user:MyTheme"
+	current := cfg.Appearance.ForConnType(connType).Theme // ConfigValue e.g. "DockSTARTer" or "user:MyTheme"
 	themes, _ := theme.List(current)
 
 	s := &DisplayOptionsScreen{
@@ -238,7 +238,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Show borders on all dialogs",
 			Help:        "Toggle border visibility (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.Borders,
+			Checked:     s.config.Appearance.Ptr(s.connType).Borders,
 			Selectable:  true,
 			SpaceAction: s.toggleBorders(),
 		},
@@ -247,7 +247,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Show large (bordered) buttons",
 			Help:        "Toggle large (bordered) vs flat button style (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.LargeButtons,
+			Checked:     s.config.Appearance.Ptr(s.connType).LargeButtons,
 			Selectable:  true,
 			SpaceAction: s.toggleLargeButtons(),
 		},
@@ -256,7 +256,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Show title in a separate row above content",
 			Help:        "Toggle large title bar style (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.LargeTitleBars,
+			Checked:     s.config.Appearance.Ptr(s.connType).LargeTitleBars,
 			Selectable:  true,
 			SpaceAction: s.toggleLargeTitleBars(),
 		},
@@ -265,7 +265,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Use unicode line drawing characters",
 			Help:        "Use ┌─ instead of +- for borders (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.LineCharacters,
+			Checked:     s.config.Appearance.Ptr(s.connType).LineCharacters,
 			Selectable:  true,
 			SpaceAction: s.toggleLineChars(),
 		},
@@ -274,19 +274,19 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Enable drop shadows",
 			Help:        "Toggle drop shadow effect (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.Shadow,
+			Checked:     s.config.Appearance.Ptr(s.connType).Shadow,
 			Selectable:  true,
 			SpaceAction: s.toggleShadow(),
 		},
 		{
 			Tag:    "Shadow Level",
-			Desc:   s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel)),
+			Desc:   s.dropdownDesc(s.shadowLevelToDesc(s.config.Appearance.Ptr(s.connType).ShadowLevel)),
 			Help:   "Adjust the density of the shadow (Select/Enter for list)",
 			Action: s.showShadowDropdown(),
 		},
 		{
 			Tag:    "Border Color",
-			Desc:   s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor)),
+			Desc:   s.dropdownDesc(s.borderColorToDesc(s.config.Appearance.Ptr(s.connType).BorderColor)),
 			Help:   "Choose theme colors for borders (Select/Enter for list)",
 			Action: s.showBorderColorDropdown(),
 		},
@@ -295,7 +295,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Show scrollbar in lists",
 			Help:        "Toggle scrollbar in scrollable lists (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.Scrollbar,
+			Checked:     s.config.Appearance.Ptr(s.connType).Scrollbar,
 			Selectable:  true,
 			SpaceAction: s.toggleScrollbar(),
 		},
@@ -304,7 +304,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Show loading spinner animations",
 			Help:        "Toggle spinner animations during loading (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.Spinner,
+			Checked:     s.config.Appearance.Ptr(s.connType).Spinner,
 			Selectable:  true,
 			SpaceAction: s.toggleSpinner(),
 		},
@@ -313,7 +313,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Wrap the focused menu item in [brackets]",
 			Help:        "Bracket the focused row's tag (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.MenuBrackets,
+			Checked:     s.config.Appearance.Ptr(s.connType).MenuBrackets,
 			Selectable:  true,
 			SpaceAction: s.toggleMenuBrackets(),
 		},
@@ -322,99 +322,99 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Desc:        "Wrap the focused line number in [brackets]",
 			Help:        "Bracket the focused line's number in the env editor (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.LineNumberBrackets,
+			Checked:     s.config.Appearance.Ptr(s.connType).LineNumberBrackets,
 			Selectable:  true,
 			SpaceAction: s.toggleLineNumberBrackets(),
 		},
 		{
 			Tag:  "Tab Layout",
-			Desc: s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout)),
+			Desc: s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.connType).TabLayout)),
 			Help: "Default view when the vars editor has 2 tabs open (Enter for options)",
 			Action: s.showTabLayoutDropdown("tab_layout", "Tab Layout",
-				func() string { return s.config.UI.TabLayout },
-				func(cfg *config.AppConfig, v string) { cfg.UI.TabLayout = v }),
+				func() string { return s.config.Appearance.Ptr(s.connType).TabLayout },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.connType).TabLayout = v }),
 		},
 		{
 			Tag:         "Show Preview",
 			Desc:        "Show the preview panel by default (some prefer a less busy screen)",
 			Help:        "Default visibility of this preview panel (Space to toggle)",
 			IsCheckbox:  true,
-			Checked:     s.config.UI.ShowPreview,
+			Checked:     s.config.Appearance.ShowPreview,
 			Selectable:  true,
 			SpaceAction: s.toggleShowPreview(),
 		},
 		{
 			Tag:  "Markdown Hyperlinks",
-			Desc: s.dropdownDesc(markdownHyperlinksDesc(s.config.UI.MarkdownHyperlinks)),
+			Desc: s.dropdownDesc(markdownHyperlinksDesc(s.config.Appearance.MarkdownHyperlinks)),
 			Help: "OSC8 hyperlink rendering for markdown, e.g. the help dialog doc page and --man (Enter for options)",
 			Action: s.showMarkdownHyperlinksDropdown("markdown_hyperlinks", "Markdown Hyperlinks",
-				func() string { return s.config.UI.MarkdownHyperlinks },
-				func(cfg *config.AppConfig, v string) { cfg.UI.MarkdownHyperlinks = v }),
+				func() string { return s.config.Appearance.MarkdownHyperlinks },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.MarkdownHyperlinks = v }),
 		},
 		{
 			Tag:  "Hyperlinks",
-			Desc: s.dropdownDesc(hyperlinksDesc(s.config.UI.Hyperlinks)),
+			Desc: s.dropdownDesc(hyperlinksDesc(s.config.Appearance.Hyperlinks)),
 			Help: "OSC8 hyperlink rendering for DS2's own console/path/link tags (Enter for options)",
 			Action: s.showMarkdownHyperlinksDropdown("hyperlinks", "Hyperlinks",
-				func() string { return s.config.UI.Hyperlinks },
-				func(cfg *config.AppConfig, v string) { cfg.UI.Hyperlinks = v }),
+				func() string { return s.config.Appearance.Hyperlinks },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Hyperlinks = v }),
 		},
 
 		// -- Brackets --
 		{
 			Tag:  "Checkbox Brackets",
-			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.CheckboxBrackets)),
+			Desc: s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.connType).CheckboxBrackets)),
 			Help: "When checkbox brackets are shown in lists (Enter for options)",
 			Action: s.showBracketModeDropdown("checkbox_brackets", "Checkbox Brackets",
-				func() string { return s.config.UI.CheckboxBrackets },
-				func(cfg *config.AppConfig, v string) { cfg.UI.CheckboxBrackets = v }),
+				func() string { return s.config.Appearance.Ptr(s.connType).CheckboxBrackets },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.connType).CheckboxBrackets = v }),
 		},
 		{
 			Tag:  "Radio Brackets",
-			Desc: s.dropdownDesc(bracketModeDesc(s.config.UI.RadioBrackets)),
+			Desc: s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.connType).RadioBrackets)),
 			Help: "When radio button brackets are shown in lists (Enter for options)",
 			Action: s.showBracketModeDropdown("radio_brackets", "Radio Brackets",
-				func() string { return s.config.UI.RadioBrackets },
-				func(cfg *config.AppConfig, v string) { cfg.UI.RadioBrackets = v }),
+				func() string { return s.config.Appearance.Ptr(s.connType).RadioBrackets },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.connType).RadioBrackets = v }),
 		},
 
 		// -- Title alignment --
 		{
 			Tag:  "Dialog Title",
-			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign)),
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).DialogTitleAlign)),
 			Help: "Alignment of titles in dialog borders (Enter for options)",
 			Action: s.showTitleAlignDropdown("dialog_title_align", "Dialog Title Align",
-				func() string { return s.config.UI.DialogTitleAlign },
-				func(cfg *config.AppConfig, v string) { cfg.UI.DialogTitleAlign = v }),
+				func() string { return s.config.Appearance.Ptr(s.connType).DialogTitleAlign },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.connType).DialogTitleAlign = v }),
 		},
 		{
 			Tag:  "Submenu Title",
-			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign)),
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).SubmenuTitleAlign)),
 			Help: "Alignment of subtitle rows inside menus (Enter for options)",
 			Action: s.showTitleAlignDropdown("submenu_title_align", "Submenu Title Align",
-				func() string { return s.config.UI.SubmenuTitleAlign },
-				func(cfg *config.AppConfig, v string) { cfg.UI.SubmenuTitleAlign = v }),
+				func() string { return s.config.Appearance.Ptr(s.connType).SubmenuTitleAlign },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.connType).SubmenuTitleAlign = v }),
 		},
 		{
 			Tag:  "Panel Title",
-			Desc: s.dropdownDesc(titleAlignDesc(s.config.UI.PanelTitleAlign)),
+			Desc: s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).PanelTitleAlign)),
 			Help: "Alignment of the panel strip label (Enter for options)",
 			Action: s.showTitleAlignDropdown("panel_title_align", "Panel Title Align",
-				func() string { return s.config.UI.PanelTitleAlign },
-				func(cfg *config.AppConfig, v string) { cfg.UI.PanelTitleAlign = v }),
+				func() string { return s.config.Appearance.Ptr(s.connType).PanelTitleAlign },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.connType).PanelTitleAlign = v }),
 		},
 
 		// -- Performance --
 		{
 			Tag:        "Refresh Rate",
-			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.RefreshRate),
+			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.Appearance.RefreshRate),
 			Help:       "Screen repaint interval in milliseconds (Enter to change). Applies on restart.",
 			Action:     s.promptRefreshRate(),
 			Selectable: true,
 		},
 		{
 			Tag:        "Spinner Speed",
-			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.UI.SpinnerSpeed),
+			Desc:       fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", s.config.Appearance.SpinnerSpeed),
 			Help:       "Spinner frame speed in milliseconds (Enter to change)",
 			Action:     s.promptSpinnerSpeed(),
 			Selectable: true,
@@ -423,7 +423,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 	optionItems = append(optionItems, displayengine.MenuItem{
 		Tag:           "Local Panel Mode",
-		Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal)),
+		Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.PanelLocal)),
 		Help:          "Choose the panel mode for local terminal sessions (Console allowed).",
 		Action:        s.showPanelDropdown(true),
 		IsDestructive: true,
@@ -431,7 +431,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 	optionItems = append(optionItems, displayengine.MenuItem{
 		Tag:           "Remote Panel Mode",
-		Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote)),
+		Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.PanelRemote)),
 		Help:          "Choose the panel mode for SSH and Web sessions (Console restricted).",
 		Action:        s.showPanelDropdown(false),
 		IsDestructive: true,
@@ -485,7 +485,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	outerMenu.SetMaximized(true)
 	settingsColumn := displayengine.NewContentColumn(loadDefaultsMenu, themeMenu, optionsMenu)
 	s.layoutRow = newAppearanceLayoutRow(settingsColumn, s.buildPreviewSection())
-	s.layoutRow.previewHidden = !s.config.UI.ShowPreview
+	s.layoutRow.previewHidden = !s.config.Appearance.ShowPreview
 	outerMenu.AddContentSection(s.layoutRow)
 	s.outerMenu = outerMenu
 }
@@ -659,7 +659,7 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) displayengine.HelpConte
 
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 	var levels []string
-	if s.config.UI.LineCharacters {
+	if s.config.Appearance.Ptr(s.connType).LineCharacters {
 		levels = []string{"(Off)", "(░)", "(▒)", "(▓)", "(█)"}
 	} else {
 		levels = []string{
@@ -885,9 +885,9 @@ func (s *DisplayOptionsScreen) showTabLayoutDropdown(menuName, label string, get
 
 func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 	return func() tea.Msg {
-		currentMode := s.config.UI.PanelRemote
+		currentMode := s.config.Appearance.PanelRemote
 		if isLocalSetting {
-			currentMode = s.config.UI.PanelLocal
+			currentMode = s.config.Appearance.PanelLocal
 		}
 
 		applyChange := func(mode string) tea.Cmd {
@@ -896,9 +896,9 @@ func (s *DisplayOptionsScreen) showPanelDropdown(isLocalSetting bool) tea.Cmd {
 					func() tea.Msg {
 						return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
 							if isLocalSetting {
-								cfg.UI.PanelLocal = mode
+								cfg.Appearance.PanelLocal = mode
 							} else {
-								cfg.UI.PanelRemote = mode
+								cfg.Appearance.PanelRemote = mode
 							}
 						}}
 					},
@@ -1028,7 +1028,7 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 	return func() tea.Msg {
 		type shadowEntry struct{ label, value string }
 		var entries []shadowEntry
-		if s.config.UI.LineCharacters {
+		if s.config.Appearance.Ptr(s.connType).LineCharacters {
 			entries = []shadowEntry{
 				{"Off", ""},
 				{"Light", "{{|OptionValue|}}(░){{[-]}}"},
@@ -1055,13 +1055,13 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 				Help:          fmt.Sprintf("Set shadow to %s", e.label),
 				IsRadioButton: true,
 				Selectable:    true,
-				Checked:       level == s.config.UI.ShadowLevel,
+				Checked:       level == s.config.Appearance.Ptr(s.connType).ShadowLevel,
 			})
 			applyFuncs = append(applyFuncs, func() tea.Msg {
 				return tea.Batch(
 					func() tea.Msg {
 						return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-							cfg.UI.ShadowLevel = level
+							cfg.Appearance.Ptr(s.connType).ShadowLevel = level
 						}}
 					},
 					tui.CloseDialog(),
@@ -1074,7 +1074,7 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked shadow level."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
-		menu.Select(s.config.UI.ShadowLevel)
+		menu.Select(s.config.Appearance.Ptr(s.connType).ShadowLevel)
 		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
@@ -1100,13 +1100,13 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 				Help:          fmt.Sprintf("Set border coloring to %s", e.label),
 				IsRadioButton: true,
 				Selectable:    true,
-				Checked:       mode == s.config.UI.BorderColor,
+				Checked:       mode == s.config.Appearance.Ptr(s.connType).BorderColor,
 			})
 			applyFuncs = append(applyFuncs, func() tea.Msg {
 				return tea.Batch(
 					func() tea.Msg {
 						return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-							cfg.UI.BorderColor = mode
+							cfg.Appearance.Ptr(s.connType).BorderColor = mode
 						}}
 					},
 					tui.CloseDialog(),
@@ -1119,97 +1119,97 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked border coloring."},
 			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
 		})
-		menu.Select(s.config.UI.BorderColor - 1)
+		menu.Select(s.config.Appearance.Ptr(s.connType).BorderColor - 1)
 		return displayengine.ShowDialogMsg{Dialog: menu}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleBorders() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.Borders
+		newState := !s.config.Appearance.Ptr(s.connType).Borders
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.Borders = newState
+			cfg.Appearance.Ptr(s.connType).Borders = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleLargeButtons() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.LargeButtons
+		newState := !s.config.Appearance.Ptr(s.connType).LargeButtons
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.LargeButtons = newState
+			cfg.Appearance.Ptr(s.connType).LargeButtons = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleLargeTitleBars() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.LargeTitleBars
+		newState := !s.config.Appearance.Ptr(s.connType).LargeTitleBars
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.LargeTitleBars = newState
+			cfg.Appearance.Ptr(s.connType).LargeTitleBars = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleLineChars() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.LineCharacters
+		newState := !s.config.Appearance.Ptr(s.connType).LineCharacters
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.LineCharacters = newState
+			cfg.Appearance.Ptr(s.connType).LineCharacters = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleShadow() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.Shadow
+		newState := !s.config.Appearance.Ptr(s.connType).Shadow
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.Shadow = newState
+			cfg.Appearance.Ptr(s.connType).Shadow = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleScrollbar() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.Scrollbar
+		newState := !s.config.Appearance.Ptr(s.connType).Scrollbar
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.Scrollbar = newState
+			cfg.Appearance.Ptr(s.connType).Scrollbar = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleMenuBrackets() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.MenuBrackets
+		newState := !s.config.Appearance.Ptr(s.connType).MenuBrackets
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.MenuBrackets = newState
+			cfg.Appearance.Ptr(s.connType).MenuBrackets = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleLineNumberBrackets() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.LineNumberBrackets
+		newState := !s.config.Appearance.Ptr(s.connType).LineNumberBrackets
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.LineNumberBrackets = newState
+			cfg.Appearance.Ptr(s.connType).LineNumberBrackets = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleShowPreview() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.ShowPreview
+		newState := !s.config.Appearance.ShowPreview
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.ShowPreview = newState
+			cfg.Appearance.ShowPreview = newState
 		}}
 	}
 }
 
 func (s *DisplayOptionsScreen) toggleSpinner() tea.Cmd {
 	return func() tea.Msg {
-		newState := !s.config.UI.Spinner
+		newState := !s.config.Appearance.Ptr(s.connType).Spinner
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.Spinner = newState
+			cfg.Appearance.Ptr(s.connType).Spinner = newState
 		}}
 	}
 }
@@ -1218,7 +1218,7 @@ func (s *DisplayOptionsScreen) promptSpinnerSpeed() tea.Cmd {
 	return func() tea.Msg {
 		result, err := console.TextPrompt(context.Background(),
 			func(context.Context, any, ...any) {}, "Spinner Speed", "Enter frame speed in milliseconds (50-5000)", false,
-			strconv.Itoa(s.config.UI.SpinnerSpeed))
+			strconv.Itoa(s.config.Appearance.SpinnerSpeed))
 		if err != nil {
 			return nil
 		}
@@ -1231,7 +1231,7 @@ func (s *DisplayOptionsScreen) promptSpinnerSpeed() tea.Cmd {
 			}
 		}
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.SpinnerSpeed = ms
+			cfg.Appearance.SpinnerSpeed = ms
 		}}
 	}
 }
@@ -1241,7 +1241,7 @@ func (s *DisplayOptionsScreen) promptRefreshRate() tea.Cmd {
 		result, err := console.TextPrompt(context.Background(),
 			func(context.Context, any, ...any) {}, "Refresh Rate",
 			fmt.Sprintf("Enter screen repaint interval in milliseconds (%d-%d)", config.MinRefreshRateMS, config.MaxRefreshRateMS), false,
-			strconv.Itoa(s.config.UI.RefreshRate))
+			strconv.Itoa(s.config.Appearance.RefreshRate))
 		if err != nil {
 			return nil
 		}
@@ -1254,7 +1254,7 @@ func (s *DisplayOptionsScreen) promptRefreshRate() tea.Cmd {
 			}
 		}
 		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.UI.RefreshRate = ms
+			cfg.Appearance.RefreshRate = ms
 		}}
 	}
 }
@@ -1281,22 +1281,24 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		_, err := theme.Load(themeSelected, "")
 		if err == nil {
 			s.currentTheme = themeSelected
-			s.config.UI.Theme = themeSelected
+			s.config.Appearance.Ptr(s.connType).Theme = themeSelected
 		}
 
 		// 2. Save Config via UpdateAppConfig, applying only this screen's
 		// own UI settings onto a freshly-loaded copy, rather than saving
 		// s.config (a snapshot from whenever this screen last loaded or
 		// saved) wholesale. This screen never touches any other AppConfig
-		// field (see the s.config.UI assignments above and in
-		// display_options_update.go), so anything else -- e.g. a tint set
+		// field (see the s.config.Appearance assignments above and in
+		// display_options_update.go), nor any tint or another connection
+		// type's settings, so anything else -- e.g. a tint set
 		// from a different session while this screen was open -- would
 		// otherwise be clobbered back to its value as of that stale
 		// snapshot.
-		refreshRateChanged := s.config.UI.RefreshRate != s.baseConfig.UI.RefreshRate
-		newUI := s.config.UI
+		refreshRateChanged := s.config.Appearance.RefreshRate != s.baseConfig.Appearance.RefreshRate
+		staged := s.config.Appearance
 		fresh, err := config.UpdateAppConfig(func(c *config.AppConfig) {
-			c.UI = newUI
+			c.Appearance.CopySharedFrom(staged)
+			c.Appearance.Ptr(s.connType).CopySettingsFrom(staged.ForConnType(s.connType))
 		})
 		if err != nil {
 			return tui.ShowMessageDialogMsg{
@@ -1310,7 +1312,7 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 
 		var previewCmd tea.Cmd
 		if s.layoutRow != nil {
-			previewCmd = s.layoutRow.SetPreviewHidden(!s.config.UI.ShowPreview)
+			previewCmd = s.layoutRow.SetPreviewHidden(!s.config.Appearance.ShowPreview)
 		}
 
 		// 3. Refresh rate can only take effect at program construction time
@@ -1348,7 +1350,7 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 func (s *DisplayOptionsScreen) handleReset() tea.Cmd {
 	return func() tea.Msg {
 		s.config = s.baseConfig
-		s.currentTheme = s.baseConfig.UI.Theme
+		s.currentTheme = s.baseConfig.Appearance.Ptr(s.connType).Theme
 		s.previewTheme = s.currentTheme
 		s.themeChangedFields = nil
 		s.themeDefaults[s.currentTheme], _ = theme.Load(s.currentTheme, "Preview")

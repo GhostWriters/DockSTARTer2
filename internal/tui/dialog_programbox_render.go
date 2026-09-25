@@ -228,11 +228,10 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
 
-	console.SpinnerEnabled = cfg.UI.Spinner
-	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
-	console.LineCharacters = cfg.UI.LineCharacters
-	console.HyperlinksMode = cfg.UI.Hyperlinks
-	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
+	cfg.Appearance.ApplyToConsole()
+	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.Appearance.SpinnerSpeed, cfg.Appearance.RefreshRate)
+	console.HyperlinksMode = cfg.Appearance.Hyperlinks
+	if _, err := theme.Load(cfg.Appearance.Local.Theme, ""); err == nil {
 		displayengine.InitStyles(cfg)
 	}
 
@@ -246,7 +245,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	model := NewAppModelStandalone(ctx, cfg, "local", "cli", parseSessionKey(nil), nil, dialogModel)
 
 	// Create Bubble Tea program
-	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.UI.RefreshRate})
+	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.Appearance.RefreshRate})
 
 	registerCallbacks()
 	defer func() {

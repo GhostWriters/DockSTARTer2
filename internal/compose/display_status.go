@@ -273,20 +273,20 @@ type iconSet struct {
 func (p *consoleEventProcessor) icons() iconSet {
 	if p.asciiMode {
 		spinnerChar := "-"
-		if console.SpinnerEnabled {
+		if console.SpinnerEnabledFor(console.ConnTypeFromContext(p.logCtx)) {
 			spinnerChar = asciiSpinnerFrames[p.spinnerFrame%len(asciiSpinnerFrames)]
 		}
 		return iconSet{done: "+", error: "x", warn: "!", pending: "-", spinner: spinnerChar}
 	}
 	spinnerChar := "·"
-	if console.SpinnerEnabled {
+	if console.SpinnerEnabledFor(console.ConnTypeFromContext(p.logCtx)) {
 		spinnerChar = spinnerFrames[p.spinnerFrame]
 	}
 	return iconSet{done: "✓", error: "×", warn: "⚠", pending: "·", spinner: spinnerChar}
 }
 
 func (p *consoleEventProcessor) activeSpinnerTag(char string) string {
-	if console.SpinnerEnabled {
+	if console.SpinnerEnabledFor(console.ConnTypeFromContext(p.logCtx)) {
 		return "{{|DockerSpinner|}}" + char + "{{[-]}}"
 	}
 	return "{{[::D]}}" + char + "{{[-]}}"

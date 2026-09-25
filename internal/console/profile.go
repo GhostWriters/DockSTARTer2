@@ -14,12 +14,6 @@ var (
 	// TUIMode indicates whether we're running in TUI mode (always render colors)
 	TUIMode bool
 
-	// LineCharacters indicates whether unicode line/box-drawing characters are enabled.
-	LineCharacters bool
-
-	// SpinnerEnabled controls whether the CLI spinner is shown during tasks.
-	SpinnerEnabled bool
-
 	// SpinnerSpeed is the milliseconds per CLI spinner frame (default 120;
 	// overwritten from config before any real use).
 	SpinnerSpeed int = 100

@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
@@ -164,10 +165,16 @@ func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, chan
 }
 
 // panelRenderFn returns the render function for streamvp line rendering.
+// Renders under the "programbox" element's tint (see
+// console.ActivateTintForElement), the same as a ProgramBox's streamed
+// output.
 func panelRenderFn() func(string) string {
-	styles := GetStyles()
 	return func(raw string) string {
-		return RenderConsoleText(raw, styles.Console)
+		var rendered string
+		console.ActivateTintForElement("programbox", func() {
+			rendered = RenderConsoleText(raw, GetStyles().Console)
+		})
+		return rendered
 	}
 }
 
@@ -585,7 +592,7 @@ func (m PanelModel) DragScrollbar(mouseY int, drag *ScrollbarDragState, sbAbsTop
 func panelMaxHeight(totalTermHeight int) int {
 	layout := GetLayout()
 	shadowH := 0
-	if currentConfig.UI.Shadow {
+	if ActiveAppearance().Shadow {
 		shadowH = layout.ShadowHeight
 	}
 	usable := totalTermHeight - layout.ChromeHeight(1) - layout.BottomChrome(layout.HelplineHeight) - shadowH

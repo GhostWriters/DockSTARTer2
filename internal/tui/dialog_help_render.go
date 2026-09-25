@@ -30,7 +30,7 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	}
 
 	source := m.contextInfo.DocMarkdown
-	mode := config.LoadAppConfig().UI.MarkdownHyperlinks
+	mode := config.LoadAppConfig().Appearance.MarkdownHyperlinks
 
 	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
 	// Auto (link text + visible URL) and strips the resulting OSC8 escapes

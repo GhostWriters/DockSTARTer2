@@ -61,7 +61,7 @@ func TitleSpinnerFrames(frame int, lineCharacters bool) (left, right string) {
 // computes the shared cadence/frame-set math for title-style spinners
 // (MenuModel, TabbedVarsEditorModel, PanelModel).
 func AdvanceTitleSpinnerFrame(frame int, lastSpinner, now time.Time, lineCharacters bool) (newFrame int, newLastSpinner time.Time, advanced bool) {
-	if !SpinnerEnabled {
+	if !SpinnerEnabled() {
 		return frame, lastSpinner, false
 	}
 	fps := time.Duration(SpinnerSpeed) * time.Millisecond
@@ -77,7 +77,7 @@ func AdvanceTitleSpinnerFrame(frame int, lastSpinner, now time.Time, lineCharact
 
 // spinnerFrames returns the correct frame set based on config.
 func spinnerFrames() []string {
-	if LineCharacters {
+	if LineCharacters() {
 		return SpinnerFramesUnicode
 	}
 	return SpinnerFramesASCII
@@ -152,7 +152,7 @@ func Println(a ...any) {
 // ShowSpinnerFrame draws the current spinner frame. Must be called while
 // holding termMu (via LockTerminal), after the log line has been written.
 func ShowSpinnerFrame() {
-	if !isTTYGlobal || TUIMode || IsTUIEnabled() || !SpinnerEnabled {
+	if !isTTYGlobal || TUIMode || IsTUIEnabled() || !SpinnerEnabled() {
 		return
 	}
 	activeSpinner.mu.Lock()
@@ -198,7 +198,7 @@ func SpinnerSafeWriter(w io.Writer) io.Writer {
 // Otherwise it writes directly to stderr on the current line.
 // Returns a stop function that clears the spinner.
 func StartSpinner() func() {
-	if !isTTYGlobal || TUIMode || IsTUIEnabled() || !SpinnerEnabled {
+	if !isTTYGlobal || TUIMode || IsTUIEnabled() || !SpinnerEnabled() {
 		return func() {}
 	}
 

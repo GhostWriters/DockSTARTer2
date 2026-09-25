@@ -271,9 +271,12 @@ var (
 	GetShadowBoxCtx                = classic.GetShadowBoxCtx
 	GetSolidBoxCtx                 = classic.GetSolidBoxCtx
 	GetStyles                      = classic.GetStyles
+	StylesScopeKey                 = classic.StylesScopeKey
+	ActiveAppearance               = classic.ActiveAppearance
 	HandleScrollbarLayerHit        = classic.HandleScrollbarLayerHit
 	HelpContextWidth               = classic.HelpContextWidth
 	InitStyles                     = classic.InitStyles
+	InvalidateStyles               = classic.InvalidateStyles
 	InjectBorderFlags              = classic.InjectBorderFlags
 	IsScrollbarEnabled             = classic.IsScrollbarEnabled
 	IsTitleWidgetID                = classic.IsTitleWidgetID

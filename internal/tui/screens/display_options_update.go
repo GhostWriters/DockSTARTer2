@@ -12,9 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// specifiedThemeDefaultFields returns the set of config.UIConfig struct field
-// names a theme's [defaults] table specifies (i.e. whose pointer is non-nil
-// in d) -- theme.ThemeDefaults' field names match config.UIConfig's 1:1 for
+// specifiedThemeDefaultFields returns the set of config.Appearance struct
+// field names a theme's [defaults] table specifies (i.e. whose pointer is
+// non-nil in d) -- theme.ThemeDefaults' field names match config.Appearance's 1:1 for
 // every field it can suggest. Used to mark which Options rows the theme set,
 // regardless of whether the resulting value actually differs from before.
 func specifiedThemeDefaultFields(d theme.ThemeDefaults) map[string]bool {
@@ -273,9 +273,9 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 
 	// Carry forward every option exactly as currently staged (whatever the
 	// user has set so far, or the base config if nothing's changed yet).
-	staged := s.config.UI
+	staged := s.config.Appearance
 	s.config = s.baseConfig
-	s.config.UI = staged
+	s.config.Appearance = staged
 
 	// Always load to ensure tags are registered in registry
 	defaults, err := theme.Load(themeName, "Preview")
@@ -294,7 +294,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	// by hand) as-is. When off, theme selection never touches options at all.
 	s.themeChangedFields = nil
 	if s.loadThemeDefaults && defaults != nil {
-		theme.ApplyThemeDefaults(&s.config, *defaults)
+		theme.ApplyThemeDefaults(s.config.Appearance.Ptr(s.connType), *defaults)
 		// Mark every field the theme's [defaults] table specifies, not just
 		// ones whose value actually differed from what was already staged --
 		// the marker means "the theme set this", not "this changed".
@@ -308,8 +308,8 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	displayengine.ClearSemanticCachePrefix("Preview_")
 }
 
-// optionTagToUIField maps each Options row's Tag to the config.UIConfig
-// struct field name it displays, so syncOptionsMenu can look up
+// optionTagToUIField maps each Options row's Tag to the config.Appearance or
+// config.AppearanceConfig struct field name it displays, so syncOptionsMenu can look up
 // s.themeChangedFields by the same name diffUIConfigFieldSet produces.
 var optionTagToUIField = map[string]string{
 	"Shadows":              "Shadow",
@@ -341,47 +341,47 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 		items[i].IsNew = s.themeChangedFields[optionTagToUIField[items[i].Tag]]
 		switch items[i].Tag {
 		case "Shadows":
-			items[i].Checked = s.config.UI.Shadow
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).Shadow
 		case "Borders":
-			items[i].Checked = s.config.UI.Borders
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).Borders
 		case "Large Buttons":
-			items[i].Checked = s.config.UI.LargeButtons
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).LargeButtons
 		case "Large Title Bars":
-			items[i].Checked = s.config.UI.LargeTitleBars
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).LargeTitleBars
 		case "Line Characters":
-			items[i].Checked = s.config.UI.LineCharacters
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).LineCharacters
 		case "Scrollbars":
-			items[i].Checked = s.config.UI.Scrollbar
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).Scrollbar
 		case "Menu Brackets":
-			items[i].Checked = s.config.UI.MenuBrackets
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).MenuBrackets
 		case "Line Number Brackets":
-			items[i].Checked = s.config.UI.LineNumberBrackets
+			items[i].Checked = s.config.Appearance.Ptr(s.connType).LineNumberBrackets
 		case "Show Preview":
-			items[i].Checked = s.config.UI.ShowPreview
+			items[i].Checked = s.config.Appearance.ShowPreview
 		case "Tab Layout":
-			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.UI.TabLayout))
+			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.connType).TabLayout))
 		case "Markdown Hyperlinks":
-			items[i].Desc = s.dropdownDesc(markdownHyperlinksDesc(s.config.UI.MarkdownHyperlinks))
+			items[i].Desc = s.dropdownDesc(markdownHyperlinksDesc(s.config.Appearance.MarkdownHyperlinks))
 		case "Hyperlinks":
-			items[i].Desc = s.dropdownDesc(hyperlinksDesc(s.config.UI.Hyperlinks))
+			items[i].Desc = s.dropdownDesc(hyperlinksDesc(s.config.Appearance.Hyperlinks))
 		case "Shadow Level":
-			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.UI.ShadowLevel))
+			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.Appearance.Ptr(s.connType).ShadowLevel))
 		case "Border Color":
-			items[i].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.UI.BorderColor))
+			items[i].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.Appearance.Ptr(s.connType).BorderColor))
 		case "Dialog Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.DialogTitleAlign))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).DialogTitleAlign))
 		case "Submenu Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.SubmenuTitleAlign))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).SubmenuTitleAlign))
 		case "Panel Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.UI.PanelTitleAlign))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).PanelTitleAlign))
 		case "Local Panel Mode":
-			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelLocal))
+			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.PanelLocal))
 		case "Remote Panel Mode":
-			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.UI.PanelRemote))
+			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.PanelRemote))
 		case "Checkbox Brackets":
-			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.UI.CheckboxBrackets))
+			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.connType).CheckboxBrackets))
 		case "Radio Brackets":
-			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.UI.RadioBrackets))
+			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.connType).RadioBrackets))
 		}
 	}
 	s.optionsMenu.SetItems(items)

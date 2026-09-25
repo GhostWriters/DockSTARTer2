@@ -2,6 +2,7 @@ package classic
 
 import (
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
 	semstyle "github.com/GhostWriters/semstyle/lg"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 )
@@ -384,80 +386,91 @@ type StyleContext struct {
 	DrawShadow           bool   // Whether to draw shadows for this context
 }
 
-// CurrentStyles holds the active styles
-var CurrentStyles Styles
-
-// GetStyles returns the current styles
+// GetStyles returns the Styles for the active theme prefix and tint (see
+// semstyle.RunWithRenderScope), building and caching them on first use in
+// that scope.
 func GetStyles() Styles {
-	return CurrentStyles
+	key := StylesScopeKey()
+	stylesMu.Lock()
+	s, ok := stylesCache[key]
+	stylesMu.Unlock()
+	if ok {
+		return s
+	}
+	s = buildStyles(ActiveAppearance())
+	stylesMu.Lock()
+	stylesCache[key] = s
+	stylesMu.Unlock()
+	return s
 }
 
-// GetActiveContext returns the current global styles as a StyleContext
+// GetActiveContext returns the active scope's styles (see GetStyles) as a StyleContext
 func GetActiveContext() StyleContext {
+	cs := GetStyles()
 	return StyleContext{
-		LineCharacters:       CurrentStyles.LineCharacters,
-		DrawBorders:          CurrentStyles.DrawBorders,
-		LargeButtons:         CurrentStyles.LargeButtons,
-		LargeTitleBars:       CurrentStyles.LargeTitleBars,
+		LineCharacters:       cs.LineCharacters,
+		DrawBorders:          cs.DrawBorders,
+		LargeButtons:         cs.LargeButtons,
+		LargeTitleBars:       cs.LargeTitleBars,
 		Type:                 DialogTypeInfo, // Default to info
-		Screen:               CurrentStyles.Screen,
-		Dialog:               CurrentStyles.Dialog,
-		ContentBackground:    CurrentStyles.ContentBackground,
-		DialogTitle:          CurrentStyles.DialogTitle,
-		DialogTitleHelp:      CurrentStyles.DialogTitleHelp,
-		SubmenuTitle:         CurrentStyles.SubmenuTitle,
-		SubmenuTitleFocused:  CurrentStyles.SubmenuTitleFocused,
-		SubmenuTitleDisabled: CurrentStyles.SubmenuTitleDisabled,
-		LargeTitleArea:       CurrentStyles.LargeTitleArea,
-		Border:               CurrentStyles.Border,
-		BorderColor:          CurrentStyles.BorderColor,
-		Border2Color:         CurrentStyles.Border2Color,
-		BorderDisabledColor:  CurrentStyles.BorderDisabledColor,
-		Border2DisabledColor: CurrentStyles.Border2DisabledColor,
-		BorderFlags:          CurrentStyles.BorderFlags,
-		Border2Flags:         CurrentStyles.Border2Flags,
-		BorderDisabledFlags:  CurrentStyles.BorderDisabledFlags,
-		Border2DisabledFlags: CurrentStyles.Border2DisabledFlags,
-		ButtonActive:         CurrentStyles.ButtonActive,
-		ButtonInactive:       CurrentStyles.ButtonInactive,
-		IconFocused:          CurrentStyles.IconFocused,
-		IconPressed:          CurrentStyles.IconPressed,
-		IconInactive:         CurrentStyles.IconInactive,
-		IconHelpInactive:     CurrentStyles.IconHelpInactive,
-		IconRefreshInactive:  CurrentStyles.IconRefreshInactive,
-		IconExitInactive:     CurrentStyles.IconExitInactive,
-		IconResizeUpInactive: CurrentStyles.IconResizeUpInactive,
-		IconResizeDnInactive: CurrentStyles.IconResizeDnInactive,
-		ButtonKeyActive:      CurrentStyles.ButtonKeyActive,
-		ButtonKeyInactive:    CurrentStyles.ButtonKeyInactive,
-		ItemNormal:           CurrentStyles.ItemNormal,
-		ItemFocused:          CurrentStyles.ItemFocused,
-		TagNormal:            CurrentStyles.TagNormal,
-		TagFocused:           CurrentStyles.TagFocused,
-		TagKey:               CurrentStyles.TagKey,
-		TagKeyFocused:        CurrentStyles.TagKeyFocused,
-		TagSpinner:           CurrentStyles.TagSpinner,
-		ButtonSpinner:        CurrentStyles.ButtonSpinner,
-		LargeButtonSpinner:   CurrentStyles.LargeButtonSpinner,
-		Shadow:               CurrentStyles.Shadow,
-		ShadowColor:          CurrentStyles.ShadowColor,
-		ShadowLevel:          currentConfig.UI.ShadowLevel,
-		HelpLine:             CurrentStyles.HelpLine,
-		StatusSuccess:        CurrentStyles.StatusSuccess,
-		StatusWarn:           CurrentStyles.StatusWarn,
-		Console:              CurrentStyles.Console,
-		OptionValueFocused:   CurrentStyles.OptionValueFocused,
-		StatusBarFocused:     CurrentStyles.StatusBarFocused,
-		PanelTitleColor:      CurrentStyles.PanelTitleColor,
-		DialogTitleAlign:     CurrentStyles.DialogTitleAlign,
-		SubmenuTitleAlign:    CurrentStyles.SubmenuTitleAlign,
-		PanelTitleAlign:      CurrentStyles.PanelTitleAlign,
-		CheckboxBrackets:     CurrentStyles.CheckboxBrackets,
-		RadioBrackets:        CurrentStyles.RadioBrackets,
-		MenuBrackets:         CurrentStyles.MenuBrackets,
-		LineNumberBrackets:   CurrentStyles.LineNumberBrackets,
+		Screen:               cs.Screen,
+		Dialog:               cs.Dialog,
+		ContentBackground:    cs.ContentBackground,
+		DialogTitle:          cs.DialogTitle,
+		DialogTitleHelp:      cs.DialogTitleHelp,
+		SubmenuTitle:         cs.SubmenuTitle,
+		SubmenuTitleFocused:  cs.SubmenuTitleFocused,
+		SubmenuTitleDisabled: cs.SubmenuTitleDisabled,
+		LargeTitleArea:       cs.LargeTitleArea,
+		Border:               cs.Border,
+		BorderColor:          cs.BorderColor,
+		Border2Color:         cs.Border2Color,
+		BorderDisabledColor:  cs.BorderDisabledColor,
+		Border2DisabledColor: cs.Border2DisabledColor,
+		BorderFlags:          cs.BorderFlags,
+		Border2Flags:         cs.Border2Flags,
+		BorderDisabledFlags:  cs.BorderDisabledFlags,
+		Border2DisabledFlags: cs.Border2DisabledFlags,
+		ButtonActive:         cs.ButtonActive,
+		ButtonInactive:       cs.ButtonInactive,
+		IconFocused:          cs.IconFocused,
+		IconPressed:          cs.IconPressed,
+		IconInactive:         cs.IconInactive,
+		IconHelpInactive:     cs.IconHelpInactive,
+		IconRefreshInactive:  cs.IconRefreshInactive,
+		IconExitInactive:     cs.IconExitInactive,
+		IconResizeUpInactive: cs.IconResizeUpInactive,
+		IconResizeDnInactive: cs.IconResizeDnInactive,
+		ButtonKeyActive:      cs.ButtonKeyActive,
+		ButtonKeyInactive:    cs.ButtonKeyInactive,
+		ItemNormal:           cs.ItemNormal,
+		ItemFocused:          cs.ItemFocused,
+		TagNormal:            cs.TagNormal,
+		TagFocused:           cs.TagFocused,
+		TagKey:               cs.TagKey,
+		TagKeyFocused:        cs.TagKeyFocused,
+		TagSpinner:           cs.TagSpinner,
+		ButtonSpinner:        cs.ButtonSpinner,
+		LargeButtonSpinner:   cs.LargeButtonSpinner,
+		Shadow:               cs.Shadow,
+		ShadowColor:          cs.ShadowColor,
+		ShadowLevel:          ActiveAppearance().ShadowLevel,
+		HelpLine:             cs.HelpLine,
+		StatusSuccess:        cs.StatusSuccess,
+		StatusWarn:           cs.StatusWarn,
+		Console:              cs.Console,
+		OptionValueFocused:   cs.OptionValueFocused,
+		StatusBarFocused:     cs.StatusBarFocused,
+		PanelTitleColor:      cs.PanelTitleColor,
+		DialogTitleAlign:     cs.DialogTitleAlign,
+		SubmenuTitleAlign:    cs.SubmenuTitleAlign,
+		PanelTitleAlign:      cs.PanelTitleAlign,
+		CheckboxBrackets:     cs.CheckboxBrackets,
+		RadioBrackets:        cs.RadioBrackets,
+		MenuBrackets:         cs.MenuBrackets,
+		LineNumberBrackets:   cs.LineNumberBrackets,
 		Prefix:               "", // Global context has no prefix
-		DrawShadow:           currentConfig.UI.Shadow,
+		DrawShadow:           ActiveAppearance().Shadow,
 	}
 }
 
@@ -611,138 +624,187 @@ func styleWithFallback(tagName string, fallback lipgloss.Style) lipgloss.Style {
 	return style
 }
 
-// InitStyles initializes lipgloss styles from the current theme
+// stylesCache holds one fully built Styles per (active theme prefix, active
+// tint key) pair seen since the last InitStyles, so each session renders
+// with its own theme and tint -- both are fixed into a lipgloss.Style when
+// it's built (see semstyle.ToColorCtx), so one shared struct can't serve
+// sessions that differ in either.
+var (
+	stylesMu    sync.Mutex
+	stylesCache = map[string]Styles{}
+)
+
+// InitStyles records cfg as the live configuration and discards every
+// cached Styles, so the next GetStyles call for each theme/tint scope
+// rebuilds from cfg and the currently registered theme tags.
 func InitStyles(cfg config.AppConfig) {
 	// Clear the semantic style cache to ensure real-time visual updates on theme swap
 	ClearSemanticCache()
 
+	stylesMu.Lock()
 	// Update the global config so IsShadowEnabled(), GetActiveContext().ShadowLevel,
 	// and any other currentConfig readers see the new values immediately.
 	currentConfig = cfg
+	stylesCache = map[string]Styles{}
+	stylesMu.Unlock()
+}
+
+// InvalidateStyles discards every cached Styles and semantic render without
+// changing the live configuration -- for when a theme namespace or tint is
+// re-registered under a scope key that may already be cached.
+func InvalidateStyles() {
+	ClearSemanticCache()
+	stylesMu.Lock()
+	stylesCache = map[string]Styles{}
+	stylesMu.Unlock()
+}
+
+// StylesScopeKey identifies the active connType/theme/tint scope; anything
+// cached from resolved colors or per-connType settings must include it in
+// its key.
+func StylesScopeKey() string {
+	return console.ActiveConnType() + "|" + semstyle.ActiveThemePrefix() + "|" + semstyle.ActiveTintKey()
+}
+
+// ActiveAppearance returns the rendering connType's Appearance (see
+// console.ActiveConnType).
+func ActiveAppearance() config.Appearance {
+	ct := console.ActiveConnType()
+	stylesMu.Lock()
+	defer stylesMu.Unlock()
+	return currentConfig.Appearance.ForConnType(ct)
+}
+
+// buildStyles resolves every Styles field from a and whichever theme
+// prefix and tint are active right now.
+func buildStyles(a config.Appearance) Styles {
+	var s Styles
 
 	// Store LineCharacters setting for later use
-	CurrentStyles.LineCharacters = cfg.UI.LineCharacters
-	CurrentStyles.DrawBorders = cfg.UI.Borders
-	CurrentStyles.LargeButtons = cfg.UI.LargeButtons
-	CurrentStyles.LargeTitleBars = cfg.UI.LargeTitleBars
+	s.LineCharacters = a.LineCharacters
+	s.DrawBorders = a.Borders
+	s.LargeButtons = a.LargeButtons
+	s.LargeTitleBars = a.LargeTitleBars
 
 	// Border style based on LineCharacters setting
-	if cfg.UI.LineCharacters { // Updated: Use cfg.UI.LineCharacters
-		CurrentStyles.Border = lipgloss.RoundedBorder()
-		CurrentStyles.SepChar = "─"
+	if a.LineCharacters {
+		s.Border = lipgloss.RoundedBorder()
+		s.SepChar = "─"
 	} else {
-		CurrentStyles.Border = AsciiBorder
-		CurrentStyles.SepChar = "-"
+		s.Border = AsciiBorder
+		s.SepChar = "-"
 	}
 
 	// Screen background
-	CurrentStyles.Screen = SemanticRawStyle("Screen")
+	s.Screen = SemanticRawStyle("Screen")
 
 	// Dialog
-	CurrentStyles.Dialog = SemanticRawStyle("Dialog")
-	CurrentStyles.ContentBackground = CurrentStyles.Dialog
+	s.Dialog = SemanticRawStyle("Dialog")
+	s.ContentBackground = s.Dialog
 
-	CurrentStyles.DialogTitle = SemanticRawStyle("Title")
+	s.DialogTitle = SemanticRawStyle("Title")
 
-	CurrentStyles.DialogTitleHelp = SemanticRawStyle("TitleHelp")
+	s.DialogTitleHelp = SemanticRawStyle("TitleHelp")
 
 	// Border colors and flags, merged per the Border Color mode setting.
-	borderOverrides := ResolveThemeOverrides(cfg.UI.BorderColor, "")
-	CurrentStyles.BorderColor = borderOverrides["Border"].Style.GetForeground()
-	CurrentStyles.Border2Color = borderOverrides["Border2"].Style.GetForeground()
-	CurrentStyles.BorderFlags = borderOverrides["Border"].Flags
-	CurrentStyles.Border2Flags = borderOverrides["Border2"].Flags
+	borderOverrides := ResolveThemeOverrides(a.BorderColor, "")
+	s.BorderColor = borderOverrides["Border"].Style.GetForeground()
+	s.Border2Color = borderOverrides["Border2"].Style.GetForeground()
+	s.BorderFlags = borderOverrides["Border"].Flags
+	s.Border2Flags = borderOverrides["Border2"].Flags
 
-	CurrentStyles.BorderDisabledColor = borderOverrides["BorderDisabled"].Style.GetForeground()
-	CurrentStyles.Border2DisabledColor = borderOverrides["Border2Disabled"].Style.GetForeground()
-	CurrentStyles.BorderDisabledFlags = borderOverrides["BorderDisabled"].Flags
-	CurrentStyles.Border2DisabledFlags = borderOverrides["Border2Disabled"].Flags
+	s.BorderDisabledColor = borderOverrides["BorderDisabled"].Style.GetForeground()
+	s.Border2DisabledColor = borderOverrides["Border2Disabled"].Style.GetForeground()
+	s.BorderDisabledFlags = borderOverrides["BorderDisabled"].Flags
+	s.Border2DisabledFlags = borderOverrides["Border2Disabled"].Flags
 
 	// Shadow defines the shadow color and any attributes (e.g. dim, bold) for shade characters.
 	shadowDef := SemanticRawStyle("Shadow")
-	CurrentStyles.ShadowColor = shadowDef.GetForeground()
-	if CurrentStyles.ShadowColor == (lipgloss.NoColor{}) {
-		CurrentStyles.ShadowColor = shadowDef.GetBackground()
+	s.ShadowColor = shadowDef.GetForeground()
+	if s.ShadowColor == (lipgloss.NoColor{}) {
+		s.ShadowColor = shadowDef.GetBackground()
 	}
-	CurrentStyles.Shadow = shadowDef.UnsetBackground()
+	s.Shadow = shadowDef.UnsetBackground()
 
 	// Buttons (spacing handled at layout level)
 	// lipgloss v2 GetBackground() returns NoColor{} (never nil) for unset colors.
 	// Use type assertion to detect truly unset colors and fall back to Dialog's.
-	CurrentStyles.ButtonActive = styleWithFallback("ButtonActive", CurrentStyles.Dialog)
-	CurrentStyles.ButtonInactive = styleWithFallback("ButtonInactive", CurrentStyles.Dialog)
+	s.ButtonActive = styleWithFallback("ButtonActive", s.Dialog)
+	s.ButtonInactive = styleWithFallback("ButtonInactive", s.Dialog)
 
 	// Title bar icon widgets
-	CurrentStyles.IconFocused = styleWithFallback("IconFocused", CurrentStyles.Dialog)
-	CurrentStyles.IconPressed = styleWithFallback("IconPressed", CurrentStyles.Dialog)
-	CurrentStyles.IconInactive = styleWithFallback("IconInactive", CurrentStyles.Dialog)
-	CurrentStyles.IconHelpInactive = styleWithFallback("IconHelpInactive", CurrentStyles.Dialog)
-	CurrentStyles.IconRefreshInactive = styleWithFallback("IconRefreshInactive", CurrentStyles.Dialog)
-	CurrentStyles.IconExitInactive = styleWithFallback("IconExitInactive", CurrentStyles.Dialog)
-	CurrentStyles.IconResizeUpInactive = styleWithFallback("IconResizeUpInactive", CurrentStyles.Dialog)
-	CurrentStyles.IconResizeDnInactive = styleWithFallback("IconResizeDnInactive", CurrentStyles.Dialog)
-	CurrentStyles.ButtonKeyActive = styleWithFallback("ButtonKeyActive", CurrentStyles.ButtonActive)
-	CurrentStyles.ButtonKeyInactive = styleWithFallback("ButtonKeyInactive", CurrentStyles.ButtonInactive)
+	s.IconFocused = styleWithFallback("IconFocused", s.Dialog)
+	s.IconPressed = styleWithFallback("IconPressed", s.Dialog)
+	s.IconInactive = styleWithFallback("IconInactive", s.Dialog)
+	s.IconHelpInactive = styleWithFallback("IconHelpInactive", s.Dialog)
+	s.IconRefreshInactive = styleWithFallback("IconRefreshInactive", s.Dialog)
+	s.IconExitInactive = styleWithFallback("IconExitInactive", s.Dialog)
+	s.IconResizeUpInactive = styleWithFallback("IconResizeUpInactive", s.Dialog)
+	s.IconResizeDnInactive = styleWithFallback("IconResizeDnInactive", s.Dialog)
+	s.ButtonKeyActive = styleWithFallback("ButtonKeyActive", s.ButtonActive)
+	s.ButtonKeyInactive = styleWithFallback("ButtonKeyInactive", s.ButtonInactive)
 
 	// List items
-	CurrentStyles.ItemNormal = styleWithFallback("Item", CurrentStyles.Dialog)
-	CurrentStyles.ItemFocused = styleWithFallback("ItemFocused", CurrentStyles.Dialog)
-	CurrentStyles.OptionValueFocused = styleWithFallback("OptionValueFocused", CurrentStyles.Dialog)
+	s.ItemNormal = styleWithFallback("Item", s.Dialog)
+	s.ItemFocused = styleWithFallback("ItemFocused", s.Dialog)
+	s.OptionValueFocused = styleWithFallback("OptionValueFocused", s.Dialog)
 
 	// Tags
-	CurrentStyles.TagNormal = styleWithFallback("Tag", CurrentStyles.Dialog)
-	CurrentStyles.TagFocused = styleWithFallback("TagFocused", CurrentStyles.Dialog)
-	CurrentStyles.TagKey = styleWithFallback("TagKey", CurrentStyles.Dialog)
-	CurrentStyles.TagKeyFocused = styleWithFallback("TagKeyFocused", CurrentStyles.Dialog)
-	CurrentStyles.TagSpinner = styleWithFallback("TagSpinner", CurrentStyles.Dialog)
+	s.TagNormal = styleWithFallback("Tag", s.Dialog)
+	s.TagFocused = styleWithFallback("TagFocused", s.Dialog)
+	s.TagKey = styleWithFallback("TagKey", s.Dialog)
+	s.TagKeyFocused = styleWithFallback("TagKeyFocused", s.Dialog)
+	s.TagSpinner = styleWithFallback("TagSpinner", s.Dialog)
 
-	CurrentStyles.ButtonSpinner = styleWithFallback("ButtonSpinner", CurrentStyles.ButtonActive)
-	CurrentStyles.LargeButtonSpinner = styleWithFallback("LargeButtonSpinner", CurrentStyles.ButtonActive)
+	s.ButtonSpinner = styleWithFallback("ButtonSpinner", s.ButtonActive)
+	s.LargeButtonSpinner = styleWithFallback("LargeButtonSpinner", s.ButtonActive)
 
 	// Header / Status Bar
-	CurrentStyles.StatusBar = SemanticRawStyle("StatusBar")
-	CurrentStyles.StatusBarFocused = SemanticRawStyle("StatusBarFocused")
-	CurrentStyles.StatusBarBorder = SemanticRawStyle("StatusBarBorder")
+	s.StatusBar = SemanticRawStyle("StatusBar")
+	s.StatusBarFocused = SemanticRawStyle("StatusBarFocused")
+	s.StatusBarBorder = SemanticRawStyle("StatusBarBorder")
 	{
 		// Fallback for themes that don't define StatusBarBorder: use full StatusBar style.
-		_, noFG := CurrentStyles.StatusBarBorder.GetForeground().(lipgloss.NoColor)
-		_, noBG := CurrentStyles.StatusBarBorder.GetBackground().(lipgloss.NoColor)
+		_, noFG := s.StatusBarBorder.GetForeground().(lipgloss.NoColor)
+		_, noBG := s.StatusBarBorder.GetBackground().(lipgloss.NoColor)
 		if noFG && noBG {
-			CurrentStyles.StatusBarBorder = CurrentStyles.StatusBar
+			s.StatusBarBorder = s.StatusBar
 		}
 	}
-	CurrentStyles.HeaderBG = CurrentStyles.StatusBar // Backwards compatibility
+	s.HeaderBG = s.StatusBar // Backwards compatibility
 
 	// Help line
-	CurrentStyles.HelpLine = SemanticRawStyle("Helpline")
+	s.HelpLine = SemanticRawStyle("Helpline")
 
 	// Submenu Title
-	CurrentStyles.SubmenuTitle = SemanticRawStyle("TitleSubMenu")
-	CurrentStyles.SubmenuTitleFocused = SemanticRawStyle("TitleSubMenuFocused")
+	s.SubmenuTitle = SemanticRawStyle("TitleSubMenu")
+	s.SubmenuTitleFocused = SemanticRawStyle("TitleSubMenuFocused")
 	// ResolveDisabledStyle, not a plain lookup: themes rarely define an explicit
 	// TitleSubMenuDisabled tag, and a bare lookup of a tag the theme never
 	// registered resolves to an undefined/generic style instead of falling back
 	// to TitleSubMenu with Bold stripped and Dim applied (the same rule every
 	// other disabled element uses -- see ResolveDisabledStyle).
-	CurrentStyles.SubmenuTitleDisabled, _ = ResolveDisabledStyle("TitleSubMenu")
+	s.SubmenuTitleDisabled, _ = ResolveDisabledStyle("TitleSubMenu")
 
 	// Large Title Bar
-	CurrentStyles.LargeTitleArea = SemanticRawStyle("LargeTitleArea")
+	s.LargeTitleArea = SemanticRawStyle("LargeTitleArea")
 
 	// Initialize semantic styles from console color tags (Theme-specific to avoid log interference)
-	CurrentStyles.StatusSuccess = SemanticRawStyle("TitleNotice")
-	CurrentStyles.StatusWarn = SemanticRawStyle("TitleWarn")
-	CurrentStyles.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
+	s.StatusSuccess = SemanticRawStyle("TitleNotice")
+	s.StatusWarn = SemanticRawStyle("TitleWarn")
+	s.Console = theme.ConsoleSemanticRawStyle("ProgramBox")
 
-	CurrentStyles.PanelTitleColor = SemanticRawStyle("PanelTitle").GetForeground()
+	s.PanelTitleColor = SemanticRawStyle("PanelTitle").GetForeground()
 
-	CurrentStyles.DialogTitleAlign = cfg.UI.DialogTitleAlign
-	CurrentStyles.SubmenuTitleAlign = cfg.UI.SubmenuTitleAlign
-	CurrentStyles.PanelTitleAlign = cfg.UI.PanelTitleAlign
-	CurrentStyles.CheckboxBrackets = cfg.UI.CheckboxBrackets
-	CurrentStyles.RadioBrackets = cfg.UI.RadioBrackets
-	CurrentStyles.MenuBrackets = cfg.UI.MenuBrackets
-	CurrentStyles.LineNumberBrackets = cfg.UI.LineNumberBrackets
+	s.DialogTitleAlign = a.DialogTitleAlign
+	s.SubmenuTitleAlign = a.SubmenuTitleAlign
+	s.PanelTitleAlign = a.PanelTitleAlign
+	s.CheckboxBrackets = a.CheckboxBrackets
+	s.RadioBrackets = a.RadioBrackets
+	s.MenuBrackets = a.MenuBrackets
+	s.LineNumberBrackets = a.LineNumberBrackets
+
+	return s
 }
 
 // Helper functions for common style operations

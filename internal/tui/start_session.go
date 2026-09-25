@@ -43,6 +43,7 @@ func StartForSession(ctx context.Context, startMenu string, opts ProgramOptions)
 	// ActivateSessionRenderContext, which would deadlock on semstyle's
 	// non-reentrant tint mutex if this scope were still held when that
 	// starts.
+	ctx = console.WithConnType(ctx, connType)
 	restoreStartupTint := BeginTintFor(connType)
 	endStartupTintScope := func() {
 		if restoreStartupTint != nil {
@@ -51,7 +52,7 @@ func StartForSession(ctx context.Context, startMenu string, opts ProgramOptions)
 		}
 	}
 	defer endStartupTintScope()
-	RegisterConnTypeTints(ctx, connType, config.LoadAppConfig().AnsiColors.ForConnType(connType))
+	RegisterConnTypeTints(ctx, connType, config.LoadAppConfig().Appearance.ForConnType(connType).AnsiColors)
 
 	if err := Initialize(ctx); err != nil {
 		return nil, nil, err

@@ -328,7 +328,7 @@ func (m *BackdropModel) GetContentArea() (width, height int) {
 
 	// Use Layout helpers for consistent calculations
 	layout := GetLayout()
-	hasShadow := currentConfig.UI.Shadow
+	hasShadow := ActiveAppearance().Shadow
 	headerH := 1
 	if m.Header != nil {
 		headerH = m.Header.Height()

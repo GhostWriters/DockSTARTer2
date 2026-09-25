@@ -166,10 +166,9 @@ func run() (exitCode int) {
 	var earlyConf config.AppConfig
 	{
 		earlyConf = config.LoadAppConfig()
-		console.LineCharacters = earlyConf.UI.LineCharacters
-		console.SpinnerEnabled = earlyConf.UI.Spinner
-		console.SpinnerSpeed = earlyConf.UI.SpinnerSpeed
-		console.HyperlinksMode = earlyConf.UI.Hyperlinks
+		earlyConf.Appearance.ApplyToConsole()
+		console.SpinnerSpeed = earlyConf.Appearance.SpinnerSpeed
+		console.HyperlinksMode = earlyConf.Appearance.Hyperlinks
 	}
 
 	// Re-tighten permissions on DS2's own config/state/log files every
@@ -369,7 +368,7 @@ func run() (exitCode int) {
 	// (see TagProcessorHandler.Handle), which only reflects the correct tint
 	// if the key is already the active one by then.
 	restoreTint = tui.BeginTintForElement("local", "cli")
-	tui.RegisterConnTypeTints(ctx, "local", config.LoadAppConfig().AnsiColors.Local)
+	tui.RegisterConnTypeTints(ctx, "local", config.LoadAppConfig().Appearance.Local.AnsiColors)
 
 	stopStartupSpinner := console.StartSpinner()
 

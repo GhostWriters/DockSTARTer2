@@ -848,13 +848,13 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case displayengine.ConfigChangedMsg:
 		m.config = msg.Config
-		console.SpinnerEnabled = msg.Config.UI.Spinner
-		console.RefreshRate = msg.Config.UI.RefreshRate
-		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.UI.SpinnerSpeed, msg.Config.UI.RefreshRate)
-		console.LineCharacters = msg.Config.UI.LineCharacters
-		console.HyperlinksMode = msg.Config.UI.Hyperlinks
-		_, _ = theme.Load(m.config.UI.Theme, "")
-		RegisterConnTypeTints(m.ctx, m.connType, m.config.AnsiColors.ForConnType(m.connType))
+		msg.Config.Appearance.ApplyToConsole()
+		console.RefreshRate = msg.Config.Appearance.RefreshRate
+		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.Appearance.SpinnerSpeed, msg.Config.Appearance.RefreshRate)
+		console.HyperlinksMode = msg.Config.Appearance.Hyperlinks
+		_, _ = theme.Load(m.config.Appearance.Local.Theme, "")
+		RegisterConnTypeTints(m.ctx, m.connType, m.config.Appearance.ForConnType(m.connType).AnsiColors)
+		RegisterConnTypeTheme(m.ctx, m.connType, m.config)
 		m.invalidateAllCaches()
 		m.backdrop.Header.SyncFlags()
 		updated, _ := m.panel.Update(msg)
@@ -1209,7 +1209,7 @@ func (m *AppModel) invalidateAllCaches() {
 // Returns true if the log panel height changed (caller should resize the active screen/dialog).
 func (m *AppModel) applyPanelMax() bool {
 	layout := displayengine.GetLayout()
-	hasShadow := displayengine.CurrentConfig().UI.Shadow
+	hasShadow := displayengine.ActiveAppearance().Shadow
 	headerH := 1
 	if m.backdrop != nil {
 		headerH = m.backdrop.Header.Height()
@@ -1305,7 +1305,7 @@ func (m AppModel) getContentArea() (int, int) {
 	// Use backdropHeight() to account for log panel
 	bh := m.backdropHeight()
 	layout := displayengine.GetLayout()
-	hasShadow := displayengine.CurrentConfig().UI.Shadow
+	hasShadow := displayengine.ActiveAppearance().Shadow
 	headerH := 1
 	helplineH := layout.HelplineHeight
 	if m.backdrop != nil {
@@ -1328,7 +1328,7 @@ func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 			headerH = m.backdrop.ChromeHeight() - 1
 			helplineH = m.backdrop.HelplineActualHeight()
 		}
-		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, true, headerH, helplineH)
+		return layout.ContentArea(m.width, m.height, m.config.Appearance.ForConnType(m.connType).Shadow, true, headerH, helplineH)
 	}
 	return m.getContentArea()
 }

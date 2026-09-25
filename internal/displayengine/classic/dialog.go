@@ -134,13 +134,13 @@ func (b *BaseDialogModel) CalculateLayout() {
 // All three simple dialog types (confirm, message, prompt) share this calculation.
 func newStandardDialogLayout(width, height int) DialogLayout {
 	shadow := 0
-	if currentConfig.UI.Shadow {
+	if ActiveAppearance().Shadow {
 		shadow = DialogShadowHeight
 	}
 	buttons := DialogButtonHeight
 	// Use large titlebar if enabled and the dialog is tall enough to fit it.
 	// Conservative check: need at least 3 content rows after all overhead.
-	largeTitleBar := currentConfig.UI.LargeTitleBars &&
+	largeTitleBar := ActiveAppearance().LargeTitleBars &&
 		height > DialogBorderHeight+buttons+shadow+LargeTitleBarOverhead+3
 	overhead := DialogBorderHeight + buttons + shadow
 	if largeTitleBar {
