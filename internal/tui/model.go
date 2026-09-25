@@ -441,7 +441,7 @@ func (m *AppModel) Send(msg tea.Msg) {
 // Init implements tea.Model
 func (m *AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
-		globalTickCmd(),
+		globalTickCmd(m.connType),
 		m.backdrop.Init(),
 		m.panel.Init(),
 	}

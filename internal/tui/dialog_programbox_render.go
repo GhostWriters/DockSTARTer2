@@ -229,8 +229,6 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	cfg := config.LoadAppConfig()
 
 	cfg.Appearance.ApplyToConsole()
-	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.Appearance.SpinnerSpeed, cfg.Appearance.RefreshRate)
-	console.HyperlinksMode = cfg.Appearance.Hyperlinks
 	if _, err := theme.Load(cfg.Appearance.Local.Theme, ""); err == nil {
 		displayengine.InitStyles(cfg)
 	}
@@ -245,7 +243,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	model := NewAppModelStandalone(ctx, cfg, "local", "cli", parseSessionKey(nil), nil, dialogModel)
 
 	// Create Bubble Tea program
-	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.Appearance.RefreshRate})
+	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.Appearance.Local.RefreshRate})
 
 	registerCallbacks()
 	defer func() {

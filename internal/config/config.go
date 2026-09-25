@@ -28,7 +28,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// MinRefreshRateMS and MaxRefreshRateMS bound UI.RefreshRate (screen repaint
+// MinRefreshRateMS and MaxRefreshRateMS bound Appearance.RefreshRate (screen repaint
 // interval, in milliseconds). Shared by config validation, the Appearance
 // menu's prompt, and the Browser Settings dialog's refresh-rate field.
 const (
@@ -477,7 +477,6 @@ func CollapseVariables(path string) string {
 func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	var def AppConfig
 	_ = toml.Unmarshal(defaultConfigBytes(), &def)
-	ui := &conf.Appearance
 
 	warn := func(field, bad, fixed string) {
 		logger.Warn(ctx, "Config: invalid value for {{|Var|}}%s{{[-]}} ({{|Var|}}%s{{[-]}}) — reset to {{|Var|}}%s{{[-]}}.", field, bad, fixed)
@@ -486,39 +485,6 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	for _, ct := range ConnTypes {
 		sanitizeAppearance(conf.Appearance.Ptr(ct), def.Appearance.ForConnType(ct), "appearance."+ct+".", warn)
 	}
-	if ui.SpinnerSpeed < 50 || ui.SpinnerSpeed > 5000 {
-		warn("spinner_speed", fmt.Sprintf("%d", ui.SpinnerSpeed), fmt.Sprintf("%d", def.Appearance.SpinnerSpeed))
-		ui.SpinnerSpeed = def.Appearance.SpinnerSpeed
-	}
-	if ui.RefreshRate < MinRefreshRateMS || ui.RefreshRate > MaxRefreshRateMS {
-		warn("refresh_rate", fmt.Sprintf("%d", ui.RefreshRate), fmt.Sprintf("%d", def.Appearance.RefreshRate))
-		ui.RefreshRate = def.Appearance.RefreshRate
-	}
-	switch ui.PanelLocal {
-	case "log", "console", "none", "system":
-	default:
-		warn("panel_local", ui.PanelLocal, def.Appearance.PanelLocal)
-		ui.PanelLocal = def.Appearance.PanelLocal
-	}
-	switch ui.PanelRemote {
-	case "log", "console", "none", "system":
-	default:
-		warn("panel_remote", ui.PanelRemote, def.Appearance.PanelRemote)
-		ui.PanelRemote = def.Appearance.PanelRemote
-	}
-	switch ui.MarkdownHyperlinks {
-	case "off", "inline", "auto":
-	default:
-		warn("markdown_hyperlinks", ui.MarkdownHyperlinks, def.Appearance.MarkdownHyperlinks)
-		ui.MarkdownHyperlinks = def.Appearance.MarkdownHyperlinks
-	}
-	switch ui.Hyperlinks {
-	case "off", "inline", "auto":
-	default:
-		warn("hyperlinks", ui.Hyperlinks, def.Appearance.Hyperlinks)
-		ui.Hyperlinks = def.Appearance.Hyperlinks
-	}
-
 	isValidPath := func(p string) bool {
 		expanded := filepath.Clean(ExpandVariables(p))
 		return filepath.IsAbs(expanded)
@@ -536,6 +502,14 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 // sanitizeAppearance resets any field of a that has an invalid value to
 // def's, reporting each through warn under keyPrefix.
 func sanitizeAppearance(a *Appearance, def Appearance, keyPrefix string, warn func(field, bad, fixed string)) {
+	if a.SpinnerSpeed < 50 || a.SpinnerSpeed > 5000 {
+		warn(keyPrefix+"spinner_speed", fmt.Sprintf("%d", a.SpinnerSpeed), fmt.Sprintf("%d", def.SpinnerSpeed))
+		a.SpinnerSpeed = def.SpinnerSpeed
+	}
+	if a.RefreshRate < MinRefreshRateMS || a.RefreshRate > MaxRefreshRateMS {
+		warn(keyPrefix+"refresh_rate", fmt.Sprintf("%d", a.RefreshRate), fmt.Sprintf("%d", def.RefreshRate))
+		a.RefreshRate = def.RefreshRate
+	}
 	if a.ShadowLevel < 0 || a.ShadowLevel > 4 {
 		warn(keyPrefix+"shadow_level", fmt.Sprintf("%d", a.ShadowLevel), fmt.Sprintf("%d", def.ShadowLevel))
 		a.ShadowLevel = def.ShadowLevel
@@ -554,6 +528,9 @@ func sanitizeAppearance(a *Appearance, def Appearance, keyPrefix string, warn fu
 		warn(keyPrefix+field, *v, fallback)
 		*v = fallback
 	}
+	oneOf("panel", &a.Panel, def.Panel, "log", "console", "none", "system")
+	oneOf("markdown_hyperlinks", &a.MarkdownHyperlinks, def.MarkdownHyperlinks, "off", "inline", "auto")
+	oneOf("hyperlinks", &a.Hyperlinks, def.Hyperlinks, "off", "inline", "auto")
 	oneOf("dialog_title_align", &a.DialogTitleAlign, def.DialogTitleAlign, "left", "center")
 	oneOf("submenu_title_align", &a.SubmenuTitleAlign, def.SubmenuTitleAlign, "left", "center")
 	oneOf("panel_title_align", &a.PanelTitleAlign, def.PanelTitleAlign, "left", "center")
@@ -1026,10 +1003,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["SubmenuTitleAlign"] = true
 			case "ui.panel_title_align":
 				present["PanelTitleAlign"] = true
-			case "ui.panel_local":
-				present["PanelLocal"] = true
-			case "ui.panel_remote":
-				present["PanelRemote"] = true
+			case "ui.panel_local", "ui.panel_remote":
+				present["Panel"] = true
 			case "ui.checkbox_brackets":
 				present["CheckboxBrackets"] = true
 			case "ui.radio_brackets":
@@ -1317,22 +1292,14 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 
 	keys := []string{
 		"ConfigFolder", "ComposeFolder",
-		"SpinnerSpeed", "RefreshRate", "PanelLocal", "PanelRemote", "ShowPreview", "MarkdownHyperlinks", "Hyperlinks",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
-		"ConfigFolder":       "Config Folder",
-		"ComposeFolder":      "Compose Folder",
-		"SpinnerSpeed":       "Spinner Speed",
-		"RefreshRate":        "Refresh Rate",
-		"PanelLocal":         "Panel Local",
-		"PanelRemote":        "Panel Remote",
-		"ShowPreview":        "Show Preview",
-		"MarkdownHyperlinks": "Markdown Hyperlinks",
-		"Hyperlinks":         "Hyperlinks",
-		"SSHPort":            "SSH Port",
-		"WebPort":            "Web Port",
-		"AuthMode":           "Auth Mode",
+		"ConfigFolder":  "Config Folder",
+		"ComposeFolder": "Compose Folder",
+		"SSHPort":       "SSH Port",
+		"WebPort":       "Web Port",
+		"AuthMode":      "Auth Mode",
 	}
 
 	var data []string
@@ -1365,20 +1332,6 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = conf.RawPaths.ComposeFolder
 			expandedValue = conf.ComposeDir
 			useFolderColor = true
-		case "SpinnerSpeed":
-			value = fmt.Sprintf("{{|Var|}}%dms{{[-]}}", conf.Appearance.SpinnerSpeed)
-		case "RefreshRate":
-			value = fmt.Sprintf("{{|Var|}}%dms{{[-]}}", conf.Appearance.RefreshRate)
-		case "PanelLocal":
-			value = varValue(conf.Appearance.PanelLocal)
-		case "PanelRemote":
-			value = varValue(conf.Appearance.PanelRemote)
-		case "ShowPreview":
-			value = boolToYesNo(conf.Appearance.ShowPreview)
-		case "MarkdownHyperlinks":
-			value = varValue(conf.Appearance.MarkdownHyperlinks)
-		case "Hyperlinks":
-			value = varValue(conf.Appearance.Hyperlinks)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
 				value = varValue(conf.Server.SSH.Port)
@@ -1436,6 +1389,12 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		{"MenuBrackets", "Menu Brackets", func(_ string, a Appearance) string { return boolToYesNo(a.MenuBrackets) }},
 		{"LineNumberBrackets", "Line Number Brackets", func(_ string, a Appearance) string { return boolToYesNo(a.LineNumberBrackets) }},
 		{"TabLayout", "Tab Layout", func(_ string, a Appearance) string { return varValue(a.TabLayout) }},
+		{"Panel", "Panel", func(_ string, a Appearance) string { return varValue(a.Panel) }},
+		{"ShowPreview", "Show Preview", func(_ string, a Appearance) string { return boolToYesNo(a.ShowPreview) }},
+		{"Hyperlinks", "Hyperlinks", func(_ string, a Appearance) string { return varValue(a.Hyperlinks) }},
+		{"MarkdownHyperlinks", "Markdown Hyperlinks", func(_ string, a Appearance) string { return varValue(a.MarkdownHyperlinks) }},
+		{"RefreshRate", "Refresh Rate", func(_ string, a Appearance) string { return fmt.Sprintf("{{|Var|}}%dms{{[-]}}", a.RefreshRate) }},
+		{"SpinnerSpeed", "Spinner Speed", func(_ string, a Appearance) string { return fmt.Sprintf("{{|Var|}}%dms{{[-]}}", a.SpinnerSpeed) }},
 		{"MenuTint", "Menu Tint", func(_ string, a Appearance) string { return tintSummary(a.AnsiColors.AnsiElementColors) }},
 		{"MenuOverrides", "Menu Color Overrides", func(_ string, a Appearance) string { return overrideSummary(a.AnsiColors.AnsiElementColors) }},
 		{"ProgramBoxTint", "ProgramBox Tint", func(_ string, a Appearance) string { return tintSummary(a.AnsiColors.ProgramBox) }},

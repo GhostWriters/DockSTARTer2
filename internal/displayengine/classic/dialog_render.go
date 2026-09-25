@@ -318,6 +318,14 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 // spinnerIndicator, when non-empty, replaces the focus indicators with the given frame character.
 // Pass a second value to use a different frame for the right indicator (counter-clockwise effect).
 func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext, spinnerIndicator ...string) string {
+	return RenderMarkedTitleSegmentCtx(rawTitle, "", borderFocused, contentFocused, showIndicators, titleTag, ctx, spinnerIndicator...)
+}
+
+// RenderMarkedTitleSegmentCtx is RenderTitleSegmentCtx with marker, when
+// non-empty, drawn on both sides of the title outside the indicators, styled
+// like the panel's changed indicator (PanelTitleChangedIndicator) rather
+// than the title.
+func RenderMarkedTitleSegmentCtx(rawTitle, marker string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext, spinnerIndicator ...string) string {
 	spinInd := ""
 	spinIndR := ""
 	if len(spinnerIndicator) > 0 {
@@ -359,8 +367,14 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 		Foreground(ctx.BorderColor).
 		Background(borderBG)
 
+	renderedMarker := ""
+	if marker != "" {
+		renderedMarker = borderStyleLight.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+marker+"{{[-]}}", ctx.Prefix))
+	}
+
 	var result strings.Builder
 	result.WriteString(borderStyleLight.Render(leftT))
+	result.WriteString(renderedMarker)
 
 	if showIndicators {
 		if contentFocused {
@@ -400,6 +414,7 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 		}
 	}
 
+	result.WriteString(renderedMarker)
 	result.WriteString(borderStyleLight.Render(rightT))
 	return result.String()
 }

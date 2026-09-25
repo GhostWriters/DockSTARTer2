@@ -1457,8 +1457,8 @@ func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 // NewMenuModel(id, title, "", nil) wrapping content sections, the pattern
 // used by Config Menu/Main Menu/Options Menu/etc.), m.list.Index() and
 // m.cursor are meaningless -- the real focused item lives inside whichever
-// content section currently has focus. Recurses through ContentRow wrappers
-// to find the actual *MenuModel. Returns m itself when it has real items
+// content section currently has focus. Recurses through ContentRow/
+// ContentColumn and ContentWrapper layers to find the actual *MenuModel. Returns m itself when it has real items
 // (the plain-list case) or no focusable section was found.
 func (m *MenuModel) focusedSectionMenu() *MenuModel {
 	if len(m.items) > 0 || len(m.contentSections) == 0 {
@@ -1476,6 +1476,10 @@ func (m *MenuModel) focusedSectionMenu() *MenuModel {
 				return m
 			}
 			c = items[idx]
+			continue
+		}
+		if w, ok := c.(ContentWrapper); ok {
+			c = w.Unwrap()
 			continue
 		}
 		break

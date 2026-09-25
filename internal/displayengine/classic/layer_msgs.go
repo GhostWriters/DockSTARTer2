@@ -2,7 +2,6 @@ package classic
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -95,12 +94,7 @@ type ReplaceOutputMsg struct {
 	Lines []string
 }
 
-// EffectivePanelMode returns the configured panel mode for the active
-// session. Keys off console.RequiresRemoteSudoGate (DS2's own SSH/web
-// server), matching connType's own local/remote split.
+// EffectivePanelMode returns connType's configured panel mode.
 func EffectivePanelMode(cfg config.AppConfig, connType string) string {
-	if !console.RequiresRemoteSudoGate() {
-		return cfg.Appearance.PanelLocal
-	}
-	return cfg.Appearance.PanelRemote
+	return cfg.Appearance.ForConnType(connType).Panel
 }

@@ -68,6 +68,14 @@ type KeyMap struct {
 	EnvResizeSplit key.Binding
 	EnvClosePane   key.Binding
 
+	// Tab strip switching (TabStrip owners)
+	TabStripNext key.Binding
+	TabStripPrev key.Binding
+
+	// Appearance Settings preview: show/focus, and back to settings/hide
+	PreviewForward key.Binding
+	PreviewBack    key.Binding
+
 	// Program-wide context menu (keyboard equiv of right-click)
 	ContextMenu key.Binding
 }
@@ -246,6 +254,22 @@ var Keys = KeyMap{
 	EnvClosePane: key.NewBinding(
 		key.WithKeys("ctrl+q", "alt+q", "ctrl+alt+q"),
 		key.WithHelp("ctrl+q", "close pane"),
+	),
+	TabStripNext: key.NewBinding(
+		key.WithKeys("ctrl+right", "alt+right", "ctrl+alt+right"),
+		key.WithHelp("alt+→", "next tab"),
+	),
+	TabStripPrev: key.NewBinding(
+		key.WithKeys("ctrl+left", "alt+left", "ctrl+alt+left"),
+		key.WithHelp("alt+←", "prev tab"),
+	),
+	PreviewForward: key.NewBinding(
+		key.WithKeys("ctrl+pgdown", "alt+pgdown", "ctrl+alt+pgdown"),
+		key.WithHelp("alt+pgdn", "show/focus preview"),
+	),
+	PreviewBack: key.NewBinding(
+		key.WithKeys("ctrl+pgup", "alt+pgup", "ctrl+alt+pgup"),
+		key.WithHelp("alt+pgup", "focus settings/hide preview"),
 	),
 	ContextMenu: key.NewBinding(
 		key.WithKeys("f3", "ctrl+space", "alt+space", "ctrl+alt+space", "shift+F10", "alt+enter", "ctrl+enter", "ctrl+alt+enter", "menu"),

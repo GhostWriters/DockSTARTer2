@@ -62,8 +62,6 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		}
 	}()
 	conf.Appearance.ApplyToConsole()
-	console.SpinnerSpeed = conf.Appearance.SpinnerSpeed
-	console.HyperlinksMode = conf.Appearance.Hyperlinks
 	exitCode := 0
 
 	// Validate override file for operational commands

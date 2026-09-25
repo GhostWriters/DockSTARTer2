@@ -244,21 +244,26 @@ func HandleCompose(ctx context.Context, group *CommandGroup, state *CmdState) er
 	return nil
 }
 func HandleConfigPanel(ctx context.Context, group *CommandGroup) error {
-	if len(group.Args) == 0 {
+	value, connTypes, err := splitThemeValueArgs(group.Args)
+	if err != nil {
+		return err
+	}
+	if value == "" {
 		return errors.New("missing panel mode (log, console, none)")
 	}
-	mode := strings.ToLower(group.Args[0])
+	mode := strings.ToLower(value)
 	if mode != "log" && mode != "console" && mode != "none" {
 		return fmt.Errorf("invalid panel mode: %s (use log, console, or none)", mode)
 	}
 
 	conf := config.LoadAppConfig()
-	conf.Appearance.PanelLocal = mode
-	conf.Appearance.PanelRemote = mode
+	for _, ct := range connTypes {
+		conf.Appearance.Ptr(ct).Panel = mode
+	}
 	if err := config.SaveAppConfig(conf); err != nil {
 		return err
 	}
 
-	logger.Notice(ctx, "Panel mode set to: {{|Var|}}%s{{[-]}}", mode)
+	logger.Notice(ctx, "Panel mode for %s set to: {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), mode)
 	return nil
 }

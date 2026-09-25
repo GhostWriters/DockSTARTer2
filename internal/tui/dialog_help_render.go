@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -30,7 +31,7 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	}
 
 	source := m.contextInfo.DocMarkdown
-	mode := config.LoadAppConfig().Appearance.MarkdownHyperlinks
+	mode := config.LoadAppConfig().Appearance.ForConnType(console.ActiveConnType()).MarkdownHyperlinks
 
 	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
 	// Auto (link text + visible URL) and strips the resulting OSC8 escapes

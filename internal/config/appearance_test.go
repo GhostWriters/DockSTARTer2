@@ -32,19 +32,62 @@ borders = false
 shadow_level = 4
 spinner_speed = 200
 hyperlinks = "off"
+panel_local = "console"
+panel_remote = "none"
 `)
-	if conf.Appearance.SpinnerSpeed != 200 || conf.Appearance.Hyperlinks != "off" {
-		t.Errorf("shared settings not migrated: spinner_speed=%d hyperlinks=%q", conf.Appearance.SpinnerSpeed, conf.Appearance.Hyperlinks)
-	}
 	def := DefaultConfig().Appearance.Local
 	for _, ct := range ConnTypes {
 		a := conf.Appearance.ForConnType(ct)
 		if a.Theme != "Firehouse" || a.Borders || a.ShadowLevel != 4 {
 			t.Errorf("%s: theme=%q borders=%v shadow_level=%d, want Firehouse/false/4", ct, a.Theme, a.Borders, a.ShadowLevel)
 		}
+		if a.SpinnerSpeed != 200 || a.Hyperlinks != "off" {
+			t.Errorf("%s: spinner_speed=%d hyperlinks=%q, want 200/off", ct, a.SpinnerSpeed, a.Hyperlinks)
+		}
+		wantPanel := "none"
+		if ct == "local" {
+			wantPanel = "console"
+		}
+		if a.Panel != wantPanel {
+			t.Errorf("%s: panel = %q, want %q", ct, a.Panel, wantPanel)
+		}
 		if a.TabLayout != def.TabLayout {
 			t.Errorf("%s: unset tab_layout = %q, want default %q", ct, a.TabLayout, def.TabLayout)
 		}
+	}
+}
+
+// TestMigrateSharedAppearanceSettings covers settings kept directly in
+// [appearance], which move into every connection type's block unless the
+// block already has them.
+func TestMigrateSharedAppearanceSettings(t *testing.T) {
+	conf := loadFromBytes(t, `
+[appearance]
+refresh_rate = 100
+panel_local = "console"
+panel_remote = "none"
+show_preview = false
+
+[appearance.web]
+theme = "Murica"
+refresh_rate = 200
+panel = "log"
+`)
+	for _, ct := range ConnTypes {
+		a := conf.Appearance.ForConnType(ct)
+		wantRate, wantPanel := 100, "none"
+		switch ct {
+		case "local":
+			wantPanel = "console"
+		case "web":
+			wantRate, wantPanel = 200, "log"
+		}
+		if a.RefreshRate != wantRate || a.Panel != wantPanel || a.ShowPreview {
+			t.Errorf("%s: refresh_rate=%d panel=%q show_preview=%v, want %d/%q/false", ct, a.RefreshRate, a.Panel, a.ShowPreview, wantRate, wantPanel)
+		}
+	}
+	if got := conf.Appearance.Web.Theme; got != "Murica" {
+		t.Errorf("web theme = %q, want Murica", got)
 	}
 }
 
@@ -156,8 +199,8 @@ tint = 'embedded:dracula'
 			t.Errorf("%s theme = %q, want RetroDockSTARTer", ct, got)
 		}
 	}
-	if conf.Appearance.SpinnerSpeed != 200 {
-		t.Errorf("spinner_speed = %d, want 200", conf.Appearance.SpinnerSpeed)
+	if got := conf.Appearance.SSH.SpinnerSpeed; got != 200 {
+		t.Errorf("ssh spinner_speed = %d, want 200", got)
 	}
 	if got := conf.Appearance.Web.AnsiColors.Tint; got != "embedded:dracula" {
 		t.Errorf("web tint = %q, want embedded:dracula", got)

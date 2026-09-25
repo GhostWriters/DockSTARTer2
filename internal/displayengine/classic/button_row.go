@@ -117,7 +117,7 @@ func (b *ButtonRow) AdvanceSpinner(now time.Time) bool {
 	if b.processingBtnID == "" || !console.SpinnerEnabled() {
 		return false
 	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	fps := time.Duration(console.SpinnerSpeed()) * time.Millisecond
 	if fps <= 0 || now.Sub(b.lastSpinner) < fps {
 		return false
 	}

@@ -260,7 +260,6 @@ func Parse(args []string) ([]CommandGroup, error) {
 			}
 
 		case "-t", "--test", "--man", "--config-pm", "--config-folder", "--config-compose-folder",
-			"--theme-spinner-speed", "--theme-refresh-rate",
 			"--edit-app", "--start-edit-app",
 			"--env-edit", "--env-edit-lower", "--env-appfiles":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
@@ -271,7 +270,9 @@ func Parse(args []string) ([]CommandGroup, error) {
 
 		case "-T", "--theme", "--theme-shadow-level", "--theme-border-color",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
-			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-tab-layout":
+			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-tab-layout",
+			"--theme-spinner-speed", "--theme-refresh-rate",
+			"--theme-markdown-hyperlinks", "--theme-hyperlinks", "--config-panel":
 			// An optional value, then an optional connection-type list (see
 			// splitThemeValueArgs).
 			for range 2 {
@@ -290,14 +291,15 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
 			"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
-			"--theme-menu-brackets", "--theme-no-menu-brackets":
+			"--theme-menu-brackets", "--theme-no-menu-brackets",
+			"--theme-show-preview", "--theme-no-show-preview":
 			// An optional connection-type list.
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++
 			}
 
-		case "-S", "--select", "--menu-config-app-select", "--menu-app-select", "--theme-markdown-hyperlinks", "--theme-hyperlinks":
+		case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++
@@ -499,8 +501,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--edit-global", "--start-edit-global",
 			"-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced",
 			"--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table",
-			"--config-show", "--show-config",
-			"--theme-show-preview", "--theme-no-show-preview":
+			"--config-show", "--show-config":
 			// Do nothing, consumesUntilDash is false
 
 		default:

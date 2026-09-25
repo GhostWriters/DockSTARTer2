@@ -223,6 +223,7 @@ var (
 	setScrollbar      = func(a *config.Appearance, v bool) { a.Scrollbar = v }
 	setSpinner        = func(a *config.Appearance, v bool) { a.Spinner = v }
 	setMenuBrackets   = func(a *config.Appearance, v bool) { a.MenuBrackets = v }
+	setShowPreview    = func(a *config.Appearance, v bool) { a.ShowPreview = v }
 )
 
 // themeToggles holds every per-connection-type on/off --theme-* command.
@@ -253,6 +254,8 @@ var themeToggles = map[string]themeToggle{
 	"--theme-no-spinners":        {setSpinner, false},
 	"--theme-menu-brackets":      {setMenuBrackets, true},
 	"--theme-no-menu-brackets":   {setMenuBrackets, false},
+	"--theme-show-preview":       {setShowPreview, true},
+	"--theme-no-show-preview":    {setShowPreview, false},
 }
 
 // themeValueSetting is one per-connection-type --theme-* command taking a
@@ -278,9 +281,36 @@ func stringSetting(label string, field func(a *config.Appearance) *string, parse
 	}
 }
 
+// msSetting builds a themeValueSetting for a millisecond Appearance field
+// bounded by lo and hi.
+func msSetting(label string, field func(a *config.Appearance) *int, lo, hi int) themeValueSetting {
+	return themeValueSetting{
+		label: label,
+		get:   func(a config.Appearance) string { return strconv.Itoa(*field(&a)) + "ms" },
+		parse: func(ctx context.Context, arg string) (func(a *config.Appearance), error) {
+			ms, err := strconv.Atoi(strings.TrimSpace(arg))
+			if err != nil || ms < lo || ms > hi {
+				logger.Error(ctx, "Invalid %s: %s (use %d-%d ms)", label, arg, lo, hi)
+				return nil, fmt.Errorf("invalid %s", label)
+			}
+			return func(a *config.Appearance) { *field(a) = ms }, nil
+		},
+	}
+}
+
 // themeValueSettings holds every per-connection-type --theme-* command that
 // takes a value.
 var themeValueSettings = map[string]themeValueSetting{
+	"--theme-spinner-speed": msSetting("spinner speed",
+		func(a *config.Appearance) *int { return &a.SpinnerSpeed }, 50, 5000),
+	"--theme-refresh-rate": msSetting("refresh rate",
+		func(a *config.Appearance) *int { return &a.RefreshRate }, config.MinRefreshRateMS, config.MaxRefreshRateMS),
+	"--theme-markdown-hyperlinks": stringSetting("markdown hyperlinks mode",
+		func(a *config.Appearance) *string { return &a.MarkdownHyperlinks },
+		parseMarkdownHyperlinks),
+	"--theme-hyperlinks": stringSetting("hyperlinks mode",
+		func(a *config.Appearance) *string { return &a.Hyperlinks },
+		parseHyperlinks),
 	"--theme-shadow-level": {
 		label: "shadow level",
 		get:   func(a config.Appearance) string { return strconv.Itoa(a.ShadowLevel) },
@@ -421,74 +451,6 @@ func HandleThemeSettings(ctx context.Context, group *CommandGroup) error {
 		return nil
 	}
 
-	switch group.Command {
-	case "--theme-spinner-speed":
-		if len(group.Args) == 0 {
-			logger.Error(ctx, "Usage: --theme-spinner-speed <milliseconds>")
-			return fmt.Errorf("missing argument")
-		}
-		ms, err := strconv.Atoi(strings.TrimSpace(group.Args[0]))
-		if err != nil || ms < 50 || ms > 5000 {
-			logger.Error(ctx, "Invalid spinner speed: %s (use 50-5000 ms)", group.Args[0])
-			return fmt.Errorf("invalid spinner speed")
-		}
-		conf.Appearance.SpinnerSpeed = ms
-	case "--theme-refresh-rate":
-		if len(group.Args) == 0 {
-			logger.Error(ctx, "Usage: --theme-refresh-rate <milliseconds>")
-			return fmt.Errorf("missing argument")
-		}
-		ms, err := strconv.Atoi(strings.TrimSpace(group.Args[0]))
-		if err != nil || ms < config.MinRefreshRateMS || ms > config.MaxRefreshRateMS {
-			logger.Error(ctx, "Invalid refresh rate: %s (use %d-%d ms)", group.Args[0], config.MinRefreshRateMS, config.MaxRefreshRateMS)
-			return fmt.Errorf("invalid refresh rate")
-		}
-		conf.Appearance.RefreshRate = ms
-	case "--theme-show-preview":
-		conf.Appearance.ShowPreview = true
-	case "--theme-no-show-preview":
-		conf.Appearance.ShowPreview = false
-	case "--theme-markdown-hyperlinks":
-		if len(group.Args) == 0 {
-			logger.Display(ctx, "Current markdown hyperlinks mode: %s", conf.Appearance.MarkdownHyperlinks)
-			return nil
-		}
-		v, err := parseMarkdownHyperlinks(ctx, group.Args[0])
-		if err != nil {
-			return err
-		}
-		conf.Appearance.MarkdownHyperlinks = v
-	case "--theme-hyperlinks":
-		if len(group.Args) == 0 {
-			logger.Display(ctx, "Current hyperlinks mode: %s", conf.Appearance.Hyperlinks)
-			return nil
-		}
-		v, err := parseHyperlinks(ctx, group.Args[0])
-		if err != nil {
-			return err
-		}
-		conf.Appearance.Hyperlinks = v
-	}
-
-	if err := config.SaveAppConfig(conf); err != nil {
-		logger.Error(ctx, "Failed to save theme setting: %v", err)
-		return err
-	}
-
-	switch group.Command {
-	case "--theme-show-preview", "--theme-no-show-preview":
-		if def, ok := Registry[group.Command]; ok && def.Title != "" {
-			logger.Notice(ctx, "%s", def.Title)
-		}
-	case "--theme-spinner-speed":
-		logger.Notice(ctx, "Spinner speed set to: {{|Var|}}%dms{{[-]}}", conf.Appearance.SpinnerSpeed)
-	case "--theme-refresh-rate":
-		logger.Notice(ctx, "Refresh rate set to: {{|Var|}}%dms{{[-]}}", conf.Appearance.RefreshRate)
-	case "--theme-markdown-hyperlinks":
-		logger.Notice(ctx, "Markdown hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.Appearance.MarkdownHyperlinks)
-	case "--theme-hyperlinks":
-		logger.Notice(ctx, "Hyperlinks mode set to: {{|Var|}}%s{{[-]}}", conf.Appearance.Hyperlinks)
-	}
 	return nil
 }
 

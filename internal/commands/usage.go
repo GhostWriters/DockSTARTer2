@@ -255,7 +255,7 @@ func GetUsage(target string, noHeading bool) string {
 		)
 	}
 
-	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder") {
+	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder", "--config-panel") {
 		printStr(
 			"{{|UsageCommand|}}--config-show{{[-]}}",
 			"{{|UsageCommand|}}--show-config{{[-]}}",
@@ -264,6 +264,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Sets the folder where application variables are stored.",
 			"{{|UsageCommand|}}--config-compose-folder{{[-]}} {{|UsageFile|}}<path>{{[-]}}",
 			"	Sets the folder where the docker-compose.yml file is stored.",
+			"{{|UsageCommand|}}--config-panel{{[-]}} {{|UsageOption|}}<log|console|none>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Sets which panel shows below the menus (see {{|UsageCommand|}}-T{{[-]}} for connection types).",
 		)
 	}
 	if match("--disconnect", "--server") {
@@ -532,10 +534,10 @@ func GetUsage(target string, noHeading bool) string {
 			"	Turn the scrollbar on or off in the GUI",
 			"{{|UsageCommand|}}--theme-spinners{{[-]}} | {{|UsageCommand|}}--theme-no-spinners{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn the CLI spinner on or off",
-			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().Appearance.SpinnerSpeed),
-			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().Appearance.RefreshRate),
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().Appearance.Local.SpinnerSpeed),
+			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().Appearance.Local.RefreshRate),
 			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
 			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
@@ -552,11 +554,11 @@ func GetUsage(target string, noHeading bool) string {
 			"	Turn brackets around the focused menu item's tag on or off",
 			"{{|UsageCommand|}}--theme-tab-layout{{[-]}} {{|UsageOption|}}<layout>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set the vars editor's tab layout when 2 tabs are open ({{|UsageOption|}}maximized{{[-]}}, {{|UsageOption|}}sidebyside{{[-]}}, or {{|UsageOption|}}stacked{{[-]}})",
-			"{{|UsageCommand|}}--theme-markdown-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"{{|UsageCommand|}}--theme-markdown-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set markdown hyperlink rendering ({{|UsageOption|}}off{{[-]}}, {{|UsageOption|}}inline{{[-]}}, or {{|UsageOption|}}auto{{[-]}})",
-			"{{|UsageCommand|}}--theme-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"{{|UsageCommand|}}--theme-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set DS2's own console/path hyperlink rendering ({{|UsageOption|}}off{{[-]}}, {{|UsageOption|}}inline{{[-]}}, or {{|UsageOption|}}auto{{[-]}})",
-			"{{|UsageCommand|}}--theme-show-preview{{[-]}} | {{|UsageCommand|}}--theme-no-show-preview{{[-]}}",
+			"{{|UsageCommand|}}--theme-show-preview{{[-]}} | {{|UsageCommand|}}--theme-no-show-preview{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Show or hide the Appearance Settings preview panel by default",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
@@ -608,14 +610,14 @@ func GetUsage(target string, noHeading bool) string {
 	}
 	if match("--theme-spinner-speed") {
 		printStr(
-			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().Appearance.SpinnerSpeed),
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().Appearance.Local.SpinnerSpeed),
 		)
 	}
 	if match("--theme-refresh-rate") {
 		printStr(
-			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().Appearance.RefreshRate),
+			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().Appearance.Local.RefreshRate),
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {

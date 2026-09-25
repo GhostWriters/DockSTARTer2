@@ -193,7 +193,7 @@ func (m *Model) AdvanceSpinner(now time.Time) bool {
 	if !m.CommandRunning || !console.SpinnerEnabled() {
 		return false
 	}
-	fps := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	fps := time.Duration(console.SpinnerSpeed()) * time.Millisecond
 	if fps <= 0 || now.Sub(m.lastSpinner) < fps {
 		return false
 	}

@@ -167,8 +167,6 @@ func run() (exitCode int) {
 	{
 		earlyConf = config.LoadAppConfig()
 		earlyConf.Appearance.ApplyToConsole()
-		console.SpinnerSpeed = earlyConf.Appearance.SpinnerSpeed
-		console.HyperlinksMode = earlyConf.Appearance.Hyperlinks
 	}
 
 	// Re-tighten permissions on DS2's own config/state/log files every

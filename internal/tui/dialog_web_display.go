@@ -30,9 +30,8 @@ type WebDisplaySettings struct {
 }
 
 // DefaultWebDisplaySettings returns sensible defaults matching xterm.js defaults.
-// RefreshRate defaults to the Appearance menu's configured refresh rate, not
-// a hardcoded value, so web and local sessions agree unless the browser
-// explicitly overrides it.
+// RefreshRate defaults to the Web Server appearance refresh rate, not a
+// hardcoded value, so it applies unless the browser explicitly overrides it.
 func DefaultWebDisplaySettings() WebDisplaySettings {
 	return WebDisplaySettings{
 		FontFamily:     "monospace",
@@ -42,13 +41,13 @@ func DefaultWebDisplaySettings() WebDisplaySettings {
 	}
 }
 
-// defaultRefreshRate returns the Appearance menu's configured refresh rate,
+// defaultRefreshRate returns the Web Server appearance refresh rate,
 // falling back to the config package's default if unset.
 func defaultRefreshRate() int {
-	if rate := displayengine.CurrentConfig().Appearance.RefreshRate; rate > 0 {
+	if rate := displayengine.CurrentConfig().Appearance.Web.RefreshRate; rate > 0 {
 		return rate
 	}
-	return config.DefaultConfig().Appearance.RefreshRate
+	return config.DefaultConfig().Appearance.Web.RefreshRate
 }
 
 // refreshRateHelp is the helpline text shown while the Refresh Rate field is focused.

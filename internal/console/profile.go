@@ -13,27 +13,6 @@ var (
 
 	// TUIMode indicates whether we're running in TUI mode (always render colors)
 	TUIMode bool
-
-	// SpinnerSpeed is the milliseconds per CLI spinner frame (default 120;
-	// overwritten from config before any real use).
-	SpinnerSpeed int = 100
-
-	// RefreshRate is the screen repaint interval in milliseconds (default
-	// 60; overwritten from config before any real use) -- the baseline
-	// AlignToRefreshRate aligns other periodic UI speeds against, so their
-	// state changes always land on an actual repaint instead of getting
-	// stranded between two out-of-sync clocks until the next unrelated one.
-	RefreshRate int = 60
-
-	// HyperlinksMode caches ui.hyperlinks ("off"/"inline"/"auto"; default
-	// "inline", overwritten from config before any real use). Consulted by
-	// semstyle.HyperlinkModeFunc (wired below) -- must stay a cheap cached
-	// read, not a live config.LoadAppConfig() call: that hook fires once per
-	// hyperlink tag rendered, including tags emitted from inside
-	// LoadAppConfig()'s own no-config-file bootstrap path (FormatFolderPath
-	// et al.), so calling LoadAppConfig() from the hook would recursively
-	// re-enter it every time a bootstrap message renders.
-	HyperlinksMode string = "inline"
 )
 
 // AlignToRefreshRate rounds spinnerMs to the nearest multiple of refreshMs,
@@ -76,10 +55,13 @@ func init() {
 		return !blocksHyperlink()
 	}
 
-	// Reads the cached HyperlinksMode var, not config.LoadAppConfig() -- see
-	// HyperlinksMode's doc comment for why a live config read here is unsafe.
+	// Reads the rendering connType's recorded mode (see SetConnTypeDisplay),
+	// not config.LoadAppConfig(): this hook fires once per hyperlink tag
+	// rendered, including tags emitted from inside LoadAppConfig()'s own
+	// no-config-file bootstrap path, so a live config read would recursively
+	// re-enter it.
 	semstyle.HyperlinkModeFunc = func() semstyle.HyperlinkMode {
-		switch HyperlinksMode {
+		switch HyperlinksMode() {
 		case "off":
 			return semstyle.HyperlinkModeOff
 		case "auto":

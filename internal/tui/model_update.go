@@ -2,7 +2,6 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
@@ -169,7 +168,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if sa, ok := m.activeScreen.(SpinnerAdvancer); ok {
 			sa.AdvanceSpinners(msg.time)
 		}
-		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd())
+		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd(m.connType))
 
 	case displayengine.PanelLineMsg:
 		// Freeze auto-follow while the log-panel scrollbar thumb is being
@@ -849,9 +848,6 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case displayengine.ConfigChangedMsg:
 		m.config = msg.Config
 		msg.Config.Appearance.ApplyToConsole()
-		console.RefreshRate = msg.Config.Appearance.RefreshRate
-		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.Appearance.SpinnerSpeed, msg.Config.Appearance.RefreshRate)
-		console.HyperlinksMode = msg.Config.Appearance.Hyperlinks
 		_, _ = theme.Load(m.config.Appearance.Local.Theme, "")
 		RegisterConnTypeTints(m.ctx, m.connType, m.config.Appearance.ForConnType(m.connType).AnsiColors)
 		RegisterConnTypeTheme(m.ctx, m.connType, m.config)

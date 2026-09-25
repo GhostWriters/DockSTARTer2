@@ -64,7 +64,7 @@ func AdvanceTitleSpinnerFrame(frame int, lastSpinner, now time.Time, lineCharact
 	if !SpinnerEnabled() {
 		return frame, lastSpinner, false
 	}
-	fps := time.Duration(SpinnerSpeed) * time.Millisecond
+	fps := time.Duration(SpinnerSpeed()) * time.Millisecond
 	if fps <= 0 || now.Sub(lastSpinner) < fps {
 		return frame, lastSpinner, false
 	}
@@ -210,8 +210,8 @@ func StartSpinner() func() {
 	activeSpinner.mu.Unlock()
 
 	fps := cliSpinnerFPS
-	if SpinnerSpeed > 0 {
-		fps = time.Duration(SpinnerSpeed) * time.Millisecond
+	if ms := SpinnerSpeed(); ms > 0 {
+		fps = time.Duration(ms) * time.Millisecond
 	}
 
 	done := make(chan struct{})

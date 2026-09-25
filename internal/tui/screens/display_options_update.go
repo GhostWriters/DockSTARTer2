@@ -1,9 +1,11 @@
 package screens
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
@@ -36,6 +38,12 @@ func itemConfigValue(item displayengine.MenuItem) string {
 		return cv
 	}
 	return item.Tag
+}
+
+// scrollableMenus returns the settings menus that own their own scrollbars,
+// as pointers so an Update's returned model can be stored back.
+func (s *DisplayOptionsScreen) scrollableMenus() []**displayengine.MenuModel {
+	return []**displayengine.MenuModel{&s.themeMenu, &s.optionsMenu}
 }
 
 // IsScrollbarDragging reports whether any sub-menu, or the preview panel's
@@ -101,27 +109,27 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// scroll over the preview would scroll one line and then stop).
 	switch dmsg := msg.(type) {
 	case displayengine.DragDoneMsg:
-		updated, uCmd := s.themeMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.themeMenu = m
-		}
-		updated, uCmd2 := s.optionsMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.optionsMenu = m
+		var cmds []tea.Cmd
+		for _, target := range s.scrollableMenus() {
+			updated, uCmd := (*target).Update(dmsg)
+			if m, ok := updated.(*displayengine.MenuModel); ok {
+				*target = m
+			}
+			cmds = append(cmds, uCmd)
 		}
 		_, _, _ = s.previewScroll.Update(dmsg, s.previewViewport.YOffset(), s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount())
-		return s, tea.Batch(uCmd, uCmd2)
+		return s, tea.Batch(cmds...)
 	case displayengine.ScrollDoneMsg:
-		updated, uCmd := s.themeMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.themeMenu = m
-		}
-		updated, uCmd2 := s.optionsMenu.Update(dmsg)
-		if m, ok := updated.(*displayengine.MenuModel); ok {
-			s.optionsMenu = m
+		var cmds []tea.Cmd
+		for _, target := range s.scrollableMenus() {
+			updated, uCmd := (*target).Update(dmsg)
+			if m, ok := updated.(*displayengine.MenuModel); ok {
+				*target = m
+			}
+			cmds = append(cmds, uCmd)
 		}
 		_, _, _ = s.previewScroll.Update(dmsg, s.previewViewport.YOffset(), s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount())
-		return s, tea.Batch(uCmd, uCmd2)
+		return s, tea.Batch(cmds...)
 	}
 
 	// Forward raw mouse drag/release events to whichever scrollbar is
@@ -140,30 +148,19 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return s, nil
 			}
 		} else {
-			target := s.themeMenu
-			if s.optionsMenu.IsScrollbarDragging() {
-				target = s.optionsMenu
+			target := &s.themeMenu
+			for _, t := range s.scrollableMenus() {
+				if (*t).IsScrollbarDragging() {
+					target = t
+					break
+				}
 			}
 
-			if _, ok := msg.(tea.MouseMotionMsg); ok {
-				updated, uCmd := target.Update(msg)
+			switch msg.(type) {
+			case tea.MouseMotionMsg, tea.MouseReleaseMsg:
+				updated, uCmd := (*target).Update(msg)
 				if m, ok := updated.(*displayengine.MenuModel); ok {
-					if target == s.themeMenu {
-						s.themeMenu = m
-					} else {
-						s.optionsMenu = m
-					}
-				}
-				return s, uCmd
-			}
-			if _, ok := msg.(tea.MouseReleaseMsg); ok {
-				updated, uCmd := target.Update(msg)
-				if m, ok := updated.(*displayengine.MenuModel); ok {
-					if target == s.themeMenu {
-						s.themeMenu = m
-					} else {
-						s.optionsMenu = m
-					}
+					*target = m
 				}
 				return s, uCmd
 			}
@@ -187,7 +184,21 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case displayengine.LayerHitMsg:
+		if i, ok := s.tabs.TabFromID(msg.ID); ok {
+			return s, s.switchTab(config.ConnTypes[i])
+		}
+		if d, ok := s.tabs.ScrollFromID(msg.ID); ok {
+			s.tabs.ScrollBy(d)
+			if s.outerMenu != nil {
+				s.outerMenu.InvalidateCache()
+			}
+			return s, nil
+		}
 		return s.delegateToOuterMenu(msg)
+
+	case tabUnlockedMsg:
+		s.unlocked = true
+		return s, s.switchTab(msg.connType)
 
 	case tea.MouseWheelMsg, displayengine.ToggleFocusedMsg:
 		return s.delegateToOuterMenu(msg)
@@ -203,6 +214,12 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, displayengine.Keys.Esc) {
 			return s, s.EscapeAction()
+		}
+		switch {
+		case key.Matches(msg, displayengine.Keys.TabStripPrev):
+			return s, s.cycleTab(-1)
+		case key.Matches(msg, displayengine.Keys.TabStripNext):
+			return s, s.cycleTab(1)
 		}
 		return s.delegateToOuterMenu(msg)
 
@@ -276,6 +293,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	staged := s.config.Appearance
 	s.config = s.baseConfig
 	s.config.Appearance = staged
+	s.config.Appearance.Ptr(s.editType).Theme = themeName
 
 	// Always load to ensure tags are registered in registry
 	defaults, err := theme.Load(themeName, "Preview")
@@ -294,7 +312,7 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 	// by hand) as-is. When off, theme selection never touches options at all.
 	s.themeChangedFields = nil
 	if s.loadThemeDefaults && defaults != nil {
-		theme.ApplyThemeDefaults(s.config.Appearance.Ptr(s.connType), *defaults)
+		theme.ApplyThemeDefaults(s.config.Appearance.Ptr(s.editType), *defaults)
 		// Mark every field the theme's [defaults] table specifies, not just
 		// ones whose value actually differed from what was already staged --
 		// the marker means "the theme set this", not "this changed".
@@ -325,8 +343,7 @@ var optionTagToUIField = map[string]string{
 	"Dialog Title":         "DialogTitleAlign",
 	"Submenu Title":        "SubmenuTitleAlign",
 	"Panel Title":          "PanelTitleAlign",
-	"Local Panel Mode":     "PanelLocal",
-	"Remote Panel Mode":    "PanelRemote",
+	"Panel Mode":           "Panel",
 	"Checkbox Brackets":    "CheckboxBrackets",
 	"Radio Brackets":       "RadioBrackets",
 	"Tab Layout":           "TabLayout",
@@ -335,53 +352,57 @@ var optionTagToUIField = map[string]string{
 	"Hyperlinks":           "Hyperlinks",
 }
 
+// syncOptionsMenu refreshes the options menu's rows from the staged config.
 func (s *DisplayOptionsScreen) syncOptionsMenu() {
+	a := s.config.Appearance.Ptr(s.editType)
 	items := s.optionsMenu.GetItems()
 	for i := range items {
 		items[i].IsNew = s.themeChangedFields[optionTagToUIField[items[i].Tag]]
 		switch items[i].Tag {
 		case "Shadows":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).Shadow
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).Shadow
 		case "Borders":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).Borders
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).Borders
 		case "Large Buttons":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).LargeButtons
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).LargeButtons
 		case "Large Title Bars":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).LargeTitleBars
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).LargeTitleBars
 		case "Line Characters":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).LineCharacters
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).LineCharacters
 		case "Scrollbars":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).Scrollbar
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).Scrollbar
 		case "Menu Brackets":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).MenuBrackets
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).MenuBrackets
 		case "Line Number Brackets":
-			items[i].Checked = s.config.Appearance.Ptr(s.connType).LineNumberBrackets
+			items[i].Checked = s.config.Appearance.Ptr(s.editType).LineNumberBrackets
 		case "Show Preview":
-			items[i].Checked = s.config.Appearance.ShowPreview
+			items[i].Checked = a.ShowPreview
 		case "Tab Layout":
-			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.connType).TabLayout))
+			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.editType).TabLayout))
 		case "Markdown Hyperlinks":
-			items[i].Desc = s.dropdownDesc(markdownHyperlinksDesc(s.config.Appearance.MarkdownHyperlinks))
+			items[i].Desc = s.dropdownDesc(markdownHyperlinksDesc(a.MarkdownHyperlinks))
 		case "Hyperlinks":
-			items[i].Desc = s.dropdownDesc(hyperlinksDesc(s.config.Appearance.Hyperlinks))
+			items[i].Desc = s.dropdownDesc(hyperlinksDesc(a.Hyperlinks))
 		case "Shadow Level":
-			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.Appearance.Ptr(s.connType).ShadowLevel))
+			items[i].Desc = s.dropdownDesc(s.shadowLevelToDesc(s.config.Appearance.Ptr(s.editType).ShadowLevel))
 		case "Border Color":
-			items[i].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.Appearance.Ptr(s.connType).BorderColor))
+			items[i].Desc = s.dropdownDesc(s.borderColorToDesc(s.config.Appearance.Ptr(s.editType).BorderColor))
 		case "Dialog Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).DialogTitleAlign))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.editType).DialogTitleAlign))
 		case "Submenu Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).SubmenuTitleAlign))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.editType).SubmenuTitleAlign))
 		case "Panel Title":
-			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.connType).PanelTitleAlign))
-		case "Local Panel Mode":
-			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.PanelLocal))
-		case "Remote Panel Mode":
-			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.PanelRemote))
+			items[i].Desc = s.dropdownDesc(titleAlignDesc(s.config.Appearance.Ptr(s.editType).PanelTitleAlign))
+		case "Panel Mode":
+			items[i].Desc = s.dropdownDesc(s.panelModeToDesc(a.Panel))
+		case "Refresh Rate":
+			items[i].Desc = fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", a.RefreshRate)
+		case "Spinner Speed":
+			items[i].Desc = fmt.Sprintf("{{|OptionValue|}}%dms{{[-]}}", a.SpinnerSpeed)
 		case "Checkbox Brackets":
-			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.connType).CheckboxBrackets))
+			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.editType).CheckboxBrackets))
 		case "Radio Brackets":
-			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.connType).RadioBrackets))
+			items[i].Desc = s.dropdownDesc(bracketModeDesc(s.config.Appearance.Ptr(s.editType).RadioBrackets))
 		}
 	}
 	s.optionsMenu.SetItems(items)
@@ -389,6 +410,21 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 
 func (s *DisplayOptionsScreen) Title() string {
 	return "Display Options"
+}
+
+func (s *DisplayOptionsScreen) ShortHelp() []key.Binding {
+	return displayengine.Keys.ShortHelp()
+}
+
+// FullHelp adds this screen's connection type tab and preview keys to the
+// standard help columns.
+func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
+	return append(displayengine.Keys.FullHelp(), []key.Binding{
+		displayengine.Keys.TabStripPrev,
+		displayengine.Keys.TabStripNext,
+		displayengine.Keys.PreviewForward,
+		displayengine.Keys.PreviewBack,
+	})
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {

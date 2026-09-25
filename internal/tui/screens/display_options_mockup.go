@@ -53,20 +53,20 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	// Border Color setting, so the mockup reflects the same merge every
 	// other border consumer gets for free -- without touching the shared
 	// theme registry.
-	borderOverrides := displayengine.ResolveThemeOverrides(s.config.Appearance.Ptr(s.connType).BorderColor, "Preview_")
+	borderOverrides := displayengine.ResolveThemeOverrides(s.config.Appearance.Ptr(s.editType).BorderColor, "Preview_")
 
 	bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
 	dContent := displayengine.SemanticRawStyleWithPrefix("Dialog", "Preview_")
 	dBorder1 := borderOverrides["Border"].Style
 	dBorder2 := borderOverrides["Border2"].Style
 
-	pMode := displayengine.EffectivePanelMode(s.config, s.connType)
+	pMode := s.config.Appearance.Ptr(s.editType).Panel
 	showStrip := pMode != "none"
 
 	var b lipgloss.Border
-	if !s.config.Appearance.Ptr(s.connType).Borders {
+	if !s.config.Appearance.Ptr(s.editType).Borders {
 		b = lipgloss.HiddenBorder()
-	} else if s.config.Appearance.Ptr(s.connType).LineCharacters {
+	} else if s.config.Appearance.Ptr(s.editType).LineCharacters {
 		b = lipgloss.RoundedBorder()
 	} else {
 		b = displayengine.RoundedAsciiBorder
@@ -74,10 +74,10 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 
 	// Build StyleContext for the preview
 	previewCtx := displayengine.StyleContext{
-		LineCharacters:      s.config.Appearance.Ptr(s.connType).LineCharacters,
-		DrawBorders:         s.config.Appearance.Ptr(s.connType).Borders,
-		LargeButtons:        s.config.Appearance.Ptr(s.connType).LargeButtons,
-		LargeTitleBars:      s.config.Appearance.Ptr(s.connType).LargeTitleBars,
+		LineCharacters:      s.config.Appearance.Ptr(s.editType).LineCharacters,
+		DrawBorders:         s.config.Appearance.Ptr(s.editType).Borders,
+		LargeButtons:        s.config.Appearance.Ptr(s.editType).LargeButtons,
+		LargeTitleBars:      s.config.Appearance.Ptr(s.editType).LargeTitleBars,
 		LargeTitleArea:      displayengine.SemanticRawStyleWithPrefix("LargeTitleArea", "Preview_"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
@@ -107,15 +107,15 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 		TagKeyFocused:       displayengine.SemanticRawStyleWithPrefix("TagKeyFocused", "Preview_"),
 		Shadow:              displayengine.SemanticRawStyleWithPrefix("Shadow", "Preview_"),
 		ShadowColor:         getPreviewShadowColor(),
-		ShadowLevel:         s.config.Appearance.Ptr(s.connType).ShadowLevel,
+		ShadowLevel:         s.config.Appearance.Ptr(s.editType).ShadowLevel,
 		HelpLine:            displayengine.SemanticRawStyleWithPrefix("Helpline", "Preview_"),
 		StatusSuccess:       displayengine.SemanticRawStyleWithPrefix("TitleNotice", "Preview_"),
 		StatusWarn:          displayengine.SemanticRawStyleWithPrefix("TitleWarn", "Preview_"),
-		DialogTitleAlign:    s.config.Appearance.Ptr(s.connType).DialogTitleAlign,
-		SubmenuTitleAlign:   s.config.Appearance.Ptr(s.connType).SubmenuTitleAlign,
-		PanelTitleAlign:     s.config.Appearance.Ptr(s.connType).PanelTitleAlign,
+		DialogTitleAlign:    s.config.Appearance.Ptr(s.editType).DialogTitleAlign,
+		SubmenuTitleAlign:   s.config.Appearance.Ptr(s.editType).SubmenuTitleAlign,
+		PanelTitleAlign:     s.config.Appearance.Ptr(s.editType).PanelTitleAlign,
 		Prefix:              "Preview_",
-		DrawShadow:          s.config.Appearance.Ptr(s.connType).Shadow,
+		DrawShadow:          s.config.Appearance.Ptr(s.editType).Shadow,
 	}
 
 	paddedLine := func(text string, style lipgloss.Style, fallback string, ctx ...displayengine.StyleContext) string {
@@ -155,7 +155,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 
 	// Border characters (unfocused, since the preview is static)
 	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
-	if s.config.Appearance.Ptr(s.connType).LineCharacters {
+	if s.config.Appearance.Ptr(s.editType).LineCharacters {
 		bottomLeftChar = "╰"
 		bottomRightChar = "╯"
 		leftChar = "│"
@@ -308,7 +308,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	label := panelTitleStyle.Render(" " + marker + " " + titleText + " " + marker + " ")
 
 	var leftT, rightT, borderTop, topLeftC, topRightC string
-	if s.config.Appearance.Ptr(s.connType).LineCharacters {
+	if s.config.Appearance.Ptr(s.editType).LineCharacters {
 		leftT = "┤"
 		rightT = "├"
 		borderTop = "─"
@@ -328,7 +328,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	// Strip has side borders/corners in the mockup
 	innerWidthStrip := width - 2
 	var leftPad int
-	if s.config.Appearance.Ptr(s.connType).PanelTitleAlign == "left" {
+	if s.config.Appearance.Ptr(s.editType).PanelTitleAlign == "left" {
 		leftPad = 0
 	} else {
 		leftPad = (innerWidthStrip - titleSectionLen) / 2

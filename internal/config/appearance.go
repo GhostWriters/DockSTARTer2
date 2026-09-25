@@ -36,26 +36,26 @@ func ConnTypeLabels(connTypes []string) string {
 	return strings.Join(labels, ", ")
 }
 
-// AppearanceConfig is the [appearance] table: settings shared by every
-// connection type, plus each connection type's own Appearance as a
-// sub-table ([appearance.local], [appearance.ssh], [appearance.web]).
+// AppearanceConfig is the [appearance] table: each connection type's own
+// Appearance as a sub-table ([appearance.local], [appearance.ssh],
+// [appearance.web]).
 type AppearanceConfig struct {
-	SpinnerSpeed       int    `toml:"spinner_speed"`       // milliseconds per frame, default 120
-	RefreshRate        int    `toml:"refresh_rate"`        // screen repaint interval in milliseconds, default 60
-	PanelLocal         string `toml:"panel_local"`         // "log", "console", or "none" (for local sessions)
-	PanelRemote        string `toml:"panel_remote"`        // "log", "console", or "none" (for ssh/web sessions)
-	ShowPreview        bool   `toml:"show_preview"`        // default visibility of the Appearance Settings preview panel
-	MarkdownHyperlinks string `toml:"markdown_hyperlinks"` // "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
-	Hyperlinks         string `toml:"hyperlinks"`          // "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags (semstyle.HyperlinkModeFunc)
-
 	Local Appearance `toml:"local"`
 	SSH   Appearance `toml:"ssh"`
 	Web   Appearance `toml:"web"`
 }
 
-// Appearance holds one connection type's theme, the settings a theme's
-// [defaults] table can set (see theme.ThemeDefaults), and its ANSI tint.
+// Appearance holds one connection type's display settings, theme, the
+// settings a theme's [defaults] table can set (see theme.ThemeDefaults), and
+// its ANSI tint.
 type Appearance struct {
+	SpinnerSpeed       int    `toml:"spinner_speed"`       // milliseconds per frame, default 120
+	RefreshRate        int    `toml:"refresh_rate"`        // screen repaint interval in milliseconds, default 60
+	Panel              string `toml:"panel"`               // "log", "console", or "none"
+	ShowPreview        bool   `toml:"show_preview"`        // default visibility of the Appearance Settings preview panel
+	MarkdownHyperlinks string `toml:"markdown_hyperlinks"` // "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
+	Hyperlinks         string `toml:"hyperlinks"`          // "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags (semstyle.HyperlinkModeFunc)
+
 	Theme              string `toml:"theme"`
 	Borders            bool   `toml:"borders"`
 	LargeButtons       bool   `toml:"large_buttons"`
@@ -97,14 +97,6 @@ func (c *AppearanceConfig) Ptr(connType string) *Appearance {
 	}
 }
 
-// CopySharedFrom copies src's shared settings (everything outside the
-// per-connection-type blocks) onto c, leaving c's Local/SSH/Web untouched.
-func (c *AppearanceConfig) CopySharedFrom(src AppearanceConfig) {
-	local, ssh, web := c.Local, c.SSH, c.Web
-	*c = src
-	c.Local, c.SSH, c.Web = local, ssh, web
-}
-
 // CopySettingsFrom copies src's theme and settings onto a, leaving a's
 // ANSI palette untouched.
 func (a *Appearance) CopySettingsFrom(src Appearance) {
@@ -113,13 +105,18 @@ func (a *Appearance) CopySettingsFrom(src Appearance) {
 	a.AnsiColors = palette
 }
 
-// ApplyToConsole records every connection type's line_characters and
-// spinner settings with the console package (see
-// console.SetConnTypeDisplay).
+// ApplyToConsole records every connection type's runtime display settings
+// with the console package (see console.SetConnTypeDisplay).
 func (c AppearanceConfig) ApplyToConsole() {
 	for _, ct := range ConnTypes {
 		a := c.ForConnType(ct)
-		console.SetConnTypeDisplay(ct, a.LineCharacters, a.Spinner)
+		console.SetConnTypeDisplay(ct, console.ConnTypeDisplay{
+			LineCharacters: a.LineCharacters,
+			Spinner:        a.Spinner,
+			SpinnerSpeed:   a.SpinnerSpeed,
+			RefreshRate:    a.RefreshRate,
+			Hyperlinks:     a.Hyperlinks,
+		})
 	}
 }
 
@@ -137,11 +134,12 @@ func decodeWeak(src map[string]any, dst any) error {
 	return decoder.Decode(src)
 }
 
-// migrateToAppearance moves settings from a config file that predates the
-// [appearance] table into it: [ui]'s shared settings into [appearance],
-// [ui]'s theme and theme-default settings into every connection type's
-// block, and each connection type's [ansi_palette.<type>] table into
-// [appearance.<type>.ansi_palette]. A connection type whose block already
+// migrateToAppearance moves settings from older config file layouts into
+// every connection type's [appearance.<type>] block: [ui]'s settings (when
+// there is no [appearance] table), settings kept directly in [appearance]
+// itself, and each connection type's [ansi_palette.<type>] table (into
+// [appearance.<type>.ansi_palette]). panel_local becomes local's panel and
+// panel_remote ssh's and web's. A connection type whose block already
 // carries a given setting is left alone.
 func migrateToAppearance(data []byte, conf *AppConfig) {
 	var raw map[string]any
@@ -150,11 +148,31 @@ func migrateToAppearance(data []byte, conf *AppConfig) {
 	}
 	appearance, _ := raw["appearance"].(map[string]any)
 
+	shared := appearance
 	if ui, ok := raw["ui"].(map[string]any); ok && appearance == nil {
-		_ = decodeWeak(ui, &conf.Appearance)
-		for _, ct := range ConnTypes {
-			_ = decodeWeak(ui, conf.Appearance.Ptr(ct))
+		shared = ui
+	}
+	for _, ct := range ConnTypes {
+		block, _ := appearance[ct].(map[string]any)
+		settings := map[string]any{}
+		for k, v := range shared {
+			if _, isTable := v.(map[string]any); isTable {
+				continue
+			}
+			if _, has := block[k]; !has {
+				settings[k] = v
+			}
 		}
+		panelKey := "panel_remote"
+		if ct == "local" {
+			panelKey = "panel_local"
+		}
+		if v, ok := shared[panelKey]; ok {
+			if _, has := block["panel"]; !has {
+				settings["panel"] = v
+			}
+		}
+		_ = decodeWeak(settings, conf.Appearance.Ptr(ct))
 	}
 
 	palette, _ := raw["ansi_palette"].(map[string]any)

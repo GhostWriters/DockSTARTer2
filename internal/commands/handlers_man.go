@@ -9,6 +9,7 @@ import (
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 
 	glamour "charm.land/glamour/v2"
@@ -54,7 +55,7 @@ func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool
 		styleName = glamourstyles.DarkStyle
 	}
 
-	mode := config.LoadAppConfig().Appearance.MarkdownHyperlinks
+	mode := config.LoadAppConfig().Appearance.ForConnType(console.ConnTypeFromContext(ctx)).MarkdownHyperlinks
 	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
 	// Auto (link text + visible URL) and strips the resulting OSC8 escapes
 	// afterward, leaving plain readable text with no embedded hyperlink.

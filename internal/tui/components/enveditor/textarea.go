@@ -666,7 +666,7 @@ func (m *Model) updateVirtualCursorStyle() {
 			// of the repaint cadence rounds to whichever render boundary it
 			// happens to land nearest, wobbling slightly cycle to cycle
 			// instead of keeping a perfectly even rhythm.
-			alignedMS := console.AlignToRefreshRate(int(m.styles.Cursor.BlinkSpeed/time.Millisecond), console.RefreshRate)
+			alignedMS := console.AlignToRefreshRate(int(m.styles.Cursor.BlinkSpeed/time.Millisecond), console.RefreshRate())
 			m.virtualCursor.BlinkSpeed = time.Duration(alignedMS) * time.Millisecond
 		}
 		m.virtualCursor.SetMode(cursor.CursorBlink)

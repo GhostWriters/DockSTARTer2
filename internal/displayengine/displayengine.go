@@ -131,6 +131,9 @@ type (
 	Content                    = classic.Content
 	ContentRow                 = classic.ContentRow
 	ContentColumn              = classic.ContentColumn
+	ContentWrapper             = classic.ContentWrapper
+	TabStrip                   = classic.TabStrip
+	TabStripLayout             = classic.TabStripLayout
 	TagOverride                = classic.TagOverride
 	ContextMenuItem            = classic.ContextMenuItem
 	ContextMenuModel           = classic.ContextMenuModel

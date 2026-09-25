@@ -128,9 +128,6 @@ func Initialize(ctx context.Context) error {
 
 	cfg := config.LoadAppConfig()
 	cfg.Appearance.ApplyToConsole()
-	console.RefreshRate = cfg.Appearance.RefreshRate
-	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.Appearance.SpinnerSpeed, cfg.Appearance.RefreshRate)
-	console.HyperlinksMode = cfg.Appearance.Hyperlinks
 	if deflts, err := theme.Load(cfg.Appearance.Local.Theme, ""); err != nil {
 		if deflts == nil {
 			// Default theme itself failed to parse — unrecoverable
@@ -186,18 +183,17 @@ type ProgramOptions struct {
 
 // resolveRefreshRate returns the refresh rate (ms) to use for a new program.
 // Web sessions use their per-browser-token override if the browser set one;
-// otherwise (including local/SSH sessions) it falls back to the Appearance
-// menu's configured refresh rate.
+// otherwise it is connType's appearance refresh rate.
 func resolveRefreshRate(connType, webToken string) int {
 	if connType == "web" {
 		if rate := webmsg.GetDisplaySettings(webToken).RefreshRate; rate > 0 {
 			return clampRefreshRate(rate)
 		}
 	}
-	if displayengine.CurrentConfig().Appearance.RefreshRate > 0 {
-		return displayengine.CurrentConfig().Appearance.RefreshRate
+	if rate := displayengine.CurrentConfig().Appearance.ForConnType(connType).RefreshRate; rate > 0 {
+		return rate
 	}
-	return config.DefaultConfig().Appearance.RefreshRate
+	return config.DefaultConfig().Appearance.ForConnType(connType).RefreshRate
 }
 
 // clampRefreshRate bounds a browser-supplied refresh rate to the same
@@ -213,11 +209,12 @@ func clampRefreshRate(ms int) int {
 	}
 }
 
-// globalTickCmd returns a tea.Cmd that fires a globalTickMsg after the
-// configured refresh interval. This single ticker drives all spinner advances
-// and the periodic repaint, ensuring spinners are updated before each frame.
-func globalTickCmd() tea.Cmd {
-	ms := resolveRefreshRate(activeConnType, webToken)
+// globalTickCmd returns a tea.Cmd that fires a globalTickMsg after
+// connType's refresh interval. This single ticker drives all spinner
+// advances and the periodic repaint, ensuring spinners are updated before
+// each frame.
+func globalTickCmd(connType string) tea.Cmd {
+	ms := resolveRefreshRate(connType, webToken)
 	if ms <= 0 {
 		ms = 60
 	}
