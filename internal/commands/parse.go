@@ -402,7 +402,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 					break
 				}
 			}
-			if typeElementArgs := currentGroup.Args[1:]; len(typeElementArgs) > 0 {
+			if len(currentGroup.Args) > 1 {
+				typeElementArgs := currentGroup.Args[1:]
 				if err := checkCLIConnTypeScope(expandedArgs, cmd, i-len(typeElementArgs), typeElementArgs); err != nil {
 					return nil, err
 				}

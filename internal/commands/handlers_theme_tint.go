@@ -213,6 +213,11 @@ func validateCLIConnTypeScope(typesArg string, elements []string) error {
 // command actually runs.
 func checkCLIConnTypeScope(expandedArgs []string, cmd string, baseIndex int, typeElementArgs []string) error {
 	typesArg, elementsArg := splitTintTypeElementArgs(typeElementArgs)
+	if elementsArg == "" {
+		// No element named: "cli" is skipped for ssh/web when applied (see
+		// setAnsiElementField), not an error.
+		return nil
+	}
 	elements, err := parseOptionalElementList(elementsArg)
 	if err != nil {
 		return &ParseError{Args: expandedArgs, Index: baseIndex + len(typeElementArgs) - 1, FailingCommand: cmd, Message: err.Error()}
