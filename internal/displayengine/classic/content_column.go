@@ -13,11 +13,16 @@ import (
 // Width is passed through unchanged to every child; fixed-height children
 // keep their natural height and expandable children split whatever height
 // remains (see SetSize).
+//
+// A child that is itself SubFocusable (looking through ContentWrapper layers)
+// contributes its own Tab stops rather than one, so the column's stops are
+// the flattened list of every child's; SubFocusIndex and Items use that
+// flattened numbering.
 type ContentColumn struct {
 	items    []Content
 	heights  []int // last-computed per-item heights, from the most recent SetSize
 	width    int
-	subFocus int // index into items with column-internal focus; defaults to 0
+	subFocus int // flattened Tab stop index with column-internal focus; defaults to 0
 }
 
 var _ Content = (*ContentColumn)(nil)
@@ -34,57 +39,163 @@ func (c *ContentColumn) Init() tea.Cmd { return nil }
 // View satisfies tea.Model.
 func (c *ContentColumn) View() tea.View { return tea.View{Content: c.ViewString()} }
 
-// SubFocusIndex returns the index of the child currently holding
+// nestedStops returns item's own Tab stops when it (or a Content it wraps)
+// is SubFocusable, or nil when it is a single stop.
+func nestedStops(item Content) SubFocusable {
+	for {
+		if sf, ok := item.(SubFocusable); ok {
+			return sf
+		}
+		w, ok := item.(ContentWrapper)
+		if !ok {
+			return nil
+		}
+		item = w.Unwrap()
+	}
+}
+
+// stopCount returns how many Tab stops item contributes.
+func stopCount(item Content) int {
+	if n := nestedStops(item); n != nil {
+		return n.NumTabStops()
+	}
+	return 1
+}
+
+// base returns the flattened index of item i's first Tab stop.
+func (c *ContentColumn) base(i int) int {
+	b := 0
+	for j := 0; j < i && j < len(c.items); j++ {
+		b += stopCount(c.items[j])
+	}
+	return b
+}
+
+// locate returns the child holding flattened Tab stop stop, and the stop's
+// index within that child; (-1, 0) when out of range.
+func (c *ContentColumn) locate(stop int) (item, local int) {
+	if stop < 0 {
+		return -1, 0
+	}
+	for i, it := range c.items {
+		n := stopCount(it)
+		if stop < n {
+			return i, stop
+		}
+		stop -= n
+	}
+	return -1, 0
+}
+
+// SubFocusIndex returns the flattened Tab stop currently holding
 // column-internal focus.
 func (c *ContentColumn) SubFocusIndex() int {
-	if c.subFocus < 0 || c.subFocus >= len(c.items) {
+	if c.subFocus < 0 || c.subFocus >= c.NumTabStops() {
 		return 0
 	}
 	return c.subFocus
 }
 
-// SetSubFocusIndex sets which child holds column-internal focus.
+// SetSubFocusIndex sets which flattened Tab stop holds column-internal
+// focus, passing the stop on to a nested child.
 func (c *ContentColumn) SetSubFocusIndex(i int) {
-	if i < 0 || i >= len(c.items) {
+	if i < 0 || i >= c.NumTabStops() {
 		i = 0
 	}
 	c.subFocus = i
+	if item, local := c.locate(i); item >= 0 {
+		if n := nestedStops(c.items[item]); n != nil {
+			n.SetSubFocusIndex(local)
+		}
+	}
 }
 
-// NumTabStops returns how many individual Tab stops this column contributes --
-// one per child, mirroring ContentRow's convention.
+// focusedItem returns the index of the child holding the focused Tab stop.
+func (c *ContentColumn) focusedItem() int {
+	if item, _ := c.locate(c.SubFocusIndex()); item >= 0 {
+		return item
+	}
+	return 0
+}
+
+// NumTabStops returns how many Tab stops this column contributes: one per
+// child, or a nested child's own count.
 func (c *ContentColumn) NumTabStops() int {
-	if len(c.items) == 0 {
+	total := 0
+	for _, item := range c.items {
+		total += stopCount(item)
+	}
+	if total == 0 {
 		return 1
 	}
-	return len(c.items)
+	return total
 }
 
-// NextFocusableSub returns the next child index after from that is
-// Focusable(), or (-1, false) if none remains.
+// NextFocusableSub returns the next Tab stop after from that is focusable,
+// or (-1, false) if none remains. A nested child decides its own next stop.
 func (c *ContentColumn) NextFocusableSub(from int) (int, bool) {
-	for i := from + 1; i < len(c.items); i++ {
+	start := 0
+	if item, local := c.locate(from); item >= 0 {
+		if n := nestedStops(c.items[item]); n != nil {
+			if j, ok := n.NextFocusableSub(local); ok {
+				return c.base(item) + j, true
+			}
+		}
+		start = item + 1
+	}
+	for i := start; i < len(c.items); i++ {
+		if n := nestedStops(c.items[i]); n != nil {
+			if j, ok := n.NextFocusableSub(-1); ok {
+				return c.base(i) + j, true
+			}
+			continue
+		}
 		if c.items[i].Focusable() {
-			return i, true
+			return c.base(i), true
 		}
 	}
 	return -1, false
 }
 
-// PrevFocusableSub returns the previous child index before from that is
-// Focusable(), or (-1, false) if none remains.
+// PrevFocusableSub returns the previous Tab stop before from that is
+// focusable, or (-1, false) if none remains. A nested child decides its own
+// previous stop.
 func (c *ContentColumn) PrevFocusableSub(from int) (int, bool) {
-	for i := from - 1; i >= 0; i-- {
+	start := len(c.items) - 1
+	if item, local := c.locate(from); item >= 0 {
+		if n := nestedStops(c.items[item]); n != nil {
+			if j, ok := n.PrevFocusableSub(local); ok {
+				return c.base(item) + j, true
+			}
+		}
+		start = item - 1
+	}
+	for i := start; i >= 0; i-- {
+		if n := nestedStops(c.items[i]); n != nil {
+			if j, ok := n.PrevFocusableSub(n.NumTabStops()); ok {
+				return c.base(i) + j, true
+			}
+			continue
+		}
 		if c.items[i].Focusable() {
-			return i, true
+			return c.base(i), true
 		}
 	}
 	return -1, false
 }
 
-// Items returns the column's child Content items, in top-to-bottom order.
+// Items returns the Content behind each flattened Tab stop, in order: a
+// nested child contributes its own Items.
 func (c *ContentColumn) Items() []Content {
-	return c.items
+	var leaves []Content
+	for _, item := range c.items {
+		if n := nestedStops(item); n != nil {
+			leaves = append(leaves, n.Items()...)
+			continue
+		}
+		leaves = append(leaves, item)
+	}
+	return leaves
 }
 
 // SectionHeight returns the sum of the children's natural heights, each
@@ -245,15 +356,31 @@ func (c *ContentColumn) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(c.items) == 0 {
 		return c, nil
 	}
-	focusCmd := resolveSubFocusHit(c.items, &c.subFocus, msg, c.SetSubFocused)
-	if c.subFocus < 0 || c.subFocus >= len(c.items) {
-		c.subFocus = 0
+	var focusCmd tea.Cmd
+	switch m := msg.(type) {
+	case LayerHitMsg:
+		focusCmd = c.focusHit(m.ID)
+	case LayerWheelMsg:
+		focusCmd = c.focusHit(m.ID)
 	}
-	updated, cmd := c.items[c.subFocus].Update(msg)
+	item := c.focusedItem()
+	updated, cmd := c.items[item].Update(msg)
 	if updatedContent, ok := updated.(Content); ok {
-		c.items[c.subFocus] = updatedContent
+		c.items[item] = updatedContent
 	}
 	return c, tea.Batch(focusCmd, cmd)
+}
+
+// focusHit moves column-internal focus to the Tab stop whose Content id
+// belongs to, if any.
+func (c *ContentColumn) focusHit(id string) tea.Cmd {
+	for i, leaf := range c.Items() {
+		if leaf.MatchesID(id) {
+			c.SetSubFocusIndex(i)
+			return c.SetSubFocused(true)
+		}
+	}
+	return nil
 }
 
 // SetSubFocused propagates sub-focus to the child currently holding
@@ -262,12 +389,10 @@ func (c *ContentColumn) SetSubFocused(focused bool) tea.Cmd {
 	if len(c.items) == 0 {
 		return nil
 	}
-	if c.subFocus < 0 || c.subFocus >= len(c.items) {
-		c.subFocus = 0
-	}
+	fi := c.focusedItem()
 	var cmd tea.Cmd
 	for i, item := range c.items {
-		if i == c.subFocus {
+		if i == fi {
 			cmd = item.SetSubFocused(focused)
 		} else {
 			item.SetSubFocused(false)
@@ -381,7 +506,7 @@ func (c *ContentColumn) WantsHorizontalKeys() bool {
 	if len(c.items) == 0 {
 		return false
 	}
-	return c.items[c.SubFocusIndex()].WantsHorizontalKeys()
+	return c.items[c.focusedItem()].WantsHorizontalKeys()
 }
 
 // WantsAllMessages delegates to whichever child currently holds
@@ -390,7 +515,7 @@ func (c *ContentColumn) WantsAllMessages() bool {
 	if len(c.items) == 0 {
 		return false
 	}
-	return c.items[c.SubFocusIndex()].WantsAllMessages()
+	return c.items[c.focusedItem()].WantsAllMessages()
 }
 
 // Focusable reports true if any child is focusable.

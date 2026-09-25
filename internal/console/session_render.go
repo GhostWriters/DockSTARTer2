@@ -60,6 +60,17 @@ func ActivateTintForElement(element string, fn func()) {
 	fn()
 }
 
+// ActivateTintKey makes key the active tint for the duration of fn -- for
+// rendering one region (e.g. a preview) with a palette registered under its
+// own key. Like ActivateTintForElement, it sets the tint directly and must
+// run inside the caller's already-held render scope.
+func ActivateTintKey(key string, fn func()) {
+	prev := semstyle.ActiveTintKey()
+	semstyle.SetActiveTint(key)
+	defer semstyle.SetActiveTint(prev)
+	fn()
+}
+
 // connThemePrefixes maps a connType to the semstyle theme namespace its own
 // theme is registered under; a connType with no entry renders with the
 // unprefixed (local) theme.

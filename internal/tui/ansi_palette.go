@@ -70,7 +70,12 @@ func RegisterConnTypeTints(ctx context.Context, connType string, colors config.A
 // connecting terminal a palette override, since not every terminal honors
 // one.
 func registerElementTint(ctx context.Context, connType, elementName string, element config.AnsiElementColors) {
-	key := console.TintKeyForConnTypeElement(connType, elementName)
+	RegisterTintKey(ctx, console.TintKeyForConnTypeElement(connType, elementName), element)
+}
+
+// RegisterTintKey resolves element's palette and registers it under key
+// (see registerElementTint), or unregisters key when element tints nothing.
+func RegisterTintKey(ctx context.Context, key string, element config.AnsiElementColors) {
 	if !element.OverrideEnabled {
 		element = withoutExplicitFields(element)
 	}

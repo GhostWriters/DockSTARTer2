@@ -185,6 +185,8 @@ const (
 	IDLoadDefaultsPanel = "load_defaults_panel"
 	IDThemePanel        = "theme_panel"
 	IDOptionsPanel      = "options_panel"
+	IDTintControlsPanel = "tint_controls_panel"
+	IDTintPanel         = "tint_schemes_panel"
 	IDButtonPanel       = "button_panel"
 	IDListPanel         = "list_panel"
 	IDSaveButton        = "save_button"

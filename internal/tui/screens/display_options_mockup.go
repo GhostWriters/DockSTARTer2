@@ -420,51 +420,9 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 		}
 		return pc.naturalHeight
 	}
-	scrollSection.ContentRenderer = func(contentWidth int) string {
-		pc := s.computePreviewContent()
-		h := scrollSection.Height()
-		if h < 1 {
-			h = 1
-		}
-		if pc.invalid {
-			leftPad := (previewContentWidth - len(pc.invalidLabel)) / 2
-			rightPad := previewContentWidth - len(pc.invalidLabel) - leftPad
-			centeredLine := strutil.Repeat(" ", leftPad) + pc.invalidLabel + strutil.Repeat(" ", rightPad)
-			lines := make([]string, h)
-			for i := range lines {
-				lines[i] = strutil.Repeat(" ", previewContentWidth)
-			}
-			lines[(h-1)/2] = centeredLine
-			return strings.Join(lines, "\n")
-		}
-		parts := []string{pc.headerBlock, pc.buildBackdrop(h - pc.fixedOverhead), pc.helpRow}
-		if pc.showStrip {
-			parts = append(parts, pc.logStripRow)
-		}
-		content := lipgloss.JoinVertical(lipgloss.Left, parts...)
-		ctx := displayengine.GetActiveContext()
-		s.previewViewport.SetWidth(contentWidth)
-		s.previewViewport.SetHeight(h)
-		s.previewViewport.SetContent(content)
-		viewportOutput := s.previewViewport.View()
-		// Pad any shortfall ourselves rather than relying on
-		// viewport.FillHeight -- that pads with truly empty (unstyled)
-		// rows, which shows as a mismatched-background gap instead of a
-		// themed one. This also covers the near-bottom-of-scroll case,
-		// where the remaining slice of content is shorter than h even
-		// though the total content isn't.
-		if short := h - lipgloss.Height(viewportOutput); short > 0 {
-			bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
-			filler := bgStyle.Render(strutil.Repeat(" ", previewContentWidth))
-			fillLines := make([]string, short)
-			for i := range fillLines {
-				fillLines[i] = filler
-			}
-			viewportOutput = viewportOutput + "\n" + strings.Join(fillLines, "\n")
-		}
-		return displayengine.ApplyScrollbar(&s.previewScroll, viewportOutput,
-			s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount(),
-			s.previewViewport.YOffset(), ctx.LineCharacters, ctx)
+	scrollSection.ContentRenderer = func(contentWidth int) (out string) {
+		console.ActivateTintKey(s.previewTintKey, func() { out = s.renderPreview(scrollSection, contentWidth) })
+		return out
 	}
 	scrollSection.ExtraHitRegions = func(offsetX, offsetY, baseZ int) []displayengine.HitRegion {
 		if !s.previewScroll.Info.Needed {
@@ -530,6 +488,55 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 	}
 	mockupMenu.ConfigureWidgets(closeWidget)
 	return mockupMenu
+}
+
+// renderPreview draws the preview mockup at contentWidth, for section's
+// current height.
+func (s *DisplayOptionsScreen) renderPreview(section *displayengine.MenuModel, contentWidth int) string {
+	pc := s.computePreviewContent()
+	h := section.Height()
+	if h < 1 {
+		h = 1
+	}
+	if pc.invalid {
+		leftPad := (previewContentWidth - len(pc.invalidLabel)) / 2
+		rightPad := previewContentWidth - len(pc.invalidLabel) - leftPad
+		centeredLine := strutil.Repeat(" ", leftPad) + pc.invalidLabel + strutil.Repeat(" ", rightPad)
+		lines := make([]string, h)
+		for i := range lines {
+			lines[i] = strutil.Repeat(" ", previewContentWidth)
+		}
+		lines[(h-1)/2] = centeredLine
+		return strings.Join(lines, "\n")
+	}
+	parts := []string{pc.headerBlock, pc.buildBackdrop(h - pc.fixedOverhead), pc.helpRow}
+	if pc.showStrip {
+		parts = append(parts, pc.logStripRow)
+	}
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	ctx := displayengine.GetActiveContext()
+	s.previewViewport.SetWidth(contentWidth)
+	s.previewViewport.SetHeight(h)
+	s.previewViewport.SetContent(content)
+	viewportOutput := s.previewViewport.View()
+	// Pad any shortfall ourselves rather than relying on
+	// viewport.FillHeight -- that pads with truly empty (unstyled)
+	// rows, which shows as a mismatched-background gap instead of a
+	// themed one. This also covers the near-bottom-of-scroll case,
+	// where the remaining slice of content is shorter than h even
+	// though the total content isn't.
+	if short := h - lipgloss.Height(viewportOutput); short > 0 {
+		bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
+		filler := bgStyle.Render(strutil.Repeat(" ", previewContentWidth))
+		fillLines := make([]string, short)
+		for i := range fillLines {
+			fillLines[i] = filler
+		}
+		viewportOutput = viewportOutput + "\n" + strings.Join(fillLines, "\n")
+	}
+	return displayengine.ApplyScrollbar(&s.previewScroll, viewportOutput,
+		s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount(),
+		s.previewViewport.YOffset(), ctx.LineCharacters, ctx)
 }
 
 // previewSectionWidth returns the outer width to assign the preview section

@@ -75,11 +75,6 @@ func (f *tabFrameSection) SetSize(width, height int) {
 	f.inner.SetSize(max(width-2, 1), max(height-f.edgeRows(), 1))
 }
 
-// stripAvailWidth is the width the tab strip may use in the top edge.
-func (f *tabFrameSection) stripAvailWidth(ctx displayengine.StyleContext) int {
-	return displayengine.MaxRawTitleWidth(max(f.width-2, 1), false, ctx.SubmenuTitleAlign, nil, ctx)
-}
-
 func (f *tabFrameSection) ViewString() string {
 	ctx := displayengine.GetActiveContext()
 	body := f.inner.ViewString()
@@ -87,7 +82,8 @@ func (f *tabFrameSection) ViewString() string {
 	focused := f.frame.focused != nil && f.frame.focused()
 	title := ""
 	if f.top {
-		title = f.frame.strip.Render(f.stripAvailWidth(ctx), focused, ctx)
+		_, avail := f.frame.strip.TitlePlacement(contentWidth, ctx.SubmenuTitleAlign, nil, ctx)
+		title = f.frame.strip.Render(avail, focused, ctx)
 	}
 	box := displayengine.RenderBorderedBoxCtx(title, body, contentWidth, lipgloss.Height(body)+2,
 		focused, false, true, ctx.SubmenuTitleAlign, "RAW", ctx)
@@ -105,13 +101,8 @@ func (f *tabFrameSection) GetHitRegions(offsetX, offsetY int) []displayengine.Hi
 	regions := f.inner.GetHitRegions(offsetX+1, offsetY+f.innerOffsetY())
 	if f.top {
 		ctx := displayengine.GetActiveContext()
-		avail := f.stripAvailWidth(ctx)
-		titleWidth := displayengine.WidthWithoutZones(f.frame.strip.Render(avail, false, ctx))
-		leftPad := 0
-		if ctx.SubmenuTitleAlign != "left" {
-			leftPad = max((max(f.width-2, 1)-titleWidth)/2, 0)
-		}
-		regions = append(regions, f.frame.strip.HitRegions(offsetX+1+leftPad, offsetY, avail, displayengine.ZDialog+10, ctx, nil)...)
+		x, avail := f.frame.strip.TitlePlacement(max(f.width-2, 1), ctx.SubmenuTitleAlign, nil, ctx)
+		regions = append(regions, f.frame.strip.HitRegions(offsetX+x, offsetY, avail, displayengine.ZDialog+10, ctx, nil)...)
 	}
 	return regions
 }

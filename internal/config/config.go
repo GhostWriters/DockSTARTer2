@@ -535,6 +535,7 @@ func sanitizeAppearance(a *Appearance, def Appearance, keyPrefix string, warn fu
 	oneOf("submenu_title_align", &a.SubmenuTitleAlign, def.SubmenuTitleAlign, "left", "center")
 	oneOf("panel_title_align", &a.PanelTitleAlign, def.PanelTitleAlign, "left", "center")
 	oneOf("tab_layout", &a.TabLayout, def.TabLayout, "maximized", "sidebyside", "stacked")
+	oneOf("pane_layout", &a.PaneLayout, def.PaneLayout, "maximized", "sidebyside", "stacked")
 	oneOf("checkbox_brackets", &a.CheckboxBrackets, def.CheckboxBrackets, "never", "selected", "always")
 	oneOf("radio_brackets", &a.RadioBrackets, def.RadioBrackets, "never", "selected", "always")
 }
@@ -1391,6 +1392,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		{"TabLayout", "Tab Layout", func(_ string, a Appearance) string { return varValue(a.TabLayout) }},
 		{"Panel", "Panel", func(_ string, a Appearance) string { return varValue(a.Panel) }},
 		{"ShowPreview", "Show Preview", func(_ string, a Appearance) string { return boolToYesNo(a.ShowPreview) }},
+		{"PaneLayout", "Theme/Tint Layout", func(_ string, a Appearance) string { return varValue(a.PaneLayout) }},
 		{"Hyperlinks", "Hyperlinks", func(_ string, a Appearance) string { return varValue(a.Hyperlinks) }},
 		{"MarkdownHyperlinks", "Markdown Hyperlinks", func(_ string, a Appearance) string { return varValue(a.MarkdownHyperlinks) }},
 		{"RefreshRate", "Refresh Rate", func(_ string, a Appearance) string { return fmt.Sprintf("{{|Var|}}%dms{{[-]}}", a.RefreshRate) }},

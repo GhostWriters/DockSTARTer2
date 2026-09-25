@@ -781,9 +781,9 @@ func HandleTintList(ctx context.Context, group *CommandGroup) error {
 // tintListLabels' file-level one) -- a repo slug present in both base16/
 // and base24/ is one row with both availability flags set, not two rows.
 type tintTableRow struct {
-	Source               string
-	Slug, Name, Variant  string
-	HasBase16, HasBase24 bool
+	Source                      string
+	Slug, Name, Variant, Author string
+	HasBase16, HasBase24        bool
 }
 
 // repoTintTableRows builds one tintTableRow per distinct repo slug matching
@@ -838,6 +838,7 @@ func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, 
 				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
 			}
 		}
+		row.Author = author
 		if filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
 			rows = append(rows, row)
 		}
@@ -876,6 +877,7 @@ func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, er
 				}
 			}
 		}
+		row.Author = author
 		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
 			rows = append(rows, row)
 		}
@@ -907,6 +909,7 @@ func embeddedTintTableRows(filter tintFilter) ([]tintTableRow, error) {
 				}
 			}
 		}
+		row.Author = author
 		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
 			rows = append(rows, row)
 		}

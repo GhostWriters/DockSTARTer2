@@ -43,13 +43,13 @@ func itemConfigValue(item displayengine.MenuItem) string {
 // scrollableMenus returns the settings menus that own their own scrollbars,
 // as pointers so an Update's returned model can be stored back.
 func (s *DisplayOptionsScreen) scrollableMenus() []**displayengine.MenuModel {
-	return []**displayengine.MenuModel{&s.themeMenu, &s.optionsMenu}
+	return []**displayengine.MenuModel{&s.themeMenu, &s.tintMenu, &s.optionsMenu}
 }
 
 // IsScrollbarDragging reports whether any sub-menu, or the preview panel's
 // own scrollbar, is currently dragging a scrollbar thumb.
 func (s *DisplayOptionsScreen) IsScrollbarDragging() bool {
-	return s.themeMenu.IsScrollbarDragging() || s.optionsMenu.IsScrollbarDragging() || s.previewScroll.Drag.Dragging
+	return s.themeMenu.IsScrollbarDragging() || s.optionsMenu.IsScrollbarDragging() || s.tintMenu.IsScrollbarDragging() || s.previewScroll.Drag.Dragging
 }
 
 // delegateToOuterMenu forwards msg to outerMenu generically (Tab-cycling,
@@ -196,6 +196,48 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s.delegateToOuterMenu(msg)
 
+	case displayengine.PaneLayoutMsg:
+		if s.panes != nil && s.panes.OwnsLayoutMsg(msg) {
+			cmd := s.panes.SetLayout(msg.Layout, msg.Pane)
+			s.SetSize(s.width, s.height)
+			return s, cmd
+		}
+		return s, nil
+
+	case tintElementMsg:
+		s.tintElement = msg.element
+		s.syncTintMenus()
+		s.selectCheckedTint()
+		return s, nil
+
+	case tintPickMsg:
+		el := s.stagedTint()
+		el.Tint = msg.ref
+		if msg.ref != "" {
+			el.TintEnabled = true
+		}
+		s.syncTintMenus()
+		s.refreshPreviewTint()
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
+		}
+		return s, nil
+
+	case tintRepoDownloadMsg:
+		return s, s.downloadTintRepo()
+
+	case tintRepoDownloadedMsg:
+		s.tintDownloading = false
+		if msg.err != nil {
+			s.syncTintMenus()
+			return s, func() tea.Msg {
+				return tui.ShowMessageDialogMsg{Title: "Download Failed", Message: tintRepoDownloadFailed(msg.err), Type: tui.MessageError}
+			}
+		}
+		s.loadTintCatalog()
+		s.syncTintMenus()
+		return s, nil
+
 	case tabUnlockedMsg:
 		s.unlocked = true
 		return s, s.switchTab(msg.connType, msg.focusFrame)
@@ -220,6 +262,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.cycleTab(-1)
 		case key.Matches(msg, displayengine.Keys.TabStripNext):
 			return s, s.cycleTab(1)
+		case key.Matches(msg, displayengine.Keys.EnvCycleLayout) && s.panes != nil:
+			cmd := s.panes.CycleLayout()
+			s.SetSize(s.width, s.height)
+			return s, cmd
 		}
 		return s.delegateToOuterMenu(msg)
 
@@ -229,6 +275,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// and will be lost if the user switches themes (which resets s.config to s.baseConfig).
 		// This is consistent with how other options in this screen work.
 		s.syncOptionsMenu()
+		s.syncTintMenus()
+		s.refreshPreviewTint()
 		if s.optionsMenu != nil {
 			s.optionsMenu.ClearProcessingState()
 		}
@@ -348,6 +396,7 @@ var optionTagToUIField = map[string]string{
 	"Radio Brackets":       "RadioBrackets",
 	"Tab Layout":           "TabLayout",
 	"Show Preview":         "ShowPreview",
+	"Theme/Tint Layout":    "PaneLayout",
 	"Markdown Hyperlinks":  "MarkdownHyperlinks",
 	"Hyperlinks":           "Hyperlinks",
 }
@@ -377,6 +426,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.Appearance.Ptr(s.editType).LineNumberBrackets
 		case "Show Preview":
 			items[i].Checked = a.ShowPreview
+		case "Theme/Tint Layout":
+			items[i].Desc = s.dropdownDesc(tabLayoutDesc(a.PaneLayout))
 		case "Tab Layout":
 			items[i].Desc = s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.editType).TabLayout))
 		case "Markdown Hyperlinks":
@@ -424,6 +475,7 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 		displayengine.Keys.TabStripNext,
 		displayengine.Keys.PreviewForward,
 		displayengine.Keys.PreviewBack,
+		displayengine.Keys.EnvCycleLayout,
 	})
 }
 
@@ -472,6 +524,10 @@ func (s *DisplayOptionsScreen) ClearProcessingState() {
 	if s.optionsMenu != nil {
 		s.optionsMenu.ClearProcessingState()
 	}
+	if s.tintMenu != nil {
+		s.tintMenu.ClearProcessingState()
+		s.tintControlsMenu.ClearProcessingState()
+	}
 	if s.themeMenu != nil {
 		s.themeMenu.ClearProcessingState()
 	}
@@ -481,10 +537,10 @@ func (s *DisplayOptionsScreen) ClearProcessingState() {
 }
 
 func (s *DisplayOptionsScreen) HasDialog() bool {
-	if s.themeMenu == nil || s.optionsMenu == nil {
+	if s.themeMenu == nil || s.optionsMenu == nil || s.tintMenu == nil {
 		return false
 	}
-	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog()
+	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog() || s.tintMenu.HasDialog() || s.tintControlsMenu.HasDialog()
 }
 
 // MinHeight returns the minimum content-area height needed for the Appearance Settings

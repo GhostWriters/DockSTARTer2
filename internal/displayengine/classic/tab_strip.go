@@ -157,6 +157,19 @@ func (t *TabStrip) Render(availWidth int, focused bool, ctx StyleContext) string
 	return strings.Join(segs, "")
 }
 
+// TitlePlacement returns where the strip starts, relative to a box's left
+// border, when drawn as the "RAW" title of a box whose content is
+// contentWidth wide (see RenderBorderedBoxCtx), and the width it may use
+// beside widgets.
+func (t *TabStrip) TitlePlacement(contentWidth int, titleAlign string, widgets []WidgetDef, ctx StyleContext) (x, avail int) {
+	avail = MaxRawTitleWidth(max(contentWidth, 1), false, titleAlign, widgets, ctx)
+	x = 1
+	if titleAlign != "left" {
+		x += max((contentWidth-WidthWithoutZones(t.Render(avail, false, ctx)))/2, 0)
+	}
+	return x, avail
+}
+
 // HitRegions returns one region per visible tab and arrow, with the strip's
 // first column at (x, y). help, if non-nil, supplies each tab's help.
 func (t *TabStrip) HitRegions(x, y, availWidth, zOrder int, ctx StyleContext, help func(i int) *HelpContext) []HitRegion {

@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
@@ -25,7 +26,10 @@ type DisplayOptionsScreen struct {
 	loadDefaultsMenu *displayengine.MenuModel
 	themeMenu        *displayengine.MenuModel
 	optionsMenu      *displayengine.MenuModel // the shown connection type's options
-	isRoot           bool                     // true when launched directly via -M appearance; hides Back button
+	tintControlsMenu *displayengine.MenuModel // Tint pane: element choice and on/off switches
+	tintMenu         *displayengine.MenuModel // Tint pane scheme list
+	panes            *displayengine.TabbedPanes
+	isRoot           bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
 	themes       []theme.ThemeMetadata
@@ -77,6 +81,18 @@ type DisplayOptionsScreen struct {
 
 	tabs  *displayengine.TabStrip
 	frame *tabFrame
+
+	// tintElement is the tint element ("menu", "programbox", "cli") the Tint
+	// pane shows; tintCatalog the schemes it offers.
+	tintElement     string
+	tintCatalog     []commands.TintEntry
+	tintDownloading bool
+
+	// previewTintKey is the tint key the preview renders under, holding the
+	// shown tab's staged Menu tint (previewTint) -- private to this screen,
+	// so the rest of the screen keeps the live tint until Apply.
+	previewTintKey string
+	previewTint    *config.AnsiElementColors
 }
 
 // toggleLoadThemeDefaultsMsg flips loadThemeDefaults. Handled directly rather
@@ -119,6 +135,7 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 		themeDefaults:     make(map[string]*theme.ThemeDefaults),
 		themeFileCache:    make(map[string]theme.ThemeFile),
 		loadThemeDefaults: true,
+		tintElement:       "menu",
 		previewViewport:   viewport.New(),
 		// Must match mockupMenu's own ID in buildPreviewSection exactly --
 		// MatchesID checks msgID.Contains(m.ID()), so the scrollbar's hit
@@ -143,6 +160,8 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 	// the viewport padding it out itself.
 	s.previewViewport.FillHeight = true
 	s.themeDefaults[current], _ = theme.Load(current, "Preview")
+	s.loadTintCatalog()
+	s.previewTintKey = fmt.Sprintf("ds2-preview-tint-%p", s)
 
 	s.initMenus()
 	s.focused = true // Default to focused initially
@@ -152,10 +171,10 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 func (s *DisplayOptionsScreen) initMenus() {
 	selected := s.config.Appearance.ForConnType(s.editType).Theme
 
-	// 1. Theme Selection Menu
-	themeItems := make([]displayengine.MenuItem, len(s.themes))
+	// 1. Theme Selection Menu, grouped by source (see groupedItems).
+	var bundledThemes, userThemes, otherThemes []displayengine.MenuItem
 	foundCurrent := false
-	for i, t := range s.themes {
+	for _, t := range s.themes {
 		desc := t.Description
 		if t.Author != "" {
 			desc += fmt.Sprintf(" [by %s]", t.Author)
@@ -168,7 +187,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 		if checked {
 			foundCurrent = true
 		}
-		themeItems[i] = displayengine.MenuItem{
+		item := displayengine.MenuItem{
 			Tag:           t.Name,
 			Desc:          descTag + desc,
 			Help:          desc,
@@ -179,6 +198,11 @@ func (s *DisplayOptionsScreen) initMenus() {
 			IsUserDefined: t.IsUserTheme,
 			Metadata:      map[string]string{"config_value": t.ConfigValue},
 		}
+		if t.IsUserTheme {
+			userThemes = append(userThemes, item)
+		} else {
+			bundledThemes = append(bundledThemes, item)
+		}
 	}
 	// file: themes point outside the themes folder and are never part of
 	// s.themes (theme.List only enumerates embedded and user: themes), so
@@ -186,7 +210,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// of treating "not in the list" as "missing".
 	if !foundCurrent && strings.HasPrefix(selected, "file:") {
 		if _, err := os.Stat(strings.TrimPrefix(selected, "file:")); err == nil {
-			themeItems = append([]displayengine.MenuItem{{
+			otherThemes = append(otherThemes, displayengine.MenuItem{
 				Tag:           "file:" + theme.ThemeDisplayName(selected),
 				Desc:          "{{|ItemListUserDefined|}}External theme file",
 				Help:          "Theme loaded directly from a file outside the themes folder.",
@@ -195,7 +219,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 				Checked:       true,
 				IsUserDefined: true,
 				Metadata:      map[string]string{"config_value": selected},
-			}}, themeItems...)
+			})
 			foundCurrent = true
 		}
 	}
@@ -209,7 +233,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			shortURI = "file:" + theme.ThemeDisplayName(selected)
 		}
 		displayName := "(missing) " + shortURI
-		themeItems = append([]displayengine.MenuItem{{
+		otherThemes = append(otherThemes, displayengine.MenuItem{
 			Tag:           displayName,
 			Desc:          "{{|ItemListUserDefined|}}Source file not found — using cached version",
 			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
@@ -218,12 +242,18 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:       true,
 			IsUserDefined: true,
 			Metadata:      map[string]string{"config_value": selected},
-		}}, themeItems...)
+		})
 	}
+	themeItems := groupedItems([]listGroup{
+		{Label: "Current", Items: otherThemes},
+		{Label: "Bundled", Items: bundledThemes},
+		{Label: "User", Items: userThemes},
+	})
 
 	themeMenu := displayengine.NewMenuModel(displayengine.IDThemePanel, config.ConnTypeLabel(s.editType)+" Theme", "", themeItems)
 	s.themeMenu = themeMenu
 	s.themeMenu.SetHelpItemPrefix("Theme")
+	s.themeMenu.SetRowCache(true)
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
 	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
 	s.themeMenu.SetSubMenuMode(true)
@@ -347,6 +377,14 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.Appearance.Ptr(s.editType).ShowPreview,
 			Selectable:  true,
 			SpaceAction: s.toggleShowPreview(),
+		},
+		{
+			Tag:  "Theme/Tint Layout",
+			Desc: s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.editType).PaneLayout)),
+			Help: "Default layout of the Theme and Tint panes; Ctrl+W switches it while here (Enter for options)",
+			Action: s.showTabLayoutDropdown("pane_layout", "Theme/Tint Layout",
+				func() string { return s.config.Appearance.Ptr(s.editType).PaneLayout },
+				func(cfg *config.AppConfig, v string) { cfg.Appearance.Ptr(s.editType).PaneLayout = v }),
 		},
 		{
 			Tag:         "Menu Brackets",
@@ -505,9 +543,21 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// (every child section below already calls SetMaximized(true) for the
 	// same reason) and should always claim the height it's given.
 	outerMenu.SetMaximized(true)
+	// Theme and Tint panes (see TabbedPanes), keeping the layout and shown
+	// pane across rebuilds.
+	layout, shown := s.baseConfig.Appearance.Ptr(s.connType).PaneLayout, 0
+	if s.panes != nil {
+		layout, shown = s.panes.Layout(), s.panes.Active()
+	}
+	s.buildTintMenus()
+	s.panes = displayengine.NewTabbedPanes("appearance_panes", []string{"Theme", "Tint"},
+		[]*displayengine.ContentColumn{
+			displayengine.NewContentColumn(loadDefaultsMenu, themeMenu),
+			displayengine.NewContentColumn(s.tintControlsMenu, s.tintMenu),
+		}, layout)
+	s.panes.Strip.Active = shown
 	settingsColumn := displayengine.NewContentColumn(
-		newTabFrameSection(loadDefaultsMenu, s.frame, true, false),
-		newTabFrameSection(themeMenu, s.frame, false, false),
+		newTabFrameSection(s.panes, s.frame, true, false),
 		newTabFrameSection(optionsMenu, s.frame, false, true),
 	)
 	previewHidden := !s.config.Appearance.Ptr(s.connType).ShowPreview
@@ -518,6 +568,18 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.layoutRow.previewHidden = previewHidden
 	outerMenu.AddContentSection(s.layoutRow)
 	s.outerMenu = outerMenu
+	s.refreshPreviewTint()
+}
+
+// refreshPreviewTint registers the shown tab's staged Menu tint under
+// previewTintKey when it has changed.
+func (s *DisplayOptionsScreen) refreshPreviewTint() {
+	el := s.config.Appearance.ForConnType(s.editType).AnsiColors.Element("menu")
+	if s.previewTint != nil && reflect.DeepEqual(*s.previewTint, el) {
+		return
+	}
+	s.previewTint = &el
+	tui.RegisterTintKey(context.Background(), s.previewTintKey, el)
 }
 
 // focusedSettingsMenu returns whichever of loadDefaultsMenu/themeMenu/
@@ -536,15 +598,22 @@ func (s *DisplayOptionsScreen) focusedSettingsMenu() *displayengine.MenuModel {
 	if s.layoutRow.subFocus == 1 {
 		return nil
 	}
-	switch s.layoutRow.settings.SubFocusIndex() {
-	case 0:
-		return s.loadDefaultsMenu
-	case 1:
-		return s.themeMenu
-	case 2:
-		return s.optionsMenu
+	leaves := s.layoutRow.settings.Items()
+	i := s.layoutRow.settings.SubFocusIndex()
+	if i < 0 || i >= len(leaves) {
+		return nil
 	}
-	return nil
+	c := leaves[i]
+	for {
+		if m, ok := c.(*displayengine.MenuModel); ok {
+			return m
+		}
+		w, ok := c.(displayengine.ContentWrapper)
+		if !ok {
+			return nil
+		}
+		c = w.Unwrap()
+	}
 }
 
 // frameFocused reports whether focus is inside the connection-type tab
@@ -602,6 +671,9 @@ func (s *DisplayOptionsScreen) switchTab(connType string, focusFrame bool) tea.C
 	// new tab's checked theme; any other theme stays focused.
 	s.optionsMenu.Select(optionCursor)
 	for i, it := range s.themeMenu.GetItems() {
+		if it.IsSeparator {
+			continue
+		}
 		if focusedTheme.Checked && it.Checked || !focusedTheme.Checked && itemConfigValue(it) == itemConfigValue(focusedTheme) {
 			s.themeMenu.Select(i)
 			break
@@ -1441,8 +1513,15 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		// snapshot.
 		refreshRateChanged := s.config.Appearance.Ptr(s.editType).RefreshRate != s.baseConfig.Appearance.Ptr(s.editType).RefreshRate
 		staged := s.config.Appearance
+		// The tint is saved only when edited here, so one set elsewhere
+		// meanwhile (e.g. with --tint) isn't overwritten.
+		tintEdited := !reflect.DeepEqual(staged.ForConnType(s.editType).AnsiColors, s.baseConfig.Appearance.ForConnType(s.editType).AnsiColors)
 		fresh, err := config.UpdateAppConfig(func(c *config.AppConfig) {
-			c.Appearance.Ptr(s.editType).CopySettingsFrom(staged.ForConnType(s.editType))
+			a := c.Appearance.Ptr(s.editType)
+			a.CopySettingsFrom(staged.ForConnType(s.editType))
+			if tintEdited {
+				a.AnsiColors = staged.ForConnType(s.editType).AnsiColors
+			}
 		})
 		if err != nil {
 			return tui.ShowMessageDialogMsg{
@@ -1589,12 +1668,13 @@ func (s *DisplayOptionsScreen) TitleBarFocused() bool {
 }
 
 func (s *DisplayOptionsScreen) Init() tea.Cmd {
-	return tea.Batch(s.themeMenu.Init(), s.optionsMenu.Init())
+	return tea.Batch(s.themeMenu.Init(), s.tintMenu.Init(), s.optionsMenu.Init())
 }
 
 func (s *DisplayOptionsScreen) AdvanceSpinners(now time.Time) bool {
 	a := s.themeMenu.AdvanceSpinners(now)
 	b := s.optionsMenu.AdvanceSpinners(now)
-	c := s.outerMenu != nil && s.outerMenu.AdvanceSpinners(now)
-	return a || b || c
+	c := s.tintMenu.AdvanceSpinners(now)
+	d := s.outerMenu != nil && s.outerMenu.AdvanceSpinners(now)
+	return a || b || c || d
 }
