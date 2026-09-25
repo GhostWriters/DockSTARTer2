@@ -88,8 +88,12 @@ type updateDisplayOptionMsg struct {
 	update func(*config.AppConfig)
 }
 
-// tabUnlockedMsg reports that the sudo gate passed for connType's tab.
-type tabUnlockedMsg struct{ connType string }
+// tabUnlockedMsg reports that the sudo gate passed for connType's tab;
+// focusFrame is switchTab's.
+type tabUnlockedMsg struct {
+	connType   string
+	focusFrame bool
+}
 
 // displayOptionsAbortMsg is sent when Apply is attempted but blocked (e.g. command lock).
 // Handled by Update to clear the processing spinner without applying changes.
@@ -559,22 +563,32 @@ func connTypeIndex(connType string) int {
 	return 0
 }
 
-// switchTab shows connType's tab, keeping the focused section and options
-// row. A Local session may edit every tab; an SSH or Web Server session must
+// switchTab shows connType's tab, keeping the focused rows. focusFrame
+// (a tab click) moves focus into the tab frame, to the section last focused
+// there; otherwise focus stays where it is, preview and buttons included. A Local session may edit every tab; an SSH or Web Server session must
 // pass the sudo gate once before leaving its own tab. Staged changes on
 // every tab are kept.
-func (s *DisplayOptionsScreen) switchTab(connType string) tea.Cmd {
+func (s *DisplayOptionsScreen) switchTab(connType string, focusFrame bool) tea.Cmd {
 	if connType == s.editType {
+		if focusFrame {
+			return s.focusFrame()
+		}
 		return nil
 	}
 	if !s.unlocked && connType != s.connType {
-		return s.unlockTab(connType)
+		return s.unlockTab(connType, focusFrame)
 	}
-	focusIdx := 0
+	focusIdx, rowFocus := 0, 0
 	if s.layoutRow != nil {
-		focusIdx = s.layoutRow.settings.SubFocusIndex()
+		focusIdx, rowFocus = s.layoutRow.settings.SubFocusIndex(), s.layoutRow.subFocus
+	}
+	onButtons := s.outerMenu != nil && s.outerMenu.GetFocusedItem() != displayengine.FocusList
+	btnIdx := 0
+	if onButtons {
+		btnIdx = s.outerMenu.GetFocusedBtnIndex()
 	}
 	optionCursor := s.optionsMenu.Index()
+	focusedTheme := s.themeMenu.SelectedItem()
 	s.editType = connType
 	s.tabs.Active = connTypeIndex(connType)
 	s.currentTheme = s.baseConfig.Appearance.ForConnType(connType).Theme
@@ -584,25 +598,54 @@ func (s *DisplayOptionsScreen) switchTab(connType string) tea.Cmd {
 	displayengine.ClearSemanticCachePrefix("Preview_")
 	s.initMenus()
 	// The options list is the same on every tab, so the same row stays
-	// focused. The theme list's cursor is the tab's own staged theme.
+	// focused. In the theme list, a cursor on the checked theme moves to the
+	// new tab's checked theme; any other theme stays focused.
 	s.optionsMenu.Select(optionCursor)
+	for i, it := range s.themeMenu.GetItems() {
+		if focusedTheme.Checked && it.Checked || !focusedTheme.Checked && itemConfigValue(it) == itemConfigValue(focusedTheme) {
+			s.themeMenu.Select(i)
+			break
+		}
+	}
 	s.layoutRow.settings.SetSubFocusIndex(focusIdx)
+	s.layoutRow.subFocus = rowFocus
 	if s.outerMenu != nil {
 		s.outerMenu.SetFocused(s.focused)
 	}
 	s.SetSize(s.width, s.height)
-	return nil
+	// The rebuilt menus still show whichever section held focus when they
+	// were built; point that at the restored one. After SetSize, since the
+	// preview can only hold focus once the row knows it fits.
+	if focusFrame {
+		return s.focusFrame()
+	}
+	if onButtons {
+		s.outerMenu.SetFocusedBtnIndex(btnIdx)
+		return s.layoutRow.SetSubFocused(false)
+	}
+	return s.layoutRow.SetSubFocused(true)
+}
+
+// focusFrame moves focus into the tab frame, to the section last focused
+// there.
+func (s *DisplayOptionsScreen) focusFrame() tea.Cmd {
+	if s.layoutRow == nil || s.outerMenu == nil {
+		return nil
+	}
+	s.layoutRow.subFocus = 0
+	s.outerMenu.SetFocusedSection(0)
+	return s.layoutRow.SetSubFocused(true)
 }
 
 // cycleTab moves to the previous (-1) or next (1) connection type's tab.
 func (s *DisplayOptionsScreen) cycleTab(delta int) tea.Cmd {
 	n := len(config.ConnTypes)
-	return s.switchTab(config.ConnTypes[(connTypeIndex(s.editType)+delta+n)%n])
+	return s.switchTab(config.ConnTypes[(connTypeIndex(s.editType)+delta+n)%n], false)
 }
 
 // unlockTab asks for the sudo password before a remote session may edit
 // other connection types' settings, then switches to connType.
-func (s *DisplayOptionsScreen) unlockTab(connType string) tea.Cmd {
+func (s *DisplayOptionsScreen) unlockTab(connType string, focusFrame bool) tea.Cmd {
 	return func() tea.Msg {
 		pass, err := tui.PromptText("Sudo Authentication",
 			"Password required to edit other connection types' appearance settings:", true)
@@ -615,7 +658,7 @@ func (s *DisplayOptionsScreen) unlockTab(connType string) tea.Cmd {
 		if msg := verifySudoPassword(pass); msg != "" {
 			return tui.ShowMessageDialogMsg{Title: "Authentication Failed", Message: msg, Type: tui.MessageError}
 		}
-		return tabUnlockedMsg{connType: connType}
+		return tabUnlockedMsg{connType: connType, focusFrame: focusFrame}
 	}
 }
 

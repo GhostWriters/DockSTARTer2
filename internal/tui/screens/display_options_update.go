@@ -185,7 +185,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case displayengine.LayerHitMsg:
 		if i, ok := s.tabs.TabFromID(msg.ID); ok {
-			return s, s.switchTab(config.ConnTypes[i])
+			return s, s.switchTab(config.ConnTypes[i], true)
 		}
 		if d, ok := s.tabs.ScrollFromID(msg.ID); ok {
 			s.tabs.ScrollBy(d)
@@ -198,7 +198,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tabUnlockedMsg:
 		s.unlocked = true
-		return s, s.switchTab(msg.connType)
+		return s, s.switchTab(msg.connType, msg.focusFrame)
 
 	case tea.MouseWheelMsg, displayengine.ToggleFocusedMsg:
 		return s.delegateToOuterMenu(msg)
