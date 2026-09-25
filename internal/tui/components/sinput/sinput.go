@@ -122,6 +122,9 @@ func New(ti textinput.Model) Model {
 // Call this from GetHitRegions() each frame.
 func (m *Model) SetScreenTextX(x int) { m.screenTextX = x }
 
+// ScreenTextX returns the X recorded by SetScreenTextX.
+func (m Model) ScreenTextX() int { return m.screenTextX }
+
 // PromptWidth returns the visual width of the prompt string.
 func (m Model) PromptWidth() int { return lipgloss.Width(m.Prompt) }
 

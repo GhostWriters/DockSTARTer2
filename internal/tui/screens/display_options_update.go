@@ -43,7 +43,7 @@ func itemConfigValue(item displayengine.MenuItem) string {
 // scrollableMenus returns the settings menus that own their own scrollbars,
 // as pointers so an Update's returned model can be stored back.
 func (s *DisplayOptionsScreen) scrollableMenus() []**displayengine.MenuModel {
-	return []**displayengine.MenuModel{&s.themeMenu, &s.tintMenu, &s.optionsMenu}
+	return []**displayengine.MenuModel{&s.themeMenu, &s.tintMenu, &s.overrideMenu, &s.optionsMenu}
 }
 
 // IsScrollbarDragging reports whether any sub-menu, or the preview panel's
@@ -69,6 +69,8 @@ func (s *DisplayOptionsScreen) delegateToOuterMenu(msg tea.Msg) (tea.Model, tea.
 		for _, it := range s.themeMenu.GetItems() {
 			if it.Checked && itemConfigValue(it) != s.previewTheme {
 				s.applyPreview(itemConfigValue(it))
+				s.markThemeList()
+				s.syncOptionsMenu()
 				break
 			}
 		}
@@ -184,6 +186,25 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case displayengine.LayerHitMsg:
+		if msg.Button == tea.MouseLeft && s.outerMenu != nil && msg.ID == s.outerMenu.TitleCheckboxID() {
+			return s, s.toggleAdvanced()
+		}
+		if msg.Button == tea.MouseLeft && s.tintMenu != nil {
+			switch msg.ID {
+			case s.themeMenu.TitleCheckboxID():
+				return s, func() tea.Msg { return toggleLoadThemeDefaultsMsg{} }
+			case s.tintMenu.TitleCheckboxID():
+				return s, s.toggleTintEnabled()
+			case s.overrideMenu.TitleCheckboxID():
+				return s, s.toggleOverrideEnabled()
+			case s.tintSearchMenu.TitleControlID(0):
+				return s, s.toggleTintWholeWords()
+			case s.tintSearchMenu.TitleControlID(1):
+				return s, s.showTintVariantPicker()
+			case s.tintSearchMenu.TitleControlID(2):
+				return s, s.showTintBasePicker()
+			}
+		}
 		if i, ok := s.tabs.TabFromID(msg.ID); ok {
 			return s, s.switchTab(config.ConnTypes[i], true)
 		}
@@ -220,6 +241,38 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.refreshPreviewTint()
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
+		}
+		return s, nil
+
+	case overrideEditMsg:
+		el := s.stagedTint()
+		if f := overrideField(el, msg.base); f != nil {
+			*f = msg.value
+			if msg.value != "" {
+				el.OverrideEnabled = true
+			}
+		}
+		s.syncTintMenus()
+		s.refreshPreviewTint()
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
+		}
+		return s, nil
+
+	case tintSearchOptionMsg:
+		msg.apply(s)
+		s.syncTintMenus()
+		s.selectCheckedTint()
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
+		}
+		return s, nil
+
+	case tintSearchMsg:
+		if s.tintSearchInput != nil && s.tintSearchInput.Value() != s.tintQuery {
+			s.tintQuery = s.tintSearchInput.Value()
+			s.syncTintMenus()
+			s.selectCheckedTint()
 		}
 		return s, nil
 
@@ -262,6 +315,26 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.cycleTab(-1)
 		case key.Matches(msg, displayengine.Keys.TabStripNext):
 			return s, s.cycleTab(1)
+		case key.Matches(msg, displayengine.Keys.ToggleLoadDefaults) && s.focusedSettingsLeaf() == s.themeMenu:
+			return s, func() tea.Msg { return toggleLoadThemeDefaultsMsg{} }
+		case key.Matches(msg, displayengine.Keys.ToggleEnabled) && s.focusedSettingsLeaf() == s.tintMenu:
+			return s, s.toggleTintEnabled()
+		case key.Matches(msg, displayengine.Keys.ToggleEnabled) && s.focusedSettingsLeaf() == s.overrideMenu:
+			return s, s.toggleOverrideEnabled()
+		case key.Matches(msg, displayengine.Keys.ToggleAdvanced) && s.focusedSettingsLeaf() != s.tintSearchMenu:
+			return s, s.toggleAdvanced()
+		case key.Matches(msg, displayengine.Keys.SearchWholeWords) && s.tintFrameFocused():
+			return s, s.toggleTintWholeWords()
+		case key.Matches(msg, displayengine.Keys.SearchVariant) && s.tintFrameFocused():
+			return s, s.showTintVariantPicker()
+		case key.Matches(msg, displayengine.Keys.SearchBase) && s.tintFrameFocused():
+			return s, s.showTintBasePicker()
+		case key.Matches(msg, displayengine.Keys.EnvClosePane) && s.panes != nil && s.focusedSettingsLeaf() != nil:
+			return s, s.panes.CloseFocused()
+		case key.Matches(msg, displayengine.Keys.SectionPrev):
+			return s, s.jumpSectionGroup(-1)
+		case key.Matches(msg, displayengine.Keys.SectionNext):
+			return s, s.jumpSectionGroup(1)
 		case key.Matches(msg, displayengine.Keys.EnvCycleLayout) && s.panes != nil:
 			cmd := s.panes.CycleLayout()
 			s.SetSize(s.width, s.height)
@@ -315,6 +388,7 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_, _ = theme.Load(s.previewTheme, "Preview")
 			displayengine.ClearSemanticCachePrefix("Preview_")
 		}
+		s.refreshChangeMarkers()
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
 		}
@@ -378,6 +452,9 @@ func (s *DisplayOptionsScreen) applyPreview(themeName string) {
 // config.AppearanceConfig struct field name it displays, so syncOptionsMenu can look up
 // s.themeChangedFields by the same name diffUIConfigFieldSet produces.
 var optionTagToUIField = map[string]string{
+	"Spinners":             "Spinner",
+	"Refresh Rate":         "RefreshRate",
+	"Spinner Speed":        "SpinnerSpeed",
 	"Shadows":              "Shadow",
 	"Borders":              "Borders",
 	"Large Buttons":        "LargeButtons",
@@ -396,6 +473,7 @@ var optionTagToUIField = map[string]string{
 	"Radio Brackets":       "RadioBrackets",
 	"Tab Layout":           "TabLayout",
 	"Show Preview":         "ShowPreview",
+	"Advanced Appearance":  "Advanced",
 	"Theme/Tint Layout":    "PaneLayout",
 	"Markdown Hyperlinks":  "MarkdownHyperlinks",
 	"Hyperlinks":           "Hyperlinks",
@@ -406,7 +484,9 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 	a := s.config.Appearance.Ptr(s.editType)
 	items := s.optionsMenu.GetItems()
 	for i := range items {
-		items[i].IsNew = s.themeChangedFields[optionTagToUIField[items[i].Tag]]
+		field := optionTagToUIField[items[i].Tag]
+		items[i].IsNew = s.themeChangedFields[field]
+		items[i].Changed = s.appearanceFieldChanged(field)
 		switch items[i].Tag {
 		case "Shadows":
 			items[i].Checked = s.config.Appearance.Ptr(s.editType).Shadow
@@ -426,6 +506,8 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.Appearance.Ptr(s.editType).LineNumberBrackets
 		case "Show Preview":
 			items[i].Checked = a.ShowPreview
+		case "Advanced Appearance":
+			items[i].Checked = a.Advanced
 		case "Theme/Tint Layout":
 			items[i].Desc = s.dropdownDesc(tabLayoutDesc(a.PaneLayout))
 		case "Tab Layout":
@@ -476,10 +558,22 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 		displayengine.Keys.PreviewForward,
 		displayengine.Keys.PreviewBack,
 		displayengine.Keys.EnvCycleLayout,
+		displayengine.Keys.SectionPrev,
+		displayengine.Keys.SectionNext,
+		displayengine.Keys.ToggleEnabled,
+		displayengine.Keys.ToggleLoadDefaults,
+		displayengine.Keys.EnvClosePane,
+		displayengine.Keys.ToggleAdvanced,
+		displayengine.Keys.SearchWholeWords,
+		displayengine.Keys.SearchVariant,
+		displayengine.Keys.SearchBase,
 	})
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {
+	if s.tintStripSection != nil && s.focusedSettingsLeaf() == s.tintStripSection {
+		return "Left/Right to choose which element's tint to show"
+	}
 	if m := s.focusedSettingsMenu(); m != nil {
 		return m.HelpText()
 	}
@@ -526,7 +620,7 @@ func (s *DisplayOptionsScreen) ClearProcessingState() {
 	}
 	if s.tintMenu != nil {
 		s.tintMenu.ClearProcessingState()
-		s.tintControlsMenu.ClearProcessingState()
+		s.overrideMenu.ClearProcessingState()
 	}
 	if s.themeMenu != nil {
 		s.themeMenu.ClearProcessingState()
@@ -540,7 +634,7 @@ func (s *DisplayOptionsScreen) HasDialog() bool {
 	if s.themeMenu == nil || s.optionsMenu == nil || s.tintMenu == nil {
 		return false
 	}
-	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog() || s.tintMenu.HasDialog() || s.tintControlsMenu.HasDialog()
+	return s.themeMenu.HasDialog() || s.optionsMenu.HasDialog() || s.tintMenu.HasDialog() || s.overrideMenu.HasDialog()
 }
 
 // MinHeight returns the minimum content-area height needed for the Appearance Settings

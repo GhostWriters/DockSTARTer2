@@ -184,6 +184,45 @@ func (c *ContentColumn) PrevFocusableSub(from int) (int, bool) {
 	return -1, false
 }
 
+// GroupStop implements GroupJumper: each child is a group, and a nested
+// GroupJumper child's own groups count too.
+func (c *ContentColumn) GroupStop(from, dir int) (int, bool) {
+	item, local := c.locate(from)
+	if item >= 0 {
+		if g, ok := nestedStops(c.items[item]).(GroupJumper); ok {
+			if j, ok := g.GroupStop(local, dir); ok {
+				return c.base(item) + j, true
+			}
+		}
+	} else if from < 0 {
+		item = -1
+	} else {
+		item = len(c.items)
+	}
+	for i := item + dir; i >= 0 && i < len(c.items); i += dir {
+		n := nestedStops(c.items[i])
+		if n == nil {
+			if c.items[i].Focusable() {
+				return c.base(i), true
+			}
+			continue
+		}
+		if g, ok := n.(GroupJumper); ok {
+			from := -1
+			if dir < 0 {
+				from = n.NumTabStops()
+			}
+			if j, ok := g.GroupStop(from, dir); ok {
+				return c.base(i) + j, true
+			}
+		}
+		if j, ok := n.NextFocusableSub(-1); ok {
+			return c.base(i) + j, true
+		}
+	}
+	return -1, false
+}
+
 // Items returns the Content behind each flattened Tab stop, in order: a
 // nested child contributes its own Items.
 func (c *ContentColumn) Items() []Content {

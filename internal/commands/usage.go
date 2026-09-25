@@ -505,6 +505,7 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-checkbox-brackets", "--theme-radio-brackets",
 		"--theme-menu-brackets", "--theme-no-menu-brackets",
 		"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
+		"--theme-advanced", "--theme-no-advanced", "--theme-pane-layout",
 		"--theme-extract", "--theme-extract-all") {
 		printStr(
 			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}] [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
@@ -560,6 +561,10 @@ func GetUsage(target string, noHeading bool) string {
 			"	Set DS2's own console/path hyperlink rendering ({{|UsageOption|}}off{{[-]}}, {{|UsageOption|}}inline{{[-]}}, or {{|UsageOption|}}auto{{[-]}})",
 			"{{|UsageCommand|}}--theme-show-preview{{[-]}} | {{|UsageCommand|}}--theme-no-show-preview{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Show or hide the Appearance Settings preview panel by default",
+			"{{|UsageCommand|}}--theme-advanced{{[-]}} | {{|UsageCommand|}}--theme-no-advanced{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Show or hide Appearance Settings' connection-type and ProgramBox/CLI tabs by default",
+			"{{|UsageCommand|}}--theme-pane-layout{{[-]}} {{|UsageOption|}}<layout>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Set the layout of Appearance Settings' Theme/Tint/Overrides panes ({{|UsageOption|}}maximized{{[-]}}, {{|UsageOption|}}sidebyside{{[-]}}, or {{|UsageOption|}}stacked{{[-]}})",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",

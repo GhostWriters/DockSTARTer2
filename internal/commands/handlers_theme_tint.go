@@ -605,6 +605,24 @@ func (f tintFilter) matchesTerms(fields ...string) bool {
 	return true
 }
 
+// containsTerms is matchesTerms matching each term anywhere in a field
+// (case-insensitive) rather than as whole words.
+func (f tintFilter) containsTerms(fields ...string) bool {
+	for _, term := range f.Terms {
+		found := false
+		for _, field := range fields {
+			if strings.Contains(strings.ToLower(field), term) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // matchesSystem reports whether f's optional system constraint is satisfied
 // by a source available in hasBase16/hasBase24.
 func (f tintFilter) matchesSystem(hasBase16, hasBase24 bool) bool {

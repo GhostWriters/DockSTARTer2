@@ -20,6 +20,9 @@ type TabStrip struct {
 	// is then drawn between two of the panel's changed indicators, outside
 	// the focus indicators.
 	Changed func(i int) bool
+	// ActiveFocus, if set, limits the active tab's focus indicators to
+	// while it reports true -- for a strip that is its own Tab stop.
+	ActiveFocus func() bool
 
 	scroll int // index of the leftmost visible tab
 }
@@ -149,7 +152,8 @@ func (t *TabStrip) Render(availWidth int, focused bool, ctx StyleContext) string
 	}
 	for i := layout.First; i <= layout.Last; i++ {
 		styleTag := t.styleTag(i)
-		segs = append(segs, RenderMarkedTitleSegmentCtx(t.Labels[i], t.marker(i, ctx), focused, i == t.Active, true, styleTag, ctx))
+		indicate := i == t.Active && (t.ActiveFocus == nil || t.ActiveFocus())
+		segs = append(segs, RenderMarkedTitleSegmentCtx(t.Labels[i], t.marker(i, ctx), focused, indicate, true, styleTag, ctx))
 	}
 	if layout.ShowRightArrow {
 		segs = append(segs, rightArrow)

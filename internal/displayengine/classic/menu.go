@@ -2,8 +2,10 @@ package classic
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"unicode"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -43,6 +45,7 @@ type MenuItem struct {
 	IsAddInstance     bool   // "[+] Add instance…" action row
 	IsEditing         bool   // Inline text-input row for new instance name entry
 	IsNew             bool   // Newly added this session (not yet saved; used to allow rename)
+	Changed           bool   // Has an unapplied change: drawn between changed markers, which take the spaces around its label or value
 	IsReferenced      bool   // Has env vars / compose reference but no __ENABLED; locked from rename
 	WasAdded          bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
 	ShowEnabledGutter bool   // Whether to show the Enabled (E/D) gutter column
@@ -276,6 +279,18 @@ type MenuModel struct {
 	rowCacheStamp   string
 	rowCacheEnabled bool
 	itemsVersion    int
+
+	// savedRadio is the saved radio row's index plus one, 0 for none (see
+	// SetSavedRadio).
+	savedRadio int
+
+	// titleChanged, when set, reports whether the title should carry the
+	// changed marker (see SetTitleChanged).
+	titleChanged func() bool
+
+	// titleControls are drawn at the right end of the title bar (see
+	// SetTitleControls).
+	titleControls   []TitleControl
 	lastWidth       int
 	lastHeight      int
 	lastIndex       int
@@ -1261,6 +1276,185 @@ func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth in
 	}
 
 	return res
+}
+
+// SetTitleChanged makes the title carry the changed marker whenever fn
+// reports true -- e.g. while the section has unapplied changes.
+func (m *MenuModel) SetTitleChanged(fn func() bool) {
+	m.titleChanged = fn
+}
+
+// TitleControl is a checkbox or a dropdown drawn at the right end of a
+// menu's title bar; its owner handles clicks on its hit region (see
+// TitleControlID).
+type TitleControl struct {
+	Label   string
+	Key     rune          // the label's letter drawn as its shortcut (TagKey), if any
+	Checked func() bool   // a checkbox, checked whenever this reports true
+	Value   func() string // a dropdown showing this value, when Checked is nil
+	Changed func() bool   // optional: changed markers take the spaces around the label
+	Help    string        // hit region label
+}
+
+// SetTitleControls draws controls, in order, at the right end of the title
+// bar, before any widgets.
+func (m *MenuModel) SetTitleControls(controls []TitleControl) {
+	m.titleControls = controls
+}
+
+// SetTitleCheckbox draws a single labeled checkbox (e.g. "[x] Enabled") as
+// the title bar's only control (see SetTitleControls), with key as its
+// shortcut letter.
+func (m *MenuModel) SetTitleCheckbox(label string, key rune, checked, changed func() bool) {
+	m.SetTitleControls([]TitleControl{{Label: label, Key: key, Checked: checked, Changed: changed, Help: "Turn " + label + " on or off"}})
+}
+
+// titleControlRender renders markup for a title control, whose style tags
+// name the TitleControl* styles without their prefix: on the large title
+// row the LargeTitleControl* styles over that row's area (ctx.Dialog).
+func titleControlRender(markup string, ctx StyleContext, large bool) string {
+	prefix := "TitleControl"
+	if large {
+		prefix = "LargeTitleControl"
+	}
+	markup = strings.ReplaceAll(markup, "{{|", "{{|"+prefix)
+	if large {
+		return RenderThemeTextCtx(markup, ctx)
+	}
+	return RenderThemeText(markup, ctx.Dialog)
+}
+
+// titleControlLabel renders c's label with its Key letter (the first match,
+// ignoring case) drawn as its shortcut (Tag and TagKey). Each style resets
+// before the next, so attributes like bold don't carry over.
+func titleControlLabel(c TitleControl, ctx StyleContext, large bool) string {
+	markup := "{{|Tag|}}" + c.Label + "{{[-]}}"
+	if c.Key != 0 {
+		runes := []rune(c.Label)
+		for i, r := range runes {
+			if unicode.ToLower(r) == unicode.ToLower(c.Key) {
+				markup = "{{|Tag|}}" + string(runes[:i]) + "{{[-]}}{{|TagKey|}}" + string(r) +
+					"{{[-]}}{{|Tag|}}" + string(runes[i+1:]) + "{{[-]}}"
+				break
+			}
+		}
+	}
+	return titleControlRender(markup, ctx, large)
+}
+
+// titleControlCheckbox renders a title checkbox's glyph: brackets
+// (CheckboxBrackets) around its mark (CheckboxOn or CheckboxOff).
+func titleControlCheckbox(checked bool, ctx StyleContext, large bool) string {
+	runes := []rune(GetPlainText(renderCheckbox(false, checked, ctx.LineCharacters, false, "always", lipgloss.NewStyle(), lipgloss.NewStyle())))
+	mark := "CheckboxOff"
+	if checked {
+		mark = "CheckboxOn"
+	}
+	if len(runes) < 3 {
+		return titleControlRender("{{|"+mark+"|}}"+string(runes)+"{{[-]}}", ctx, large)
+	}
+	last := len(runes) - 1
+	return titleControlRender("{{|CheckboxBrackets|}}"+string(runes[0])+"{{[-]}}{{|"+mark+"|}}"+string(runes[1:last])+
+		"{{[-]}}{{|CheckboxBrackets|}}"+string(runes[last])+"{{[-]}}", ctx, large)
+}
+
+// TitleControlID returns the hit region ID of title control i.
+func (m *MenuModel) TitleControlID(i int) string { return m.id + ".titlectl" + strconv.Itoa(i) }
+
+// TitleCheckboxID returns the hit region ID of the first title control.
+func (m *MenuModel) TitleCheckboxID() string { return m.TitleControlID(0) }
+
+// titleControlPieces returns each title control as drawn in the border: a
+// checkbox and its label styled like a checkbox row, or a label and its
+// value styled like an option dropdown -- with the changed markers in place
+// of the spaces around the label when changed. Styled by the TitleControl*
+// styles, or with large for the large title row by the LargeTitleControl*
+// ones; both are the same width.
+func (m *MenuModel) titleControlPieces(ctx StyleContext, large bool) []string {
+	pieces := make([]string, 0, len(m.titleControls))
+	pad := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
+	if large {
+		pad = " "
+	}
+	for _, c := range m.titleControls {
+		around := pad
+		if c.Changed != nil && c.Changed() {
+			around = RenderChangedMarker(ctx)
+		}
+		label := titleControlLabel(c, ctx, large)
+		if c.Checked == nil {
+			value := ""
+			if c.Value != nil {
+				value = c.Value()
+			}
+			shown := titleControlRender("{{|OptionValue|}}"+value+"▼{{[-]}}", ctx, large)
+			pieces = append(pieces, around+label+pad+shown+around)
+			continue
+		}
+		glyph := titleControlCheckbox(c.Checked(), ctx, large)
+		pieces = append(pieces, pad+glyph+around+label+around)
+	}
+	return pieces
+}
+
+// largeTitleControlsSegment returns the title controls as drawn on the large
+// title row.
+func (m *MenuModel) largeTitleControlsSegment(ctx StyleContext) string {
+	return strings.Join(m.titleControlPieces(ctx, true), "")
+}
+
+// titleControlRegions returns the title controls' hit regions for a box at
+// (offsetX, offsetY), matching where the title bar places them: just before
+// any widgets at the right end, on the large title row when there is one.
+func (m *MenuModel) titleControlRegions(offsetX, offsetY, zOrder int) []HitRegion {
+	ctx := GetActiveContext()
+	pieces := m.titleControlPieces(ctx, false)
+	// A small title bar separates the controls with a stretch of the border
+	// line (see TitleBarState.RightSegments).
+	sep := 1
+	if m.Layout.LargeTitleBar {
+		sep = 0
+	}
+	total := sep * (len(pieces) - 1)
+	for _, p := range pieces {
+		total += WidthWithoutZones(p)
+	}
+	widgets := 0
+	if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
+		if m.Layout.LargeTitleBar {
+			widgets = lipgloss.Width(RenderThemeTextCtx(buildLargeTitleBarWidgets(false, "", "", m.ActiveWidgets(), ctx), ctx))
+		} else {
+			widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", m.ActiveWidgets(), ctx))
+		}
+	}
+	right := offsetX + m.GetInnerContentWidth() + GetLayout().BorderWidth() - 2
+	x := right - widgets - total
+	regions := make([]HitRegion, 0, len(pieces))
+	for i, p := range pieces {
+		w := WidthWithoutZones(p)
+		regions = append(regions, HitRegion{
+			ID: m.TitleControlID(i), X: x, Y: TitleBarWidgetY(offsetY, m.Layout.LargeTitleBar),
+			Width: w, Height: 1, ZOrder: zOrder, Label: m.titleControls[i].Help,
+		})
+		x += w + sep
+	}
+	return regions
+}
+
+// SetSavedRadio names the radio row holding the saved value: while another
+// row is checked, it carries the changed marker. -1 turns this off.
+func (m *MenuModel) SetSavedRadio(index int) {
+	m.savedRadio = index + 1
+}
+
+// savedRadioTag returns the saved radio row's tag when another row is
+// checked, else "".
+func (m *MenuModel) savedRadioTag() string {
+	saved := m.savedRadio - 1
+	if saved < 0 || saved >= len(m.items) || m.items[saved].Checked {
+		return ""
+	}
+	return m.items[saved].Tag
 }
 
 // SetRowCache lets the list reuse each row's rendering across frames where

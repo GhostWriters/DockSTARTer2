@@ -80,7 +80,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 			"--theme-checkbox-brackets", "--theme-radio-brackets",
 			"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks",
-			"--theme-show-preview", "--theme-no-show-preview",
+			"--theme-show-preview", "--theme-no-show-preview", "--theme-advanced", "--theme-no-advanced", "--theme-pane-layout",
 			"--theme-extract", "--theme-extract-all", "--tint", "--tint-list", "--tint-table", "--theme-tint", "--theme-no-tint", "--ansi-override", "--theme-ansi-override", "--theme-no-ansi-override", "--app-template-extract", "--app-template-new", "--man",
 			"--env-appfiles":
 			// Skip validation for meta/config commands
@@ -330,7 +330,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
 				"--theme-checkbox-brackets", "--theme-radio-brackets",
 				"--theme-menu-brackets", "--theme-no-menu-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks",
-				"--theme-show-preview", "--theme-no-show-preview":
+				"--theme-show-preview", "--theme-no-show-preview", "--theme-advanced", "--theme-no-advanced", "--theme-pane-layout":
 				ranCommand = true
 				return commands.HandleThemeSettings(subCtx, &group)
 			case "-p", "--prune":

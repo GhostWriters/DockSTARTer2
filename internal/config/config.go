@@ -1393,6 +1393,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		{"Panel", "Panel", func(_ string, a Appearance) string { return varValue(a.Panel) }},
 		{"ShowPreview", "Show Preview", func(_ string, a Appearance) string { return boolToYesNo(a.ShowPreview) }},
 		{"PaneLayout", "Theme/Tint Layout", func(_ string, a Appearance) string { return varValue(a.PaneLayout) }},
+		{"Advanced", "Advanced Appearance", func(_ string, a Appearance) string { return boolToYesNo(a.Advanced) }},
 		{"Hyperlinks", "Hyperlinks", func(_ string, a Appearance) string { return varValue(a.Hyperlinks) }},
 		{"MarkdownHyperlinks", "Markdown Hyperlinks", func(_ string, a Appearance) string { return varValue(a.MarkdownHyperlinks) }},
 		{"RefreshRate", "Refresh Rate", func(_ string, a Appearance) string { return fmt.Sprintf("{{|Var|}}%dms{{[-]}}", a.RefreshRate) }},

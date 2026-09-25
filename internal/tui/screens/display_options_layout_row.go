@@ -546,9 +546,12 @@ func (r *appearanceLayoutRow) IsProcessing() bool {
 	return r.settings.IsProcessing() || (r.previewFits && r.preview.IsProcessing())
 }
 
-// WantsHorizontalKeys always reports false -- neither column consumes
-// Left/Right itself today (unlike a sinput text field).
-func (r *appearanceLayoutRow) WantsHorizontalKeys() bool { return false }
+// WantsHorizontalKeys reports whether the focused settings section
+// consumes Left/Right itself (e.g. the search box or a tab strip); the
+// preview never does.
+func (r *appearanceLayoutRow) WantsHorizontalKeys() bool {
+	return r.subFocus == 0 && r.settings.WantsHorizontalKeys()
+}
 
 func (r *appearanceLayoutRow) WantsAllMessages() bool {
 	if r.subFocus == 1 {
@@ -562,15 +565,14 @@ func (r *appearanceLayoutRow) WantsAllMessages() bool {
 func (r *appearanceLayoutRow) Focusable() bool { return true }
 
 // ComfortableMinHeight is the row's own floor for the theme list (mirroring
-// ContentColumn's minExpandableFloor) plus room for Load Theme Defaults and
-// a handful of Options rows before Options needs to start scrolling --
+// ContentColumn's minExpandableFloor) plus room for a handful of Options
+// rows before Options needs to start scrolling --
 // below this, the outer dialog flattens its button row (see
 // classic.ComfortableMinHeight) rather than squeezing this row further.
 func (r *appearanceLayoutRow) ComfortableMinHeight() int {
 	const themeListFloor = 8 // mirrors ContentColumn's minExpandableFloor
-	const loadDefaultsNatural = 3
 	const optionsComfortable = 6
-	return themeListFloor + loadDefaultsNatural + optionsComfortable
+	return themeListFloor + optionsComfortable
 }
 
 var _ displayengine.ComfortableMinHeight = (*appearanceLayoutRow)(nil)

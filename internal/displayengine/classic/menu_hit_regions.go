@@ -502,6 +502,10 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		regions = append(regions, TitleBarHitRegionsFor(m.id, offsetX, offsetY, dialogWidth, m.Layout.LargeTitleBar, m.ActiveWidgets(), baseZ)...)
 	}
 
+	if len(m.titleControls) > 0 {
+		regions = append(regions, m.titleControlRegions(offsetX, offsetY, baseZ+10)...)
+	}
+
 	// Extra hit regions from section helpers (e.g. sinput text area).
 	if m.ExtraHitRegions != nil {
 		regions = append(regions, m.ExtraHitRegions(offsetX, offsetY, baseZ)...)

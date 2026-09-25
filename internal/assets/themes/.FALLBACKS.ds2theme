@@ -208,6 +208,22 @@ LargeTitleAreaSuccess        = "{{|LargeTitleArea|}}"
 LargeTitleAreaQuestion       = "{{|LargeTitleArea|}}"
 LargeTitleFocusIndicator     = "{{|TitleFocusIndicator|}}"
 LargeTitleUnfocusedIndicator = "{{|TitleUnfocusedIndicator|}}"
+# Title bar controls: checkboxes, their labels and shortcut letters, and
+# dropdown values drawn in a title bar (e.g. "[x] Enabled", "Variant All▼").
+# Small title bars fall back to the list styles; large ones to the large
+# title bar's own colors.
+TitleControlCheckboxOn            = "{{|CheckboxOn|}}"
+TitleControlCheckboxOff           = "{{|CheckboxOff|}}"
+TitleControlCheckboxBrackets      = "{{|CheckboxBracketsOff|}}"
+TitleControlTag                   = "{{|Tag|}}"
+TitleControlTagKey                = "{{|TagKey|}}"
+TitleControlOptionValue           = "{{|OptionValue|}}"
+LargeTitleControlCheckboxOn       = "{{|LargeTitleControlCheckboxOff:::B|}}"
+LargeTitleControlCheckboxOff      = "{{[-]}}"
+LargeTitleControlCheckboxBrackets = "{{[-]}}"
+LargeTitleControlTag              = "{{[-]}}"
+LargeTitleControlTagKey           = "{{|LargeTitleControlTag:::B|}}"
+LargeTitleControlOptionValue      = "{{|LargeTitleControlTag|}}"
 
 ## Item list
 # Optional ItemList-variant tags that fall back to another tag when the

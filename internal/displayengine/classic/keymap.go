@@ -72,6 +72,25 @@ type KeyMap struct {
 	TabStripNext key.Binding
 	TabStripPrev key.Binding
 
+	// Turn the focused list's own enable checkbox on or off
+	ToggleEnabled key.Binding
+
+	// Turn a theme list's Load Defaults on or off
+	ToggleLoadDefaults key.Binding
+
+	// Show or hide a screen's advanced settings
+	ToggleAdvanced key.Binding
+
+	// A search's options: whole words or partial, and its variant and
+	// base pickers
+	SearchWholeWords key.Binding
+	SearchVariant    key.Binding
+	SearchBase       key.Binding
+
+	// Jump to the previous/next group of sections
+	SectionPrev key.Binding
+	SectionNext key.Binding
+
 	// Appearance Settings preview: show/focus, and back to settings/hide
 	PreviewForward key.Binding
 	PreviewBack    key.Binding
@@ -262,6 +281,38 @@ var Keys = KeyMap{
 	TabStripPrev: key.NewBinding(
 		key.WithKeys("ctrl+left", "alt+left", "ctrl+alt+left"),
 		key.WithHelp("alt+←", "prev tab"),
+	),
+	ToggleEnabled: key.NewBinding(
+		key.WithKeys("ctrl+e", "alt+e", "ctrl+alt+e"),
+		key.WithHelp("alt+e", "turn list on/off"),
+	),
+	ToggleLoadDefaults: key.NewBinding(
+		key.WithKeys("ctrl+d", "alt+d", "ctrl+alt+d"),
+		key.WithHelp("alt+d", "load theme defaults on/off"),
+	),
+	ToggleAdvanced: key.NewBinding(
+		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
+		key.WithHelp("alt+a", "show/hide advanced"),
+	),
+	SearchWholeWords: key.NewBinding(
+		key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"),
+		key.WithHelp("alt+o", "search whole words/partial"),
+	),
+	SearchVariant: key.NewBinding(
+		key.WithKeys("ctrl+r", "alt+r", "ctrl+alt+r"),
+		key.WithHelp("alt+r", "search variant"),
+	),
+	SearchBase: key.NewBinding(
+		key.WithKeys("ctrl+b", "alt+b", "ctrl+alt+b"),
+		key.WithHelp("alt+b", "search base"),
+	),
+	SectionPrev: key.NewBinding(
+		key.WithKeys("ctrl+up", "alt+up", "ctrl+alt+up"),
+		key.WithHelp("alt+↑", "previous section group"),
+	),
+	SectionNext: key.NewBinding(
+		key.WithKeys("ctrl+down", "alt+down", "ctrl+alt+down"),
+		key.WithHelp("alt+↓", "next section group"),
 	),
 	PreviewForward: key.NewBinding(
 		key.WithKeys("ctrl+pgdown", "alt+pgdown", "ctrl+alt+pgdown"),

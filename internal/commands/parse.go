@@ -270,7 +270,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 
 		case "-T", "--theme", "--theme-shadow-level", "--theme-border-color",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
-			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-tab-layout",
+			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-tab-layout", "--theme-pane-layout",
 			"--theme-spinner-speed", "--theme-refresh-rate",
 			"--theme-markdown-hyperlinks", "--theme-hyperlinks", "--config-panel":
 			// An optional value, then an optional connection-type list (see
@@ -292,7 +292,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
 			"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
 			"--theme-menu-brackets", "--theme-no-menu-brackets",
-			"--theme-show-preview", "--theme-no-show-preview":
+			"--theme-show-preview", "--theme-no-show-preview",
+			"--theme-advanced", "--theme-no-advanced":
 			// An optional connection-type list.
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])

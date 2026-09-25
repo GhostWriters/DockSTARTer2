@@ -5,6 +5,7 @@ import (
 
 	"DockSTARTer2/internal/displayengine"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -157,3 +158,81 @@ func (f *tabFrameSection) HelpText() string {
 	}
 	return ""
 }
+
+// tabStripSection is a tab frame's top edge as its own section and Tab stop:
+// it draws the frame's top border with the tab strip, and while focused
+// Left/Right move to the previous/next tab. A click on a tab does the same.
+// onSwitch is called with the tab to show.
+type tabStripSection struct {
+	frame    *tabFrame
+	width    int
+	focused  bool
+	onSwitch func(tab int) tea.Cmd
+}
+
+var _ displayengine.Content = (*tabStripSection)(nil)
+
+func newTabStripSection(frame *tabFrame, onSwitch func(tab int) tea.Cmd) *tabStripSection {
+	s := &tabStripSection{frame: frame, onSwitch: onSwitch}
+	frame.strip.ActiveFocus = func() bool { return s.focused }
+	return s
+}
+
+func (s *tabStripSection) SectionHeight(int) int                { return 1 }
+func (s *tabStripSection) SectionNaturalWidth(maxWidth int) int { return maxWidth }
+func (s *tabStripSection) SetSize(width, _ int)                 { s.width = width }
+func (s *tabStripSection) Height() int                          { return 1 }
+
+func (s *tabStripSection) ViewString() string {
+	ctx := displayengine.GetActiveContext()
+	contentWidth := max(s.width-2, 1)
+	focused := s.focused || (s.frame.focused != nil && s.frame.focused())
+	_, avail := s.frame.strip.TitlePlacement(contentWidth, ctx.SubmenuTitleAlign, nil, ctx)
+	box := displayengine.RenderBorderedBoxCtx(s.frame.strip.Render(avail, focused, ctx), "", contentWidth, 2,
+		focused, false, true, ctx.SubmenuTitleAlign, "RAW", ctx)
+	top, _, _ := strings.Cut(box, "\n")
+	return top
+}
+
+func (s *tabStripSection) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
+	ctx := displayengine.GetActiveContext()
+	x, avail := s.frame.strip.TitlePlacement(max(s.width-2, 1), ctx.SubmenuTitleAlign, nil, ctx)
+	return s.frame.strip.HitRegions(offsetX+x, offsetY, avail, displayengine.ZDialog+10, ctx, nil)
+}
+
+func (s *tabStripSection) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	strip := s.frame.strip
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		n := len(strip.Labels)
+		switch {
+		case key.Matches(msg, displayengine.Keys.Left) && n > 0:
+			return s, s.onSwitch((strip.Active - 1 + n) % n)
+		case key.Matches(msg, displayengine.Keys.Right) && n > 0:
+			return s, s.onSwitch((strip.Active + 1) % n)
+		}
+	case displayengine.LayerHitMsg:
+		if i, ok := strip.TabFromID(msg.ID); ok {
+			return s, s.onSwitch(i)
+		}
+		if d, ok := strip.ScrollFromID(msg.ID); ok {
+			strip.ScrollBy(d)
+		}
+	}
+	return s, nil
+}
+
+func (s *tabStripSection) View() tea.View                { return tea.View{Content: s.ViewString()} }
+func (s *tabStripSection) Init() tea.Cmd                 { return nil }
+func (s *tabStripSection) SetSubFocused(v bool) tea.Cmd  { s.focused = v; return nil }
+func (s *tabStripSection) SetIsDialog(bool)              {}
+func (s *tabStripSection) SetLockedByOthers(bool)        {}
+func (s *tabStripSection) IsVariableHeight() bool        { return false }
+func (s *tabStripSection) ID() string                    { return s.frame.strip.ID }
+func (s *tabStripSection) ScrollID() string              { return "" }
+func (s *tabStripSection) WantsHorizontalKeys() bool     { return true }
+func (s *tabStripSection) WantsAllMessages() bool        { return false }
+func (s *tabStripSection) Focusable() bool               { return true }
+func (s *tabStripSection) AbsorbMessage(tea.Msg) tea.Cmd { return nil }
+func (s *tabStripSection) IsProcessing() bool            { return false }
+func (s *tabStripSection) MatchesID(msgID string) bool   { return s.frame.strip.OwnsID(msgID) }

@@ -29,9 +29,9 @@ func shape(list []displayengine.MenuItem) []string {
 	return out
 }
 
-func TestGroupedItemsSingleShortGroupHasNoDividers(t *testing.T) {
+func TestGroupedItemsSingleShortGroupIsLabeled(t *testing.T) {
 	got := shape(groupedItems([]listGroup{{Label: "Bundled", Items: items("Alpha", "Beta")}, {Label: "User"}}))
-	if fmt.Sprint(got) != "[Alpha Beta]" {
+	if fmt.Sprint(got) != "[--Bundled Alpha Beta]" {
 		t.Errorf("got %v", got)
 	}
 }
@@ -55,7 +55,7 @@ func TestGroupedItemsLetterDividersOnlyWhenLong(t *testing.T) {
 	got := groupedItems([]listGroup{{Label: "Repo", Items: items(tags...)}})
 	dividers := 0
 	for i, it := range got {
-		if !it.IsSeparator {
+		if !it.IsSeparator || it.Tag != "" {
 			continue
 		}
 		dividers++
@@ -69,7 +69,7 @@ func TestGroupedItemsLetterDividersOnlyWhenLong(t *testing.T) {
 
 	short := groupedItems([]listGroup{{Label: "Repo", Items: items(tags[:letterDividerMinItems]...)}})
 	for _, it := range short {
-		if it.IsSeparator {
+		if it.IsSeparator && it.Tag == "" {
 			t.Fatalf("a list of %d items got a letter divider", letterDividerMinItems)
 		}
 	}

@@ -95,7 +95,7 @@ func hitIDToPanelID(hitID string) string {
 
 	// 4. Panel IDs themselves
 	if effectiveID == displayengine.IDThemePanel || effectiveID == displayengine.IDOptionsPanel || effectiveID == displayengine.IDListPanel ||
-		effectiveID == displayengine.IDTintControlsPanel || effectiveID == displayengine.IDTintPanel ||
+		effectiveID == displayengine.IDOverridePanel || effectiveID == displayengine.IDTintPanel ||
 		effectiveID == displayengine.IDPanelViewport || effectiveID == displayengine.IDButtonPanel {
 		return effectiveID
 	}

@@ -71,10 +71,9 @@ const (
 	IDPanelResize             = classic.IDPanelResize
 	IDPanelViewport           = classic.IDPanelViewport
 	IDStatusBar               = classic.IDStatusBar
-	IDLoadDefaultsPanel       = classic.IDLoadDefaultsPanel
 	IDThemePanel              = classic.IDThemePanel
 	IDOptionsPanel            = classic.IDOptionsPanel
-	IDTintControlsPanel       = classic.IDTintControlsPanel
+	IDOverridePanel           = classic.IDOverridePanel
 	IDTintPanel               = classic.IDTintPanel
 	PaneLayoutMaximized       = classic.PaneLayoutMaximized
 	PaneLayoutSideBySide      = classic.PaneLayoutSideBySide
@@ -139,6 +138,9 @@ type (
 	ContentWrapper             = classic.ContentWrapper
 	TabStrip                   = classic.TabStrip
 	TabbedPanes                = classic.TabbedPanes
+	RepeatedStops              = classic.RepeatedStops
+	TitleControl               = classic.TitleControl
+	GroupJumper                = classic.GroupJumper
 	PaneLayoutMsg              = classic.PaneLayoutMsg
 	TabStripLayout             = classic.TabStripLayout
 	TagOverride                = classic.TagOverride
@@ -301,6 +303,7 @@ var (
 	NewContentRow                  = classic.NewContentRow
 	NewContentColumn               = classic.NewContentColumn
 	NewTabbedPanes                 = classic.NewTabbedPanes
+	NewRepeatedStops               = classic.NewRepeatedStops
 	StyleGeneration                = classic.StyleGeneration
 	NewContextMenuModel            = classic.NewContextMenuModel
 	NewHeaderModel                 = classic.NewHeaderModel

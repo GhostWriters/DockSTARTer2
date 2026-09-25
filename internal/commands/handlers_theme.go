@@ -185,8 +185,8 @@ func parseTabLayout(ctx context.Context, arg string) (string, error) {
 	case "maximized", "sidebyside", "stacked":
 		return strings.ToLower(arg), nil
 	}
-	logger.Error(ctx, "Invalid tab layout: %s (use maximized, sidebyside, or stacked)", arg)
-	return "", fmt.Errorf("invalid tab layout")
+	logger.Error(ctx, "Invalid layout: %s (use maximized, sidebyside, or stacked)", arg)
+	return "", fmt.Errorf("invalid layout")
 }
 
 func parseMarkdownHyperlinks(ctx context.Context, arg string) (string, error) {
@@ -224,6 +224,7 @@ var (
 	setSpinner        = func(a *config.Appearance, v bool) { a.Spinner = v }
 	setMenuBrackets   = func(a *config.Appearance, v bool) { a.MenuBrackets = v }
 	setShowPreview    = func(a *config.Appearance, v bool) { a.ShowPreview = v }
+	setAdvanced       = func(a *config.Appearance, v bool) { a.Advanced = v }
 )
 
 // themeToggles holds every per-connection-type on/off --theme-* command.
@@ -256,6 +257,8 @@ var themeToggles = map[string]themeToggle{
 	"--theme-no-menu-brackets":   {setMenuBrackets, false},
 	"--theme-show-preview":       {setShowPreview, true},
 	"--theme-no-show-preview":    {setShowPreview, false},
+	"--theme-advanced":           {setAdvanced, true},
+	"--theme-no-advanced":        {setAdvanced, false},
 }
 
 // themeValueSetting is one per-connection-type --theme-* command taking a
@@ -360,6 +363,9 @@ var themeValueSettings = map[string]themeValueSetting{
 		func(ctx context.Context, arg string) (string, error) { return parseBracketMode(ctx, arg, "radio") }),
 	"--theme-tab-layout": stringSetting("tab layout",
 		func(a *config.Appearance) *string { return &a.TabLayout },
+		parseTabLayout),
+	"--theme-pane-layout": stringSetting("Theme/Tint layout",
+		func(a *config.Appearance) *string { return &a.PaneLayout },
 		parseTabLayout),
 }
 

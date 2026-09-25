@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"os"
+	"strings"
 
 	"DockSTARTer2/internal/paths"
 )
@@ -58,11 +59,40 @@ func TintCatalog(ctx context.Context) ([]TintEntry, error) {
 // TintMatcher parses query the way --tint-list and --tint-table parse their
 // search argument and returns whether an entry matches it.
 func TintMatcher(query string) (func(TintEntry) bool, error) {
-	f, err := parseTintFilter(query)
+	return TintSearch{Query: query}.Matcher()
+}
+
+// TintSearch is a scheme search: Query as --tint-list parses it, narrowed
+// to Variant ("light" or "dark") and System ("base16" or "base24") when
+// set. Partial matches each term anywhere in a field rather than as whole
+// words.
+type TintSearch struct {
+	Query, Variant, System string
+	Partial                bool
+}
+
+// Matcher returns whether an entry matches the search.
+func (q TintSearch) Matcher() (func(TintEntry) bool, error) {
+	f, err := parseTintFilter(q.Query)
 	if err != nil {
 		return nil, err
 	}
+	if q.System != "" {
+		if f.System != "" && f.System != q.System {
+			return func(TintEntry) bool { return false }, nil
+		}
+		f.System = q.System
+	}
 	return func(e TintEntry) bool {
-		return f.matchesSystem(e.HasBase16, e.HasBase24) && f.matchesTerms(e.Slug, e.Name, e.Variant, e.Author)
+		if q.Variant != "" && !strings.EqualFold(e.Variant, q.Variant) {
+			return false
+		}
+		if !f.matchesSystem(e.HasBase16, e.HasBase24) {
+			return false
+		}
+		if q.Partial {
+			return f.containsTerms(e.Slug, e.Name, e.Variant, e.Author)
+		}
+		return f.matchesTerms(e.Slug, e.Name, e.Variant, e.Author)
 	}, nil
 }

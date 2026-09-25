@@ -139,15 +139,17 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 	// Rows are reused while nothing but other rows' focus has changed; none
 	// are cached while an item shows a processing spinner.
+	savedTag := m.savedRadioTag()
 	cacheRows := m.rowCacheEnabled && m.processingItemIdx < 0
 	if stamp := fmt.Sprint(m.itemsVersion, m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ctx.LineCharacters,
-		m.activeColumn, m.itemPaddingWidth, m.disabled, filter, maxTagLen, m.IsListActive()); stamp != m.rowCacheStamp || m.rowCache == nil {
+		m.activeColumn, m.itemPaddingWidth, m.disabled, filter, maxTagLen, m.IsListActive(), savedTag); stamp != m.rowCacheStamp || m.rowCache == nil {
 		m.rowCache = map[int]cachedRow{}
 		m.rowCacheStamp = stamp
 	}
 
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
+		item.Changed = item.Changed || (savedTag != "" && item.IsRadioButton && item.Tag == savedTag)
 		isAppSelect := m.id == "app-select"
 		isSelected := i == selectedVisibleIndex && m.IsListActive()
 
@@ -569,7 +571,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + cbExpand3 + nameSep
 			} else {
 				// Standard menus or Radio buttons: indicator followed by one space
-				prefixPadding = checkbox + neutralStyle.Render(" ")
+				// (the leading changed marker when the item is changed).
+				space := neutralStyle.Render(" ")
+				if item.Changed {
+					space = RenderChangedMarker(ctx)
+				}
+				prefixPadding = checkbox + space
 			}
 		}
 		prefixWidth = lipgloss.Width(GetPlainText(prefixPadding))
@@ -594,9 +601,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 			spinTagExtra += nameCloseWidth
 		}
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
-		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
+		padding := neutralStyle.Render(strutil.Repeat(" ", max(0, gapWidth)))
+		if item.Changed && gapWidth > 0 {
+			padding = RenderChangedMarker(ctx) + neutralStyle.Render(strutil.Repeat(" ", gapWidth-1))
+		}
 
-		firstLine := prefixPadding + tagStr + nameClose + neutralStyle.Render(paddingSpaces) + lines[0]
+		firstLine := prefixPadding + tagStr + nameClose + padding + lines[0]
 		indent := neutralStyle.Render(strutil.Repeat(" ", menuPrefixWidth+maxTagLen+minGap))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
@@ -612,6 +622,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 		sep := paddingStr
 		if isAppSelect || isProcessingItem || menuBracketsShown {
 			sep = ""
+		} else if item.Changed && prefixPadding == "" && m.itemPaddingWidth > 0 {
+			// No checkbox space to hold the leading changed marker: it takes
+			// the padding before the label instead.
+			sep = RenderChangedMarker(ctx) + neutralStyle.Render(strutil.Repeat(" ", m.itemPaddingWidth-1))
 		}
 		// Continuation lines always use the normal separator width so they align
 		// with the description column on line 0 (the spinner only affects line 0).

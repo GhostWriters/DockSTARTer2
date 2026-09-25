@@ -45,6 +45,14 @@ type TitleBarState struct {
 	Widgets               []WidgetDef // Ordered widget set; nil means defaultWidgets
 	SpinnerIndicator      string      // When non-empty, replaces left focus indicator with this spinner frame
 	SpinnerIndicatorRight string      // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
+	Changed               bool        // When true, the title carries the changed marker (see RenderMarkedTitleSegmentCtx)
+	// RightSegments are pre-rendered controls drawn at the right end of the
+	// top border, before any widgets, each separated by a stretch of the
+	// border line.
+	RightSegments []string
+	// LargeRightSegment renders RightSegments for the large title row, given
+	// that row's context (its area style as the dialog); nil joins them.
+	LargeRightSegment func(StyleContext) string
 }
 
 func (s TitleBarState) rightSpinner() string {
@@ -143,13 +151,16 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	titleSectionWidth := indWidth + titleWidth + indWidth
 
 	// Right widget — built from TitleBarState so large styles are always used in this path.
-	renderedWidget := ""
-	rightWidgetWidth := 0
+	renderedWidget := strings.Join(tbs.RightSegments, "")
+	if tbs.LargeRightSegment != nil {
+		renderedWidget = tbs.LargeRightSegment(titleCtx)
+	}
 	if tbs.Show {
 		rawWidget := buildLargeTitleBarWidgets(tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget, tbs.activeWidgets(), ctx)
-		renderedWidget = RenderThemeTextCtx(rawWidget, titleCtx)
-		rightWidgetWidth = lipgloss.Width(renderedWidget)
+		renderedWidget += RenderThemeTextCtx(rawWidget, titleCtx)
 	}
+	rightWidgetWidth := lipgloss.Width(renderedWidget)
+	hasRight := renderedWidget != ""
 
 	// Center the title in the full inner width; widget floats to the right.
 	innerWidth := actualWidth
@@ -162,7 +173,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 			leftPad = 0
 		}
 	}
-	if tbs.Show {
+	if hasRight {
 		rightPadEnd = 1
 		rightPadMid = innerWidth - leftPad - titleSectionWidth - rightWidgetWidth - rightPadEnd
 		if rightPadMid < 0 {
@@ -195,7 +206,7 @@ func renderLargeTitleRow(rawTitle string, actualWidth int, focused bool, showInd
 	inner.WriteString(renderedTitle)
 	inner.WriteString(indR)
 	inner.WriteString(pad(rightPadMid))
-	if tbs.Show {
+	if hasRight {
 		inner.WriteString(renderedWidget)
 		inner.WriteString(pad(rightPadEnd))
 	}
@@ -319,6 +330,13 @@ func RenderUniformBlockDialogCtx(title, content string, ctx StyleContext) string
 // Pass a second value to use a different frame for the right indicator (counter-clockwise effect).
 func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext, spinnerIndicator ...string) string {
 	return RenderMarkedTitleSegmentCtx(rawTitle, "", borderFocused, contentFocused, showIndicators, titleTag, ctx, spinnerIndicator...)
+}
+
+// RenderChangedMarker returns the changed marker styled like the panel's
+// changed indicator (PanelTitleChangedIndicator), for drawing in a border.
+func RenderChangedMarker(ctx StyleContext) string {
+	return ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground()).
+		Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+changedIndicatorChar(ctx.LineCharacters)+"{{[-]}}", ctx.Prefix))
 }
 
 // RenderMarkedTitleSegmentCtx is RenderTitleSegmentCtx with marker, when
@@ -601,16 +619,20 @@ func renderBorderedBoxCtxImpl(rawTitle, content string, contentWidth int, target
 				renderedSegment = rawTitle
 				titleSectionLen = WidthWithoutZones(rawTitle)
 			} else {
-				renderedSegment = RenderTitleSegmentCtx(rawTitle, focused, focused, showIndicators, titleTag, ctx, tbsState.SpinnerIndicator)
-				titleSectionLen = WidthOfTitleSegment(rawTitle, showIndicators, ctx)
+				marker := ""
+				if tbsState.Changed {
+					marker = changedIndicatorChar(ctx.LineCharacters)
+				}
+				renderedSegment = RenderMarkedTitleSegmentCtx(rawTitle, marker, focused, focused, showIndicators, titleTag, ctx, tbsState.SpinnerIndicator)
+				titleSectionLen = WidthOfTitleSegment(rawTitle, showIndicators, ctx) + 2*WidthWithoutZones(marker)
 			}
 			if titleSectionLen > actualWidth {
 				actualWidth = titleSectionLen
 			}
 			// Small titlebar: build small-style widgets from tbsState.
-			rightWidget := ""
+			rightWidget := strings.Join(tbsState.RightSegments, borderStyleLight.Render(border.Top))
 			if tbsState.Show {
-				rightWidget = BuildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.PressedWidget, tbsState.activeWidgets(), ctx)
+				rightWidget += BuildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.PressedWidget, tbsState.activeWidgets(), ctx)
 			}
 			rightWidgetWidth := WidthWithoutZones(rightWidget)
 			if rightWidget != "" {

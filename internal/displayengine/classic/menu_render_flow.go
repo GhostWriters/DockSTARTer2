@@ -39,8 +39,29 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 	var lines []string
 	var currentLine []string
+	var currentChanged []bool
 	currentLineWidth := 0
 	itemSpacing := FlowItemSpacing
+	neutral := lipgloss.NewStyle().Background(dialogBG)
+
+	// joinLine joins a row's items with the item gap; a changed item's
+	// trailing marker takes the gap's first space, or the row's spare
+	// width after its last item.
+	joinLine := func(items []string, changed []bool, width int) string {
+		var b strings.Builder
+		for k, it := range items {
+			b.WriteString(it)
+			switch {
+			case k < len(items)-1 && changed[k]:
+				b.WriteString(RenderChangedMarker(ctx) + neutral.Render(strutil.Repeat(" ", itemSpacing-1)))
+			case k < len(items)-1:
+				b.WriteString(strutil.Repeat(" ", itemSpacing))
+			case changed[k] && width < maxWidth:
+				b.WriteString(RenderChangedMarker(ctx))
+			}
+		}
+		return b.String()
+	}
 
 	for i, item := range m.items {
 		if item.IsSeparator {
@@ -73,7 +94,11 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 			// Flow/grid lists always keep their brackets, regardless of focus,
 			// but the color still follows real keyboard focus (isSelected).
 			content, bracket := checkboxStylePair(item.IsRadioButton, item.Checked, isSelected, isDisabled)
-			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, "always", content, bracket) + neutralStyle.Render(" ")
+			space := neutralStyle.Render(" ")
+			if item.Changed {
+				space = RenderChangedMarker(ctx)
+			}
+			prefix = renderCheckbox(item.IsRadioButton, item.Checked, ctx.LineCharacters, true, "always", content, bracket) + space
 		}
 
 		// Tag with first-letter shortcut
@@ -129,11 +154,16 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 		// For non-checkbox/non-radio items (e.g. dropdowns), append the value inline.
 		// Neutral space (dialogBG) breaks the selection background color in the gap only.
 		if !item.IsCheckbox && !item.IsRadioButton && item.Desc != "" {
+			// Neutral space breaks the tag background before the value color
+			// starts; the leading changed marker takes it when changed.
+			space := neutralStyle.Render(" ")
+			if item.Changed {
+				space = RenderChangedMarker(ctx)
+			}
 			if isSelected {
-				itemContent += neutralStyle.Render(" ") + ctx.OptionValueFocused.Render(GetPlainText(item.Desc))
+				itemContent += space + ctx.OptionValueFocused.Render(GetPlainText(item.Desc))
 			} else {
-				// Neutral space breaks the tag background before the value color starts.
-				itemContent += neutralStyle.Render(" ") + RenderThemeText(item.Desc, neutralStyle)
+				itemContent += space + RenderThemeText(item.Desc, neutralStyle)
 			}
 		}
 
@@ -145,11 +175,13 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 		// Check if we need to wrap
 		if currentLineWidth > 0 && currentLineWidth+itemSpacing+itemWidth > maxWidth {
-			lines = append(lines, strings.Join(currentLine, strutil.Repeat(" ", itemSpacing)))
+			lines = append(lines, joinLine(currentLine, currentChanged, currentLineWidth))
 			currentLine = []string{itemContent}
+			currentChanged = []bool{item.Changed}
 			currentLineWidth = itemWidth
 		} else {
 			currentLine = append(currentLine, itemContent)
+			currentChanged = append(currentChanged, item.Changed)
 			if currentLineWidth > 0 {
 				currentLineWidth += itemSpacing
 			}
@@ -159,7 +191,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 
 	// Add final line
 	if len(currentLine) > 0 {
-		lines = append(lines, strings.Join(currentLine, strutil.Repeat(" ", itemSpacing)))
+		lines = append(lines, joinLine(currentLine, currentChanged, currentLineWidth))
 	}
 
 	// Clip to viewport when maxFlowRows is set -- same windowing helper

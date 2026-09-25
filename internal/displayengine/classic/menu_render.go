@@ -405,6 +405,7 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 	tbs := m.State()
 	tbs.Show = m.title != "" && (!m.subMenuMode || m.submenuWidgets)
+	tbs.Changed = m.titleChanged != nil && m.titleChanged()
 	if m.titleSpinnerIndicator != nil {
 		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinnerIndicator()
 	} else if m.loadingText != "" {
@@ -412,6 +413,10 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 	lineBackgrounds := m.sectionLineBackgrounds
 	m.sectionLineBackgrounds = nil
+	tbs.RightSegments = m.titleControlPieces(ctx, false)
+	if len(tbs.RightSegments) > 0 {
+		tbs.LargeRightSegment = m.largeTitleControlsSegment
+	}
 	rendered := renderBorderedBoxCtxImpl(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, lineBackgrounds, tbs)
 	if m.bottomBorderLabel != "" {
 		lines := strings.Split(rendered, "\n")

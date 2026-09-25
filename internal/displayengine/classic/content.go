@@ -107,6 +107,16 @@ type SubFocusable interface {
 	Items() []Content
 }
 
+// GroupJumper is a SubFocusable whose Tab stops form groups (e.g. a
+// column's sections, or a TabbedPanes' panes) that Ctrl+Up/Down jump
+// between.
+type GroupJumper interface {
+	// GroupStop returns the first Tab stop of the group after (dir > 0) or
+	// before (dir < 0) the one holding stop from; from may be -1 or
+	// NumTabStops() to enter from before the first or after the last.
+	GroupStop(from, dir int) (int, bool)
+}
+
 var (
 	_ SubFocusable = (*ContentRow)(nil)
 	_ SubFocusable = (*ContentColumn)(nil)

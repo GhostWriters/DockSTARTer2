@@ -19,17 +19,23 @@ import (
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/components/sinput"
 )
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
 type DisplayOptionsScreen struct {
-	loadDefaultsMenu *displayengine.MenuModel
-	themeMenu        *displayengine.MenuModel
-	optionsMenu      *displayengine.MenuModel // the shown connection type's options
-	tintControlsMenu *displayengine.MenuModel // Tint pane: element choice and on/off switches
-	tintMenu         *displayengine.MenuModel // Tint pane scheme list
-	panes            *displayengine.TabbedPanes
-	isRoot           bool // true when launched directly via -M appearance; hides Back button
+	themeMenu            *displayengine.MenuModel
+	optionsMenu          *displayengine.MenuModel // the shown connection type's options
+	tintMenu             *displayengine.MenuModel // Tint pane scheme list
+	tintSearchMenu       *displayengine.MenuModel // Tint pane scheme search box
+	tintSearchInput      *sinput.Model
+	tintFrame            *tabFrame
+	tintStripSection     *tabStripSection
+	overrideMenu         *displayengine.MenuModel // Overrides pane color slot list
+	overrideFrame        *tabFrame
+	overrideStripSection *tabStripSection
+	panes                *displayengine.TabbedPanes
+	isRoot               bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
 	themes       []theme.ThemeMetadata
@@ -82,9 +88,21 @@ type DisplayOptionsScreen struct {
 	tabs  *displayengine.TabStrip
 	frame *tabFrame
 
+	// advanced shows the connection-type tabs; otherwise only the session's
+	// own settings show. Starts from the Advanced option, and the title bar
+	// checkbox (Ctrl+A) changes it for this visit only.
+	advanced bool
+
 	// tintElement is the tint element ("menu", "programbox", "cli") the Tint
 	// pane shows; tintCatalog the schemes it offers.
-	tintElement     string
+	tintElement string
+	tintQuery   string // scheme search text
+	// tintPartial matches the search's terms anywhere in a word rather
+	// than as whole words; tintVariant and tintSystem narrow it to light
+	// or dark and to base16 or base24 schemes ("" for all).
+	tintPartial     bool
+	tintVariant     string
+	tintSystem      string
 	tintCatalog     []commands.TintEntry
 	tintDownloading bool
 
@@ -136,6 +154,7 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 		themeFileCache:    make(map[string]theme.ThemeFile),
 		loadThemeDefaults: true,
 		tintElement:       "menu",
+		advanced:          cfg.Appearance.ForConnType(connType).Advanced,
 		previewViewport:   viewport.New(),
 		// Must match mockupMenu's own ID in buildPreviewSection exactly --
 		// MatchesID checks msgID.Contains(m.ID()), so the scrollbar's hit
@@ -255,7 +274,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetHelpItemPrefix("Theme")
 	s.themeMenu.SetRowCache(true)
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
-	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options.")
+	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options. With Load Defaults checked (click it, or Ctrl+D), moving to a theme also stages its own suggested options.")
 	s.themeMenu.SetSubMenuMode(true)
 	s.themeMenu.SetVariableHeight(true)
 	s.themeMenu.SetIsDialog(false) // Part of a screen, not a modal
@@ -264,31 +283,8 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetShowLockGutter(false)
 	s.themeMenu.SetNoLeftMargin(true)
 
-	// 2. Load Theme Defaults Menu (own section, above the theme list, since
-	// toggling it affects how focusing a theme below behaves)
-	loadDefaultsItems := []displayengine.MenuItem{
-		{
-			Tag:        "Load Theme Defaults",
-			Desc:       "Stage a theme's suggested options when focused",
-			Help:       "When on, browsing themes stages that theme's own suggested options below (Space to toggle)",
-			IsCheckbox: true,
-			Checked:    s.loadThemeDefaults,
-			Selectable: true,
-			SpaceAction: func() tea.Msg {
-				return toggleLoadThemeDefaultsMsg{}
-			},
-		},
-	}
-	loadDefaultsMenu := displayengine.NewMenuModel(displayengine.IDLoadDefaultsPanel, "", "", loadDefaultsItems)
-	s.loadDefaultsMenu = loadDefaultsMenu
-	s.loadDefaultsMenu.SetHelpItemPrefix("Option")
-	s.loadDefaultsMenu.SetHelpPageText("Controls whether focusing a theme below stages that theme's own suggested options.")
-	s.loadDefaultsMenu.SetSubMenuMode(true)
-	s.loadDefaultsMenu.SetIsDialog(false)
-	s.loadDefaultsMenu.SetButtons([]displayengine.ButtonDef{})
-	s.loadDefaultsMenu.SetFlowMode(true)
-	s.loadDefaultsMenu.SetMaximized(true)
-	s.loadDefaultsMenu.SetShowLockGutter(false)
+	// Load Defaults: whether focusing a theme stages its suggested options.
+	s.themeMenu.SetTitleCheckbox("Load Defaults", 'd', func() bool { return s.loadThemeDefaults }, nil)
 
 	// 3. Options Menu
 	// Grouped: visual toggles, then brackets, then title alignment, then performance.
@@ -377,6 +373,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 			Checked:     s.config.Appearance.Ptr(s.editType).ShowPreview,
 			Selectable:  true,
 			SpaceAction: s.toggleShowPreview(),
+		},
+		{
+			Tag:         "Advanced Appearance",
+			Desc:        "Start with the connection-type and element tabs shown",
+			Help:        "Show the Local / SSH Server / Web Server tabs and the ProgramBox/CLI tint tabs when this screen opens (Space to toggle; Ctrl+A shows or hides them for now)",
+			IsCheckbox:  true,
+			Checked:     s.config.Appearance.Ptr(s.editType).Advanced,
+			Selectable:  true,
+			SpaceAction: s.toggleAdvancedOption(),
 		},
 		{
 			Tag:  "Theme/Tint Layout",
@@ -526,6 +531,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
+	outerMenu.SetTitleCheckbox("Advanced", 'a', func() bool { return s.advanced }, nil)
 	// Title-bar refresh icon mirrors the Reset button, matching the tabbed
 	// vars editor's use of the same widget for its own reload action. Extra
 	// widgets go before Help/Close, which stay rightmost by convention (see
@@ -550,16 +556,32 @@ func (s *DisplayOptionsScreen) initMenus() {
 		layout, shown = s.panes.Layout(), s.panes.Active()
 	}
 	s.buildTintMenus()
-	s.panes = displayengine.NewTabbedPanes("appearance_panes", []string{"Theme", "Tint"},
+	s.panes = displayengine.NewTabbedPanes("appearance_panes", []string{"Theme", "Tint", "Overrides"},
 		[]*displayengine.ContentColumn{
-			displayengine.NewContentColumn(loadDefaultsMenu, themeMenu),
-			displayengine.NewContentColumn(s.tintControlsMenu, s.tintMenu),
+			displayengine.NewContentColumn(themeMenu),
+			s.tintPaneColumn(),
+			s.overridePaneColumn(),
 		}, layout)
 	s.panes.Strip.Active = shown
-	settingsColumn := displayengine.NewContentColumn(
-		newTabFrameSection(s.panes, s.frame, true, false),
-		newTabFrameSection(optionsMenu, s.frame, false, true),
-	)
+	s.panes.Changed = func(pane int) bool {
+		switch pane {
+		case 0:
+			return s.themeChanged()
+		case 1:
+			return s.elementPartChanged("", tintPart)
+		}
+		return s.elementPartChanged("", overridePart)
+	}
+	themeMenu.SetTitleChanged(s.themeChanged)
+	optionsMenu.SetTitleChanged(s.optionsChanged)
+	// The connection-type tab frame only shows in advanced mode.
+	settingsColumn := displayengine.NewContentColumn(s.panes, optionsMenu)
+	if s.advanced {
+		settingsColumn = displayengine.NewContentColumn(
+			newTabFrameSection(s.panes, s.frame, true, false),
+			newTabFrameSection(optionsMenu, s.frame, false, true),
+		)
+	}
 	previewHidden := !s.config.Appearance.Ptr(s.connType).ShowPreview
 	if s.layoutRow != nil {
 		previewHidden = s.layoutRow.previewHidden
@@ -569,6 +591,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	outerMenu.AddContentSection(s.layoutRow)
 	s.outerMenu = outerMenu
 	s.refreshPreviewTint()
+	s.refreshChangeMarkers()
 }
 
 // refreshPreviewTint registers the shown tab's staged Menu tint under
@@ -582,20 +605,23 @@ func (s *DisplayOptionsScreen) refreshPreviewTint() {
 	tui.RegisterTintKey(context.Background(), s.previewTintKey, el)
 }
 
-// focusedSettingsMenu returns whichever of loadDefaultsMenu/themeMenu/
-// optionsMenu currently holds section-internal focus, or nil when focus is
+// focusedSettingsMenu returns whichever settings menu currently holds section-internal focus, or nil when focus is
 // elsewhere (buttons, or the preview side once it's a real Tab stop) --
 // outerMenu/layoutRow track focus generically now (GetFocusedSection/
 // GetFocusedItem, and the row's own subFocus/settings.SubFocusIndex), so
 // this just reads that state instead of a separate parallel one.
 func (s *DisplayOptionsScreen) focusedSettingsMenu() *displayengine.MenuModel {
-	if s.outerMenu == nil || s.layoutRow == nil {
+	m, _ := s.focusedSettingsLeaf().(*displayengine.MenuModel)
+	return m
+}
+
+// focusedSettingsLeaf returns the settings section holding focus (looking
+// through wrapper layers), or nil when focus is elsewhere.
+func (s *DisplayOptionsScreen) focusedSettingsLeaf() displayengine.Content {
+	if s.outerMenu == nil || s.layoutRow == nil || s.layoutRow.subFocus == 1 {
 		return nil
 	}
 	if s.outerMenu.GetFocusedItem() != displayengine.FocusList || s.outerMenu.GetFocusedSection() != 0 {
-		return nil
-	}
-	if s.layoutRow.subFocus == 1 {
 		return nil
 	}
 	leaves := s.layoutRow.settings.Items()
@@ -605,21 +631,35 @@ func (s *DisplayOptionsScreen) focusedSettingsMenu() *displayengine.MenuModel {
 	}
 	c := leaves[i]
 	for {
-		if m, ok := c.(*displayengine.MenuModel); ok {
-			return m
-		}
 		w, ok := c.(displayengine.ContentWrapper)
 		if !ok {
-			return nil
+			return c
 		}
 		c = w.Unwrap()
 	}
 }
 
+// jumpSectionGroup moves focus to the first section of the previous (-1) or
+// next (1) group: the Theme pane, the Tint pane, or Options.
+func (s *DisplayOptionsScreen) jumpSectionGroup(dir int) tea.Cmd {
+	if s.focusedSettingsLeaf() == nil {
+		return nil
+	}
+	col := s.layoutRow.settings
+	i, ok := col.GroupStop(col.SubFocusIndex(), dir)
+	if !ok {
+		return nil
+	}
+	col.SetSubFocusIndex(i)
+	cmd := s.layoutRow.SetSubFocused(true)
+	s.outerMenu.InvalidateCache()
+	return cmd
+}
+
 // frameFocused reports whether focus is inside the connection-type tab
 // frame, which holds every settings section.
 func (s *DisplayOptionsScreen) frameFocused() bool {
-	return s.focusedSettingsMenu() != nil
+	return s.focusedSettingsLeaf() != nil
 }
 
 // connTypeIndex returns connType's position in config.ConnTypes (0 if unknown).
@@ -647,6 +687,21 @@ func (s *DisplayOptionsScreen) switchTab(connType string, focusFrame bool) tea.C
 	if !s.unlocked && connType != s.connType {
 		return s.unlockTab(connType, focusFrame)
 	}
+	return s.rebuild(focusFrame, func() {
+		s.editType = connType
+		s.tabs.Active = connTypeIndex(connType)
+		s.currentTheme = s.baseConfig.Appearance.ForConnType(connType).Theme
+		s.previewTheme = s.config.Appearance.ForConnType(connType).Theme
+		s.themeChangedFields = nil
+		s.themeDefaults[s.previewTheme], _ = theme.Load(s.previewTheme, "Preview")
+		displayengine.ClearSemanticCachePrefix("Preview_")
+	})
+}
+
+// rebuild applies change, rebuilds the menus, and keeps the focused
+// section and rows (see switchTab); focusFrame moves focus into the
+// settings instead.
+func (s *DisplayOptionsScreen) rebuild(focusFrame bool, change func()) tea.Cmd {
 	focusIdx, rowFocus := 0, 0
 	if s.layoutRow != nil {
 		focusIdx, rowFocus = s.layoutRow.settings.SubFocusIndex(), s.layoutRow.subFocus
@@ -658,13 +713,7 @@ func (s *DisplayOptionsScreen) switchTab(connType string, focusFrame bool) tea.C
 	}
 	optionCursor := s.optionsMenu.Index()
 	focusedTheme := s.themeMenu.SelectedItem()
-	s.editType = connType
-	s.tabs.Active = connTypeIndex(connType)
-	s.currentTheme = s.baseConfig.Appearance.ForConnType(connType).Theme
-	s.previewTheme = s.config.Appearance.ForConnType(connType).Theme
-	s.themeChangedFields = nil
-	s.themeDefaults[s.previewTheme], _ = theme.Load(s.previewTheme, "Preview")
-	displayengine.ClearSemanticCachePrefix("Preview_")
+	change()
 	s.initMenus()
 	// The options list is the same on every tab, so the same row stays
 	// focused. In the theme list, a cursor on the checked theme moves to the
@@ -709,8 +758,40 @@ func (s *DisplayOptionsScreen) focusFrame() tea.Cmd {
 	return s.layoutRow.SetSubFocused(true)
 }
 
+// toggleAdvanced shows or hides the connection-type and element tabs for
+// this visit; hiding them goes back to the session's own tab and the Menu
+// element.
+func (s *DisplayOptionsScreen) toggleAdvanced() tea.Cmd {
+	return s.rebuild(false, func() {
+		s.advanced = !s.advanced
+		if !s.advanced && s.editType != s.connType {
+			ct := s.connType
+			s.editType = ct
+			s.tabs.Active = connTypeIndex(ct)
+			s.currentTheme = s.baseConfig.Appearance.ForConnType(ct).Theme
+			s.previewTheme = s.config.Appearance.ForConnType(ct).Theme
+			s.themeChangedFields = nil
+			s.themeDefaults[s.previewTheme], _ = theme.Load(s.previewTheme, "Preview")
+			displayengine.ClearSemanticCachePrefix("Preview_")
+		}
+	})
+}
+
+// toggleAdvancedOption flips the shown tab's Advanced option (the default).
+func (s *DisplayOptionsScreen) toggleAdvancedOption() tea.Cmd {
+	return func() tea.Msg {
+		newState := !s.config.Appearance.Ptr(s.editType).Advanced
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+			cfg.Appearance.Ptr(s.editType).Advanced = newState
+		}}
+	}
+}
+
 // cycleTab moves to the previous (-1) or next (1) connection type's tab.
 func (s *DisplayOptionsScreen) cycleTab(delta int) tea.Cmd {
+	if !s.advanced {
+		return nil
+	}
 	n := len(config.ConnTypes)
 	return s.switchTab(config.ConnTypes[(connTypeIndex(s.editType)+delta+n)%n], false)
 }
@@ -1011,6 +1092,7 @@ func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, ge
 		}
 		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "left"), s.titleAlignAction(apply, "center")}
 		menu := displayengine.NewMenuModel(menuName, label, "Select alignment", items)
+		menu.SetSavedRadio(savedIndex([]string{"left"}, s.savedSetting(menuName), 1))
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked alignment."},
@@ -1039,6 +1121,7 @@ func (s *DisplayOptionsScreen) showBracketModeDropdown(menuName, label string, g
 		}
 		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "never"), s.titleAlignAction(apply, "selected"), s.titleAlignAction(apply, "always")}
 		menu := displayengine.NewMenuModel(menuName, label, "Select mode", items)
+		menu.SetSavedRadio(savedIndex([]string{"never", "selected", "always"}, s.savedSetting(menuName), 1))
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked mode."},
@@ -1068,6 +1151,7 @@ func (s *DisplayOptionsScreen) showMarkdownHyperlinksDropdown(menuName, label st
 		}
 		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "off"), s.titleAlignAction(apply, "inline"), s.titleAlignAction(apply, "auto")}
 		menu := displayengine.NewMenuModel(menuName, label, "Select mode", items)
+		menu.SetSavedRadio(savedIndex([]string{"off", "inline", "auto"}, s.savedSetting(menuName), 1))
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked mode."},
@@ -1097,6 +1181,7 @@ func (s *DisplayOptionsScreen) showTabLayoutDropdown(menuName, label string, get
 		}
 		applyFuncs := []tea.Cmd{s.titleAlignAction(apply, "maximized"), s.titleAlignAction(apply, "sidebyside"), s.titleAlignAction(apply, "stacked")}
 		menu := displayengine.NewMenuModel(menuName, label, "Select layout", items)
+		menu.SetSavedRadio(savedIndex([]string{"maximized", "sidebyside", "stacked"}, s.savedSetting(menuName), 0))
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(menuName))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked layout."},
@@ -1222,6 +1307,7 @@ func (s *DisplayOptionsScreen) showPanelDropdown() tea.Cmd {
 
 		title := config.ConnTypeLabel(editType) + " Panel Mode"
 		menu := displayengine.NewMenuModel("panel_dropdown", title, "Choose layout", items)
+		menu.SetSavedRadio(savedIndex([]string{"none", "log", "console", "system"}, s.savedSetting("panel"), -1))
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor("panel_dropdown"))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked layout."},
@@ -1285,6 +1371,7 @@ func (s *DisplayOptionsScreen) showShadowDropdown() tea.Cmd {
 			})
 		}
 		menu := displayengine.NewMenuModel("shadow_dropdown", "Shadow Level", "Select shadow fill pattern", items)
+		menu.SetSavedRadio(s.baseConfig.Appearance.ForConnType(s.editType).ShadowLevel)
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor("shadow_dropdown"))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked shadow level."},
@@ -1330,6 +1417,7 @@ func (s *DisplayOptionsScreen) showBorderColorDropdown() tea.Cmd {
 			})
 		}
 		menu := displayengine.NewMenuModel("border_dropdown", "Border Coloring", "Select which theme colors highlight borders", items)
+		menu.SetSavedRadio(s.baseConfig.Appearance.ForConnType(s.editType).BorderColor - 1)
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor("border_dropdown"))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked border coloring."},
@@ -1616,6 +1704,88 @@ func refreshRateNotice(connType string) string {
 	}
 }
 
+// themeChanged reports whether the shown tab's theme has an unapplied
+// change.
+func (s *DisplayOptionsScreen) themeChanged() bool {
+	return s.config.Appearance.ForConnType(s.editType).Theme != s.baseConfig.Appearance.ForConnType(s.editType).Theme
+}
+
+// appearanceFieldChanged reports whether the shown tab's config.Appearance
+// field has an unapplied change.
+func (s *DisplayOptionsScreen) appearanceFieldChanged(field string) bool {
+	if field == "" {
+		return false
+	}
+	staged := reflect.ValueOf(s.config.Appearance.ForConnType(s.editType)).FieldByName(field)
+	base := reflect.ValueOf(s.baseConfig.Appearance.ForConnType(s.editType)).FieldByName(field)
+	return staged.IsValid() && !reflect.DeepEqual(staged.Interface(), base.Interface())
+}
+
+// savedSetting returns the shown tab's saved value of the string setting
+// whose config key is key (e.g. "checkbox_brackets"), lowercased.
+func (s *DisplayOptionsScreen) savedSetting(key string) string {
+	v := reflect.ValueOf(s.baseConfig.Appearance.ForConnType(s.editType))
+	for i := range v.NumField() {
+		if tag, _, _ := strings.Cut(v.Type().Field(i).Tag.Get("toml"), ","); tag == key && v.Field(i).Kind() == reflect.String {
+			return strings.ToLower(v.Field(i).String())
+		}
+	}
+	return ""
+}
+
+// savedIndex returns saved's position in values, or fallback when absent.
+func savedIndex(values []string, saved string, fallback int) int {
+	for i, v := range values {
+		if v == saved {
+			return i
+		}
+	}
+	return fallback
+}
+
+// markThemeList marks the saved theme's row changed while another theme is
+// staged.
+func (s *DisplayOptionsScreen) markThemeList() {
+	if s.themeMenu == nil {
+		return
+	}
+	saved := s.baseConfig.Appearance.ForConnType(s.editType).Theme
+	changed := s.themeChanged()
+	items := s.themeMenu.GetItems()
+	dirty := false
+	for i := range items {
+		c := changed && !items[i].IsSeparator && itemConfigValue(items[i]) == saved
+		if items[i].Changed != c {
+			items[i].Changed, dirty = c, true
+		}
+	}
+	if dirty {
+		cursor := s.themeMenu.Index()
+		s.themeMenu.SetItems(items)
+		s.themeMenu.Select(cursor)
+	}
+}
+
+// refreshChangeMarkers updates every list's changed markers from the
+// staged and saved configs.
+func (s *DisplayOptionsScreen) refreshChangeMarkers() {
+	if s.optionsMenu != nil {
+		s.syncOptionsMenu()
+	}
+	s.markThemeList()
+	s.syncTintMenus()
+}
+
+// optionsChanged reports whether any of the shown tab's other settings has
+// an unapplied change.
+func (s *DisplayOptionsScreen) optionsChanged() bool {
+	staged := s.config.Appearance.ForConnType(s.editType)
+	base := s.baseConfig.Appearance.ForConnType(s.editType)
+	staged.Theme, base.Theme = "", ""
+	staged.AnsiColors, base.AnsiColors = config.AnsiColors{}, config.AnsiColors{}
+	return !reflect.DeepEqual(staged, base)
+}
+
 // unappliedTabs returns the connection types, other than the shown one,
 // with staged changes.
 func (s *DisplayOptionsScreen) unappliedTabs() []string {
@@ -1668,7 +1838,7 @@ func (s *DisplayOptionsScreen) TitleBarFocused() bool {
 }
 
 func (s *DisplayOptionsScreen) Init() tea.Cmd {
-	return tea.Batch(s.themeMenu.Init(), s.tintMenu.Init(), s.optionsMenu.Init())
+	return tea.Batch(s.themeMenu.Init(), s.tintMenu.Init(), s.optionsMenu.Init(), displayengine.SinputSectionInit())
 }
 
 func (s *DisplayOptionsScreen) AdvanceSpinners(now time.Time) bool {
