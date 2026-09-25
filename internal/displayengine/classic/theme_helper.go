@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"DockSTARTer2/internal/theme"
 	semstyle "github.com/GhostWriters/semstyle/lg"
@@ -14,10 +15,18 @@ import (
 var (
 	renderCache = make(map[string]string)
 	cacheMu     sync.RWMutex
+
+	// styleGeneration counts semantic cache clears, so a cached rendering
+	// can tell whether theme or tint styles changed since it was made.
+	styleGeneration atomic.Uint64
 )
+
+// StyleGeneration returns the current style generation (see styleGeneration).
+func StyleGeneration() uint64 { return styleGeneration.Load() }
 
 // ClearSemanticCache clears both the theme-level style cache and the TUI render cache.
 func ClearSemanticCache() {
+	styleGeneration.Add(1)
 	theme.ClearSemanticCache()
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
@@ -27,6 +36,7 @@ func ClearSemanticCache() {
 // ClearSemanticCachePrefix removes render cache and style cache entries whose key
 // contains the given prefix string.
 func ClearSemanticCachePrefix(prefix string) {
+	styleGeneration.Add(1)
 	theme.ClearSemanticCachePrefix(prefix)
 	cacheMu.Lock()
 	defer cacheMu.Unlock()

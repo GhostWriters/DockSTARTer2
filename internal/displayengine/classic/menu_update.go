@@ -758,6 +758,7 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 				// Update list.Model internal items to reflect changes immediately
 				m.list.SetItem(idx, item)
 			}
+			m.itemsVersion++
 			m.renderVersion++
 			m.InvalidateCache()
 
@@ -802,9 +803,16 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 
 // SetSize updates the menu dimensions and resizes the list
 func (m *MenuModel) SetSize(width, height int) {
+	// An unchanged size still rebuilds the view, but keeps the list memo
+	// (see renderVariableHeightList), whose key covers size and content --
+	// screens re-apply their size on every render.
+	if width != m.width || height != m.height {
+		m.InvalidateCache()
+	} else {
+		m.cacheValid = false
+	}
 	m.width = width
 	m.height = height
-	m.InvalidateCache()
 
 	// If in flow mode, calculate height based on content
 	if m.flowMode {
@@ -1220,6 +1228,36 @@ func (m *MenuModel) syncSelectionToViewport() {
 	}
 
 	maxIdx := len(m.items) - 1
+
+	// A variable-height list's ViewStartY counts rendered rows, not items:
+	// keep the cursor on an item that lies within the visible rows.
+	if m.variableHeight {
+		low, high := m.ViewStartY, m.ViewStartY+visible-1
+		idx := m.list.Index()
+		target := -1
+		if m.RowOffsetForIndex(idx) < low {
+			target = m.IndexForRowOffset(low)
+			if m.RowOffsetForIndex(target) < low && target < maxIdx {
+				target++
+			}
+		} else if m.RowOffsetForIndex(idx+1)-1 > high {
+			target = m.IndexForRowOffset(high)
+			if m.RowOffsetForIndex(target+1)-1 > high && target > m.IndexForRowOffset(low) {
+				target--
+			}
+		}
+		if target < 0 {
+			return
+		}
+		m.list.Select(min(max(target, 0), maxIdx))
+		for m.list.Index() < maxIdx && m.items[m.list.Index()].IsSeparator && target <= idx {
+			m.list.CursorDown()
+		}
+		for m.list.Index() > 0 && m.items[m.list.Index()].IsSeparator {
+			m.list.CursorUp()
+		}
+		return
+	}
 
 	// Range [low, high]
 	low := m.ViewStartY

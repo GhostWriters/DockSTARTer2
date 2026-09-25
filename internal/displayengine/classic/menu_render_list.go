@@ -1,6 +1,7 @@
 package classic
 
 import (
+	"fmt"
 	"strings"
 
 	"DockSTARTer2/internal/strutil"
@@ -37,8 +38,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
 	layout := GetLayout()
 
-	// Memoization Check
+	// Memoization Check. Skipped while an item shows a processing spinner,
+	// whose frame isn't part of the key.
 	if m.lastListView != "" &&
+		m.processingItemIdx < 0 &&
+		m.lastStyleGen == StyleGeneration() &&
+		m.lastScope == StylesScopeKey() &&
+		m.lastViewportHeight == m.Layout.ViewportHeight &&
 		m.lastWidth == m.width &&
 		m.lastHeight == m.height &&
 		m.lastIndex == m.list.Index() &&
@@ -131,6 +137,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 	var itemHeights []int
 	var itemMappings []int
 
+	// Rows are reused while nothing but other rows' focus has changed; none
+	// are cached while an item shows a processing spinner.
+	cacheRows := m.rowCacheEnabled && m.processingItemIdx < 0
+	if stamp := fmt.Sprint(m.itemsVersion, m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ctx.LineCharacters,
+		m.activeColumn, m.itemPaddingWidth, m.disabled, filter, maxTagLen, m.IsListActive()); stamp != m.rowCacheStamp || m.rowCache == nil {
+		m.rowCache = map[int]cachedRow{}
+		m.rowCacheStamp = stamp
+	}
+
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
 		isAppSelect := m.id == "app-select"
@@ -196,13 +211,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		if item.IsSeparator {
-			line := ""
+			// A labeled separator is a divider line with its label set in
+			// near the left end: "── Label ──────".
+			lineStyle := neutralStyle.PaddingLeft(0)
+			sepChar := GetStyles().SepChar
+			line := lineStyle.Render(strutil.Repeat(sepChar, listContentWidth))
 			if item.Tag != "" {
-				line = RenderThemeText(item.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
-			} else {
-				line = strutil.Repeat("─", listContentWidth)
+				label := GetPlainText(item.Tag)
+				lead := min(2, listContentWidth)
+				fill := max(listContentWidth-lead-2-lipgloss.Width(label), 0)
+				line = lineStyle.Render(strutil.Repeat(sepChar, lead) + " " + label + " " + strutil.Repeat(sepChar, fill))
 			}
-			renderedItems = append(renderedItems, neutralStyle.PaddingLeft(0).Render(line))
+			renderedItems = append(renderedItems, line)
 			itemHeights = append(itemHeights, 1)
 			itemMappings = append(itemMappings, i)
 			continue
@@ -219,6 +239,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 			rowStyle := neutralStyle.Width(maxWidth)
 			renderedItems = append(renderedItems, rowStyle.Render(line)+semstyle.CodeReset)
 			itemHeights = append(itemHeights, 1)
+			itemMappings = append(itemMappings, i)
+			continue
+		}
+
+		rowKey := cachedRowKey{selected: isSelected, parentOfSelected: isParentOfSelected, disabled: isDisabled}
+		if r, ok := m.rowCache[i]; cacheRows && ok && r.key == rowKey {
+			renderedItems = append(renderedItems, r.text)
+			itemHeights = append(itemHeights, r.height)
 			itemMappings = append(itemMappings, i)
 			continue
 		}
@@ -601,12 +629,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 		renderedItems = append(renderedItems, finalItem)
+		rowHeight := 1
 		if m.variableHeight {
-			itemHeights = append(itemHeights, len(lines))
-		} else {
-			itemHeights = append(itemHeights, 1)
+			rowHeight = len(lines)
 		}
+		itemHeights = append(itemHeights, rowHeight)
 		itemMappings = append(itemMappings, i)
+		if cacheRows {
+			m.rowCache[i] = cachedRow{key: rowKey, text: finalItem, height: rowHeight}
+		}
 	}
 
 	totalContentHeight := 0
@@ -726,9 +757,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		result := strings.Join(viewLines, "\n")
 		m.lastListView = result
 		m.lastHitRegions = newHitRegions
-		m.lastVersion = m.renderVersion
-		m.lastColumn = m.ActiveColumn()
-		m.lastListActive = m.IsListActive()
+		m.recordListMemo(ctx)
 		return result
 	}
 
@@ -877,11 +906,38 @@ func (m *MenuModel) renderVariableHeightList() string {
 	finalResult := strings.Join(viewLines, "\n")
 	m.lastListView = finalResult
 	m.lastHitRegions = newHitRegions
+	m.recordListMemo(ctx)
+	return finalResult
+}
+
+// cachedRowKey is the per-row state a cached row rendering depends on.
+type cachedRowKey struct {
+	selected, parentOfSelected, disabled bool
+}
+
+// cachedRow is one list row's cached rendering.
+type cachedRow struct {
+	key    cachedRowKey
+	text   string
+	height int
+}
+
+// recordListMemo records the state renderVariableHeightList's memo check
+// compares against, after a full render.
+func (m *MenuModel) recordListMemo(ctx StyleContext) {
+	m.lastWidth = m.width
+	m.lastHeight = m.height
+	m.lastIndex = m.list.Index()
+	m.lastFilter = m.list.FilterValue()
+	m.lastActive = m.IsActive()
+	m.lastListActive = m.IsListActive()
+	m.lastLineChars = ctx.LineCharacters
+	m.lastViewStartY = m.ViewStartY
 	m.lastVersion = m.renderVersion
 	m.lastColumn = m.ActiveColumn()
-	m.lastViewStartY = m.ViewStartY
-	m.lastListActive = m.IsListActive()
-	return finalResult
+	m.lastStyleGen = StyleGeneration()
+	m.lastScope = StylesScopeKey()
+	m.lastViewportHeight = m.Layout.ViewportHeight
 }
 
 // renderSubListSequence handles a contiguous sequence of sub-items by wrapping them in a border.

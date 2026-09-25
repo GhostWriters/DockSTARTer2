@@ -260,7 +260,21 @@ type MenuModel struct {
 	lastStateVersion int  // renderVersion snapshot when lastView was saved
 
 	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
-	lastListView    string
+	lastListView string
+	// lastStyleGen, lastScope, and lastViewportHeight complete
+	// renderVariableHeightList's memo key (see recordListMemo).
+	lastStyleGen       uint64
+	lastScope          string
+	lastViewportHeight int
+
+	// rowCache holds each list row's last rendering (see
+	// renderVariableHeightList), valid while rowCacheStamp matches; only
+	// used when rowCacheEnabled (see SetRowCache). itemsVersion counts the
+	// menu's own changes to its items.
+	rowCache        map[int]cachedRow
+	rowCacheStamp   string
+	rowCacheEnabled bool
+	itemsVersion    int
 	lastWidth       int
 	lastHeight      int
 	lastIndex       int
@@ -407,6 +421,7 @@ func (m *MenuModel) applyItemLocks() {
 		if item.IsDestructive && item.Locked != locked {
 			item.Locked = locked
 			m.items[i] = item
+			m.itemsVersion++
 			changed = true
 		}
 	}
@@ -1244,12 +1259,21 @@ func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth in
 	return res
 }
 
+// SetRowCache lets the list reuse each row's rendering across frames where
+// only focus moved. Only for menus whose items change solely through the
+// menu's own methods (SetItems, SetItem, toggling), never by editing
+// GetItems' slice in place.
+func (m *MenuModel) SetRowCache(enabled bool) {
+	m.rowCacheEnabled = enabled
+}
+
 func (m *MenuModel) SetItem(index int, item MenuItem) {
 	if index < 0 || index >= len(m.items) {
 		return
 	}
 	m.items[index] = item
 	m.list.SetItem(index, item)
+	m.itemsVersion++
 	m.renderVersion++
 	m.InvalidateCache()
 }
@@ -1315,6 +1339,7 @@ func (m *MenuModel) GetInnerContentWidth() int {
 // SetItems updates the menu items and refreshes the bubbles list
 func (m *MenuModel) SetItems(items []MenuItem) {
 	m.items = items
+	m.itemsVersion++
 
 	// Convert MenuItems to list.Items
 	listItems := make([]list.Item, len(items))
@@ -1396,6 +1421,7 @@ func (m *MenuModel) ToggleSelectedItem() {
 		}
 		// Update the list item too
 		m.list.SetItem(idx, m.items[idx])
+		m.itemsVersion++
 		m.renderVersion++
 		m.InvalidateCache()
 	}
