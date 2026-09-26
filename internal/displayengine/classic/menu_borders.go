@@ -137,7 +137,7 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, activeC
 	}
 
 	// With scroll percent: right side gets leftT + pct + rightT + 1×dash + BottomRight
-	pctLabel := labelStyle.Render(fmt.Sprintf("%d%%", int(scrollPct*100)))
+	pctLabel := labelStyle.Render(fmt.Sprintf("%3d%%", int(scrollPct*100)))
 	pctW := lipgloss.Width(pctLabel)
 	// right segment width: connector(1) + pct + connector(1) + dash(1) + corner(1)
 	rightSegW := 1 + pctW + 1 + 1 + 1

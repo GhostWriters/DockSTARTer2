@@ -485,7 +485,7 @@ func (s *ScrollbarDragState) ScrollOffset(mouseY, sbAbsTopY, maxOff int, info Sc
 // totalWidth is the full visual width of the bordered box including side border chars.
 // Only call this when a scrollbar is needed (sbInfo.Needed == true).
 func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused bool, ctx StyleContext) string {
-	scrollIndicator := ctx.TagKey.Bold(true).Render(fmt.Sprintf("%d%%", int(scrollPct*100)))
+	scrollIndicator := ctx.TagKey.Bold(true).Render(fmt.Sprintf("%3d%%", int(scrollPct*100)))
 
 	var border lipgloss.Border
 	if ctx.LineCharacters {

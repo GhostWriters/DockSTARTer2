@@ -316,7 +316,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	scrollLabel := ""
 	if editor.TotalDisplayLines() > editor.Height() {
-		scrollLabel = fmt.Sprintf("%d%%", int(editor.ScrollPercent()*100))
+		scrollLabel = fmt.Sprintf("%3d%%", int(editor.ScrollPercent()*100))
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {

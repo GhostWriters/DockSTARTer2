@@ -163,7 +163,7 @@ func (m PanelModel) ViewString() string {
 			lineChar +
 			"{{|" + dnTag + "|}}[" + dnGlyph + "]{{[-]}}"
 		pct := int(m.Sv.ScrollPercent() * 100)
-		rightTitle = fmt.Sprintf(" %d%% ", pct)
+		rightTitle = fmt.Sprintf(" %3d%% ", pct)
 		rightSuffix = RenderThemeText(iconStr, baseStyle)
 	}
 
