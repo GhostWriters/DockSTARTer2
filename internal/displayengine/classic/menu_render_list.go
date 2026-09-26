@@ -140,10 +140,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 	// Rows are reused by content while the list-wide settings below are
 	// unchanged; none are cached while an item shows a processing spinner.
 	savedTag := m.savedRadioTag()
+	// Any checkbox-like row gives every row a checkbox-width prefix.
+	hasAnyCheckboxes := false
+	for _, it := range visibleItems {
+		if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
+			hasAnyCheckboxes = true
+			break
+		}
+	}
 	cacheRows := !m.rowCacheOff && m.processingItemIdx < 0
 	if stamp := fmt.Sprint(m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ActiveAppearance(), ctx.LineCharacters,
 		m.activeColumn, m.itemPaddingWidth, m.showLockGutter, m.activityGutterWidth, m.disabled, filter, maxTagLen,
-		m.IsListActive(), savedTag); stamp != m.rowCacheStamp || m.rowCache == nil || len(m.rowCache) > rowCacheLimit {
+		m.IsListActive(), savedTag, hasAnyCheckboxes); stamp != m.rowCacheStamp || m.rowCache == nil || len(m.rowCache) > rowCacheLimit {
 		m.rowCache = map[string]cachedRow{}
 		m.rowCacheStamp = stamp
 	}
@@ -470,14 +478,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		// Prefix width calculation (Left of the Tag)
 		var gutterWidth int
-
-		hasAnyCheckboxes := false
-		for _, it := range visibleItems {
-			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
-				hasAnyCheckboxes = true
-				break
-			}
-		}
 
 		menuPrefixWidth := 0
 		if isAppSelect {
