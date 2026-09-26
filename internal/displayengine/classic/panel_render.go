@@ -59,11 +59,14 @@ func (m PanelModel) ViewString() string {
 		m.Sv.SetSize(m.width-ScrollbarGutterWidth, vpH)
 	}
 
+	// The content area uses the output tint; the borders and scrollbar keep
+	// the session's own.
+	output := OutputConsoleStyle()
 	m.Sv.SetStyle(lipgloss.NewStyle().
-		Background(ctx.Console.GetBackground()).
-		Foreground(ctx.Console.GetForeground()))
+		Background(output.GetBackground()).
+		Foreground(output.GetForeground()))
 
-	vpView := MaintainBackground(m.Sv.View(), ctx.Console)
+	vpView := MaintainBackground(m.Sv.View(), output)
 	vpView = ApplyScrollbarColumn(vpView, m.Sv.TotalLineCount(), vpH, m.Sv.YOffset(), ctx.LineCharacters, ctx)
 
 	// Input box — bordered with submenu styling.

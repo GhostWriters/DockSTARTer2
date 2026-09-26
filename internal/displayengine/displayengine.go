@@ -314,6 +314,7 @@ var (
 	NewPasswordSinputSection       = classic.NewPasswordSinputSection
 	NewPlainTextSection            = classic.NewPlainTextSection
 	NewSinputSection               = classic.NewSinputSection
+	OutputConsoleStyle             = classic.OutputConsoleStyle
 	OutputContentWidth             = classic.OutputContentWidth
 	Overlay                        = classic.Overlay
 	PadRight                       = classic.PadRight

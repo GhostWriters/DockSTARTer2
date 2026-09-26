@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // newStreamOutputSection builds a borderless, variable-height
@@ -50,11 +51,17 @@ func newStreamOutputSection(id string, box *ProgramBoxModel) *displayengine.Menu
 
 	m.ContentRenderer = func(contentWidth int) string {
 		ctx := displayengine.GetActiveContext()
+		// The content area uses the output tint; the border and scrollbar
+		// keep the session's own.
+		output := displayengine.OutputConsoleStyle()
+		box.sv.SetStyle(lipgloss.NewStyle().
+			Background(output.GetBackground()).
+			Foreground(output.GetForeground()))
 
-		viewportContent := displayengine.MaintainBackground(box.sv.View(), ctx.Console)
+		viewportContent := displayengine.MaintainBackground(box.sv.View(), output)
 		viewportContent = displayengine.ApplyScrollbar(&box.Scroll, viewportContent, box.sv.TotalLineCount(), box.sv.Height(), box.sv.YOffset(), ctx.LineCharacters, ctx)
 
-		viewportStyle := ctx.Console.Padding(0, 0)
+		viewportStyle := output.Padding(0, 0)
 		viewportStyle = displayengine.ApplyInnerBorderCtx(viewportStyle, box.focused, ctx)
 		viewportStyle = viewportStyle.BorderBottom(false)
 

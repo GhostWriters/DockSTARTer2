@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/tui/components/streamvp"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 const (
@@ -162,6 +163,18 @@ func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, chan
 		return ch, ch, true
 	}
 	return "", "", false
+}
+
+// OutputConsoleStyle returns the Console style under the "programbox"
+// element's tint (see console.ActivateTintForElement): the text and
+// background of command output's content area, in the log panel and a
+// ProgramBox, whose borders keep the session's own tint.
+func OutputConsoleStyle() lipgloss.Style {
+	var s lipgloss.Style
+	console.ActivateTintForElement("programbox", func() {
+		s = GetStyles().Console
+	})
+	return s
 }
 
 // panelRenderFn returns the render function for streamvp line rendering.

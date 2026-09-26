@@ -125,11 +125,11 @@ type SetProgramBoxHeaderMsg struct {
 
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
-	styles := displayengine.GetStyles()
+	output := displayengine.OutputConsoleStyle()
 	sv := streamvp.New()
 	sv.SetStyle(lipgloss.NewStyle().
-		Background(styles.Console.GetBackground()).
-		Foreground(styles.Console.GetForeground()))
+		Background(output.GetBackground()).
+		Foreground(output.GetForeground()))
 
 	m := &ProgramBoxModel{
 		title:           title,
