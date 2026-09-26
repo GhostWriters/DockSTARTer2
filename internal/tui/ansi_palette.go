@@ -79,10 +79,12 @@ func RegisterTintKey(ctx context.Context, key string, element config.AnsiElement
 	if !element.OverrideEnabled {
 		element = withoutExplicitFields(element)
 	}
+	variant := ""
 	if element.TintEnabled {
-		element = resolveAnsiColors(ctx, element)
+		element, variant = resolveAnsiColors(ctx, element)
 	}
 	palette, empty := colorsToPalette(element)
+	palette.Variant = variant
 	if empty {
 		semstyle.UnregisterTint(key)
 	} else {
@@ -238,6 +240,9 @@ func warnTintOnce(ctx context.Context, ref, format string, args ...any) {
 
 // resolveAnsiColors layers colors' own explicit fields over its configured
 // Tint (if set), so an individually-set field always wins over the scheme.
+// It also returns the scheme's variant ("dark" or "light", empty when the
+// scheme doesn't say), which orders the palette's derived backgrounds (see
+// semstyle.Palette.Variant).
 //
 // Any failure to load or parse it warns (once per ref per process run, see
 // warnTintOnce) and falls back to colors' own explicit fields (or no tint
@@ -247,19 +252,20 @@ func warnTintOnce(ctx context.Context, ref, format string, args ...any) {
 // otherwise changed out from under an existing, once-valid configuration,
 // not an unset default (colors.Tint == "" is handled separately, above,
 // and never reaches this far).
-func resolveAnsiColors(ctx context.Context, colors config.AnsiElementColors) config.AnsiElementColors {
+func resolveAnsiColors(ctx context.Context, colors config.AnsiElementColors) (config.AnsiElementColors, string) {
 	if colors.Tint == "" {
-		return colors
+		return colors, ""
 	}
 	data, err := resolveTintRef(ctx, colors.Tint)
 	if err != nil {
 		warnTintOnce(ctx, colors.Tint, "ansi_palette: could not load tint %q: %v", colors.Tint, err)
-		return colors
+		return colors, ""
 	}
 	scheme, err := config.ParseBase16Scheme(data)
 	if err != nil {
 		warnTintOnce(ctx, colors.Tint, "ansi_palette: could not parse tint %q: %v", colors.Tint, err)
-		return colors
+		return colors, ""
 	}
-	return colors.WithDefaults(scheme)
+	meta, _ := config.ParseBase16SchemeMeta(data)
+	return colors.WithDefaults(scheme), meta.Variant
 }

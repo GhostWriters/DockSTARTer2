@@ -11,7 +11,7 @@ require (
 	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.4
 	github.com/Gaurav-Gosain/sip v0.8.1
-	github.com/GhostWriters/semstyle v0.3.1
+	github.com/GhostWriters/semstyle v0.3.2
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
