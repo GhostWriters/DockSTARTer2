@@ -14,22 +14,19 @@ direct_suffix   = "]}}"
 # styling.md) rather than a literal ANSI color name -- both spellings are
 # the same color (see semstyle's ansiColorIndex), base0X just reads the
 # same as the scheme file itself. Chosen per that doc's own documented
-# usage guidance for each slot:
+# usage guidance for each slot. Meant for use with a tint; without one,
+# the eight slots with no ANSI color (base01/02/04/06/09/0F/10/11) use the
+# ANSI color they're a variant of.
 primary   = "base05" # Default Foreground, Caret, Delimiters, Operators
 secondary = "base00" # Default Background
 muted     = "base03" # Comments, Invisibles, Line Highlighting; "Inactive elements"
+subtle    = "base04" # Dark Foreground; "Menu elements" option text
+selection = "base02" # Selection Background; "Selected elements"
+darkest   = "base11" # The Darkest Background (base24)
 highlight = "base07" # The Lightest Foreground
 accent    = "base0d" # Functions, Methods, Attribute IDs, Headings; also the documented "Focus elements" color
 success   = "base0b" # Strings, Diff Inserted -- green, conventional success (not itself a base24-documented category)
-# warning: base0F is base24's own literal "Warning elements" slot ("used
-# for elements that provide a warning"), but it isn't one of the 16
-# tint-substitutable ANSI slots (see semstyle.Palette) -- text using it
-# would show the scheme's own fixed color even while every other slot here
-# re-tints live. base0A (yellow) is used instead so warning stays
-# consistent with the rest of this theme's whole purpose (working with
-# tinted-theming color *sets*, i.e. live ANSI tints) -- swap to base0f if
-# you'd rather have literal spec fidelity for this one slot than tinting.
-warning   = "base0a" # Classes, Markup Bold, Search Text Background -- yellow
+warning   = "base0f" # "Warning elements"
 error     = "base08" # Variables, Diff Deleted; also the documented "Alert elements" color
 info      = "base0c" # Support, Regular Expressions, Escape Characters, Markup Quotes -- cyan
 special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed -- magenta
@@ -46,12 +43,12 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
   Dialog     = "{{[$primary:$secondary]}}"
   Border     = "{{[$primary:$secondary]}}"
   Border2    = "{{[$muted:$secondary]}}"
-# Shadow     = "{{|Screen:::D|}}"
+  Shadow     = "{{[$darkest]}}"
 # ProgramBox = "{{[~]}}"
 
 ## Header bar
   StatusFields          = "{{|Screen|}}"
-  StatusName            = "{{|StatusFields:::B|}}"
+  StatusName            = "{{[$accent:$primary:B]}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"
@@ -147,8 +144,8 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 ## Menus
   TagBrackets                 = "{{|Dialog|}}"
   TagSpinner                  = ""
-# TagKey                      = "{{|Dialog:::-B|}}"
-  Tag                         = "{{[$muted:$secondary:-]}}"
+  TagKey                      = "{{[$accent::-B]}}"
+  Tag                         = "{{[$subtle:$secondary:-]}}"
   Item                        = "{{|Dialog|}}"
   TagKeyFocused               = "{{[$secondary:$accent:-B]}}"
   TagFocused                  = "{{[$secondary:$accent:-B]}}"
@@ -163,7 +160,7 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
   ItemListUserDefined         = "{{[$info::-]}}"
 # ItemListUserTemplate        = "{{|ItemList:::U|}}"
   OptionValue                 = "{{[$accent::-B]}}"
-  OptionValueFocused          = "{{|OptionValue:::B|}}"
+  OptionValueFocused          = "{{[$secondary:$accent:B]}}"
 
 ## Help
 # HelpTag  = "{{|Tag|}}"
@@ -251,28 +248,28 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 # LargeIconStackedPressed     = "{{|LargeIconPressed|}}"
 
 ## Env editor variable types
-  EnvBuiltin       = "{{|Dialog:::B|}}"
+  EnvBuiltin       = "{{[$subtle]}}"
   EnvInvalid       = "{{[$secondary:$error:B]}}"
-  EnvDuplicate     = "{{[$secondary:$warning:D]}}"
-  EnvPendingDelete = "{{[$muted::DS]}}"
-  EnvReadOnly      = "{{[$muted::D]}}"
+  EnvDuplicate     = "{{[$secondary:$warning]}}"
+  EnvPendingDelete = "{{[$error::S]}}"
+  EnvReadOnly      = "{{[$muted]}}"
 
 ## Env editor
-  LineComment  = "{{[$muted::D]}}"
-  ModifiedText = "{{[$warning::B]}}"
+  LineComment  = "{{[$muted]}}"
+  ModifiedText = "{{[$special::B]}}"
 
 ## Env editor line numbers
-  LineNumber                = "{{[$muted::D]}}"
+  LineNumber                = "{{[$muted]}}"
   LineNumberFocused         = "{{[$accent::B]}}"
   LineNumberModified        = "{{|ModifiedText|}}"
-  LineNumberModifiedFocused = "{{|LineNumberModified:::B|}}"
+  LineNumberModifiedFocused = "{{[$secondary:$special:B]}}"
   LineNumberBrackets        = "{{|TagBrackets|}}"
 
 ## Markers and cursor
   Marker                  = "{{[$secondary:$primary]}}"
   MarkerAdded             = "{{[$secondary:$success]}}"
   MarkerDeleted           = "{{[$secondary:$error]}}"
-  MarkerModified          = "{{[$secondary:$warning]}}"
+  MarkerModified          = "{{[$secondary:$special]}}"
   MarkerInvalid           = "{{[$secondary:$error:B]}}"
   MarkerLocked            = "{{|MarkerInvalid|}}"
 # ButtonLockedMarker      = "{{|MarkerLocked|}}"
@@ -281,7 +278,7 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
   TextCursor              = "{{[$secondary:$primary:-B]}}"
-# TextCursorFlash         = "{{[$secondary:$primary:-]}}"
+  TextCursorFlash         = "{{[$primary:$selection:B]}}"
 
 ## Scrollbar
   Scrollbar       = "{{|Border2|}}"
@@ -289,7 +286,7 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
   ScrollbarArrows = "{{|Border|}}"
 
 ## Keys, progress, and indicators
-  KeyCap             = "{{[$accent::-R]}}"
+  KeyCap             = "{{[$secondary:$accent]}}"
   ProgressWaiting    = "{{[$muted:$secondary]}}"
   ProgressInProgress = "{{[$accent:$secondary:B]}}"
   ProgressCompleted  = "{{[$secondary:$success]}}"
