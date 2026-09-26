@@ -261,6 +261,7 @@ accent    = "$screen_bg"
 # Prompt                  = ""
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
+  InputField              = "{{[white:black]}}"          # = ""
   TextCursor              = "{{[magenta::B]}}"    # = "{{[-:-:R]}}"
 # TextCursorFlash         = "{{|TextCursor:::R|}}"
 

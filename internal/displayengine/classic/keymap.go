@@ -83,6 +83,7 @@ type KeyMap struct {
 
 	// A search's options: whole words or partial, and its variant and
 	// base pickers
+	ToggleFilter     key.Binding
 	SearchWholeWords key.Binding
 	SearchVariant    key.Binding
 	SearchBase       key.Binding
@@ -294,17 +295,21 @@ var Keys = KeyMap{
 		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
 		key.WithHelp("alt+a", "show/hide advanced"),
 	),
+	ToggleFilter: key.NewBinding(
+		key.WithKeys("ctrl+f", "alt+f", "ctrl+alt+f"),
+		key.WithHelp("alt+f", "expand/collapse find"),
+	),
 	SearchWholeWords: key.NewBinding(
 		key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"),
-		key.WithHelp("alt+o", "search whole words/partial"),
+		key.WithHelp("alt+o", "find whole words/partial"),
 	),
 	SearchVariant: key.NewBinding(
 		key.WithKeys("ctrl+r", "alt+r", "ctrl+alt+r"),
-		key.WithHelp("alt+r", "search variant"),
+		key.WithHelp("alt+r", "find variant"),
 	),
 	SearchBase: key.NewBinding(
 		key.WithKeys("ctrl+b", "alt+b", "ctrl+alt+b"),
-		key.WithHelp("alt+b", "search base"),
+		key.WithHelp("alt+b", "find base"),
 	),
 	SectionPrev: key.NewBinding(
 		key.WithKeys("ctrl+up", "alt+up", "ctrl+alt+up"),

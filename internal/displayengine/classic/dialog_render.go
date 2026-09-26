@@ -47,8 +47,8 @@ type TitleBarState struct {
 	SpinnerIndicatorRight string      // When non-empty, replaces right focus indicator (defaults to SpinnerIndicator)
 	Changed               bool        // When true, the title carries the changed marker (see RenderMarkedTitleSegmentCtx)
 	// RightSegments are pre-rendered controls drawn at the right end of the
-	// top border, before any widgets, each separated by a stretch of the
-	// border line.
+	// top border, before any widgets, each separated from the next, and from
+	// the widgets, by a stretch of the border line.
 	RightSegments []string
 	// LargeRightSegment renders RightSegments for the large title row, given
 	// that row's context (its area style as the dialog); nil joins them.
@@ -632,6 +632,9 @@ func renderBorderedBoxCtxImpl(rawTitle, content string, contentWidth int, target
 			// Small titlebar: build small-style widgets from tbsState.
 			rightWidget := strings.Join(tbsState.RightSegments, borderStyleLight.Render(border.Top))
 			if tbsState.Show {
+				if rightWidget != "" {
+					rightWidget += borderStyleLight.Render(border.Top)
+				}
 				rightWidget += BuildDialogTitleWidgets(tbsState.Focused, tbsState.ActiveWidget, tbsState.PressedWidget, tbsState.activeWidgets(), ctx)
 			}
 			rightWidgetWidth := WidthWithoutZones(rightWidget)

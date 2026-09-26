@@ -262,6 +262,7 @@ accent    = "cyan"
   Prompt                  = "{{[-:-:-B]}}"              # = ""
   PromptShell             = "{{[:yellow:-B]}}"          # = "{{|Highlight|}}"
   PromptSudo              = "{{[:red:-B]}}"             # = "{{|MarkerInvalid|}}"
+  InputField              = "{{[white:black]}}"          # = ""
   TextCursor              = "{{[blue:white:-B]}}"       # = "{{[-:-:R]}}"
 # TextCursorFlash         = "{{|TextCursor:::R|}}"
 

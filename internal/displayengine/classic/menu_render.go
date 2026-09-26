@@ -3,6 +3,7 @@ package classic
 import (
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -407,6 +408,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 
 	ctx := GetActiveContext()
+	if m.darkBorder {
+		ctx.BorderColor, ctx.BorderFlags = ctx.Border2Color, ctx.Border2Flags
+	}
 	ctx.Type = m.dialogType
 	ctx.AngledBorder = m.borderStyle == BorderStyleAngled
 	ctx.SquareBorder = m.borderStyle == BorderStyleSquare
@@ -432,7 +436,17 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	if len(tbs.RightSegments) > 0 {
 		tbs.LargeRightSegment = m.largeTitleControlsSegment
 	}
-	rendered := renderBorderedBoxCtxImpl(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, lineBackgrounds, tbs)
+	rawTitle := m.title
+	if m.frameTitle != nil {
+		// An enclosing frame's title, with its widgets after the controls.
+		_, avail, widgets := m.frameTitleLayout(contentWidth, ctx)
+		tbs.Show = len(widgets) > 0
+		tbs.Widgets = widgets
+		tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget = false, "", ""
+		rawTitle = m.frameTitle.Render(avail, focused || m.TitleBarFocused(), ctx)
+		titleTag = "RAW"
+	}
+	rendered := renderBorderedBoxCtxImpl(rawTitle, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, lineBackgrounds, tbs)
 	if m.bottomBorderLabel != "" {
 		lines := strings.Split(rendered, "\n")
 		if n := len(lines); n > 0 {
@@ -466,7 +480,7 @@ func (m *MenuModel) viewSubMenu() string {
 		subStr := RenderThemeText("{{|Subtitle|}}"+m.subtitle, styles.Dialog)
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
-	if m.header != nil {
+	if m.header != nil && !m.headerBottom {
 		innerParts = append(innerParts, m.header.ViewString())
 	}
 
@@ -528,22 +542,70 @@ func (m *MenuModel) viewSubMenu() string {
 	combined := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
 	// 2. Wrap in bordered dialog
+	footer := ""
+	maxHeight := m.height
+	if m.header != nil && m.headerBottom {
+		footer = m.header.ViewString()
+		maxHeight -= lipgloss.Height(footer) - layout.SingleBorder()
+	}
 	targetHeight := lipgloss.Height(combined) + 2
 	if m.maximized {
-		targetHeight = m.height
-	} else if targetHeight > m.height {
-		targetHeight = m.height
+		targetHeight = maxHeight
+	} else if targetHeight > maxHeight {
+		targetHeight = maxHeight
 	}
 	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub || m.frameFocused, true, "Title")
-
-	// 3. Replace bottom border with scroll-percent indicator if needed
-	if (!m.flowMode || m.MaxFlowRows > 0) && m.Scroll.Info.Needed {
-		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
-			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub || m.frameFocused, ctx)
-			result = result[:lastNL+1] + bottomLine
+	// 3. The scroll percent on the list's bottom edge: the footer's top edge
+	// when there is one, else the bottom border, which also carries the
+	// footer bar.
+	scrolled := (!m.flowMode || m.MaxFlowRows > 0) && m.Scroll.Info.Needed
+	pct := ""
+	if scrolled {
+		pct = fmt.Sprintf("%3d%%", int(m.listScrollPercent()*100))
+	}
+	if footer != "" {
+		result = m.joinFooter(result, footer, pct)
+		pct, scrolled = "", false
+	}
+	if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
+		focused := m.focusedSub || m.frameFocused
+		switch {
+		case m.footerBar != nil:
+			m.footerBarY = strings.Count(result, "\n")
+			result = result[:lastNL+1] + m.footerBarLine(m.width, true, focused, pct, true, ctx)
+		case scrolled:
+			result = result[:lastNL+1] + BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), focused, ctx)
 		}
 	}
 	return result
+}
+
+// footerJunction returns the junction joining a side edge (heavy or not)
+// to a top edge drawn with horizontal, on the left or right side.
+func footerJunction(left, heavySide bool, horizontal rune) string {
+	switch {
+	case horizontal == '═':
+		return map[bool]string{true: "╠", false: "╣"}[left]
+	case heavySide && horizontal == '━':
+		return map[bool]string{true: "┣", false: "┫"}[left]
+	case heavySide:
+		return map[bool]string{true: "┠", false: "┨"}[left]
+	case horizontal == '━':
+		return map[bool]string{true: "┝", false: "┥"}[left]
+	}
+	return map[bool]string{true: "├", false: "┤"}[left]
+}
+
+// joinFooter draws footer in place of box's bottom border (see SetFooter),
+// its top edge a divider joining box's side edges with the scroll percent
+// pct, recording the row it starts on.
+func (m *MenuModel) joinFooter(box, footer, pct string) string {
+	lines := strings.Split(box, "\n")
+	lines = lines[:len(lines)-1]
+	m.footerY = len(lines)
+	footerLines := strings.Split(footer, "\n")
+	footerLines[0] = m.footerBarLine(m.width, false, m.focusedSub || m.frameFocused, pct, false, GetActiveContext())
+	return strings.Join(append(lines, footerLines...), "\n")
 }
 
 // viewPlainText renders a single line of theme-styled text with no border --

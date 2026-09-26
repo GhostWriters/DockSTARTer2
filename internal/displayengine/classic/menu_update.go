@@ -964,7 +964,10 @@ func (m *MenuModel) calculateLayout() {
 
 	// The header drawn above a submenu's list (see SetHeader).
 	headerHeight := m.headerHeight(m.width)
-	if headerHeight > 0 {
+	switch {
+	case headerHeight > 0 && m.headerBottom:
+		m.header.SetSize(m.width, headerHeight+GetLayout().SingleBorder())
+	case headerHeight > 0:
 		m.header.SetSize(max(m.width-GetLayout().BorderWidth(), 1), headerHeight)
 	}
 
@@ -1054,7 +1057,7 @@ func (m *MenuModel) calculateLayout() {
 		ShadowHeight:     shadowHeight,
 		Overhead:         overhead,
 		SubtitleHeight:   subtitleHeight,
-		ListHeaderHeight: headerHeight,
+		ListHeaderHeight: m.listHeaderHeight(headerHeight),
 		LargeTitleBar:    useLargeTitleBar,
 	}
 

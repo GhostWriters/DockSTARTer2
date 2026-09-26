@@ -270,10 +270,14 @@ type MenuModel struct {
 	lastListView string
 
 	// header is a section drawn inside a submenu's border above its list
-	// (see SetHeader); lastHeaderView is its last drawing, to redraw this
-	// menu when it changes.
+	// (see SetHeader), or below it sharing the border when headerBottom
+	// (see SetFooter); lastHeaderView is its last drawing, to redraw this
+	// menu when it changes. footerY is the footer's row within the last
+	// drawing.
 	header         Content
+	headerBottom   bool
 	lastHeaderView string
+	footerY        int
 	// lastStyleGen, lastScope, and lastViewportHeight complete
 	// renderVariableHeightList's memo key (see recordListMemo).
 	lastStyleGen       uint64
@@ -301,7 +305,23 @@ type MenuModel struct {
 
 	// titleControls are drawn at the right end of the title bar (see
 	// SetTitleControls).
-	titleControls   []TitleControl
+	titleControls []TitleControl
+
+	// frameTitle, when set, is an enclosing frame's title drawn in place of
+	// this menu's own (see SetFrameTitle).
+	frameTitle *FrameTitle
+	// footerBar is drawn in the bottom border (see SetFooterBar);
+	// footerBarRegions and footerBarY place its last drawing.
+	footerBar        *FooterBar
+	footerBarRegions []footerBarRegion
+	footerBarY       int
+	// darkBorder draws every edge in the Border2 style (see SetDarkBorder).
+	darkBorder bool
+	// inputControls are drawn at the right of an input section's row (see
+	// SetInputControls); inputPrompt is its prompt (see SetInputPrompt).
+	inputControls func() []TitleControl
+	inputPrompt   string
+
 	lastWidth       int
 	lastHeight      int
 	lastIndex       int
@@ -873,15 +893,29 @@ func (m *MenuModel) SetFrameFocused(v bool) {
 // a subtitle: the list, and its scrollbar, start below it. The caller routes
 // focus and messages to it (see HeaderedList).
 func (m *MenuModel) SetHeader(section Content) {
-	m.header = section
+	m.header, m.headerBottom = section, false
 	m.lastHeaderView = ""
 	m.InvalidateCache()
 }
 
-// headerHeight returns the header's height for a submenu sectionWidth wide.
+// SetFooter draws section, a bordered box as wide as this submenu, in place
+// of the submenu's bottom border: the two share their side edges, and the
+// footer's top edge divides it from the list. The caller routes focus and
+// messages to it (see NewFooteredList).
+func (m *MenuModel) SetFooter(section Content) {
+	m.header, m.headerBottom = section, true
+	m.lastHeaderView = ""
+	m.InvalidateCache()
+}
+
+// headerHeight returns how many rows the header or footer adds to a
+// submenu sectionWidth wide.
 func (m *MenuModel) headerHeight(sectionWidth int) int {
 	if m.header == nil || !m.subMenuMode {
 		return 0
+	}
+	if m.headerBottom {
+		return max(m.header.SectionHeight(sectionWidth)-GetLayout().SingleBorder(), 0)
 	}
 	return m.header.SectionHeight(max(sectionWidth-GetLayout().BorderWidth(), 1))
 }
@@ -1407,12 +1441,18 @@ func (m *MenuModel) TitleCheckboxID() string { return m.TitleControlID(0) }
 // styles, or with large for the large title row by the LargeTitleControl*
 // ones; both are the same width.
 func (m *MenuModel) titleControlPieces(ctx StyleContext, large bool) []string {
-	pieces := make([]string, 0, len(m.titleControls))
+	return titleControlPiecesFor(m.titleControls, ctx, large)
+}
+
+// titleControlPiecesFor returns controls as drawn in a border (see
+// titleControlPieces).
+func titleControlPiecesFor(controls []TitleControl, ctx StyleContext, large bool) []string {
+	pieces := make([]string, 0, len(controls))
 	pad := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
 	if large {
 		pad = " "
 	}
-	for _, c := range m.titleControls {
+	for _, c := range controls {
 		around := pad
 		if c.Changed != nil && c.Changed() {
 			around = RenderChangedMarker(ctx)
@@ -1456,12 +1496,17 @@ func (m *MenuModel) titleControlRegions(offsetX, offsetY, zOrder int) []HitRegio
 		total += WidthWithoutZones(p)
 	}
 	widgets := 0
-	if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
+	if m.frameTitle != nil {
+		widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", m.frameTitle.Widgets(), ctx))
+	} else if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
 		if m.Layout.LargeTitleBar {
 			widgets = lipgloss.Width(RenderThemeTextCtx(buildLargeTitleBarWidgets(false, "", "", m.ActiveWidgets(), ctx), ctx))
 		} else {
 			widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", m.ActiveWidgets(), ctx))
 		}
+	}
+	if widgets > 0 && sep > 0 && len(pieces) > 0 {
+		total += sep // the border line before the widgets
 	}
 	right := offsetX + m.GetInnerContentWidth() + GetLayout().BorderWidth() - 2
 	x := right - widgets - total

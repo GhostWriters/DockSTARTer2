@@ -140,6 +140,8 @@ type (
 	TabbedPanes                = classic.TabbedPanes
 	RepeatedStops              = classic.RepeatedStops
 	HeaderedList               = classic.HeaderedList
+	FrameTitle                 = classic.FrameTitle
+	FooterBar                  = classic.FooterBar
 	TitleControl               = classic.TitleControl
 	GroupJumper                = classic.GroupJumper
 	PaneLayoutMsg              = classic.PaneLayoutMsg
@@ -306,6 +308,7 @@ var (
 	NewTabbedPanes                 = classic.NewTabbedPanes
 	NewRepeatedStops               = classic.NewRepeatedStops
 	NewHeaderedList                = classic.NewHeaderedList
+	NewFooteredList                = classic.NewFooteredList
 	StyleGeneration                = classic.StyleGeneration
 	NewContextMenuModel            = classic.NewContextMenuModel
 	NewHeaderModel                 = classic.NewHeaderModel

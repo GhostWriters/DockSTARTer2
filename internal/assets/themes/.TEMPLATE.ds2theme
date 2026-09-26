@@ -262,6 +262,7 @@ direct_suffix   = "]}}"
 # Prompt                  = ""
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
+# InputField              = ""                        # unset: Item's text on the Dialog background
 # TextCursor              = "{{[-:-:R]}}"
 # TextCursorFlash         = "{{|TextCursor:::R|}}"
 

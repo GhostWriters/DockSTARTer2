@@ -2,11 +2,48 @@ package classic
 
 import (
 	"DockSTARTer2/internal/tui/components/sinput"
+	"strconv"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 )
+
+// SetInputPrompt draws prompt before an input section's text (see
+// NewSinputSection) in the Prompt style.
+func (m *MenuModel) SetInputPrompt(prompt string) {
+	m.inputPrompt = prompt
+	m.InvalidateCache()
+}
+
+// SetInputControls draws controls at the right of an input section's row
+// (see NewSinputSection), narrowing the input to fit, with hit region IDs
+// from InputControlID.
+func (m *MenuModel) SetInputControls(controls func() []TitleControl) {
+	m.inputControls = controls
+	m.InvalidateCache()
+}
+
+// InputControlID returns the hit region ID of input control i.
+func (m *MenuModel) InputControlID(i int) string { return m.id + ".inputctl" + strconv.Itoa(i) }
+
+// inputControlPieces returns the input controls as drawn, and their total
+// width with a space between each and before the first.
+func (m *MenuModel) inputControlPieces() ([]TitleControl, []string, int) {
+	if m.inputControls == nil {
+		return nil, nil, 0
+	}
+	controls := m.inputControls()
+	pieces := titleControlPiecesFor(controls, GetActiveContext(), false)
+	width := 0
+	for _, p := range pieces {
+		width += 1 + WidthWithoutZones(p)
+	}
+	return controls, pieces, width
+}
 
 // NewSinputSection creates a MenuModel content section that renders a sinput
 // (text input field) inside a titled bordered box, matching the style used by
@@ -53,10 +90,24 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 		// Resolved on each render, so the input follows the active theme and
 		// the section's disabled state.
 		(*inpPtr).SetStyles(sinputStyles(m.disabled))
-		return GetStyles().Dialog.
-			Width(contentWidth).
-			Padding(0, 1).
-			Render((*inpPtr).View())
+		field := inputFieldStyle(m.disabled)
+		if m.inputPrompt != "" {
+			(*inpPtr).Prompt = RenderThemeText("{{|Prompt|}}"+m.inputPrompt+"{{[-]}}", field)
+		}
+		dialog := GetStyles().Dialog
+		// The cell under the terminal cursor has no style of its own.
+		view := MaintainBackground((*inpPtr).View(), field)
+		_, pieces, controlsWidth := m.inputControlPieces()
+		inputWidth := max(contentWidth-2, 1)
+		if len(pieces) == 0 {
+			return dialog.Width(contentWidth).Padding(0, 1).Render(field.Width(inputWidth).Render(view))
+		}
+		// The input scrolls within what the controls leave; +1 for the cursor.
+		inputWidth = max(inputWidth-controlsWidth, 1)
+		(*inpPtr).SetWidth(max(inputWidth-(*inpPtr).PromptWidth()-1, 1))
+		space := dialog.Render(" ")
+		return dialog.Width(contentWidth).Padding(0, 1).Render(
+			field.Width(inputWidth).MaxWidth(inputWidth).Render(view) + space + strings.Join(pieces, space))
 	}
 
 	// Register a hit region covering the input text line so click-to-position and
@@ -67,15 +118,26 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 		// section left border (1) + padding (1) = text starts at col 2 within section
 		textX := offsetX + layout.SingleBorder() + 1 + (*inpPtr).PromptWidth()
 		(*inpPtr).SetScreenTextX(textX)
-		return []HitRegion{{
+		controls, pieces, controlsWidth := m.inputControlPieces()
+		regions := []HitRegion{{
 			ID:     id + ".sinput",
 			X:      offsetX + layout.SingleBorder(),
 			Y:      offsetY + layout.SingleBorder(), // content row inside top border
-			Width:  m.width - layout.BorderWidth(),
+			Width:  m.width - layout.BorderWidth() - controlsWidth,
 			Height: 1,
 			ZOrder: baseZ + 15,
 			Label:  title,
 		}}
+		// The controls end one column (the padding) before the right border.
+		x := offsetX + m.width - layout.SingleBorder() - 1 - controlsWidth
+		for i, p := range pieces {
+			x++
+			w := WidthWithoutZones(p)
+			regions = append(regions, HitRegion{ID: m.InputControlID(i), X: x, Y: offsetY + layout.SingleBorder(),
+				Width: w, Height: 1, ZOrder: baseZ + 20, Label: controls[i].Help})
+			x += w
+		}
+		return regions
 	}
 
 	m.SetUpdateInterceptor(func(msg tea.Msg, menu *MenuModel) (tea.Cmd, bool) {
@@ -153,18 +215,38 @@ func SinputSectionInit() tea.Cmd {
 }
 
 // sinputStyles returns an input section's text styles for the active
-// theme: Item on the dialog background, or its disabled form (see
-// ResolveDisabledStyle).
+// theme (see inputFieldStyle).
 func sinputStyles(disabled bool) textinput.Styles {
-	styles := GetStyles()
-	item := styles.ItemNormal
-	if disabled {
-		item, _ = ResolveDisabledStyle("Item")
-	}
-	item = item.Background(styles.Dialog.GetBackground())
+	field := inputFieldStyle(disabled)
 	ts := textinput.DefaultStyles(true)
-	ts.Focused.Prompt, ts.Focused.Text = item, item
-	ts.Blurred.Prompt, ts.Blurred.Text = item, item
+	ts.Focused.Prompt, ts.Focused.Text = field, field
+	ts.Blurred.Prompt, ts.Blurred.Text = field, field
 	ts.Cursor.Color = TextCursorColor()
 	return ts
+}
+
+// inputFieldStyle returns an input's field style for the active theme:
+// InputField, filled in from the dialog style, or where the theme leaves it
+// unset Item's text on the dialog background; its disabled form (see
+// ResolveDisabledStyle) when disabled.
+func inputFieldStyle(disabled bool) lipgloss.Style {
+	dialog := GetStyles().Dialog
+	if semstyle.GetRawTagCode("InputField") == "" {
+		item := GetStyles().ItemNormal
+		if disabled {
+			item, _ = ResolveDisabledStyle("Item")
+		}
+		return item.Background(dialog.GetBackground())
+	}
+	if !disabled {
+		return styleWithFallback("InputField", dialog)
+	}
+	field, _ := ResolveDisabledStyle("InputField")
+	if _, noBG := field.GetBackground().(lipgloss.NoColor); noBG {
+		field = field.Background(dialog.GetBackground())
+	}
+	if _, noFG := field.GetForeground().(lipgloss.NoColor); noFG {
+		field = field.Foreground(dialog.GetForeground())
+	}
+	return field
 }

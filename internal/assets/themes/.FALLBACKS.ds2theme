@@ -67,6 +67,10 @@ MarkerInvalid  = "{{[-:-:R]}}"
 #   fallback needed); a shell command gets Highlight; one that will run
 #   under sudo gets the more alarming MarkerInvalid.
 #
+#   InputField: a text input's field. Unset, it draws Item's text on the
+#   dialog background -- Item's own background is left out, which a
+#   name reference can't express, so there is no fallback entry.
+#
 #   ResizeLine: styles the tabbed env editor's split-gutter line while
 #   actively being dragged/keyboard-resized -- a solid reverse-video block
 #   reads as a stronger "actively grabbed" affordance than plain emphasized

@@ -93,3 +93,19 @@ func (q TintSearch) Matcher() (func(TintEntry) bool, error) {
 		return f.matchesTerms(e.Slug, e.Name, e.Variant, e.Author)
 	}, nil
 }
+
+// WordMatcher returns whether an entry's fields match query: every
+// comma-separated term in some field, as whole words, or anywhere in a word
+// when partial -- TintSearch's matching without its scheme options.
+func WordMatcher(query string, partial bool) func(fields ...string) bool {
+	var f tintFilter
+	for _, term := range strings.Split(query, ",") {
+		if term = strings.ToLower(strings.TrimSpace(term)); term != "" {
+			f.Terms = append(f.Terms, term)
+		}
+	}
+	if partial {
+		return f.containsTerms
+	}
+	return f.matchesTerms
+}

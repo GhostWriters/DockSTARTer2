@@ -32,7 +32,6 @@ type tintElementMsg struct{ element string }
 // tintPickMsg stages ref ("" for none) as the shown element's tint.
 type tintPickMsg struct{ ref string }
 
-
 // tintRepoDownloadMsg starts downloading the tinted-theming schemes.
 type tintRepoDownloadMsg struct{}
 
@@ -57,16 +56,7 @@ func tintElementIndex(elements []string, element string) int {
 // tintFrameFocused reports whether focus is inside the Tint pane.
 func (s *DisplayOptionsScreen) tintFrameFocused() bool {
 	switch s.focusedSettingsLeaf() {
-	case s.tintStripSection, s.tintSearchMenu, s.tintMenu:
-		return true
-	}
-	return false
-}
-
-// overrideFrameFocused reports whether focus is inside the Overrides pane.
-func (s *DisplayOptionsScreen) overrideFrameFocused() bool {
-	switch s.focusedSettingsLeaf() {
-	case s.overrideStripSection, s.overrideMenu:
+	case s.tintSearchMenu, s.tintMenu:
 		return true
 	}
 	return false
@@ -121,9 +111,9 @@ func (s *DisplayOptionsScreen) shownTintElement() {
 	s.tintElement = "menu"
 }
 
-// newElementFrame builds a frame with the element tabs in its top edge,
-// marking the elements whose part of the settings changed.
-func (s *DisplayOptionsScreen) newElementFrame(id string, part func(config.AnsiElementColors) config.AnsiElementColors, focused func() bool) (*tabFrame, *tabStripSection) {
+// newElementStrip builds the element tabs, marking the elements whose part
+// of the settings changed.
+func (s *DisplayOptionsScreen) newElementStrip(id string, part func(config.AnsiElementColors) config.AnsiElementColors) *displayengine.TabStrip {
 	elements := tintElementsFor(s.editType)
 	labels := make([]string, len(elements))
 	for i, e := range elements {
@@ -131,31 +121,72 @@ func (s *DisplayOptionsScreen) newElementFrame(id string, part func(config.AnsiE
 	}
 	strip := &displayengine.TabStrip{ID: id, Labels: labels, Active: tintElementIndex(elements, s.tintElement)}
 	strip.Changed = func(i int) bool { return s.elementPartChanged(elements[i], part) }
-	frame := &tabFrame{strip: strip, focused: focused}
-	return frame, newTabStripSection(frame, func(tab int) tea.Cmd {
-		return func() tea.Msg { return tintElementMsg{element: elements[tab]} }
-	})
+	return strip
+}
+
+// elementFrameTitle draws strip in a list's own border (see
+// displayengine.FrameTitle), so the list is the element frame.
+func elementFrameTitle(strip *displayengine.TabStrip) *displayengine.FrameTitle {
+	return &displayengine.FrameTitle{
+		Render: func(avail int, focused bool, ctx displayengine.StyleContext) string {
+			return strip.Render(avail, focused, ctx)
+		},
+		HitRegions: func(x, y, avail int, ctx displayengine.StyleContext) []displayengine.HitRegion {
+			return strip.HitRegions(x, y, avail, displayengine.ZDialog+10, ctx, nil)
+		},
+		Widgets: func() []displayengine.WidgetDef { return nil },
+	}
+}
+
+// elementStripHit handles a click on either list's element tabs.
+func (s *DisplayOptionsScreen) elementStripHit(id string) (tea.Cmd, bool) {
+	for _, strip := range []*displayengine.TabStrip{s.tintStrip, s.overrideStrip} {
+		if strip == nil {
+			continue
+		}
+		if i, ok := strip.TabFromID(id); ok {
+			element := tintElementsFor(s.editType)[i]
+			return func() tea.Msg { return tintElementMsg{element: element} }, true
+		}
+		if d, ok := strip.ScrollFromID(id); ok {
+			strip.ScrollBy(d)
+			s.tintMenu.InvalidateCache()
+			s.overrideMenu.InvalidateCache()
+			return nil, true
+		}
+	}
+	return nil, false
 }
 
 // tintPaneColumn and overridePaneColumn build the Tint and Overrides panes'
-// contents: in advanced mode framed by the element tabs, with Tab walking
-// every element; otherwise just the Menu element's sections. The search box
-// sits inside the Tint list's border, above its rows.
+// contents: in advanced mode each list's border carries the element tabs,
+// with Tab walking every element; otherwise just the Menu element's list.
+// The Find box, when expanded, sits below the Tint list's rows, sharing its
+// border.
 func (s *DisplayOptionsScreen) tintPaneColumn() *displayengine.ContentColumn {
-	searchAndList := displayengine.NewHeaderedList(s.tintSearchMenu, s.tintMenu)
+	s.tintFilterList = displayengine.NewFooteredList(s.tintSearchMenu, s.tintMenu)
+	s.tintFilterList.SetSectionShown(s.tintFilterShown)
 	if !s.advanced {
-		return displayengine.NewContentColumn(searchAndList)
+		return displayengine.NewContentColumn(s.tintFilterList)
 	}
-	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.tintStripSection,
-		newTabFrameSection(searchAndList, s.tintFrame, false, true))))
+	s.tintMenu.SetFrameTitle(elementFrameTitle(s.tintStrip))
+	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.tintFilterList)))
+}
+
+// toggleTintFilter expands or collapses the Tint list's Find box.
+func (s *DisplayOptionsScreen) toggleTintFilter() tea.Cmd {
+	return s.toggleFind(&s.tintFilterShown, s.tintFilterList, s.tintSearchMenu, s.tintMenu, func() {
+		s.syncTintMenus()
+		s.selectCheckedTint()
+	})
 }
 
 func (s *DisplayOptionsScreen) overridePaneColumn() *displayengine.ContentColumn {
 	if !s.advanced {
 		return displayengine.NewContentColumn(s.overrideMenu)
 	}
-	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.overrideStripSection,
-		newTabFrameSection(s.overrideMenu, s.overrideFrame, false, true))))
+	s.overrideMenu.SetFrameTitle(elementFrameTitle(s.overrideStrip))
+	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.overrideMenu)))
 }
 
 // perElement repeats column's Tab stops once per element tab (see
@@ -300,33 +331,31 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 }
 
 // buildTintMenus builds the Tint and Overrides panes' menus: the element
-// tab frames (used in advanced mode), each pane's list, and the Tint pane's
-// search box.
+// tabs (used in advanced mode), each pane's list, and the Tint pane's search
+// box.
 func (s *DisplayOptionsScreen) buildTintMenus() {
 	s.shownTintElement()
-	s.tintFrame, s.tintStripSection = s.newElementFrame("appearance_tint_elements", tintPart, s.tintFrameFocused)
-	s.overrideFrame, s.overrideStripSection = s.newElementFrame("appearance_override_elements", overridePart, s.overrideFrameFocused)
+	s.tintStrip = s.newElementStrip("appearance_tint_elements", tintPart)
+	s.overrideStrip = s.newElementStrip("appearance_override_elements", overridePart)
 
 	list := displayengine.NewMenuModel(displayengine.IDTintPanel, config.ConnTypeLabel(s.editType)+" Tint", "", s.tintListItems())
-	s.tintSearchMenu, s.tintSearchInput = displayengine.NewSinputSection(tintSearchID, "Search", s.tintQuery)
-	s.tintSearchMenu.SetHelpPageText("Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Variant and Base narrow to light or dark, and to base16 or base24, schemes.")
-	s.tintSearchMenu.SetTitleControls([]displayengine.TitleControl{
-		{Label: "Word", Key: 'o', Checked: func() bool { return !s.tintPartial }, Help: "Match whole words only, or part of a word"},
-		{Label: "Variant", Key: 'r', Value: func() string { return searchOptionLabel(s.tintVariant) }, Help: "Show all, light, or dark schemes"},
-		{Label: "Base", Key: 'b', Value: func() string { return searchOptionLabel(s.tintSystem) }, Help: "Show all, base16, or base24 schemes"},
-	})
-	prev := s.tintSearchMenu.Interceptor
-	s.tintSearchMenu.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {
-		cmd, handled := prev(msg, menu)
-		if handled {
-			s.applyTintSearch()
-		}
-		return cmd, handled
-	})
+	s.tintSearchMenu, s.tintSearchInput = newFindBox(tintSearchID, s.tintQuery, "Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant and Base, which narrow to light or dark, and to base16 or base24, schemes, apply either way.",
+		&s.tintPartial, s.applyTintSearch)
 
 	list.SetHelpItemPrefix("Tint")
-	list.SetTitleCheckbox("Enabled", 'e', func() bool { return s.stagedTint().TintEnabled },
-		func() bool { return s.stagedTint().TintEnabled != s.baseTint().TintEnabled })
+	list.SetFooterBar(&displayengine.FooterBar{
+		Controls: func() []displayengine.TitleControl {
+			return []displayengine.TitleControl{
+				{Label: "Variant", Key: 'r', Value: func() string { return searchOptionLabel(s.tintVariant) }, Help: "Show all, light, or dark schemes"},
+				{Label: "Base", Key: 'b', Value: func() string { return searchOptionLabel(s.tintSystem) }, Help: "Show all, base16, or base24 schemes"},
+			}
+		},
+	})
+	list.SetTitleControls([]displayengine.TitleControl{
+		{Label: "Find", Key: 'f', Checked: func() bool { return s.tintFilterShown }, Help: "Show or hide the scheme search box"},
+		{Label: "Enabled", Key: 'e', Checked: func() bool { return s.stagedTint().TintEnabled },
+			Changed: func() bool { return s.stagedTint().TintEnabled != s.baseTint().TintEnabled }, Help: "Turn Enabled on or off"},
+	})
 	list.SetTitleChanged(func() bool { return s.stagedTint().Tint != s.baseTint().Tint })
 	list.SetMinTagWidth(s.tintTagWidth())
 	list.SetItemHelpFunc(s.buildTintItemHelp)
@@ -432,15 +461,19 @@ func (s *DisplayOptionsScreen) applyTintSearch() {
 	}
 }
 
-// tintSearch returns the scheme search the Tint pane's search box and its
-// options make.
+// tintSearch returns the scheme search the Tint pane's Find makes: its
+// text and Word while expanded, Variant and Base always.
 func (s *DisplayOptionsScreen) tintSearch() commands.TintSearch {
-	return commands.TintSearch{Query: s.tintQuery, Partial: s.tintPartial, Variant: s.tintVariant, System: s.tintSystem}
+	search := commands.TintSearch{Variant: s.tintVariant, System: s.tintSystem}
+	if s.tintFilterShown {
+		search.Query, search.Partial = s.tintQuery, s.tintPartial
+	}
+	return search
 }
 
-// tintSearching reports whether the search narrows the scheme list.
+// tintSearching reports whether Find narrows the scheme list.
 func (s *DisplayOptionsScreen) tintSearching() bool {
-	return s.tintQuery != "" || s.tintVariant != "" || s.tintSystem != ""
+	return s.tintFilterShown && s.tintQuery != "" || s.tintVariant != "" || s.tintSystem != ""
 }
 
 // searchOptionLabel names a search option's value, "" being All.
@@ -520,7 +553,7 @@ func (s *DisplayOptionsScreen) syncTintMenus() {
 	}
 	s.shownTintElement()
 	active := tintElementIndex(tintElementsFor(s.editType), s.tintElement)
-	s.tintFrame.strip.Active, s.overrideFrame.strip.Active = active, active
+	s.tintStrip.Active, s.overrideStrip.Active = active, active
 	overrideCursor := s.overrideMenu.Index()
 	s.overrideMenu.SetItems(s.overrideItems())
 	s.overrideMenu.Select(overrideCursor)

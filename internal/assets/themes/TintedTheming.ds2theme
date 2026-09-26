@@ -33,6 +33,7 @@ info            = "base0c" # Support, Regular Expressions, Escape Characters, Ma
 special         = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed -- magenta
 status_fg       = "base04" # Dark Foreground (Used for status bars)
 status_bg       = "base01" # Lighter Background (Used for status bars)
+field_bg        = "base01" # Lighter Background -- input fields
 title_bg        = "base02" # Selection Background -- the large title bar
 diff_inserted   = "base0b" # Diff Inserted
 diff_deleted    = "base08" # Diff Deleted
@@ -288,6 +289,7 @@ focus_border    = "base05" # "Focus elements" borders: the focus indicators
 # Prompt                  = ""
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
+  InputField              = "{{[$primary:$field_bg]}}"
   TextCursor              = "{{[$secondary:$primary:-B]}}"
   TextCursorFlash         = "{{[$primary:$selection:B]}}"
 

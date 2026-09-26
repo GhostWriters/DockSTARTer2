@@ -65,7 +65,10 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	// The header drawn above a submenu's list (see SetHeader).
-	if m.header != nil && m.subMenuMode {
+	switch {
+	case m.header != nil && m.subMenuMode && m.headerBottom:
+		regions = append(regions, m.header.GetHitRegions(offsetX, offsetY+m.footerY)...)
+	case m.header != nil && m.subMenuMode:
 		regions = append(regions, m.header.GetHitRegions(offsetX+layout.SingleBorder(), offsetY+listY)...)
 		listY += m.Layout.ListHeaderHeight
 	}
@@ -87,6 +90,10 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	baseZ := ZScreen
 	if m.isDialog {
 		baseZ = ZDialog
+	}
+
+	if m.footerBar != nil && m.subMenuMode {
+		regions = append(regions, m.footerBarHitRegions(offsetX, offsetY, baseZ+10)...)
 	}
 
 	// Submenu frame catch-all: covers the full bordered panel including title and border chars.
@@ -501,7 +508,14 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// ConfigureWidgets adds extras). Widgets appear at the right of the
 	// title bar (row 0). Sub-menus only get them if opted in (see
 	// SetSubmenuWidgetsEnabled) -- most never do.
-	if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
+	if m.frameTitle != nil {
+		// An enclosing frame's title and widgets (see SetFrameTitle).
+		ctx := GetActiveContext()
+		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+		x, avail, widgets := m.frameTitleLayout(dialogWidth-GetLayout().BorderWidth(), ctx)
+		regions = append(regions, m.frameTitle.HitRegions(offsetX+x, offsetY, avail, ctx)...)
+		regions = append(regions, TitleBarHitRegionsFor(m.frameTitle.WidgetID, offsetX, offsetY, dialogWidth, false, widgets, baseZ)...)
+	} else if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
 		// Use actual rendered dialog width, not m.width — non-maximized menus render
 		// narrower than m.width based on content, so the widget X must match.
 		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()

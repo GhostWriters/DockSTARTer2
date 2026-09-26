@@ -24,18 +24,20 @@ import (
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
 type DisplayOptionsScreen struct {
-	themeMenu            *displayengine.MenuModel
-	optionsMenu          *displayengine.MenuModel // the shown connection type's options
-	tintMenu             *displayengine.MenuModel // Tint pane scheme list
-	tintSearchMenu       *displayengine.MenuModel // Tint pane scheme search box
-	tintSearchInput      *sinput.Model
-	tintFrame            *tabFrame
-	tintStripSection     *tabStripSection
-	overrideMenu         *displayengine.MenuModel // Overrides pane color slot list
-	overrideFrame        *tabFrame
-	overrideStripSection *tabStripSection
-	panes                *displayengine.TabbedPanes
-	isRoot               bool // true when launched directly via -M appearance; hides Back button
+	themeMenu       *displayengine.MenuModel
+	optionsMenu     *displayengine.MenuModel    // the shown connection type's options
+	tintMenu        *displayengine.MenuModel    // Tint pane scheme list
+	tintSearchMenu  *displayengine.MenuModel    // Tint pane scheme Find box
+	tintFilterList  *displayengine.HeaderedList // Tint list with the Find box below its rows
+	themeFindMenu   *displayengine.MenuModel    // Theme pane Find box
+	themeFindInput  *sinput.Model
+	themeFindList   *displayengine.HeaderedList // Theme list with the Find box below its rows
+	tintSearchInput *sinput.Model
+	tintStrip       *displayengine.TabStrip  // Tint list's element tabs (advanced mode)
+	overrideMenu    *displayengine.MenuModel // Overrides pane color slot list
+	overrideStrip   *displayengine.TabStrip  // Overrides list's element tabs (advanced mode)
+	panes           *displayengine.TabbedPanes
+	isRoot          bool // true when launched directly via -M appearance; hides Back button
 
 	config       config.AppConfig
 	themes       []theme.ThemeMetadata
@@ -97,7 +99,15 @@ type DisplayOptionsScreen struct {
 	// tintElement is the tint element ("menu", "programbox", "cli") the Tint
 	// pane shows; tintCatalog the schemes it offers.
 	tintElement string
-	tintQuery   string // scheme search text
+	tintQuery   string // scheme Find text
+	// tintFilterShown expands the Find box; its text and Word apply only
+	// while expanded, Variant and Base always.
+	tintFilterShown bool
+	// themeFindShown expands the Theme list's Find box, whose text and
+	// Word (themePartial off) apply only while expanded.
+	themeFindShown bool
+	themeQuery     string
+	themePartial   bool
 	// tintPartial matches the search's terms anywhere in a word rather
 	// than as whole words; tintVariant and tintSystem narrow it to light
 	// or dark and to base16 or base24 schemes ("" for all).
@@ -196,84 +206,8 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 func (s *DisplayOptionsScreen) initMenus() {
 	selected := s.config.Appearance.ForConnType(s.editType).Theme
 
-	// 1. Theme Selection Menu, grouped by source (see groupedItems).
-	var bundledThemes, userThemes, otherThemes []displayengine.MenuItem
-	foundCurrent := false
-	for _, t := range s.themes {
-		desc := t.Description
-		if t.Author != "" {
-			desc += fmt.Sprintf(" [by %s]", t.Author)
-		}
-		descTag := "{{|ItemList|}}"
-		if t.IsUserTheme {
-			descTag = "{{|ItemListUserDefined|}}"
-		}
-		checked := selected == t.ConfigValue
-		if checked {
-			foundCurrent = true
-		}
-		item := displayengine.MenuItem{
-			Tag:           t.Name,
-			Desc:          descTag + desc,
-			Help:          desc,
-			IsRadioButton: true,
-			Selectable:    true,
-			Checked:       checked,
-			IsInvalid:     t.IsInvalid,
-			IsUserDefined: t.IsUserTheme,
-			Metadata:      map[string]string{"config_value": t.ConfigValue},
-		}
-		if t.IsUserTheme {
-			userThemes = append(userThemes, item)
-		} else {
-			bundledThemes = append(bundledThemes, item)
-		}
-	}
-	// file: themes point outside the themes folder and are never part of
-	// s.themes (theme.List only enumerates embedded and user: themes), so
-	// foundCurrent is never true for one -- check the file directly instead
-	// of treating "not in the list" as "missing".
-	if !foundCurrent && strings.HasPrefix(selected, "file:") {
-		if _, err := os.Stat(strings.TrimPrefix(selected, "file:")); err == nil {
-			otherThemes = append(otherThemes, displayengine.MenuItem{
-				Tag:           "file:" + theme.ThemeDisplayName(selected),
-				Desc:          "{{|ItemListUserDefined|}}External theme file",
-				Help:          "Theme loaded directly from a file outside the themes folder.",
-				IsRadioButton: true,
-				Selectable:    true,
-				Checked:       true,
-				IsUserDefined: true,
-				Metadata:      map[string]string{"config_value": selected},
-			})
-			foundCurrent = true
-		}
-	}
-	// If the configured theme still doesn't match anything (its file was
-	// removed, or it's a user:/embedded reference no longer on disk),
-	// prepend a placeholder so the user can see what is active and
-	// optionally switch away from it.
-	if !foundCurrent && selected != "" {
-		shortURI := selected
-		if strings.HasPrefix(selected, "file:") {
-			shortURI = "file:" + theme.ThemeDisplayName(selected)
-		}
-		displayName := "(missing) " + shortURI
-		otherThemes = append(otherThemes, displayengine.MenuItem{
-			Tag:           displayName,
-			Desc:          "{{|ItemListUserDefined|}}Source file not found — using cached version",
-			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
-			IsRadioButton: true,
-			Selectable:    true,
-			Checked:       true,
-			IsUserDefined: true,
-			Metadata:      map[string]string{"config_value": selected},
-		})
-	}
-	themeItems := groupedItems([]listGroup{
-		{Label: "Current", Items: otherThemes},
-		{Label: "Bundled", Items: bundledThemes},
-		{Label: "User", Items: userThemes},
-	})
+	// 1. Theme Selection Menu, grouped by source (see themeListItems).
+	themeItems := s.themeListItems(selected)
 
 	themeMenu := displayengine.NewMenuModel(displayengine.IDThemePanel, config.ConnTypeLabel(s.editType)+" Theme", "", themeItems)
 	s.themeMenu = themeMenu
@@ -288,8 +222,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.themeMenu.SetShowLockGutter(false)
 	s.themeMenu.SetNoLeftMargin(true)
 
-	// Load Defaults: whether focusing a theme stages its suggested options.
-	s.themeMenu.SetTitleCheckbox("Load Defaults", 'd', func() bool { return s.loadThemeDefaults }, nil)
+	// Find, and Load Defaults: whether focusing a theme stages its
+	// suggested options.
+	s.themeMenu.SetTitleControls([]displayengine.TitleControl{
+		{Label: "Find", Key: 'f', Checked: func() bool { return s.themeFindShown }, Help: "Show or hide the theme search box"},
+		{Label: "Load Defaults", Key: 'd', Checked: func() bool { return s.loadThemeDefaults }, Help: "Turn Load Defaults on or off"},
+	})
+	s.themeFindMenu, s.themeFindInput = newFindBox(themeFindID, s.themeQuery,
+		"Show only themes whose name, description, or author contains every word typed, comma-separated. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) shows every theme again.",
+		&s.themePartial, s.applyThemeFind)
 
 	// 3. Options Menu
 	// Grouped: visual toggles, then brackets, then title alignment, then performance.
@@ -563,7 +504,7 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.buildTintMenus()
 	s.panes = displayengine.NewTabbedPanes("appearance_panes", []string{"Theme", "Tint", "Overrides"},
 		[]*displayengine.ContentColumn{
-			displayengine.NewContentColumn(themeMenu),
+			s.themePaneColumn(),
 			s.tintPaneColumn(),
 			s.overridePaneColumn(),
 		}, layout)
@@ -1744,6 +1685,103 @@ func savedIndex(values []string, saved string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// themeListItems returns the theme list grouped by source (see
+// groupedItems), with selected checked, narrowed by the Find box while it
+// shows.
+func (s *DisplayOptionsScreen) themeListItems(selected string) []displayengine.MenuItem {
+	var bundledThemes, userThemes, otherThemes []displayengine.MenuItem
+	foundCurrent := false
+	var matches func(fields ...string) bool
+	if s.themeFindShown && s.themeQuery != "" {
+		matches = commands.WordMatcher(s.themeQuery, s.themePartial)
+	}
+	for _, t := range s.themes {
+		if matches != nil && !matches(t.Name, t.Description, t.Author) {
+			if selected == t.ConfigValue {
+				foundCurrent = true
+			}
+			continue
+		}
+		desc := t.Description
+		if t.Author != "" {
+			desc += fmt.Sprintf(" [by %s]", t.Author)
+		}
+		descTag := "{{|ItemList|}}"
+		if t.IsUserTheme {
+			descTag = "{{|ItemListUserDefined|}}"
+		}
+		checked := selected == t.ConfigValue
+		if checked {
+			foundCurrent = true
+		}
+		item := displayengine.MenuItem{
+			Tag:           t.Name,
+			Desc:          descTag + desc,
+			Help:          desc,
+			IsRadioButton: true,
+			Selectable:    true,
+			Checked:       checked,
+			IsInvalid:     t.IsInvalid,
+			IsUserDefined: t.IsUserTheme,
+			Metadata:      map[string]string{"config_value": t.ConfigValue},
+		}
+		if t.IsUserTheme {
+			userThemes = append(userThemes, item)
+		} else {
+			bundledThemes = append(bundledThemes, item)
+		}
+	}
+	// file: themes point outside the themes folder and are never part of
+	// s.themes (theme.List only enumerates embedded and user: themes), so
+	// foundCurrent is never true for one -- check the file directly instead
+	// of treating "not in the list" as "missing".
+	if !foundCurrent && strings.HasPrefix(selected, "file:") {
+		if _, err := os.Stat(strings.TrimPrefix(selected, "file:")); err == nil {
+			otherThemes = append(otherThemes, displayengine.MenuItem{
+				Tag:           "file:" + theme.ThemeDisplayName(selected),
+				Desc:          "{{|ItemListUserDefined|}}External theme file",
+				Help:          "Theme loaded directly from a file outside the themes folder.",
+				IsRadioButton: true,
+				Selectable:    true,
+				Checked:       true,
+				IsUserDefined: true,
+				Metadata:      map[string]string{"config_value": selected},
+			})
+			foundCurrent = true
+		}
+	}
+	// If the configured theme still doesn't match anything (its file was
+	// removed, or it's a user:/embedded reference no longer on disk),
+	// prepend a placeholder so the user can see what is active and
+	// optionally switch away from it.
+	if !foundCurrent && selected != "" {
+		shortURI := selected
+		if strings.HasPrefix(selected, "file:") {
+			shortURI = "file:" + theme.ThemeDisplayName(selected)
+		}
+		displayName := "(missing) " + shortURI
+		otherThemes = append(otherThemes, displayengine.MenuItem{
+			Tag:           displayName,
+			Desc:          "{{|ItemListUserDefined|}}Source file not found — using cached version",
+			Help:          "Theme source file is missing. The cached version remains active until you choose another theme.",
+			IsRadioButton: true,
+			Selectable:    true,
+			Checked:       true,
+			IsUserDefined: true,
+			Metadata:      map[string]string{"config_value": selected},
+		})
+	}
+	items := groupedItems([]listGroup{
+		{Label: "Current", Items: otherThemes},
+		{Label: "Bundled", Items: bundledThemes},
+		{Label: "User", Items: userThemes},
+	})
+	if matches != nil && len(bundledThemes)+len(userThemes) == 0 {
+		items = append(items, displayengine.MenuItem{Tag: "No matching themes", IsSeparator: true})
+	}
+	return items
 }
 
 // markThemeList marks the saved theme's row changed while another theme is

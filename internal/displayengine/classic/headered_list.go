@@ -4,12 +4,16 @@ import tea "charm.land/bubbletea/v2"
 
 // HeaderedList is a submenu list with a section drawn inside its border
 // above its rows (see MenuModel.SetHeader), e.g. a search box over the list
-// it filters. It has a Tab stop for each, and routes focus, clicks, and keys
-// to whichever holds focus, like a two-item ContentColumn; the list draws,
-// sizes, and places both.
+// it filters, or below them sharing its border (see MenuModel.SetFooter).
+// It has a Tab stop for each, in the order drawn, and routes focus, clicks,
+// and keys to whichever holds focus, like a two-item ContentColumn; the list
+// draws, sizes, and places both. The section can be hidden (see
+// SetSectionShown), keeping its Tab stop but skipping it.
 type HeaderedList struct {
 	*ContentColumn
 	list    *MenuModel
+	slot    *sectionSlot
+	bottom  bool
 	focused bool
 }
 
@@ -20,8 +24,44 @@ var (
 
 // NewHeaderedList draws header inside list's border above its rows.
 func NewHeaderedList(header Content, list *MenuModel) *HeaderedList {
+	slot := &sectionSlot{Content: header, shown: true}
 	list.SetHeader(header)
-	return &HeaderedList{ContentColumn: NewContentColumn(header, list), list: list}
+	return &HeaderedList{ContentColumn: NewContentColumn(slot, list), list: list, slot: slot}
+}
+
+// NewFooteredList draws footer below list's rows, sharing its border (see
+// MenuModel.SetFooter).
+func NewFooteredList(footer Content, list *MenuModel) *HeaderedList {
+	slot := &sectionSlot{Content: footer, shown: true}
+	list.SetFooter(footer)
+	return &HeaderedList{ContentColumn: NewContentColumn(list, slot), list: list, slot: slot, bottom: true}
+}
+
+// SetSectionShown shows or hides the header or footer.
+func (h *HeaderedList) SetSectionShown(shown bool) {
+	if h.slot.shown == shown {
+		return
+	}
+	h.slot.shown = shown
+	switch {
+	case !shown:
+		h.list.SetHeader(nil)
+	case h.bottom:
+		h.list.SetFooter(h.slot.Content)
+	default:
+		h.list.SetHeader(h.slot.Content)
+	}
+}
+
+// SectionShown reports whether the header or footer shows.
+func (h *HeaderedList) SectionShown() bool { return h.slot.shown }
+
+// sectionIndex is the header or footer's Tab stop.
+func (h *HeaderedList) sectionIndex() int {
+	if h.bottom {
+		return 1
+	}
+	return 0
 }
 
 func (h *HeaderedList) SetSize(width, height int)          { h.list.SetSize(width, height) }
@@ -44,9 +84,14 @@ func (h *HeaderedList) SetSubFocused(focused bool) tea.Cmd {
 	return cmd
 }
 
-// syncFrame draws the list's border focused while the header holds focus.
+// syncFrame draws the list's border focused while the section holds focus,
+// and a footer's while the list does, since they share edges.
 func (h *HeaderedList) syncFrame() {
-	h.list.SetFrameFocused(h.focused && h.SubFocusIndex() == 0)
+	onSection := h.SubFocusIndex() == h.sectionIndex()
+	h.list.SetFrameFocused(h.focused && onSection)
+	if f, ok := h.slot.Content.(interface{ SetFrameFocused(bool) }); ok && h.bottom {
+		f.SetFrameFocused(h.focused && !onSection)
+	}
 }
 
 // Update routes msg to whichever part holds focus, except the list's own
@@ -68,3 +113,29 @@ func (h *HeaderedList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	h.syncFrame()
 	return h, cmd
 }
+
+// sectionSlot holds a HeaderedList's header or footer, which Tab and
+// clicks skip while hidden.
+type sectionSlot struct {
+	Content
+	shown bool
+}
+
+var _ ContentWrapper = (*sectionSlot)(nil)
+
+func (s *sectionSlot) Unwrap() Content { return s.Content }
+func (s *sectionSlot) Focusable() bool { return s.shown && s.Content.Focusable() }
+func (s *sectionSlot) MatchesID(id string) bool {
+	return s.shown && s.Content.MatchesID(id)
+}
+
+func (s *sectionSlot) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updated, cmd := s.Content.Update(msg)
+	if c, ok := updated.(Content); ok {
+		s.Content = c
+	}
+	return s, cmd
+}
+
+func (s *sectionSlot) Init() tea.Cmd  { return nil }
+func (s *sectionSlot) View() tea.View { return tea.View{Content: s.ViewString()} }

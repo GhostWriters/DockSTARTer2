@@ -97,7 +97,46 @@ func NewTabbedPanes(id string, labels []string, panes []*ContentColumn, layout s
 			Changed: func(int) bool { return t.paneChanged(pane) }})
 	}
 	t.effective = t.layout
+	for i := range t.panes {
+		if host := t.frameHost(i); host != nil {
+			pane := i
+			host.SetFrameTitle(&FrameTitle{
+				Render: func(avail int, focused bool, ctx StyleContext) string {
+					return t.paneStrip(pane).Render(avail, focused, ctx)
+				},
+				HitRegions: func(x, y, avail int, ctx StyleContext) []HitRegion {
+					return t.paneStrip(pane).HitRegions(x, y, avail, ZDialog+10, ctx, nil)
+				},
+				Widgets:  func() []WidgetDef { return t.paneWidgets(pane) },
+				WidgetID: t.paneID(pane),
+			})
+		}
+	}
 	return t
+}
+
+// frameHost returns the list that draws pane's box itself, titled with the
+// pane's tab strip or label and icons, like the tabbed vars editor's panes:
+// a pane holding just one bordered list (see FrameHoster). Nil for any
+// other pane, which gets a box around its sections.
+func (t *TabbedPanes) frameHost(pane int) *MenuModel {
+	items := t.panes[pane].items
+	if len(items) != 1 {
+		return nil
+	}
+	if h, ok := items[0].(FrameHoster); ok {
+		return h.FrameHost()
+	}
+	return nil
+}
+
+// boxInset returns how much pane's box adds to its content's size on each
+// axis: none when its list draws the box (see frameHost).
+func (t *TabbedPanes) boxInset(pane int) int {
+	if t.frameHost(pane) != nil {
+		return 0
+	}
+	return 2
 }
 
 // paneChanged reports whether pane has unsaved changes (see Changed).
@@ -483,23 +522,27 @@ func (t *TabbedPanes) SectionHeight(width int) int {
 		widths := SplitWidth(width-2, len(open))
 		h := 0
 		for k, p := range open {
-			h = max(h, t.panes[p].SectionHeight(max(widths[k]-2, 1))+2)
+			in := t.boxInset(p)
+			h = max(h, t.panes[p].SectionHeight(max(widths[k]-in, 1))+in)
 		}
 		return h + 2
 	case PaneLayoutStacked:
 		h := 0
 		for _, p := range open {
-			h += t.panes[p].SectionHeight(max(width-4, 1)) + 2
+			in := t.boxInset(p)
+			h += t.panes[p].SectionHeight(max(width-2-in, 1)) + in
 		}
 		return h + 2
 	}
-	return t.panes[t.Strip.Active].SectionHeight(max(width-2, 1)) + 2
+	in := t.boxInset(t.Strip.Active)
+	return t.panes[t.Strip.Active].SectionHeight(max(width-in, 1)) + in
 }
 
 func (t *TabbedPanes) SectionNaturalWidth(maxWidth int) int {
 	w := 0
-	for _, p := range t.panes {
-		w = max(w, p.SectionNaturalWidth(max(maxWidth-2, 1))+2)
+	for i, p := range t.panes {
+		in := t.boxInset(i)
+		w = max(w, p.SectionNaturalWidth(max(maxWidth-in, 1))+in)
 	}
 	if t.effectiveFor(maxWidth, 0) == PaneLayoutSideBySide {
 		w = min(w*len(t.panes), maxWidth)
@@ -533,7 +576,8 @@ func (t *TabbedPanes) SetSize(width, height int) {
 		}
 	}
 	for i, p := range t.panes {
-		p.SetSize(max(t.boxWidths[i]-2, 1), max(t.boxHeights[i]-2, 1))
+		in := t.boxInset(i)
+		p.SetSize(max(t.boxWidths[i]-in, 1), max(t.boxHeights[i]-in, 1))
 	}
 }
 
@@ -554,6 +598,9 @@ func (t *TabbedPanes) middleID() string { return t.id + ".middle" }
 
 // renderPane draws pane inside its box.
 func (t *TabbedPanes) renderPane(pane int) string {
+	if t.frameHost(pane) != nil {
+		return t.panes[pane].ViewString()
+	}
 	ctx := GetActiveContext()
 	w, h := t.boxWidths[pane], t.boxHeights[pane]
 	widgets := t.paneWidgets(pane)
@@ -607,12 +654,17 @@ func (t *TabbedPanes) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 	for _, i := range t.visible() {
 		w := t.boxWidths[i]
-		regions = append(regions, t.panes[i].GetHitRegions(x+1, y+1)...)
-		widgets := t.paneWidgets(i)
-		strip := t.paneStrip(i)
-		sx, avail := strip.TitlePlacement(max(w-2, 1), ctx.SubmenuTitleAlign, widgets, ctx)
-		regions = append(regions, strip.HitRegions(x+sx, y, avail, ZDialog+10, ctx, nil)...)
-		regions = append(regions, TitleBarHitRegionsFor(t.paneID(i), x, y, w, false, widgets, ZDialog)...)
+		if t.frameHost(i) != nil {
+			// The list draws the box, title, and icons (see frameHost).
+			regions = append(regions, t.panes[i].GetHitRegions(x, y)...)
+		} else {
+			regions = append(regions, t.panes[i].GetHitRegions(x+1, y+1)...)
+			widgets := t.paneWidgets(i)
+			strip := t.paneStrip(i)
+			sx, avail := strip.TitlePlacement(max(w-2, 1), ctx.SubmenuTitleAlign, widgets, ctx)
+			regions = append(regions, strip.HitRegions(x+sx, y, avail, ZDialog+10, ctx, nil)...)
+			regions = append(regions, TitleBarHitRegionsFor(t.paneID(i), x, y, w, false, widgets, ZDialog)...)
+		}
 		switch t.effective {
 		case PaneLayoutSideBySide:
 			x += w

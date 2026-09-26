@@ -191,19 +191,28 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Button == tea.MouseLeft && s.tintMenu != nil {
 			switch msg.ID {
-			case s.themeMenu.TitleCheckboxID():
+			case s.themeMenu.TitleControlID(0):
+				return s, s.toggleThemeFind()
+			case s.themeMenu.TitleControlID(1):
 				return s, func() tea.Msg { return toggleLoadThemeDefaultsMsg{} }
-			case s.tintMenu.TitleCheckboxID():
+			case s.themeFindMenu.InputControlID(0):
+				return s, s.toggleThemeWholeWords()
+			case s.tintMenu.TitleControlID(0):
+				return s, s.toggleTintFilter()
+			case s.tintMenu.TitleControlID(1):
 				return s, s.toggleTintEnabled()
 			case s.overrideMenu.TitleCheckboxID():
 				return s, s.toggleOverrideEnabled()
-			case s.tintSearchMenu.TitleControlID(0):
-				return s, s.toggleTintWholeWords()
-			case s.tintSearchMenu.TitleControlID(1):
+			case s.tintMenu.FooterBarControlID(0):
 				return s, s.showTintVariantPicker()
-			case s.tintSearchMenu.TitleControlID(2):
+			case s.tintMenu.FooterBarControlID(1):
 				return s, s.showTintBasePicker()
+			case s.tintSearchMenu.InputControlID(0):
+				return s, s.toggleTintWholeWords()
 			}
+		}
+		if cmd, ok := s.elementStripHit(msg.ID); ok {
+			return s, cmd
 		}
 		if i, ok := s.tabs.TabFromID(msg.ID); ok {
 			return s, s.switchTab(config.ConnTypes[i], true)
@@ -263,8 +272,9 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.apply(s)
 		s.syncTintMenus()
 		s.selectCheckedTint()
-		if s.tintSearchMenu != nil {
-			s.tintSearchMenu.InvalidateCache() // its border shows the options
+		if s.tintMenu != nil {
+			s.tintMenu.InvalidateCache() // its footer bar shows the options
+			s.tintSearchMenu.InvalidateCache()
 		}
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
@@ -316,9 +326,15 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.toggleTintEnabled()
 		case key.Matches(msg, displayengine.Keys.ToggleEnabled) && s.focusedSettingsLeaf() == s.overrideMenu:
 			return s, s.toggleOverrideEnabled()
-		case key.Matches(msg, displayengine.Keys.ToggleAdvanced) && s.focusedSettingsLeaf() != s.tintSearchMenu:
+		case key.Matches(msg, displayengine.Keys.ToggleAdvanced) && !s.findBoxFocused():
 			return s, s.toggleAdvanced()
-		case key.Matches(msg, displayengine.Keys.SearchWholeWords) && s.tintFrameFocused():
+		case key.Matches(msg, displayengine.Keys.ToggleFilter) && s.tintFrameFocused():
+			return s, s.toggleTintFilter()
+		case key.Matches(msg, displayengine.Keys.ToggleFilter) && s.themeFrameFocused():
+			return s, s.toggleThemeFind()
+		case key.Matches(msg, displayengine.Keys.SearchWholeWords) && s.themeFrameFocused() && s.themeFindShown:
+			return s, s.toggleThemeWholeWords()
+		case key.Matches(msg, displayengine.Keys.SearchWholeWords) && s.tintFrameFocused() && s.tintFilterShown:
 			return s, s.toggleTintWholeWords()
 		case key.Matches(msg, displayengine.Keys.SearchVariant) && s.tintFrameFocused():
 			return s, s.showTintVariantPicker()
@@ -559,6 +575,7 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 		displayengine.Keys.ToggleLoadDefaults,
 		displayengine.Keys.EnvClosePane,
 		displayengine.Keys.ToggleAdvanced,
+		displayengine.Keys.ToggleFilter,
 		displayengine.Keys.SearchWholeWords,
 		displayengine.Keys.SearchVariant,
 		displayengine.Keys.SearchBase,
@@ -566,9 +583,6 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {
-	if s.tintStripSection != nil && s.focusedSettingsLeaf() == s.tintStripSection {
-		return "Left/Right to choose which element's tint to show"
-	}
 	if m := s.focusedSettingsMenu(); m != nil {
 		return m.HelpText()
 	}
