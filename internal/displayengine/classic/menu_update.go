@@ -802,12 +802,13 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 
 // SetSize updates the menu dimensions and resizes the list
 func (m *MenuModel) SetSize(width, height int) {
-	// An unchanged size still rebuilds the view, but keeps the list memo
-	// (see renderVariableHeightList), whose key covers size and content --
-	// screens re-apply their size on every render.
+	// Screens re-apply their size on every render. An unchanged size keeps
+	// a cacheable menu's view, which its view stamp validates instead (see
+	// CheckCache); any other menu is drawn again, keeping only its list memo
+	// (see renderVariableHeightList).
 	if width != m.width || height != m.height {
 		m.InvalidateCache()
-	} else {
+	} else if !m.cacheableView() {
 		m.cacheValid = false
 	}
 	m.width = width

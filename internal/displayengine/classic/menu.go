@@ -261,8 +261,10 @@ type MenuModel struct {
 
 	// Memoization for expensive rendering
 	lastView         string
-	cacheValid       bool // Indicates if lastView is up-to-date with current state
-	lastStateVersion int  // renderVersion snapshot when lastView was saved
+	cacheValid       bool   // Indicates if lastView is up-to-date with current state
+	lastStateVersion int    // renderVersion snapshot when lastView was saved
+	lastViewStamp    string // viewStamp when lastView was saved
+	pendingViewStamp string // viewStamp at the start of the draw in progress
 
 	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
 	lastListView string

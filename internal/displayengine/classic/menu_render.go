@@ -184,11 +184,18 @@ func (m *MenuModel) ViewString() string {
 		}
 	}
 
-	// Return cached view if the state hasn't changed since the last render
+	m.pendingViewStamp, _ = m.viewStamp()
 	if cachedView, valid := m.CheckCache(); valid {
+		if verifyViewCachePath != "" {
+			return m.verifyCachedView(cachedView)
+		}
 		return cachedView
 	}
+	return m.renderView()
+}
 
+// renderView draws the menu, caching the result (see ViewString).
+func (m *MenuModel) renderView() string {
 	// Plain-text kind: a single borderless, theme-styled line -- e.g. a
 	// dialog's subtitle expressed as its own content section. Checked before
 	// subMenuMode since a plain-text section never wants viewSubMenu's border.
@@ -198,7 +205,7 @@ func (m *MenuModel) ViewString() string {
 		if m.plainText == "" {
 			return ""
 		}
-		return m.viewPlainText()
+		return m.saveCacheable(m.viewPlainText())
 	}
 
 	// Borderless contentRenderer sections (e.g. a header or streaming
@@ -212,7 +219,7 @@ func (m *MenuModel) ViewString() string {
 
 	// In Sub-menu mode, we render a simpler view without the global backdrop logic
 	if m.subMenuMode {
-		return m.viewSubMenu()
+		return m.saveCacheable(m.viewSubMenu())
 	}
 
 	// Sections-based layout: stack sub-menus inside the outer border.
@@ -221,7 +228,7 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	if m.flowMode {
-		return m.renderFlow()
+		return m.saveCacheable(m.renderFlow())
 	}
 
 	styles := GetStyles()
