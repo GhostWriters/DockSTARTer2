@@ -131,6 +131,7 @@ func TestHyperlinkPathMultiSegment(t *testing.T) {
 }
 
 func TestStyleWithFallbackHonorsHardReset(t *testing.T) {
+	ClearSemanticCache() // earlier tests may have cached Dialog
 	semstyle.RegisterThemeTagRaw("dialog", "black:cyan:")
 	fallback := SemanticRawStyle("Dialog")
 

@@ -88,12 +88,19 @@ func (c *ContentColumn) locate(stop int) (item, local int) {
 }
 
 // SubFocusIndex returns the flattened Tab stop currently holding
-// column-internal focus.
+// column-internal focus. Within a nested child it's the child's own stop,
+// which the child may have moved itself (e.g. TabbedPanes.ShowPane).
 func (c *ContentColumn) SubFocusIndex() int {
-	if c.subFocus < 0 || c.subFocus >= c.NumTabStops() {
-		return 0
+	i := c.subFocus
+	if i < 0 || i >= c.NumTabStops() {
+		i = 0
 	}
-	return c.subFocus
+	if item, _ := c.locate(i); item >= 0 {
+		if n := nestedStops(c.items[item]); n != nil {
+			return c.base(item) + n.SubFocusIndex()
+		}
+	}
+	return i
 }
 
 // SetSubFocusIndex sets which flattened Tab stop holds column-internal
