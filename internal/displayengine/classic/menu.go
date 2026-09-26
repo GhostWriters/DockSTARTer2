@@ -278,14 +278,16 @@ type MenuModel struct {
 	lastScope          string
 	lastViewportHeight int
 
-	// rowCache holds each list row's last rendering (see
+	// rowCache holds list rows' renderings by content (see
 	// renderVariableHeightList), valid while rowCacheStamp matches; only
-	// used when rowCacheEnabled (see SetRowCache). itemsVersion counts the
-	// menu's own changes to its items.
-	rowCache        map[int]cachedRow
+	// used when rowCacheEnabled (see SetRowCache).
+	rowCache        map[string]cachedRow
 	rowCacheStamp   string
 	rowCacheEnabled bool
-	itemsVersion    int
+
+	// minTagWidth is the narrowest the label column gets (see
+	// SetMinTagWidth).
+	minTagWidth int
 
 	// savedRadio is the saved radio row's index plus one, 0 for none (see
 	// SetSavedRadio).
@@ -444,7 +446,6 @@ func (m *MenuModel) applyItemLocks() {
 		if item.IsDestructive && item.Locked != locked {
 			item.Locked = locked
 			m.items[i] = item
-			m.itemsVersion++
 			changed = true
 		}
 	}
@@ -1490,12 +1491,20 @@ func (m *MenuModel) savedRadioTag() string {
 	return m.items[saved].Tag
 }
 
-// SetRowCache lets the list reuse each row's rendering across frames where
-// only focus moved. Only for menus whose items change solely through the
-// menu's own methods (SetItems, SetItem, toggling), never by editing
-// GetItems' slice in place.
+// SetRowCache lets the list reuse each row's rendering, by its content,
+// across frames and item changes: moving focus, or a filtered list's items
+// coming and going, only renders rows not already drawn.
 func (m *MenuModel) SetRowCache(enabled bool) {
 	m.rowCacheEnabled = enabled
+}
+
+// SetMinTagWidth keeps the label column at least width wide, so it stays
+// put while the items change (e.g. as a search narrows the list).
+func (m *MenuModel) SetMinTagWidth(width int) {
+	if m.minTagWidth != width {
+		m.minTagWidth = width
+		m.InvalidateCache()
+	}
 }
 
 func (m *MenuModel) SetItem(index int, item MenuItem) {
@@ -1504,7 +1513,6 @@ func (m *MenuModel) SetItem(index int, item MenuItem) {
 	}
 	m.items[index] = item
 	m.list.SetItem(index, item)
-	m.itemsVersion++
 	m.renderVersion++
 	m.InvalidateCache()
 }
@@ -1570,7 +1578,6 @@ func (m *MenuModel) GetInnerContentWidth() int {
 // SetItems updates the menu items and refreshes the bubbles list
 func (m *MenuModel) SetItems(items []MenuItem) {
 	m.items = items
-	m.itemsVersion++
 
 	// Convert MenuItems to list.Items
 	listItems := make([]list.Item, len(items))
@@ -1652,7 +1659,6 @@ func (m *MenuModel) ToggleSelectedItem() {
 		}
 		// Update the list item too
 		m.list.SetItem(idx, m.items[idx])
-		m.itemsVersion++
 		m.renderVersion++
 		m.InvalidateCache()
 	}

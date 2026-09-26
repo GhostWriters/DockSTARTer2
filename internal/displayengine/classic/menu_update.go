@@ -758,7 +758,6 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 				// Update list.Model internal items to reflect changes immediately
 				m.list.SetItem(idx, item)
 			}
-			m.itemsVersion++
 			m.renderVersion++
 			m.InvalidateCache()
 

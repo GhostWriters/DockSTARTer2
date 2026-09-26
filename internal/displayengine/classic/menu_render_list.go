@@ -131,19 +131,19 @@ func (m *MenuModel) renderVariableHeightList() string {
 			mainItems = append(mainItems, item)
 		}
 	}
-	maxTagLen := calculateMaxTagLength(mainItems)
+	maxTagLen := max(calculateMaxTagLength(mainItems), m.minTagWidth)
 
 	var renderedItems []string
 	var itemHeights []int
 	var itemMappings []int
 
-	// Rows are reused while nothing but other rows' focus has changed; none
-	// are cached while an item shows a processing spinner.
+	// Rows are reused by content while the list-wide settings below are
+	// unchanged; none are cached while an item shows a processing spinner.
 	savedTag := m.savedRadioTag()
 	cacheRows := m.rowCacheEnabled && m.processingItemIdx < 0
-	if stamp := fmt.Sprint(m.itemsVersion, m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ctx.LineCharacters,
-		m.activeColumn, m.itemPaddingWidth, m.disabled, filter, maxTagLen, m.IsListActive(), savedTag); stamp != m.rowCacheStamp || m.rowCache == nil {
-		m.rowCache = map[int]cachedRow{}
+	if stamp := fmt.Sprint(m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ctx.LineCharacters,
+		m.activeColumn, m.itemPaddingWidth, m.disabled, filter, maxTagLen, m.IsListActive(), savedTag); stamp != m.rowCacheStamp || m.rowCache == nil || len(m.rowCache) > rowCacheLimit {
+		m.rowCache = map[string]cachedRow{}
 		m.rowCacheStamp = stamp
 	}
 
@@ -246,7 +246,11 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		rowKey := cachedRowKey{selected: isSelected, parentOfSelected: isParentOfSelected, disabled: isDisabled}
-		if r, ok := m.rowCache[i]; cacheRows && ok && r.key == rowKey {
+		contentKey := ""
+		if cacheRows {
+			contentKey = rowContentKey(item)
+		}
+		if r, ok := m.rowCache[contentKey]; cacheRows && ok && r.key == rowKey {
 			renderedItems = append(renderedItems, r.text)
 			itemHeights = append(itemHeights, r.height)
 			itemMappings = append(itemMappings, i)
@@ -650,7 +654,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		itemHeights = append(itemHeights, rowHeight)
 		itemMappings = append(itemMappings, i)
 		if cacheRows {
-			m.rowCache[i] = cachedRow{key: rowKey, text: finalItem, height: rowHeight}
+			m.rowCache[contentKey] = cachedRow{key: rowKey, text: finalItem, height: rowHeight}
 		}
 	}
 
@@ -925,6 +929,16 @@ func (m *MenuModel) renderVariableHeightList() string {
 }
 
 // cachedRowKey is the per-row state a cached row rendering depends on.
+// rowCacheLimit bounds the row cache; past it, the cache starts over.
+const rowCacheLimit = 4096
+
+// rowContentKey identifies what a row draws: every field of item but its
+// actions and help text, which don't affect how it looks.
+func rowContentKey(item MenuItem) string {
+	item.Action, item.SpaceAction, item.Help = nil, nil, ""
+	return fmt.Sprintf("%+v", item)
+}
+
 type cachedRowKey struct {
 	selected, parentOfSelected, disabled bool
 }

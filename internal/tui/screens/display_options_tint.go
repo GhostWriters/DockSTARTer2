@@ -11,6 +11,7 @@ import (
 	"DockSTARTer2/internal/tui"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // tintElementLabels names each tint element.
@@ -330,6 +331,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 		func() bool { return s.stagedTint().TintEnabled != s.baseTint().TintEnabled })
 	list.SetTitleChanged(func() bool { return s.stagedTint().Tint != s.baseTint().Tint })
 	list.SetRowCache(true)
+	list.SetMinTagWidth(s.tintTagWidth())
 	list.SetItemHelpFunc(s.buildTintItemHelp)
 	list.SetHelpPageText("Choose an ANSI color scheme to tint this element with.")
 	list.SetSubMenuMode(true)
@@ -516,8 +518,19 @@ func (s *DisplayOptionsScreen) syncTintMenus() {
 	s.overrideMenu.SetItems(s.overrideItems())
 	s.overrideMenu.Select(overrideCursor)
 	cursor := s.tintMenu.Index()
+	s.tintMenu.SetMinTagWidth(s.tintTagWidth())
 	s.tintMenu.SetItems(s.tintListItems())
 	s.tintMenu.Select(cursor)
+}
+
+// tintTagWidth returns the widest scheme name in the catalog, so the scheme
+// list's label column stays put as the search narrows the list.
+func (s *DisplayOptionsScreen) tintTagWidth() int {
+	w := 0
+	for _, e := range s.tintCatalog {
+		w = max(w, lipgloss.Width(e.Slug))
+	}
+	return w
 }
 
 // loadTintCatalog reads the schemes the Tint list offers.
