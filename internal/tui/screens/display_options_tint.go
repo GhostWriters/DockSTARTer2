@@ -140,14 +140,15 @@ func (s *DisplayOptionsScreen) newElementFrame(id string, part func(config.AnsiE
 
 // tintPaneColumn and overridePaneColumn build the Tint and Overrides panes'
 // contents: in advanced mode framed by the element tabs, with Tab walking
-// every element; otherwise just the Menu element's sections.
+// every element; otherwise just the Menu element's sections. The search box
+// sits inside the Tint list's border, above its rows.
 func (s *DisplayOptionsScreen) tintPaneColumn() *displayengine.ContentColumn {
+	searchAndList := displayengine.NewHeaderedList(s.tintSearchMenu, s.tintMenu)
 	if !s.advanced {
-		return displayengine.NewContentColumn(s.tintSearchMenu, s.tintMenu)
+		return displayengine.NewContentColumn(searchAndList)
 	}
 	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.tintStripSection,
-		newTabFrameSection(s.tintSearchMenu, s.tintFrame, false, false),
-		newTabFrameSection(s.tintMenu, s.tintFrame, false, true))))
+		newTabFrameSection(searchAndList, s.tintFrame, false, true))))
 }
 
 func (s *DisplayOptionsScreen) overridePaneColumn() *displayengine.ContentColumn {

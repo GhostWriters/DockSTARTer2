@@ -60,15 +60,16 @@ const (
 // DialogLayout stores pre-calculated vertical budgeting for a dialog.
 // This implements the "calculate once, use everywhere" pattern.
 type DialogLayout struct {
-	Width          int
-	Height         int
-	HeaderHeight   int
-	CommandHeight  int
-	ViewportHeight int
-	ButtonHeight   int
-	ShadowHeight   int
-	Overhead       int
-	SubtitleHeight int // actual rendered subtitle height at layout time
+	Width            int
+	Height           int
+	HeaderHeight     int
+	CommandHeight    int
+	ViewportHeight   int
+	ButtonHeight     int
+	ShadowHeight     int
+	Overhead         int
+	SubtitleHeight   int // actual rendered subtitle height at layout time
+	ListHeaderHeight int // height of the section drawn above a submenu's list (see SetHeader)
 
 	LargeTitleBar bool // whether large titlebar is active (pre-computed at layout time)
 

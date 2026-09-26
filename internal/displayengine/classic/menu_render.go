@@ -176,6 +176,14 @@ func (m *MenuModel) ViewString() string {
 		return ""
 	}
 
+	// A changed header redraws this menu (its list keeps its own cache).
+	if m.header != nil && m.subMenuMode {
+		if hv := m.header.ViewString(); hv != m.lastHeaderView {
+			m.lastHeaderView = hv
+			m.cacheValid = false
+		}
+	}
+
 	// Return cached view if the state hasn't changed since the last render
 	if cachedView, valid := m.CheckCache(); valid {
 		return cachedView
@@ -451,6 +459,9 @@ func (m *MenuModel) viewSubMenu() string {
 		subStr := RenderThemeText("{{|Subtitle|}}"+m.subtitle, styles.Dialog)
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
 	}
+	if m.header != nil {
+		innerParts = append(innerParts, m.header.ViewString())
+	}
 
 	// Render core list with scrollbar (or flow layout if flowMode is set)
 	if len(m.contentSections) > 0 {
@@ -516,12 +527,12 @@ func (m *MenuModel) viewSubMenu() string {
 	} else if targetHeight > m.height {
 		targetHeight = m.height
 	}
-	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub, true, "Title")
+	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub || m.frameFocused, true, "Title")
 
 	// 3. Replace bottom border with scroll-percent indicator if needed
 	if (!m.flowMode || m.MaxFlowRows > 0) && m.Scroll.Info.Needed {
 		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
-			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub, ctx)
+			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub || m.frameFocused, ctx)
 			result = result[:lastNL+1] + bottomLine
 		}
 	}

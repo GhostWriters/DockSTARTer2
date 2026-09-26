@@ -962,6 +962,12 @@ func (m *MenuModel) calculateLayout() {
 		subtitleHeight = lipgloss.Height(subtitleStyle.Render(subStr))
 	}
 
+	// The header drawn above a submenu's list (see SetHeader).
+	headerHeight := m.headerHeight(m.width)
+	if headerHeight > 0 {
+		m.header.SetSize(max(m.width-GetLayout().BorderWidth(), 1), headerHeight)
+	}
+
 	// 3. Button and Shadow Heights
 	// Button height is 3 with borders, or 1 if space is too tight for them.
 	// innerBoxWidth mirrors the width passed to renderSimpleButtons in ViewString.
@@ -987,7 +993,7 @@ func (m *MenuModel) calculateLayout() {
 		// Sub-menu overhead: subtitle + own borders (2) + buttons.
 		// Title is embedded in the top border line by RenderBorderedBoxCtx, so it does
 		// not consume a content row and is NOT counted here.
-		overhead = subtitleHeight + layout.BorderHeight() + buttonBudget
+		overhead = subtitleHeight + headerHeight + layout.BorderHeight() + buttonBudget
 		maxListHeight = m.height - overhead
 	} else {
 		// Full dialog overhead: borders, subtitle, buttons, shadow.
@@ -1040,15 +1046,16 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	m.Layout = DialogLayout{
-		Width:          m.width,
-		Height:         m.height,
-		HeaderHeight:   overhead - layout.BorderHeight(), // Store the reserved overhead height
-		ViewportHeight: listHeight,
-		ButtonHeight:   buttonHeight,
-		ShadowHeight:   shadowHeight,
-		Overhead:       overhead,
-		SubtitleHeight: subtitleHeight,
-		LargeTitleBar:  useLargeTitleBar,
+		Width:            m.width,
+		Height:           m.height,
+		HeaderHeight:     overhead - layout.BorderHeight(), // Store the reserved overhead height
+		ViewportHeight:   listHeight,
+		ButtonHeight:     buttonHeight,
+		ShadowHeight:     shadowHeight,
+		Overhead:         overhead,
+		SubtitleHeight:   subtitleHeight,
+		ListHeaderHeight: headerHeight,
+		LargeTitleBar:    useLargeTitleBar,
 	}
 
 	m.list.SetSize(listWidth, listHeight)

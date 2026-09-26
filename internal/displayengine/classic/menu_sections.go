@@ -574,7 +574,7 @@ func (m *MenuModel) SectionHeight(sectionWidth int) int {
 	case m.ContentRenderer != nil:
 		return 1 + layout.BorderHeight()
 	default:
-		return len(m.items) + layout.BorderHeight()
+		return len(m.items) + layout.BorderHeight() + m.headerHeight(sectionWidth)
 	}
 }
 

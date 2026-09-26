@@ -119,9 +119,10 @@ type MenuModel struct {
 	listFocusOverride bool
 
 	// Sub-menu mode (for consolidated screens)
-	subMenuMode bool
-	focusedSub  bool // If false, use normal borders. If true, use thick borders.
-	disabled    bool // When true, renders title with TitleSubMenuDisabled style.
+	subMenuMode  bool
+	focusedSub   bool // If false, use normal borders. If true, use thick borders.
+	frameFocused bool // Draw the border focused although the list isn't (see SetFrameFocused)
+	disabled     bool // When true, renders title with TitleSubMenuDisabled style.
 
 	// submenuWidgets opts a submenu-mode menu into rendering its own title
 	// bar widgets (via ConfigureWidgets) on its border -- off by default so
@@ -265,6 +266,12 @@ type MenuModel struct {
 
 	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
 	lastListView string
+
+	// header is a section drawn inside a submenu's border above its list
+	// (see SetHeader); lastHeaderView is its last drawing, to redraw this
+	// menu when it changes.
+	header         Content
+	lastHeaderView string
 	// lastStyleGen, lastScope, and lastViewportHeight complete
 	// renderVariableHeightList's memo key (see recordListMemo).
 	lastStyleGen       uint64
@@ -848,6 +855,32 @@ func (m *MenuModel) SetWantsAllMessages(v bool) {
 // Part of the Content interface.
 func (m *MenuModel) Focusable() bool {
 	return !m.isPlainTextKind && !m.nonFocusable && !m.disabled
+}
+
+// SetFrameFocused draws this submenu's border as focused, as when a section
+// inside it (see SetHeader) holds focus, without making its list active.
+func (m *MenuModel) SetFrameFocused(v bool) {
+	if m.frameFocused != v {
+		m.frameFocused = v
+		m.InvalidateCache()
+	}
+}
+
+// SetHeader draws section inside this submenu's border above its list, like
+// a subtitle: the list, and its scrollbar, start below it. The caller routes
+// focus and messages to it (see HeaderedList).
+func (m *MenuModel) SetHeader(section Content) {
+	m.header = section
+	m.lastHeaderView = ""
+	m.InvalidateCache()
+}
+
+// headerHeight returns the header's height for a submenu sectionWidth wide.
+func (m *MenuModel) headerHeight(sectionWidth int) int {
+	if m.header == nil || !m.subMenuMode {
+		return 0
+	}
+	return m.header.SectionHeight(max(sectionWidth-GetLayout().BorderWidth(), 1))
 }
 
 // SetBorderless skips viewSubMenu's outer bordered-box wrap for this

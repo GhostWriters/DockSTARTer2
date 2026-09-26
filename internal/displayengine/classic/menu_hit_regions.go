@@ -64,6 +64,12 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		listY += subtitleH
 	}
 
+	// The header drawn above a submenu's list (see SetHeader).
+	if m.header != nil && m.subMenuMode {
+		regions = append(regions, m.header.GetHitRegions(offsetX+layout.SingleBorder(), offsetY+listY)...)
+		listY += m.Layout.ListHeaderHeight
+	}
+
 	// Full dialogs have a NESTED inner border around the list (1 line).
 	// Sub-menus only have the one outer border.
 	if !m.subMenuMode {

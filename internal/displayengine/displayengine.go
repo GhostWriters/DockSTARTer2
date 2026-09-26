@@ -139,6 +139,7 @@ type (
 	TabStrip                   = classic.TabStrip
 	TabbedPanes                = classic.TabbedPanes
 	RepeatedStops              = classic.RepeatedStops
+	HeaderedList               = classic.HeaderedList
 	TitleControl               = classic.TitleControl
 	GroupJumper                = classic.GroupJumper
 	PaneLayoutMsg              = classic.PaneLayoutMsg
@@ -304,6 +305,7 @@ var (
 	NewContentColumn               = classic.NewContentColumn
 	NewTabbedPanes                 = classic.NewTabbedPanes
 	NewRepeatedStops               = classic.NewRepeatedStops
+	NewHeaderedList                = classic.NewHeaderedList
 	StyleGeneration                = classic.StyleGeneration
 	NewContextMenuModel            = classic.NewContextMenuModel
 	NewHeaderModel                 = classic.NewHeaderModel
