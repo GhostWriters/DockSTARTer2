@@ -279,11 +279,11 @@ type MenuModel struct {
 	lastViewportHeight int
 
 	// rowCache holds list rows' renderings by content (see
-	// renderVariableHeightList), valid while rowCacheStamp matches; only
-	// used when rowCacheEnabled (see SetRowCache).
-	rowCache        map[string]cachedRow
-	rowCacheStamp   string
-	rowCacheEnabled bool
+	// renderVariableHeightList), valid while rowCacheStamp matches; off
+	// when rowCacheOff (see SetRowCache).
+	rowCache      map[string]cachedRow
+	rowCacheStamp string
+	rowCacheOff   bool
 
 	// minTagWidth is the narrowest the label column gets (see
 	// SetMinTagWidth).
@@ -1491,11 +1491,12 @@ func (m *MenuModel) savedRadioTag() string {
 	return m.items[saved].Tag
 }
 
-// SetRowCache lets the list reuse each row's rendering, by its content,
-// across frames and item changes: moving focus, or a filtered list's items
-// coming and going, only renders rows not already drawn.
+// SetRowCache turns the list's row cache on (the default) or off. The
+// list reuses each row's rendering, by its content, across frames and item
+// changes: moving focus, or a filtered list's items coming and going, only
+// renders rows not already drawn.
 func (m *MenuModel) SetRowCache(enabled bool) {
-	m.rowCacheEnabled = enabled
+	m.rowCacheOff = !enabled
 }
 
 // SetMinTagWidth keeps the label column at least width wide, so it stays

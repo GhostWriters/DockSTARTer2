@@ -328,7 +328,6 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 	list.SetTitleCheckbox("Enabled", 'e', func() bool { return s.stagedTint().TintEnabled },
 		func() bool { return s.stagedTint().TintEnabled != s.baseTint().TintEnabled })
 	list.SetTitleChanged(func() bool { return s.stagedTint().Tint != s.baseTint().Tint })
-	list.SetRowCache(true)
 	list.SetMinTagWidth(s.tintTagWidth())
 	list.SetItemHelpFunc(s.buildTintItemHelp)
 	list.SetHelpPageText("Choose an ANSI color scheme to tint this element with.")

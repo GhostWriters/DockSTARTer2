@@ -278,7 +278,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 	themeMenu := displayengine.NewMenuModel(displayengine.IDThemePanel, config.ConnTypeLabel(s.editType)+" Theme", "", themeItems)
 	s.themeMenu = themeMenu
 	s.themeMenu.SetHelpItemPrefix("Theme")
-	s.themeMenu.SetRowCache(true)
 	s.themeMenu.SetItemHelpFunc(s.buildThemeItemHelp)
 	s.themeMenu.SetHelpPageText("Configure the visual appearance of the application, including theme selection, borders, shadows, and other display options. With Load Defaults checked (click it, or Ctrl+D), moving to a theme also stages its own suggested options.")
 	s.themeMenu.SetSubMenuMode(true)

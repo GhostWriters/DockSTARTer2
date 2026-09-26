@@ -140,9 +140,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 	// Rows are reused by content while the list-wide settings below are
 	// unchanged; none are cached while an item shows a processing spinner.
 	savedTag := m.savedRadioTag()
-	cacheRows := m.rowCacheEnabled && m.processingItemIdx < 0
-	if stamp := fmt.Sprint(m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ctx.LineCharacters,
-		m.activeColumn, m.itemPaddingWidth, m.disabled, filter, maxTagLen, m.IsListActive(), savedTag); stamp != m.rowCacheStamp || m.rowCache == nil || len(m.rowCache) > rowCacheLimit {
+	cacheRows := !m.rowCacheOff && m.processingItemIdx < 0
+	if stamp := fmt.Sprint(m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ActiveAppearance(), ctx.LineCharacters,
+		m.activeColumn, m.itemPaddingWidth, m.showLockGutter, m.activityGutterWidth, m.disabled, filter, maxTagLen,
+		m.IsListActive(), savedTag); stamp != m.rowCacheStamp || m.rowCache == nil || len(m.rowCache) > rowCacheLimit {
 		m.rowCache = map[string]cachedRow{}
 		m.rowCacheStamp = stamp
 	}
