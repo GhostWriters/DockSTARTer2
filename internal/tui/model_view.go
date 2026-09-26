@@ -111,6 +111,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 		// at the top of Update() for every non-motion/wheel message.
 		return m.cachedView
 	}
+	m.renderPending = false
 
 	// Must run before ViewString/GetInputCursor below -- see SyncInputPrompt's
 	// doc comment for why.
@@ -431,6 +432,7 @@ func (m *AppModel) viewWithTint() (v tea.View) {
 	}
 
 	m.cachedView = v
+	m.haveCachedView = true
 	return v
 }
 

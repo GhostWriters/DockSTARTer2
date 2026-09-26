@@ -326,8 +326,13 @@ type AppModel struct {
 	renderSkipped bool
 
 	// cachedView is the most recently composed frame, returned by View()
-	// when renderSkipped is set.
-	cachedView tea.View
+	// when renderSkipped is set; haveCachedView reports there is one.
+	cachedView     tea.View
+	haveCachedView bool
+
+	// renderPending is set while a coalesced motion/wheel frame hasn't been
+	// drawn yet, so the next tick draws it even if nothing animated.
+	renderPending bool
 
 	// lastPanelInteraction / lastDialogInteraction record when a wheel event
 	// last landed on the log panel / modal dialog respectively. Streamed

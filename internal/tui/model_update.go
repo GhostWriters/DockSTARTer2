@@ -161,13 +161,16 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case globalTickMsg:
 		// Advance all active spinners before the repaint so the frame is already
 		// updated when Bubble Tea flushes the frame to the terminal.
-		m.panel.AdvanceSpinners(msg.time)
-		if sa, ok := m.dialog.(SpinnerAdvancer); ok {
-			sa.AdvanceSpinners(msg.time)
+		advanced := m.panel.AdvanceSpinners(msg.time)
+		if sa, ok := m.dialog.(SpinnerAdvancer); ok && sa.AdvanceSpinners(msg.time) {
+			advanced = true
 		}
-		if sa, ok := m.activeScreen.(SpinnerAdvancer); ok {
-			sa.AdvanceSpinners(msg.time)
+		if sa, ok := m.activeScreen.(SpinnerAdvancer); ok && sa.AdvanceSpinners(msg.time) {
+			advanced = true
 		}
+		// A tick that moved nothing reuses the last frame, unless a
+		// coalesced motion/wheel frame is still waiting to be drawn.
+		m.renderSkipped = !advanced && !m.renderPending && m.haveCachedView
 		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd(m.connType))
 
 	case displayengine.PanelLineMsg:
@@ -179,6 +182,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.panel = updated.(displayengine.PanelModel)
 		if m.panelInteractionActive() {
 			m.renderSkipped = !m.interactionRenderDue()
+			m.renderPending = m.renderPending || m.renderSkipped
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
@@ -198,6 +202,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dialog = dialog
 			if m.dialogInteractionActive() {
 				m.renderSkipped = !m.interactionRenderDue()
+				m.renderPending = m.renderPending || m.renderSkipped
 			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -207,6 +212,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.panel = updated.(displayengine.PanelModel)
 			if m.panelInteractionActive() {
 				m.renderSkipped = !m.interactionRenderDue()
+				m.renderPending = m.renderPending || m.renderSkipped
 			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -218,6 +224,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateExitLocked()
 		if m.panelInteractionActive() {
 			m.renderSkipped = !m.interactionRenderDue()
+			m.renderPending = m.renderPending || m.renderSkipped
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
@@ -280,6 +287,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.(type) {
 		case tea.MouseMotionMsg, tea.MouseWheelMsg:
 			m.renderSkipped = !m.interactionRenderDue()
+			m.renderPending = m.renderPending || m.renderSkipped
 		}
 
 		if handled {

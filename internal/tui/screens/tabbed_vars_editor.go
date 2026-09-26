@@ -170,6 +170,10 @@ func (t *envTab) defaultVal(key string) string {
 }
 
 type TabbedVarsEditorModel struct {
+	// blinkHidden is the active editor's cursor blink phase as of the last
+	// AdvanceSpinners, so a blink redraws the screen.
+	blinkHidden bool
+
 	tabs      []envTab
 	activeTab int
 
@@ -332,11 +336,18 @@ func (m *TabbedVarsEditorModel) ClearProcessingState() {
 
 // AdvanceSpinners advances the loading title spinner and the button-row
 // spinner if their intervals have elapsed. Returns true if either frame
-// changed. Called by the global tick via globalTickMsg.
+// changed, or the editor's cursor blinked. Called by the global tick via
+// globalTickMsg.
 func (m *TabbedVarsEditorModel) AdvanceSpinners(now time.Time) bool {
 	changed := m.btnRow != nil && m.btnRow.AdvanceSpinner(now)
 	if m.titleSpinner.AdvanceSpinner(now) {
 		changed = true
+	}
+	if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+		if hidden := m.tabs[m.activeTab].editor.BlinkHidden(now); hidden != m.blinkHidden {
+			m.blinkHidden = hidden
+			changed = true
+		}
 	}
 	return changed
 }

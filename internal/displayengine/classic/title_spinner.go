@@ -15,6 +15,7 @@ type TitleSpinner struct {
 	active      bool
 	frame       int
 	lastSpinner time.Time
+	shown       bool // active as of the last AdvanceSpinner
 }
 
 // Start marks the spinner active. If it was already active, the frame is
@@ -36,14 +37,17 @@ func (s *TitleSpinner) Stop() {
 func (s *TitleSpinner) IsActive() bool { return s.active }
 
 // AdvanceSpinner advances the frame if active and enough time has elapsed.
-// Returns true if the frame changed. Called by the global tick.
+// Returns true if what it shows changed: a new frame, or the spinner
+// appearing or clearing since the last call. Called by the global tick.
 func (s *TitleSpinner) AdvanceSpinner(now time.Time) bool {
+	wasShown := s.shown
+	s.shown = s.active
 	if !s.active {
-		return false
+		return wasShown
 	}
 	newFrame, newLastSpinner, advanced := console.AdvanceTitleSpinnerFrame(s.frame, s.lastSpinner, now, GetActiveContext().LineCharacters)
 	if !advanced {
-		return false
+		return !wasShown
 	}
 	s.frame = newFrame
 	s.lastSpinner = newLastSpinner

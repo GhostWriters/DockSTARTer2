@@ -1010,6 +1010,15 @@ func (m *Model) CursorEnd() {
 }
 
 // Focused returns the focus state on the model.
+// BlinkHidden reports whether the focused, blinking virtual cursor is in its
+// hidden phase at now (see blinkAnchor); false when it isn't blinking.
+func (m Model) BlinkHidden(now time.Time) bool {
+	if !m.useVirtualCursor || !m.focus || m.virtualCursor.Mode() != cursor.CursorBlink || m.virtualCursor.BlinkSpeed <= 0 {
+		return false
+	}
+	return (now.Sub(m.blinkAnchor)/m.virtualCursor.BlinkSpeed)%2 == 1
+}
+
 func (m Model) Focused() bool {
 	return m.focus
 }
