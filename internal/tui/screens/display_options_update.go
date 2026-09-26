@@ -263,6 +263,9 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msg.apply(s)
 		s.syncTintMenus()
 		s.selectCheckedTint()
+		if s.tintSearchMenu != nil {
+			s.tintSearchMenu.InvalidateCache() // its border shows the options
+		}
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
 		}
