@@ -112,6 +112,11 @@ type DisplayOptionsScreen struct {
 	// so the rest of the screen keeps the live tint until Apply.
 	previewTintKey string
 	previewTint    *config.AnsiElementColors
+
+	// previewCache is computePreviewContent's last result, for the inputs
+	// previewCacheKey names.
+	previewCache    previewContent
+	previewCacheKey string
 }
 
 // toggleLoadThemeDefaultsMsg flips loadThemeDefaults. Handled directly rather

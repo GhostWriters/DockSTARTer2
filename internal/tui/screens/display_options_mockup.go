@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 
@@ -17,10 +18,8 @@ import (
 const previewContentWidth = 44
 
 // previewContent holds the preview mockup's rendered pieces for the screen's
-// current previewTheme/config. Returned by computePreviewContent, which is
-// called fresh on every render (from the persistent preview section's
-// ContentRenderer/SectionHeightOverride closures in buildPreviewSection) --
-// nothing here is cached across renders.
+// current previewTheme/config. Returned by computePreviewContent, which
+// rebuilds it only when one of its inputs changes (see previewContentKey).
 type previewContent struct {
 	invalid       bool // true if the staged theme failed to load; only invalidLabel is meaningful then
 	invalidLabel  string
@@ -46,7 +45,23 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 			return previewContent{invalid: true, invalidLabel: "Invalid theme"}
 		}
 	}
+	if key := s.previewContentKey(); key != s.previewCacheKey {
+		s.previewCache = s.buildPreviewContent()
+		s.previewCacheKey = key
+	}
+	return s.previewCache
+}
 
+// previewContentKey identifies computePreviewContent's inputs: the staged
+// theme, the shown tab's settings, the theme and tint styles (via their
+// generation), and the rendering scope and layout.
+func (s *DisplayOptionsScreen) previewContentKey() string {
+	return fmt.Sprint(s.previewTheme, s.editType, s.config.Appearance.ForConnType(s.editType),
+		displayengine.StyleGeneration(), displayengine.StylesScopeKey(), displayengine.GetLayout())
+}
+
+// buildPreviewContent renders the preview's pieces (see computePreviewContent).
+func (s *DisplayOptionsScreen) buildPreviewContent() previewContent {
 	width := previewContentWidth
 
 	// Resolve the Preview_Border/Preview_Border2 tags based on the staged
@@ -396,7 +411,8 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 // top-level dialog. Built once, like the settings sections, and reused for
 // the screen's lifetime: its ContentRenderer/SectionHeightOverride closures
 // call computePreviewContent fresh every render instead of this MenuModel
-// being torn down and rebuilt to stay theme-live -- reconstructing it would
+// being torn down and rebuilt to stay theme-live (computePreviewContent
+// reuses its last result while nothing changed) -- reconstructing it would
 // also discard its interaction state (focus in particular), which a content
 // change has no business affecting.
 func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
