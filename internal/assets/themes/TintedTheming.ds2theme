@@ -17,23 +17,34 @@ direct_suffix   = "]}}"
 # usage guidance for each slot. Meant for use with a tint; without one,
 # the eight slots with no ANSI color (base01/02/04/06/09/0F/10/11) use the
 # ANSI color they're a variant of.
-primary   = "base05" # Default Foreground, Caret, Delimiters, Operators
-secondary = "base00" # Default Background
-muted     = "base03" # Comments, Invisibles, Line Highlighting; "Inactive elements"
-subtle    = "base04" # Dark Foreground; "Menu elements" option text
-selection = "base02" # Selection Background; "Selected elements"
-darkest   = "base11" # The Darkest Background (base24)
-highlight = "base07" # The Lightest Foreground
-accent    = "base0d" # Functions, Methods, Attribute IDs, Headings; also the documented "Focus elements" color
-success   = "base0b" # Strings, Diff Inserted -- green, conventional success (not itself a base24-documented category)
-warning   = "base0f" # "Warning elements"
-error     = "base08" # Variables, Diff Deleted; also the documented "Alert elements" color
-info      = "base0c" # Support, Regular Expressions, Escape Characters, Markup Quotes -- cyan
-special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed -- magenta
+primary         = "base05" # Default Foreground, Caret, Delimiters, Operators
+secondary       = "base00" # Default Background
+muted           = "base03" # Comments, Invisibles, Line Highlighting; "Inactive elements"
+subtle          = "base04" # Dark Foreground; "Menu elements" option text
+selection       = "base02" # Selection Background; "Selected elements"
+darkest         = "base11" # The Darkest Background (base24)
+highlight       = "base07" # The Lightest Foreground
+accent          = "base0d" # Functions, Methods, Attribute IDs, Headings; key letters, highlights
+success         = "base0b" # Strings, Diff Inserted -- green, conventional success (not itself a base24-documented category)
+caution         = "base0a" # Classes, Markup Bold, Search Text Background -- yellow, for help and questions
+warning         = "base0f" # "Warning elements"
+error           = "base08" # Variables, Diff Deleted; also the documented "Alert elements" color
+info            = "base0c" # Support, Regular Expressions, Escape Characters, Markup Quotes -- cyan
+special         = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed -- magenta
+status_fg       = "base04" # Dark Foreground (Used for status bars)
+status_bg       = "base01" # Lighter Background (Used for status bars)
+title_bg        = "base02" # Selection Background -- the large title bar
+diff_inserted   = "base0b" # Diff Inserted
+diff_deleted    = "base08" # Diff Deleted
+diff_changed    = "base0e" # Diff Changed
+border1         = "base05" # Borders of "normal elements"
+border2         = "base03" # Borders of "inactive elements"
+focus_highlight = "base0d" # "Focus elements": focused titles, tabs, and buttons
+focus_border    = "base05" # "Focus elements" borders: the focus indicators
 
 [styles]
 ## Backdrop
-  StatusBar       = "{{[$primary:$secondary]}}"
+  StatusBar       = "{{[$status_fg:$status_bg]}}"
 # StatusBarBorder = "{{|StatusBar|}}"
   Screen          = "{{[$secondary:$primary]}}"
 # Helpline        = "{{|StatusBar|}}"
@@ -41,8 +52,8 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 
 ## Dialogs and panels
   Dialog     = "{{[$primary:$secondary]}}"
-  Border     = "{{[$primary:$secondary]}}"
-  Border2    = "{{[$muted:$secondary]}}"
+  Border     = "{{[$border1:$secondary]}}"
+  Border2    = "{{[$border2:$secondary]}}"
   Shadow     = "{{[$darkest]}}"
 # ProgramBox = "{{[~]}}"
 
@@ -52,7 +63,7 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"
-  StatusVersionFocused  = "{{[$secondary:$accent]}}"
+  StatusVersionFocused  = "{{[$secondary:$focus_highlight]}}"
   StatusFlags           = "{{[$muted:$secondary:B]}}"
   StatusFlagsBrackets   = "{{|StatusFields|}}"
   StatusFlagsSpace      = "{{|StatusFields|}}"
@@ -65,19 +76,19 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 ## Titles
   Title                      = "{{[$primary::-U]}}"
 # TitleHelp                  = "{{|Title|}}"
-  TitleNotice                = "{{[$secondary:$info:B]}}"
+  TitleNotice                = "{{[$primary:$success:B]}}"
   TitleWarn                  = "{{[$secondary:$warning]}}"
   TitleError                 = "{{[$secondary:$error:B]}}"
   TitleSuccess               = "{{[$secondary:$success]}}"
   TitleWarning               = "{{[$secondary:$warning]}}"
-  TitleQuestion              = "{{[$secondary:$accent]}}"
+  TitleQuestion              = "{{[$secondary:$caution]}}"
 # TitleSubMenu               = "{{|Title|}}"
 # TitleFocused               = "{{|Title|}}"
   PanelTitle                 = "{{|PanelBorder|}}"
   PanelTitleChangedIndicator = "{{|TitleNotice|}}"
   TitleCheckbox              = ""
   TitleCheckboxFocused       = "{{|TitleSubMenuFocused|}}"
-  TitleSubMenuFocused        = "{{[$secondary:$accent]}}"
+  TitleSubMenuFocused        = "{{[$secondary:$focus_highlight]}}"
 # TitleHelpFocused           = "{{|TitleFocused|}}"
 # TitleNoticeFocused         = "{{|TitleFocused|}}"
 # TitleWarnFocused           = "{{|TitleFocused|}}"
@@ -85,19 +96,19 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 # TitleErrorFocused          = "{{|TitleFocused|}}"
 # TitleSuccessFocused        = "{{|TitleFocused|}}"
 # TitleQuestionFocused       = "{{|TitleFocused|}}"
-  TitleFocusIndicator        = "{{[$accent::-B]}}"
+  TitleFocusIndicator        = "{{[$focus_border::-B]}}"
   TitleUnfocusedIndicator    = ""
 
 ## Large Titles
-  LargeTitleArea               = "{{|Dialog|}}"
-# LargeTitleAreaHelp           = "{{|LargeTitleArea|}}"
-# LargeTitleAreaNotice         = "{{|LargeTitleArea|}}"
-# LargeTitleAreaWarn           = "{{|LargeTitleArea|}}"
-# LargeTitleAreaWarning        = "{{|LargeTitleArea|}}"
-# LargeTitleAreaError          = "{{|LargeTitleArea|}}"
-# LargeTitleAreaSuccess        = "{{|LargeTitleArea|}}"
-# LargeTitleAreaQuestion       = "{{|LargeTitleArea|}}"
-  LargeTitle                   = "{{|Title|}}"
+  LargeTitleArea               = "{{[$primary:$title_bg:-]}}"
+  LargeTitleAreaHelp           = "{{[$title_bg:$caution]}}"
+  LargeTitleAreaNotice         = "{{[$title_bg:$success]}}"
+  LargeTitleAreaWarn           = "{{[$title_bg:$warning]}}"
+  LargeTitleAreaWarning        = "{{[$title_bg:$warning]}}"
+  LargeTitleAreaError          = "{{[$title_bg:$error]}}"
+  LargeTitleAreaSuccess        = "{{[$title_bg:$success]}}"
+  LargeTitleAreaQuestion       = "{{[$title_bg:$caution]}}"
+  LargeTitle                   = "{{[::U]}}"
 # LargeTitleHelp               = "{{|LargeTitle|}}"
 # LargeTitleNotice             = "{{|TitleNotice|}}"
 # LargeTitleWarn               = "{{|TitleWarn|}}"
@@ -147,9 +158,9 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
   TagKey                      = "{{[$accent::-B]}}"
   Tag                         = "{{[$subtle:$secondary:-]}}"
   Item                        = "{{|Dialog|}}"
-  TagKeyFocused               = "{{[$secondary:$accent:-B]}}"
-  TagFocused                  = "{{[$secondary:$accent:-B]}}"
-  ItemFocused                 = "{{[$secondary:$accent:B]}}"
+  TagKeyFocused               = "{{[$accent:$selection:-B]}}"
+  TagFocused                  = "{{[$primary:$selection:-B]}}"
+  ItemFocused                 = "{{[$primary:$selection:B]}}"
 # ResizeLine                  = "{{|ItemFocused|}}"
 # ItemListFocused             = "{{|ItemFocused|}}"
 # ItemListUserDefinedFocused  = "{{|ItemFocused|}}"
@@ -160,7 +171,7 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
   ItemListUserDefined         = "{{[$info::-]}}"
 # ItemListUserTemplate        = "{{|ItemList:::U|}}"
   OptionValue                 = "{{[$accent::-B]}}"
-  OptionValueFocused          = "{{[$secondary:$accent:B]}}"
+  OptionValueFocused          = "{{[$primary:$selection:B]}}"
 
 ## Help
 # HelpTag  = "{{|Tag|}}"
@@ -187,7 +198,7 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
 # RadioBracketsOnFocused  = "{{|CheckboxBracketsOnFocused|}}"
 
 ## Buttons
-  ButtonActive       = "{{[$secondary:$accent:B]}}"
+  ButtonActive       = "{{[$secondary:$focus_highlight:B]}}"
   ButtonInactive     = "{{|Dialog|}}"
   ButtonSpinner      = ""
   LargeButtonSpinner = ""
@@ -251,26 +262,26 @@ special   = "base0e" # Keywords, Storage, Selector, Markup Italic, Diff Changed 
   EnvBuiltin       = "{{[$subtle]}}"
   EnvInvalid       = "{{[$secondary:$error:B]}}"
   EnvDuplicate     = "{{[$secondary:$warning]}}"
-  EnvPendingDelete = "{{[$error::S]}}"
+  EnvPendingDelete = "{{[$diff_deleted::S]}}"
   EnvReadOnly      = "{{[$muted]}}"
 
 ## Env editor
   LineComment  = "{{[$muted]}}"
-  ModifiedText = "{{[$special::B]}}"
+  ModifiedText = "{{[$diff_changed::B]}}"
 
 ## Env editor line numbers
   LineNumber                = "{{[$muted]}}"
   LineNumberFocused         = "{{[$accent::B]}}"
   LineNumberModified        = "{{|ModifiedText|}}"
-  LineNumberModifiedFocused = "{{[$secondary:$special:B]}}"
+  LineNumberModifiedFocused = "{{[$secondary:$diff_changed:B]}}"
   LineNumberBrackets        = "{{|TagBrackets|}}"
 
 ## Markers and cursor
   Marker                  = "{{[$secondary:$primary]}}"
-  MarkerAdded             = "{{[$secondary:$success]}}"
-  MarkerDeleted           = "{{[$secondary:$error]}}"
-  MarkerModified          = "{{[$secondary:$special]}}"
-  MarkerInvalid           = "{{[$secondary:$error:B]}}"
+  MarkerAdded             = "{{[$secondary:$diff_inserted]}}"
+  MarkerDeleted           = "{{[$secondary:$diff_deleted]}}"
+  MarkerModified          = "{{[$secondary:$diff_changed]}}"
+  MarkerInvalid           = "{{[$primary:$error:B]}}"
   MarkerLocked            = "{{|MarkerInvalid|}}"
 # ButtonLockedMarker      = "{{|MarkerLocked|}}"
 # LargeButtonLockedMarker = "{{|ButtonLockedMarker|}}"
