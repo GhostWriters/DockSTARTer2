@@ -47,10 +47,7 @@ func TintCatalog(ctx context.Context) ([]TintEntry, error) {
 			return entries, err
 		}
 		for _, r := range rows {
-			entries = append(entries, TintEntry{
-				Source: r.Source, Slug: r.Slug, Name: r.Name, Variant: r.Variant, Author: r.Author,
-				HasBase16: r.HasBase16, HasBase24: r.HasBase24,
-			})
+			entries = append(entries, TintEntry(r))
 		}
 	}
 	return entries, nil

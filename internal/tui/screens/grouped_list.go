@@ -3,6 +3,7 @@ package screens
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"DockSTARTer2/internal/displayengine"
 )
@@ -52,11 +53,12 @@ func groupedItems(groups []listGroup) []displayengine.MenuItem {
 // with anything else.
 func firstLetter(tag string) string {
 	plain := strings.TrimSpace(displayengine.GetPlainText(tag))
-	for _, r := range plain {
-		if unicode.IsLetter(r) {
-			return string(unicode.ToUpper(r))
-		}
-		return "#"
+	r, size := utf8.DecodeRuneInString(plain)
+	switch {
+	case size == 0:
+		return ""
+	case unicode.IsLetter(r):
+		return string(unicode.ToUpper(r))
 	}
-	return ""
+	return "#"
 }
