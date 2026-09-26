@@ -32,8 +32,6 @@ type tintElementMsg struct{ element string }
 // tintPickMsg stages ref ("" for none) as the shown element's tint.
 type tintPickMsg struct{ ref string }
 
-// tintSearchMsg reports that the scheme search text may have changed.
-type tintSearchMsg struct{}
 
 // tintRepoDownloadMsg starts downloading the tinted-theming schemes.
 type tintRepoDownloadMsg struct{}
@@ -320,8 +318,8 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 	prev := s.tintSearchMenu.Interceptor
 	s.tintSearchMenu.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {
 		cmd, handled := prev(msg, menu)
-		if handled && s.tintSearchInput.Value() != s.tintQuery {
-			return tea.Batch(cmd, func() tea.Msg { return tintSearchMsg{} }), true
+		if handled {
+			s.applyTintSearch()
 		}
 		return cmd, handled
 	})
@@ -423,6 +421,16 @@ func (s *DisplayOptionsScreen) selectCheckedTint() {
 		}
 	}
 	s.tintMenu.Select(0)
+}
+
+// applyTintSearch re-filters the scheme list when the search text changed,
+// in the same update as the keystroke so it draws once.
+func (s *DisplayOptionsScreen) applyTintSearch() {
+	if s.tintSearchInput != nil && s.tintSearchInput.Value() != s.tintQuery {
+		s.tintQuery = s.tintSearchInput.Value()
+		s.syncTintMenus()
+		s.selectCheckedTint()
+	}
 }
 
 // tintSearch returns the scheme search the Tint pane's search box and its

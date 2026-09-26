@@ -271,14 +271,6 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
-	case tintSearchMsg:
-		if s.tintSearchInput != nil && s.tintSearchInput.Value() != s.tintQuery {
-			s.tintQuery = s.tintSearchInput.Value()
-			s.syncTintMenus()
-			s.selectCheckedTint()
-		}
-		return s, nil
-
 	case tintRepoDownloadMsg:
 		return s, s.downloadTintRepo()
 
