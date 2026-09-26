@@ -74,6 +74,10 @@ type appearanceLayoutRow struct {
 	// settings-only (matching the pre-existing width auto-collapse) instead
 	// of clipping the indicator column.
 	showCollapsed bool
+
+	// settingsView is the settings side as ViewString last drew it, which
+	// GetHitRegions measures instead of drawing it again.
+	settingsView string
 }
 
 // appearancePreviewHideMsg is dispatched by the preview panel's own Close
@@ -235,6 +239,7 @@ func (r *appearanceLayoutRow) gutterView(height int, showGlyph bool) string {
 // blank otherwise -- then the full preview section if it fits.
 func (r *appearanceLayoutRow) ViewString() string {
 	settingsView := r.settings.ViewString()
+	r.settingsView = settingsView
 	if !r.previewFits && !r.showCollapsed {
 		return settingsView
 	}
@@ -268,7 +273,10 @@ func (r *appearanceLayoutRow) GetHitRegions(offsetX, offsetY int) []displayengin
 	}
 	panelBGZ := baseZ - 2
 
-	settingsView := r.settings.ViewString()
+	settingsView := r.settingsView
+	if settingsView == "" {
+		settingsView = r.settings.ViewString()
+	}
 	regions := []displayengine.HitRegion{{
 		ID:     settingsPanelBGID,
 		X:      offsetX,
