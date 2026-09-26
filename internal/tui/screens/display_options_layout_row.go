@@ -566,9 +566,9 @@ func (r *appearanceLayoutRow) Focusable() bool { return true }
 
 // ComfortableMinHeight is the row's own floor for the theme list (mirroring
 // ContentColumn's minExpandableFloor) plus room for a handful of Options
-// rows before Options needs to start scrolling --
-// below this, the outer dialog flattens its button row (see
-// classic.ComfortableMinHeight) rather than squeezing this row further.
+// rows before Options starts scrolling; below this, the outer dialog
+// flattens its button row (see classic.ComfortableMinHeight) rather than
+// squeezing this row further.
 func (r *appearanceLayoutRow) ComfortableMinHeight() int {
 	const themeListFloor = 8 // mirrors ContentColumn's minExpandableFloor
 	const optionsComfortable = 6

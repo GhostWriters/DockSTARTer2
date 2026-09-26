@@ -53,7 +53,7 @@ type Appearance struct {
 	RefreshRate        int    `toml:"refresh_rate"`        // screen repaint interval in milliseconds, default 60
 	Panel              string `toml:"panel"`               // "log", "console", or "none"
 	ShowPreview        bool   `toml:"show_preview"`        // default visibility of the Appearance Settings preview panel
-	PaneLayout         string `toml:"pane_layout"`         // "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint panes
+	PaneLayout         string `toml:"pane_layout"`         // "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint/Overrides panes
 	Advanced           bool   `toml:"advanced"`            // Appearance Settings starts with the connection-type and element tabs shown
 	MarkdownHyperlinks string `toml:"markdown_hyperlinks"` // "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
 	Hyperlinks         string `toml:"hyperlinks"`          // "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags (semstyle.HyperlinkModeFunc)

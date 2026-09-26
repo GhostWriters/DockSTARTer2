@@ -193,8 +193,8 @@ func (s *DisplayOptionsScreen) toggleOverrideEnabled() tea.Cmd {
 }
 
 // tintListItems returns the scheme list: None, then the schemes matching
-// the search (see commands.TintMatcher) grouped by source (see
-// groupedItems), with the element's staged scheme checked.
+// the search (see tintSearch) grouped by source (see groupedItems), with
+// the element's staged scheme checked.
 func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 	current := s.stagedTint().Tint
 	saved := s.baseTint().Tint
@@ -300,8 +300,9 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 	return append(items, grouped...)
 }
 
-// buildTintMenus builds the Tint and Overrides panes: each has the element
-// tabs framing its list, and the Tint pane a search box too.
+// buildTintMenus builds the Tint and Overrides panes' menus: the element
+// tab frames (used in advanced mode), each pane's list, and the Tint pane's
+// search box.
 func (s *DisplayOptionsScreen) buildTintMenus() {
 	s.shownTintElement()
 	s.tintFrame, s.tintStripSection = s.newElementFrame("appearance_tint_elements", tintPart, s.tintFrameFocused)

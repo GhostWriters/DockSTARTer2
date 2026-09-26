@@ -88,9 +88,10 @@ type DisplayOptionsScreen struct {
 	tabs  *displayengine.TabStrip
 	frame *tabFrame
 
-	// advanced shows the connection-type tabs; otherwise only the session's
-	// own settings show. Starts from the Advanced option, and the title bar
-	// checkbox (Ctrl+A) changes it for this visit only.
+	// advanced shows the connection-type and element tabs; otherwise only
+	// the session's own settings and the Menu element show. Starts from the
+	// Advanced Appearance option; the title bar checkbox (Ctrl+A) changes
+	// it for this visit only.
 	advanced bool
 
 	// tintElement is the tint element ("menu", "programbox", "cli") the Tint
@@ -605,11 +606,8 @@ func (s *DisplayOptionsScreen) refreshPreviewTint() {
 	tui.RegisterTintKey(context.Background(), s.previewTintKey, el)
 }
 
-// focusedSettingsMenu returns whichever settings menu currently holds section-internal focus, or nil when focus is
-// elsewhere (buttons, or the preview side once it's a real Tab stop) --
-// outerMenu/layoutRow track focus generically now (GetFocusedSection/
-// GetFocusedItem, and the row's own subFocus/settings.SubFocusIndex), so
-// this just reads that state instead of a separate parallel one.
+// focusedSettingsMenu returns the settings menu holding focus, or nil when
+// focus is elsewhere (the buttons or the preview) or on a non-menu section.
 func (s *DisplayOptionsScreen) focusedSettingsMenu() *displayengine.MenuModel {
 	m, _ := s.focusedSettingsLeaf().(*displayengine.MenuModel)
 	return m
@@ -777,7 +775,8 @@ func (s *DisplayOptionsScreen) toggleAdvanced() tea.Cmd {
 	})
 }
 
-// toggleAdvancedOption flips the shown tab's Advanced option (the default).
+// toggleAdvancedOption flips the shown tab's Advanced Appearance option
+// (advanced's default).
 func (s *DisplayOptionsScreen) toggleAdvancedOption() tea.Cmd {
 	return func() tea.Msg {
 		newState := !s.config.Appearance.Ptr(s.editType).Advanced

@@ -11,7 +11,7 @@
 [appearance.local]
 panel                = "log"       # "none", "log", "console", or "system"
 show_preview         = true        # default visibility of the Appearance Settings preview panel
-pane_layout          = "maximized"  # "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint panes
+pane_layout          = "maximized"  # "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint/Overrides panes
 advanced             = false       # Appearance Settings starts with the connection-type and element tabs shown
 hyperlinks           = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags
 markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
@@ -140,7 +140,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [appearance.ssh]
 panel                = "log"       # "none", "log", "console", or "system"
 show_preview         = true        # default visibility of the Appearance Settings preview panel
-pane_layout          = "maximized"  # "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint panes
+pane_layout          = "maximized"  # "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint/Overrides panes
 advanced             = false       # Appearance Settings starts with the connection-type and element tabs shown
 hyperlinks           = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags
 markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
@@ -255,7 +255,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [appearance.web]
 panel                = "log"       # "none", "log", "console", or "system"
 show_preview         = true        # default visibility of the Appearance Settings preview panel
-pane_layout          = "maximized"  # "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint panes
+pane_layout          = "maximized"  # "maximized", "sidebyside", or "stacked" -- default layout of Appearance Settings' Theme/Tint/Overrides panes
 advanced             = false       # Appearance Settings starts with the connection-type and element tabs shown
 hyperlinks           = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags
 markdown_hyperlinks  = "inline"    # "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)

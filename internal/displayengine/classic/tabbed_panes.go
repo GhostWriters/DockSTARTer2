@@ -37,7 +37,8 @@ type PaneLayoutMsg struct {
 // Every section is its own Tab stop, and so is the tab strip while tiled
 // (Left/Right choose a tab, Space/Enter open it). While maximized, Tab past
 // the last stop of one pane opens the next, and Shift+Tab before the first
-// opens the previous; entering from outside lands in the shown pane.
+// opens the previous; Tab entering from outside starts at the first pane,
+// Shift+Tab at the last.
 type TabbedPanes struct {
 	id    string
 	Strip *TabStrip

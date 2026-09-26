@@ -123,8 +123,8 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		// Printable keys that are also focus shortcuts ("." and ",") are
-		// typed into a focused text input instead.
+		// Every printable key, including the "." and "," focus shortcuts,
+		// types into a focused text input.
 		if m.focusedItem == FocusList && m.focusedSection >= 0 && m.focusedSection < n &&
 			IsTypedText(msg) && isTextInput(focusedLeaf(m.contentSections[m.focusedSection])) {
 			cmd := m.updateSection(m.focusedSection, msg)
