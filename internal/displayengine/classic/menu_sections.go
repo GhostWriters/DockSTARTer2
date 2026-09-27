@@ -123,8 +123,7 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		// Every printable key, including the "." and "," focus shortcuts,
-		// types into a focused text input.
+		// Every printable key types into a focused text input.
 		if m.focusedItem == FocusList && m.focusedSection >= 0 && m.focusedSection < n &&
 			IsTypedText(msg) && isTextInput(focusedLeaf(m.contentSections[m.focusedSection])) {
 			cmd := m.updateSection(m.focusedSection, msg)
@@ -875,8 +874,8 @@ func (m *MenuModel) SetFocusedSection(idx int) {
 	m.InvalidateCache()
 }
 
-// IsTypedText reports whether msg types a printable character (as ".", ","
-// and letters do), rather than being a named key like Tab.
+// IsTypedText reports whether msg types a printable character, rather than
+// being a named key like Tab.
 func IsTypedText(msg tea.KeyPressMsg) bool {
 	r := []rune(msg.Text)
 	return len(r) == 1 && unicode.IsPrint(r[0])

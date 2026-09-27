@@ -392,6 +392,30 @@ func shouldForwardResult(result any) bool {
 	return true
 }
 
+// keyAliases are plain keys that stand in for a shortcut while no text
+// field has focus: [ and ] for the previous and next screen element, , and .
+// for the previous and next tab.
+var keyAliases = map[string]tea.KeyPressMsg{
+	"[": {Code: 'p', Mod: tea.ModCtrl},
+	"]": {Code: 'n', Mod: tea.ModCtrl},
+	",": {Code: tea.KeyLeft, Mod: tea.ModCtrl},
+	".": {Code: tea.KeyRight, Mod: tea.ModCtrl},
+}
+
+// keyAlias returns msg as the shortcut it stands in for (see keyAliases),
+// unless a text field has focus, where it types.
+func (m *AppModel) keyAlias(msg tea.Msg) tea.Msg {
+	kp, ok := msg.(tea.KeyPressMsg)
+	if !ok || kp.Mod != 0 {
+		return msg
+	}
+	alias, ok := keyAliases[kp.String()]
+	if !ok || m.isTextInputActive() {
+		return msg
+	}
+	return alias
+}
+
 // isTextInputActive reports whether a focused text cursor is currently
 // showing anywhere -- the dialog, the active screen (e.g. the env editor),
 // or the console panel's own input, checked in the same priority order

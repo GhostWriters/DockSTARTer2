@@ -47,6 +47,8 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	msg = m.keyAlias(msg)
+
 	var cmds []tea.Cmd
 
 	// Reset each cycle so only the coalesced-motion/wheel case below (which

@@ -152,19 +152,19 @@ var Keys = KeyMap{
 	),
 	Tab: key.NewBinding(
 		key.WithKeys("ctrl+n", "alt+n", "ctrl+alt+n"),
-		key.WithHelp("alt+n", "next screen element"),
+		key.WithHelp("alt+n/]", "next screen element"),
 	),
 	ShiftTab: key.NewBinding(
 		key.WithKeys("ctrl+p", "alt+p", "ctrl+alt+p"),
-		key.WithHelp("alt+p", "prev screen element"),
+		key.WithHelp("alt+p/[", "prev screen element"),
 	),
 	CycleTab: key.NewBinding(
-		key.WithKeys("tab", "."),
-		key.WithHelp("tab/.", "next focus"),
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "next focus"),
 	),
 	CycleShiftTab: key.NewBinding(
-		key.WithKeys("shift+tab", ","),
-		key.WithHelp("shift+tab/,", "prev focus"),
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "prev focus"),
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
@@ -253,11 +253,11 @@ var Keys = KeyMap{
 	),
 	EnvNextTab: key.NewBinding(
 		key.WithKeys("ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown", "ctrl+alt+right"),
-		key.WithHelp("alt+→", "next tab"),
+		key.WithHelp("alt+→/.", "next tab"),
 	),
 	EnvPrevTab: key.NewBinding(
 		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup", "ctrl+alt+left"),
-		key.WithHelp("alt+←", "prev tab"),
+		key.WithHelp("alt+←/,", "prev tab"),
 	),
 	EnvCycleLayout: key.NewBinding(
 		key.WithKeys("f6", "ctrl+w", "alt+w", "ctrl+alt+w"),
@@ -277,11 +277,11 @@ var Keys = KeyMap{
 	),
 	TabStripNext: key.NewBinding(
 		key.WithKeys("ctrl+right", "alt+right", "ctrl+alt+right"),
-		key.WithHelp("alt+→", "next tab"),
+		key.WithHelp("alt+→/.", "next tab"),
 	),
 	TabStripPrev: key.NewBinding(
 		key.WithKeys("ctrl+left", "alt+left", "ctrl+alt+left"),
-		key.WithHelp("alt+←", "prev tab"),
+		key.WithHelp("alt+←/,", "prev tab"),
 	),
 	ToggleEnabled: key.NewBinding(
 		key.WithKeys("ctrl+e", "alt+e", "ctrl+alt+e"),
