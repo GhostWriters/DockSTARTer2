@@ -332,17 +332,26 @@ func RenderTitleSegmentCtx(rawTitle string, borderFocused bool, contentFocused b
 	return RenderMarkedTitleSegmentCtx(rawTitle, "", borderFocused, contentFocused, showIndicators, titleTag, ctx, spinnerIndicator...)
 }
 
-// RenderChangedMarker returns the changed marker styled like the panel's
-// changed indicator (PanelTitleChangedIndicator), for drawing in a border.
+// RenderChangedMarker returns the changed marker drawn before a changed
+// label, styled like the panel's changed indicator
+// (PanelTitleChangedIndicator), for drawing in a border.
 func RenderChangedMarker(ctx StyleContext) string {
-	return ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground()).
-		Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+changedIndicatorChar(ctx.LineCharacters)+"{{[-]}}", ctx.Prefix))
+	left, _ := RenderChangedMarkers(ctx)
+	return left
 }
 
-// RenderMarkedTitleSegmentCtx is RenderTitleSegmentCtx with marker, when
-// non-empty, drawn on both sides of the title outside the indicators, styled
-// like the panel's changed indicator (PanelTitleChangedIndicator) rather
-// than the title.
+// RenderChangedMarkers returns the changed markers drawn before and after a
+// changed label (see changedIndicatorChars), styled like RenderChangedMarker.
+func RenderChangedMarkers(ctx StyleContext) (left, right string) {
+	style := ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
+	l, r := changedIndicatorChars(ctx.LineCharacters)
+	return style.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+l+"{{[-]}}", ctx.Prefix)),
+		style.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+r+"{{[-]}}", ctx.Prefix))
+}
+
+// RenderMarkedTitleSegmentCtx is RenderTitleSegmentCtx with, when marker is
+// non-empty, the changed markers (see RenderChangedMarkers) on both sides of
+// the title outside the indicators.
 func RenderMarkedTitleSegmentCtx(rawTitle, marker string, borderFocused bool, contentFocused bool, showIndicators bool, titleTag string, ctx StyleContext, spinnerIndicator ...string) string {
 	spinInd := ""
 	spinIndR := ""
@@ -385,14 +394,14 @@ func RenderMarkedTitleSegmentCtx(rawTitle, marker string, borderFocused bool, co
 		Foreground(ctx.BorderColor).
 		Background(borderBG)
 
-	renderedMarker := ""
+	markerL, markerR := "", ""
 	if marker != "" {
-		renderedMarker = borderStyleLight.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+marker+"{{[-]}}", ctx.Prefix))
+		markerL, markerR = RenderChangedMarkers(ctx)
 	}
 
 	var result strings.Builder
 	result.WriteString(borderStyleLight.Render(leftT))
-	result.WriteString(renderedMarker)
+	result.WriteString(markerL)
 
 	if showIndicators {
 		if contentFocused {
@@ -432,7 +441,7 @@ func RenderMarkedTitleSegmentCtx(rawTitle, marker string, borderFocused bool, co
 		}
 	}
 
-	result.WriteString(renderedMarker)
+	result.WriteString(markerR)
 	result.WriteString(borderStyleLight.Render(rightT))
 	return result.String()
 }

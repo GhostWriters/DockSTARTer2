@@ -614,7 +614,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
 		padding := neutralStyle.Render(strutil.Repeat(" ", max(0, gapWidth)))
 		if item.Changed && gapWidth > 0 {
-			padding = RenderChangedMarker(ctx) + neutralStyle.Render(strutil.Repeat(" ", gapWidth-1))
+			_, after := RenderChangedMarkers(ctx)
+			padding = after + neutralStyle.Render(strutil.Repeat(" ", gapWidth-1))
 		}
 
 		firstLine := prefixPadding + tagStr + nameClose + padding + lines[0]

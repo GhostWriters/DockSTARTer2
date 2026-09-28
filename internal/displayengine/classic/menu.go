@@ -1473,9 +1473,9 @@ func titleControlPiecesFor(controls []TitleControl, ctx StyleContext, large bool
 		pad = " "
 	}
 	for _, c := range controls {
-		around := pad
+		before, after := pad, pad
 		if c.Changed != nil && c.Changed() {
-			around = RenderChangedMarker(ctx)
+			before, after = RenderChangedMarkers(ctx)
 		}
 		label := titleControlLabel(c, ctx, large)
 		if c.Checked == nil {
@@ -1484,11 +1484,11 @@ func titleControlPiecesFor(controls []TitleControl, ctx StyleContext, large bool
 				value = c.Value()
 			}
 			shown := titleControlRender("{{|OptionValue|}}"+value+"▼{{[-]}}", ctx, large)
-			pieces = append(pieces, around+label+pad+shown+around)
+			pieces = append(pieces, before+label+pad+shown+after)
 			continue
 		}
 		glyph := titleControlCheckbox(c.Checked(), ctx, large)
-		pieces = append(pieces, pad+glyph+around+label+around)
+		pieces = append(pieces, pad+glyph+before+label+after)
 	}
 	return pieces
 }

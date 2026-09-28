@@ -142,12 +142,22 @@ func (m *PanelModel) AdvanceSpinners(now time.Time) bool {
 	return changed
 }
 
-// changedIndicatorChar returns the character used to signal new content arrived while collapsed.
+// changedIndicatorChar returns the changed marker drawn before a changed label
+// (see changedIndicatorChars), for callers that need only its presence or
+// width.
 func changedIndicatorChar(lineCharacters bool) string {
+	left, _ := changedIndicatorChars(lineCharacters)
+	return left
+}
+
+// changedIndicatorChars returns the changed markers drawn before and after a
+// changed label, pointing in at it: "»" and "«", or "*" and "*" without line
+// characters. Both are in every monospace font's basic set and single-width.
+func changedIndicatorChars(lineCharacters bool) (left, right string) {
 	if lineCharacters {
-		return "•"
+		return "»", "«"
 	}
-	return "*"
+	return "*", "*"
 }
 
 // currentSpinnerMarker returns the spinner frame to use in the panel title,
@@ -159,8 +169,8 @@ func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, chan
 	}
 	if m.panelChanged && !m.Expanded {
 		ctx := GetActiveContext()
-		ch := changedIndicatorChar(ctx.LineCharacters)
-		return ch, ch, true
+		left, right := changedIndicatorChars(ctx.LineCharacters)
+		return left, right, true
 	}
 	return "", "", false
 }

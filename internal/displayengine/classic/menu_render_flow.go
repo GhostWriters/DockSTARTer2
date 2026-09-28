@@ -53,11 +53,13 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 			b.WriteString(it)
 			switch {
 			case k < len(items)-1 && changed[k]:
-				b.WriteString(RenderChangedMarker(ctx) + neutral.Render(strutil.Repeat(" ", itemSpacing-1)))
+				_, after := RenderChangedMarkers(ctx)
+				b.WriteString(after + neutral.Render(strutil.Repeat(" ", itemSpacing-1)))
 			case k < len(items)-1:
 				b.WriteString(strutil.Repeat(" ", itemSpacing))
 			case changed[k] && width < maxWidth:
-				b.WriteString(RenderChangedMarker(ctx))
+				_, after := RenderChangedMarkers(ctx)
+				b.WriteString(after)
 			}
 		}
 		return b.String()
