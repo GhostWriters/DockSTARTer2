@@ -15,7 +15,7 @@ func newFindBox(id, query, help string, partial *bool, changed func()) (*display
 	box.SetHelpPageText(help + " Esc stops typing, leaving the box focused so plain keys navigate; Space or F2 types again, where the cursor was.")
 	box.SetDarkBorder(true)
 	box.SetInputControls(func() []displayengine.TitleControl { return []displayengine.TitleControl{wordControl(partial)} })
-	box.SetInputPrompt("Find> ")
+	box.SetInputPrompt("Find>")
 	box.SetInsOvrLabel(true)
 	prev := box.Interceptor
 	box.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {

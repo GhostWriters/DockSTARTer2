@@ -36,8 +36,8 @@ func (m *MenuModel) SetInsOvrLabel(on bool) {
 	m.InvalidateCache()
 }
 
-// SetInputPrompt draws prompt before an input section's text (see
-// NewSinputSection) in the Prompt style.
+// SetInputPrompt draws prompt (">" by default) before an input section's
+// field (see NewSinputSection) in the Prompt style.
 func (m *MenuModel) SetInputPrompt(prompt string) {
 	m.inputPrompt = prompt
 	m.InvalidateCache()
@@ -110,11 +110,24 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.SetShowLockGutter(false)
 	m.SetNoLeftMargin(true)
 
+	m.inputPrompt = ">"
 	m.ContentRenderer = func(contentWidth int) string {
 		// Resolved on each render, so the input follows the active theme and
-		// the section's disabled state.
+		// the section's focus, editing, and disabled state. The prompt sits
+		// outside the field, which has a column each side: plain, or the
+		// focused-row brackets while focused but not editing.
+		ctx := GetActiveContext()
 		editing := m.focusedSub && m.InputEditing() && !m.disabled
-		(*inpPtr).SetStyles(sinputStyles(m.disabled, editing))
+		idle := m.focusedSub && !m.InputEditing() && !m.disabled
+		outside := inputFieldStyle(m.disabled, false)
+		area := inputFieldStyle(m.disabled, editing)
+		if idle {
+			area = ctx.OptionValueFocused
+		}
+		ts := sinputStyles(m.disabled, editing)
+		ts.Focused.Prompt, ts.Blurred.Prompt = outside, outside
+		ts.Focused.Text, ts.Blurred.Text = area, area
+		(*inpPtr).SetStyles(ts)
 		if m.insOvrLabel {
 			m.bottomBorderLabel = ""
 			if m.InputEditing() {
@@ -124,24 +137,34 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 				}
 			}
 		}
-		field := inputFieldStyle(m.disabled, editing)
-		if m.inputPrompt != "" {
-			(*inpPtr).Prompt = RenderThemeText("{{|Prompt|}}"+m.inputPrompt+"{{[-]}}", field)
+		left, right := outside.Render(" "), outside.Render(" ")
+		if idle && ctx.MenuBrackets {
+			open, closeCh := bracketGlyphs(ctx)
+			left = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", outside)
+			right = RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", outside)
 		}
+		prefix := RenderThemeText("{{|Prompt|}}"+m.inputPrompt+"{{[-]}}", outside) + left
+		// Prompt stays set so PromptWidth places clicks; the field is drawn
+		// without it, so the area style stays off the prompt and brackets.
+		(*inpPtr).Prompt = prefix
+		prefixWidth := (*inpPtr).PromptWidth()
 		dialog := GetStyles().Dialog
-		// The cell under the terminal cursor has no style of its own.
-		view := MaintainBackground((*inpPtr).View(), field)
 		_, pieces, controlsWidth := m.inputControlPieces()
-		inputWidth := max(contentWidth-2, 1)
+		inputWidth := max(contentWidth-2-controlsWidth, 2)
+		// The text scrolls within the field; the right column and the
+		// cursor take one each.
+		(*inpPtr).SetWidth(max(inputWidth-prefixWidth-2, 1))
+		(*inpPtr).Prompt = ""
+		// The cell under the terminal cursor has no style of its own.
+		view := MaintainBackground((*inpPtr).View(), area)
+		(*inpPtr).Prompt = prefix
+		fieldWidth := max(inputWidth-1-prefixWidth, 1)
+		row := prefix + area.Width(fieldWidth).MaxWidth(fieldWidth).Render(view) + right
 		if len(pieces) == 0 {
-			return dialog.Width(contentWidth).Padding(0, 1).Render(field.Width(inputWidth).Render(view))
+			return dialog.Width(contentWidth).Padding(0, 1).Render(row)
 		}
-		// The input scrolls within what the controls leave; +1 for the cursor.
-		inputWidth = max(inputWidth-controlsWidth, 1)
-		(*inpPtr).SetWidth(max(inputWidth-(*inpPtr).PromptWidth()-1, 1))
 		space := dialog.Render(" ")
-		return dialog.Width(contentWidth).Padding(0, 1).Render(
-			field.Width(inputWidth).MaxWidth(inputWidth).Render(view) + space + strings.Join(pieces, space))
+		return dialog.Width(contentWidth).Padding(0, 1).Render(row + space + strings.Join(pieces, space))
 	}
 
 	// Register a hit region covering the input text line so click-to-position and
