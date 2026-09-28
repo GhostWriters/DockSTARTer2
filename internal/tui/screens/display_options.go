@@ -1599,27 +1599,45 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		} else {
 			s.config.Appearance.Ptr(s.editType).Theme = s.currentTheme
 		}
+		// Another tab's staged theme is saved only if its file exists.
+		for _, ct := range config.ConnTypes {
+			if ct == s.editType {
+				continue
+			}
+			if _, err := theme.GetThemeFile(s.config.Appearance.ForConnType(ct).Theme); err != nil {
+				s.config.Appearance.Ptr(ct).Theme = s.baseConfig.Appearance.ForConnType(ct).Theme
+			}
+		}
 
-		// 2. Save Config via UpdateAppConfig, applying only this screen's
-		// own UI settings onto a freshly-loaded copy, rather than saving
-		// s.config (a snapshot from whenever this screen last loaded or
-		// saved) wholesale. This screen never touches any other AppConfig
-		// field (see the s.config.Appearance assignments above and in
-		// display_options_update.go), nor any tint or another connection
-		// type's settings, so anything else -- e.g. a tint set
+		// 2. Save every tab's changes via UpdateAppConfig, applying only this
+		// screen's own UI settings onto a freshly-loaded copy, rather than
+		// saving s.config (a snapshot from whenever this screen last loaded
+		// or saved) wholesale. This screen never touches any other
+		// AppConfig field (see the s.config.Appearance assignments above and
+		// in display_options_update.go), so anything else -- e.g. a tint set
 		// from a different session while this screen was open -- would
 		// otherwise be clobbered back to its value as of that stale
-		// snapshot.
-		refreshRateChanged := s.config.Appearance.Ptr(s.editType).RefreshRate != s.baseConfig.Appearance.Ptr(s.editType).RefreshRate
-		staged := s.config.Appearance
-		// The tint is saved only when edited here, so one set elsewhere
-		// meanwhile (e.g. with --tint) isn't overwritten.
-		tintEdited := !reflect.DeepEqual(staged.ForConnType(s.editType).AnsiColors, s.baseConfig.Appearance.ForConnType(s.editType).AnsiColors)
+		// snapshot. A tab's tint is saved only when edited here, for the
+		// same reason.
+		staged, base := s.config.Appearance, s.baseConfig.Appearance
+		var refreshChanged []string
+		for _, ct := range config.ConnTypes {
+			if staged.ForConnType(ct).RefreshRate != base.ForConnType(ct).RefreshRate {
+				refreshChanged = append(refreshChanged, ct)
+			}
+		}
+		previewChanged := staged.ForConnType(s.connType).ShowPreview != base.ForConnType(s.connType).ShowPreview
 		fresh, err := config.UpdateAppConfig(func(c *config.AppConfig) {
-			a := c.Appearance.Ptr(s.editType)
-			a.CopySettingsFrom(staged.ForConnType(s.editType))
-			if tintEdited {
-				a.AnsiColors = staged.ForConnType(s.editType).AnsiColors
+			for _, ct := range config.ConnTypes {
+				tab, saved := staged.ForConnType(ct), base.ForConnType(ct)
+				if reflect.DeepEqual(tab, saved) {
+					continue
+				}
+				a := c.Appearance.Ptr(ct)
+				a.CopySettingsFrom(tab)
+				if !reflect.DeepEqual(tab.AnsiColors, saved.AnsiColors) {
+					a.AnsiColors = tab.AnsiColors
+				}
 			}
 		})
 		if err != nil {
@@ -1631,14 +1649,9 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		}
 		s.baseConfig = fresh
 		s.config = fresh
-		for _, ct := range config.ConnTypes {
-			if ct != s.editType {
-				s.config.Appearance.Ptr(ct).CopySettingsFrom(staged.ForConnType(ct))
-			}
-		}
 
 		var previewCmd tea.Cmd
-		if s.layoutRow != nil && s.editType == s.connType {
+		if s.layoutRow != nil && previewChanged {
 			previewCmd = s.layoutRow.SetPreviewHidden(!s.config.Appearance.Ptr(s.connType).ShowPreview)
 		}
 
@@ -1646,29 +1659,29 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 		cmds := []tea.Cmd{func() tea.Msg { return displayengine.ConfigChangedMsg{Config: fresh} }, previewCmd}
 
 		// 4. Refresh rate can only take effect at program construction time
-		// (tea.WithFPS has no live-update API). A Local session applying its
-		// own refresh rate restarts in place, asking first when that would
-		// discard other tabs' unapplied changes. Every other case only
-		// affects sessions started later, so it just says so: an SSH or web
-		// session reconnecting never needs the whole process restarted.
-		if refreshRateChanged && (s.editType != "local" || s.connType != "local") {
+		// (tea.WithFPS has no live-update API). A Local session saving its
+		// own refresh rate restarts in place; every other case only affects
+		// sessions started later, so it just says so: an SSH or web session
+		// reconnecting never needs the whole process restarted.
+		var notices []string
+		restart := false
+		for _, ct := range refreshChanged {
+			if ct == "local" && s.connType == "local" {
+				restart = true
+			} else {
+				notices = append(notices, refreshRateNotice(ct))
+			}
+		}
+		if len(notices) > 0 {
+			message := strings.Join(notices, "\n\n")
 			cmds = append(cmds, func() tea.Msg {
-				return tui.ShowMessageDialogMsg{
-					Title:   "Refresh Rate Saved",
-					Message: refreshRateNotice(s.editType),
-					Type:    tui.MessageInfo,
-				}
+				return tui.ShowMessageDialogMsg{Title: "Refresh Rate Saved", Message: message, Type: tui.MessageInfo}
 			})
-		} else if refreshRateChanged {
-			unapplied := s.unappliedTabs()
-			if len(unapplied) == 0 && tui.IsRestartSafeLocally() {
+		}
+		if restart {
+			if tui.IsRestartSafeLocally() {
 				tui.RestartForConfigChange(context.Background())
 			} else {
-				question := "Refresh rate changed. You have unsaved changes — restart now to apply it, or keep editing and it'll apply next session?"
-				if len(unapplied) > 0 {
-					question = "Refresh rate changed and needs a restart, which would discard the unapplied changes on the " +
-						config.ConnTypeLabels(unapplied) + " tab. Restart now, or keep editing and it'll apply next session?"
-				}
 				resultChan := make(chan bool, 1)
 				go func() {
 					if <-resultChan {
@@ -1678,7 +1691,7 @@ func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 				cmds = append(cmds, func() tea.Msg {
 					return tui.ShowConfirmDialogMsg{
 						Title:      "Restart Required",
-						Question:   question,
+						Question:   "Refresh rate changed. You have unsaved changes — restart now to apply it, or keep editing and it'll apply next session?",
 						DefaultYes: false,
 						ResultChan: resultChan,
 					}
@@ -1910,18 +1923,6 @@ func (s *DisplayOptionsScreen) confirmBack() tea.Cmd {
 		}
 		return displayOptionsLeaveMsg{}
 	}
-}
-
-// unappliedTabs returns the connection types, other than the shown one,
-// with staged changes.
-func (s *DisplayOptionsScreen) unappliedTabs() []string {
-	var types []string
-	for _, ct := range config.ConnTypes {
-		if ct != s.editType && s.tabChanged(ct) {
-			types = append(types, ct)
-		}
-	}
-	return types
 }
 
 func (s *DisplayOptionsScreen) handleReset() tea.Cmd {
