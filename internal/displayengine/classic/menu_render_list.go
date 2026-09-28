@@ -226,6 +226,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 			// near the left end: "── Label ──────".
 			lineStyle := neutralStyle.PaddingLeft(0)
 			sepChar := GetStyles().SepChar
+			if item.IsCategory {
+				sepChar = "="
+				if ctx.LineCharacters {
+					sepChar = "━"
+				}
+			}
 			line := lineStyle.Render(strutil.Repeat(sepChar, listContentWidth))
 			if item.Tag != "" {
 				label := GetPlainText(item.Tag)

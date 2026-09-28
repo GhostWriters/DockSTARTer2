@@ -38,6 +38,9 @@ type MenuItem struct {
 
 	// Layout support
 	IsSeparator bool // Whether this is a non-selectable header/separator
+	// IsCategory, with IsSeparator, makes it a category heading, drawn with
+	// a heavy line.
+	IsCategory bool
 
 	// Grouped list support (app selection with instances)
 	IsGroupHeader     bool   // App name header row; checkbox shows group-enabled state (read-only)

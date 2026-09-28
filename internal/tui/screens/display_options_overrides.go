@@ -103,7 +103,7 @@ func (s *DisplayOptionsScreen) overrideItems() []displayengine.MenuItem {
 	base := s.baseTint()
 	var items []displayengine.MenuItem
 	for g, group := range overrideGroups {
-		items = append(items, displayengine.MenuItem{Tag: group.label, IsSeparator: true})
+		items = append(items, displayengine.MenuItem{Tag: group.label, IsSeparator: true, IsCategory: true})
 		for _, slot := range group.slots {
 			names, usage := overrideNotes(g, slot)
 			items = append(items, s.overrideItem(el, base, slot, names, usage))

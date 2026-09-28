@@ -14,29 +14,25 @@ type listGroup struct {
 	Items []displayengine.MenuItem
 }
 
-// letterDividerMinItems is how many items a grouped list must show before
-// it gets dividers between first letters.
+// letterDividerMinItems is how many items a group must show before it gets
+// dividers between first letters.
 const letterDividerMinItems = 20
 
 // groupedItems joins groups into one list. Each group with items starts
-// with a divider carrying its label, so a filtered list still shows where
-// its items come from; when the list shows more than letterDividerMinItems
-// items, a plain divider also separates each change of first letter within
-// a group.
+// with a category heading carrying its label, so a filtered list still
+// shows where its items come from; in a group with more than
+// letterDividerMinItems items, a plain divider also separates each change
+// of first letter.
 func groupedItems(groups []listGroup) []displayengine.MenuItem {
-	total := 0
-	for _, g := range groups {
-		total += len(g.Items)
-	}
 	var items []displayengine.MenuItem
 	for _, g := range groups {
 		if len(g.Items) == 0 {
 			continue
 		}
-		items = append(items, displayengine.MenuItem{Tag: g.Label, IsSeparator: true})
+		items = append(items, displayengine.MenuItem{Tag: g.Label, IsSeparator: true, IsCategory: true})
 		lastLetter := ""
 		for _, it := range g.Items {
-			if total > letterDividerMinItems {
+			if len(g.Items) > letterDividerMinItems {
 				letter := firstLetter(it.Tag)
 				if lastLetter != "" && letter != lastLetter {
 					items = append(items, displayengine.MenuItem{IsSeparator: true})
