@@ -437,6 +437,11 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 		tbs.LargeRightSegment = m.largeTitleControlsSegment
 	}
 	rawTitle := m.title
+	if icons := m.ownTitleIcons(); len(icons) > 0 {
+		tbs.Show = true
+		tbs.Widgets = icons
+		tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget = false, "", ""
+	}
 	if m.frameTitle != nil {
 		// An enclosing frame's title, with its widgets after the controls.
 		_, avail, widgets := m.frameTitleLayout(contentWidth, ctx)

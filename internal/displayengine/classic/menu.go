@@ -310,6 +310,8 @@ type MenuModel struct {
 	// frameTitle, when set, is an enclosing frame's title drawn in place of
 	// this menu's own (see SetFrameTitle).
 	frameTitle *FrameTitle
+	// titleIcons are drawn at the right of the title (see SetTitleIcons).
+	titleIcons func() []WidgetDef
 	// footerBar is drawn in the bottom border (see SetFooterBar);
 	// footerBarRegions and footerBarY place its last drawing.
 	footerBar        *FooterBar
@@ -1497,7 +1499,9 @@ func (m *MenuModel) titleControlRegions(offsetX, offsetY, zOrder int) []HitRegio
 	}
 	widgets := 0
 	if m.frameTitle != nil {
-		widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", m.frameTitle.Widgets(), ctx))
+		widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", append(m.titleIconDefs(), m.frameTitle.Widgets()...), ctx))
+	} else if icons := m.ownTitleIcons(); len(icons) > 0 {
+		widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", icons, ctx))
 	} else if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
 		if m.Layout.LargeTitleBar {
 			widgets = lipgloss.Width(RenderThemeTextCtx(buildLargeTitleBarWidgets(false, "", "", m.ActiveWidgets(), ctx), ctx))

@@ -203,6 +203,7 @@ const (
 
 	// Title bar widget IDs (suffix appended to menu ID)
 	IDTitleWidgetRefresh    = "title_widget_refresh"
+	IDTitleWidgetReset      = "title_widget_reset"
 	IDTitleWidgetHelp       = "title_widget_help"
 	IDTitleWidgetClose      = "title_widget_close"
 	IDTitleWidgetMaximize   = "title_widget_maximize"

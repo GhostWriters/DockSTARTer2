@@ -111,6 +111,7 @@ const (
 	IDTitleWidgetRefresh      = classic.IDTitleWidgetRefresh
 	IDTitleWidgetMaximize     = classic.IDTitleWidgetMaximize
 	IDTitleWidgetSideBySide   = classic.IDTitleWidgetSideBySide
+	IDTitleWidgetReset        = classic.IDTitleWidgetReset
 	IDTitleWidgetStacked      = classic.IDTitleWidgetStacked
 	IDSaveButton              = classic.IDSaveButton
 	IDRefreshButton           = classic.IDRefreshButton

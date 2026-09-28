@@ -267,6 +267,23 @@ func (t *TabbedPanes) CycleLayout() tea.Cmd {
 	return t.SetLayout(next, -1)
 }
 
+// PaneAfter returns the pane delta panes from the focused one (or, with
+// focus elsewhere, the shown one), skipping closed panes while tiled.
+func (t *TabbedPanes) PaneAfter(delta int) int {
+	n := len(t.panes)
+	cur, _ := t.locate(t.SubFocusIndex())
+	if !t.focused || cur < 0 {
+		cur = t.Strip.Active
+	}
+	for step := 1; step <= n; step++ {
+		p := ((cur+delta*step)%n + n) % n
+		if !t.tiled() || t.open[p] {
+			return p
+		}
+	}
+	return cur
+}
+
 // ShowPane shows pane (while maximized) and focuses its first Tab stop.
 func (t *TabbedPanes) ShowPane(pane int) tea.Cmd {
 	if pane < 0 || pane >= len(t.panes) {

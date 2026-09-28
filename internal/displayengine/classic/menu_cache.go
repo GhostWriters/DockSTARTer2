@@ -74,7 +74,7 @@ func (m *MenuModel) viewStamp() (stamp string, ok bool) {
 		m.tbFocused, m.tbWidget, m.tbPressed, len(m.tbWidgets),
 		m.title, m.subtitle, m.plainText, m.bottomBorderLabel, m.borderStyle, m.maximized, m.showButtons,
 		m.externalLock, m.commandLock, m.loadingText, m.titleSpinner.active, m.titleSpinner.frame,
-		m.GetButtonSpecsForState(), m.lastHeaderView, m.frameTitleStamp(GetActiveContext()), m.footerBarStamp())
+		m.GetButtonSpecsForState(), m.lastHeaderView, m.frameTitleStamp(GetActiveContext()), m.footerBarStamp(), m.titleIconsStamp())
 	for k, v := range m.sectionLineBackgrounds {
 		fmt.Fprint(&b, "|bg", k, v.GetBackground())
 	}

@@ -49,7 +49,7 @@ type FrameHoster interface {
 // its x within the border, the columns it may use, and its widgets.
 func (m *MenuModel) frameTitleLayout(contentWidth int, ctx StyleContext) (x, avail int, widgets []WidgetDef) {
 	ft := m.frameTitle
-	widgets = ft.Widgets()
+	widgets = append(m.titleIconDefs(), ft.Widgets()...)
 	controls := 0
 	for i, p := range m.titleControlPieces(ctx, false) {
 		controls += WidthWithoutZones(p)
@@ -81,6 +81,59 @@ func (m *MenuModel) frameTitleStamp(ctx StyleContext) string {
 		s += fmt.Sprint("|", w.ID)
 	}
 	return s
+}
+
+// SetTitleIcons draws icons at the right of this submenu's title, before an
+// enclosing frame's widgets (see SetFrameTitle), with hit region IDs under
+// TitleIconsID. icons is read each time the menu draws, so an icon can come
+// and go.
+func (m *MenuModel) SetTitleIcons(icons func() []WidgetDef) {
+	m.titleIcons = icons
+	m.InvalidateCache()
+}
+
+// TitleIconsID prefixes the title icons' hit region IDs.
+func (m *MenuModel) TitleIconsID() string { return m.id + ".icons" }
+
+func (m *MenuModel) titleIconDefs() []WidgetDef {
+	if m.titleIcons == nil {
+		return nil
+	}
+	return m.titleIcons()
+}
+
+// ownTitleIcons returns the title icons a submenu drawing its own title
+// shows as its only widgets, or nil.
+func (m *MenuModel) ownTitleIcons() []WidgetDef {
+	if m.frameTitle != nil || !m.subMenuMode || m.submenuWidgets || m.title == "" {
+		return nil
+	}
+	return m.titleIconDefs()
+}
+
+// titleIconsStamp describes the title icons' current drawing, for the view
+// cache (see viewStamp).
+func (m *MenuModel) titleIconsStamp() string {
+	s := ""
+	for _, w := range m.titleIconDefs() {
+		s += fmt.Sprint("|", w.ID, w.Disabled)
+	}
+	return s
+}
+
+// titleWidgetRegions returns the hit regions of widgets drawn at the right
+// end of the top border: the title icons, then the rest with IDs under
+// restID.
+func (m *MenuModel) titleWidgetRegions(restID string, offsetX, offsetY, dialogWidth int, widgets []WidgetDef, baseZ int, ctx StyleContext) []HitRegion {
+	width := WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", widgets, ctx))
+	if width == 0 {
+		return nil
+	}
+	const endPad = 1
+	x := offsetX + dialogWidth - 1 - endPad - width
+	icons := min(len(m.titleIconDefs()), len(widgets))
+	regions := TitleBarWidgetRegions(m.TitleIconsID(), widgets[:icons], x, offsetY, baseZ)
+	return append(regions, TitleBarWidgetRegions(restID, widgets[icons:], x+4*icons, offsetY, baseZ)...)
 }
 
 // listHeaderHeight returns the rows above the list taken by a header

@@ -514,7 +514,10 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
 		x, avail, widgets := m.frameTitleLayout(dialogWidth-GetLayout().BorderWidth(), ctx)
 		regions = append(regions, m.frameTitle.HitRegions(offsetX+x, offsetY, avail, ctx)...)
-		regions = append(regions, TitleBarHitRegionsFor(m.frameTitle.WidgetID, offsetX, offsetY, dialogWidth, false, widgets, baseZ)...)
+		regions = append(regions, m.titleWidgetRegions(m.frameTitle.WidgetID, offsetX, offsetY, dialogWidth, widgets, baseZ, ctx)...)
+	} else if icons := m.ownTitleIcons(); len(icons) > 0 {
+		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+		regions = append(regions, m.titleWidgetRegions("", offsetX, offsetY, dialogWidth, icons, baseZ, GetActiveContext())...)
 	} else if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
 		// Use actual rendered dialog width, not m.width — non-maximized menus render
 		// narrower than m.width based on content, so the widget X must match.

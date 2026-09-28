@@ -30,6 +30,9 @@ type WidgetDef struct {
 	// buildLargeTitleBarWidgets just reference "IconHelpInactive" etc.
 	// directly and trust it to resolve.
 	IconName string
+	// Disabled draws the widget in its Icon<IconName>Disabled style, never
+	// focused or pressed.
+	Disabled bool
 	Action   func() tea.Cmd // nil = no action; caller supplies closeCmd for Close widget
 }
 
@@ -292,7 +295,9 @@ func buildLargeTitleBarWidgets(focused bool, activeWidget, pressedWidget string,
 			glyph = w.GlyphAscii
 		}
 		prefix := "{{|LargeIcon" + w.IconName + "Inactive|}}"
-		if isPressed(w.ID) {
+		if w.Disabled {
+			prefix += "{{|LargeIcon" + w.IconName + "Disabled|}}"
+		} else if isPressed(w.ID) {
 			prefix += "{{|LargeIcon" + w.IconName + "Pressed|}}"
 		} else if isActive(w.ID) {
 			prefix += "{{|LargeIcon" + w.IconName + "Focused|}}"
@@ -329,7 +334,9 @@ func BuildDialogTitleWidgets(focused bool, activeWidget, pressedWidget string, w
 			glyph = w.GlyphAscii
 		}
 		prefix := "{{|Icon" + w.IconName + "Inactive|}}"
-		if isPressed(w.ID) {
+		if w.Disabled {
+			prefix += "{{|Icon" + w.IconName + "Disabled|}}"
+		} else if isPressed(w.ID) {
 			prefix += "{{|Icon" + w.IconName + "Pressed|}}"
 		} else if isActive(w.ID) {
 			prefix += "{{|Icon" + w.IconName + "Focused|}}"
@@ -402,6 +409,7 @@ func IsTitleWidgetID(id string) bool {
 	return strings.HasSuffix(id, "."+IDTitleWidgetHelp) ||
 		strings.HasSuffix(id, "."+IDTitleWidgetClose) ||
 		strings.HasSuffix(id, "."+IDTitleWidgetRefresh) ||
+		strings.HasSuffix(id, "."+IDTitleWidgetReset) ||
 		strings.HasSuffix(id, "."+IDTitleWidgetMaximize) ||
 		strings.HasSuffix(id, "."+IDTitleWidgetSideBySide) ||
 		strings.HasSuffix(id, "."+IDTitleWidgetStacked)
