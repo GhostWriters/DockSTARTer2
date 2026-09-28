@@ -12,10 +12,11 @@ import (
 // partial, calling changed after each message it handles.
 func newFindBox(id, query, help string, partial *bool, changed func()) (*displayengine.MenuModel, *sinput.Model) {
 	box, input := displayengine.NewSinputSection(id, "Find", query)
-	box.SetHelpPageText(help)
+	box.SetHelpPageText(help + " Esc stops typing, leaving the box focused so plain keys navigate; Space or F2 types again, where the cursor was.")
 	box.SetDarkBorder(true)
 	box.SetInputControls(func() []displayengine.TitleControl { return []displayengine.TitleControl{wordControl(partial)} })
 	box.SetInputPrompt("Find> ")
+	box.SetInsOvrLabel(true)
 	prev := box.Interceptor
 	box.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {
 		cmd, handled := prev(msg, menu)
@@ -25,6 +26,22 @@ func newFindBox(id, query, help string, partial *bool, changed func()) (*display
 		return cmd, handled
 	})
 	return box, input
+}
+
+// findInsOvrHit toggles insert/overwrite for the Find box whose INS/OVR
+// label id belongs to.
+func (s *DisplayOptionsScreen) findInsOvrHit(id string) bool {
+	for _, f := range []struct {
+		box   *displayengine.MenuModel
+		input *sinput.Model
+	}{{s.tintSearchMenu, s.tintSearchInput}, {s.themeFindMenu, s.themeFindInput}} {
+		if f.box != nil && id == f.box.ID()+"."+displayengine.IDInsOvr {
+			f.input.ToggleOverwrite()
+			f.box.InvalidateCache()
+			return true
+		}
+	}
+	return false
 }
 
 // wordControl is a Find box's Word option: whole words, or part of a word
@@ -66,13 +83,14 @@ func (s *DisplayOptionsScreen) focusSettingsStop(id string) tea.Cmd {
 	return nil
 }
 
-// focusedFindBox returns the Find box holding focus and its input, if any.
+// focusedFindBox returns the Find box holding focus and editing (see
+// displayengine.MenuModel.SetInputEditing) and its input, if any.
 func (s *DisplayOptionsScreen) focusedFindBox() (*displayengine.MenuModel, *sinput.Model) {
 	switch leaf := s.focusedSettingsLeaf(); {
 	case leaf == nil:
-	case s.tintSearchMenu != nil && leaf == s.tintSearchMenu:
+	case s.tintSearchMenu != nil && leaf == s.tintSearchMenu && s.tintSearchMenu.InputEditing():
 		return s.tintSearchMenu, s.tintSearchInput
-	case s.themeFindMenu != nil && leaf == s.themeFindMenu:
+	case s.themeFindMenu != nil && leaf == s.themeFindMenu && s.themeFindMenu.InputEditing():
 		return s.themeFindMenu, s.themeFindInput
 	}
 	return nil, nil
@@ -134,7 +152,7 @@ func (s *DisplayOptionsScreen) syncThemeList() {
 	s.themeMenu.InvalidateCache()
 }
 
-// findBoxFocused reports whether a Find box holds focus.
+// findBoxFocused reports whether a Find box holds focus and is editing.
 func (s *DisplayOptionsScreen) findBoxFocused() bool {
 	box, _ := s.focusedFindBox()
 	return box != nil

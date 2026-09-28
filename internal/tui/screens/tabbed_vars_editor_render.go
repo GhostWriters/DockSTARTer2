@@ -88,9 +88,12 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		// Global INS/OVR for the currently focused pane, once on the tab-list
 		// box's own bottom border rather than repeated on every pane (see
 		// renderPane).
-		modeLabel := "INS"
-		if m.tabs[m.activeTab].editor.IsOverwrite() {
-			modeLabel = "OVR"
+		modeLabel := ""
+		if !m.editorIdle {
+			modeLabel = "INS"
+			if m.tabs[m.activeTab].editor.IsOverwrite() {
+				modeLabel = "OVR"
+			}
 		}
 		lines := strings.Split(body, "\n")
 		if len(lines) > 0 {
@@ -308,7 +311,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	// has no separate tab-list box (its top border doubles as the editor's
 	// own), so there it stays on this pane's own border as always.
 	modeLabel := ""
-	if !m.splitMode {
+	if !m.splitMode && !m.editorIdle {
 		modeLabel = "INS"
 		if editor.IsOverwrite() {
 			modeLabel = "OVR"
@@ -431,6 +434,8 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 		displayengine.Keys.EnvDelete,
 		key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("alt+↑/↓", "reorder row")),
 		displayengine.Keys.EnvEditValue,
+		displayengine.Keys.StopEditing,
+		key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "type again (after esc)")),
 	}
 	if len(m.tabs) > 1 {
 		editorActions = append(editorActions, displayengine.Keys.EnvNextTab, displayengine.Keys.EnvPrevTab)

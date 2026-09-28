@@ -97,6 +97,20 @@ func (m *MenuModel) footerBarLine(width int, bottom, focused bool, pct string, c
 		tail = style.Render(leftT) + ctx.TagKey.Bold(true).Render(pct) + style.Render(rightT+strutil.Repeat(h, 2)+right)
 	}
 	head := style.Render(left + h)
+	if label := m.footerLabel(); bottom && label != "" {
+		// The footer's bottom border label (e.g. INS/OVR), where a bordered
+		// box of its own would draw it.
+		leftT, rightT := "┤", "├"
+		switch {
+		case !ctx.LineCharacters && focused:
+			leftT, rightT = "H", "H"
+		case !ctx.LineCharacters:
+			leftT, rightT = "|", "|"
+		case focused:
+			leftT, rightT = "┫", "┣"
+		}
+		head += style.Render(leftT) + ctx.TagKey.Bold(true).Render(label) + style.Render(rightT+h)
+	}
 	tailW, headW := WidthWithoutZones(tail), WidthWithoutZones(head)
 
 	if !controls {
@@ -136,6 +150,30 @@ func (m *MenuModel) footerBarLine(width int, bottom, focused bool, pct string, c
 	}
 	m.footerBarRegions = regions
 	return line + style.Render(strutil.Repeat(h, max(width-x-tailW, 0))) + tail
+}
+
+// footerLabel returns the shown footer's bottom border label (see
+// SetBottomBorderLabel), or "".
+func (m *MenuModel) footerLabel() string {
+	if m.header == nil || !m.headerBottom {
+		return ""
+	}
+	if l, ok := m.header.(interface{ BottomBorderLabel() string }); ok {
+		return l.BottomBorderLabel()
+	}
+	return ""
+}
+
+// footerLabelRegion returns the hit region of the shown footer's bottom
+// border label, with ID "<footer ID>." + IDInsOvr, for a menu at
+// (offsetX, offsetY).
+func (m *MenuModel) footerLabelRegion(offsetX, offsetY, zOrder int) []HitRegion {
+	label := m.footerLabel()
+	if label == "" {
+		return nil
+	}
+	return []HitRegion{{ID: m.header.ID() + "." + IDInsOvr, X: offsetX + 2, Y: offsetY + m.footerBottomY,
+		Width: WidthWithoutZones(label), Height: 1, ZOrder: zOrder, Label: "Insert/Overwrite"}}
 }
 
 // footerBarHitRegions returns the last drawn footer bar's hit regions for a

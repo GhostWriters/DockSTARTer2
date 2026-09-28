@@ -609,6 +609,7 @@ func (m *MenuModel) joinFooter(box, footer, pct string) string {
 	lines = lines[:len(lines)-1]
 	m.footerY = len(lines)
 	footerLines := strings.Split(footer, "\n")
+	m.footerBottomY = m.footerY + len(footerLines) - 1
 	footerLines[0] = m.footerBarLine(m.width, false, m.focusedSub || m.frameFocused, pct, false, GetActiveContext())
 	return strings.Join(append(lines, footerLines...), "\n")
 }

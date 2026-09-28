@@ -12,6 +12,30 @@ import (
 	semstyle "github.com/GhostWriters/semstyle/lg"
 )
 
+// SetInputEditing starts or stops editing in an input section (see
+// NewSinputSection). While not editing it stays focused, but shows no
+// cursor and leaves every key but EditInput (and clicks, which also resume
+// editing) to its parent, so plain keys navigate. It edits again whenever
+// it gains focus.
+func (m *MenuModel) SetInputEditing(editing bool) {
+	if m.inputIdle == !editing {
+		return
+	}
+	m.inputIdle = !editing
+	m.InvalidateCache()
+}
+
+// InputEditing reports whether an input section is editing (see
+// SetInputEditing).
+func (m *MenuModel) InputEditing() bool { return m.textInput && !m.inputIdle }
+
+// SetInsOvrLabel draws an input section's insert/overwrite mode ("INS" or
+// "OVR") in its bottom border while it's editing.
+func (m *MenuModel) SetInsOvrLabel(on bool) {
+	m.insOvrLabel = on
+	m.InvalidateCache()
+}
+
 // SetInputPrompt draws prompt before an input section's text (see
 // NewSinputSection) in the Prompt style.
 func (m *MenuModel) SetInputPrompt(prompt string) {
@@ -90,6 +114,15 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 		// Resolved on each render, so the input follows the active theme and
 		// the section's disabled state.
 		(*inpPtr).SetStyles(sinputStyles(m.disabled))
+		if m.insOvrLabel {
+			m.bottomBorderLabel = ""
+			if m.InputEditing() {
+				m.bottomBorderLabel = "INS"
+				if (*inpPtr).IsOverwrite() {
+					m.bottomBorderLabel = "OVR"
+				}
+			}
+		}
 		field := inputFieldStyle(m.disabled)
 		if m.inputPrompt != "" {
 			(*inpPtr).Prompt = RenderThemeText("{{|Prompt|}}"+m.inputPrompt+"{{[-]}}", field)
@@ -143,6 +176,13 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.SetUpdateInterceptor(func(msg tea.Msg, menu *MenuModel) (tea.Cmd, bool) {
 		switch msg := msg.(type) {
 		case tea.KeyPressMsg:
+			if m.inputIdle {
+				if key.Matches(msg, Keys.EditInput) {
+					menu.SetInputEditing(true)
+					return nil, true
+				}
+				return nil, false
+			}
 			if (key.Matches(msg, Keys.CycleTab) || key.Matches(msg, Keys.CycleShiftTab)) && !IsTypedText(msg) || key.Matches(msg, Keys.Enter) {
 				return nil, false
 			}
@@ -151,6 +191,9 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 			menu.InvalidateCache()
 			return cmd, true
 		case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
+			if m.inputIdle {
+				return nil, false
+			}
 			newInp, cmd := (*inpPtr).Update(msg)
 			*inpPtr = newInp
 			menu.InvalidateCache()
@@ -158,6 +201,7 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 		case LayerHitMsg:
 			switch msg.Button {
 			case tea.MouseLeft:
+				menu.SetInputEditing(true)
 				(*inpPtr).HandleClick(msg.X)
 				menu.InvalidateCache()
 			case tea.MouseRight:

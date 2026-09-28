@@ -174,6 +174,12 @@ type TabbedVarsEditorModel struct {
 	// AdvanceSpinners, so a blink redraws the screen.
 	blinkHidden bool
 
+	// editorIdle marks the focused editor not editing: Esc stops editing,
+	// keeping focus, so keys stop reaching the text and plain keys
+	// navigate (see AppModel.keyAlias); Space or a click edits again, and
+	// so does focus returning to the editor.
+	editorIdle bool
+
 	tabs      []envTab
 	activeTab int
 
@@ -1093,7 +1099,7 @@ func (m *TabbedVarsEditorModel) HasDialog() bool {
 // It returns the hardware cursor position relative to the screen's top-left corner,
 // allowing AppModel.View() to position the terminal cursor over the active editor.
 func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
-	if m.focus != envFocusEditor || len(m.tabs) == 0 {
+	if m.focus != envFocusEditor || m.editorIdle || len(m.tabs) == 0 {
 		return 0, 0, tea.CursorBar, false
 	}
 	// A Ctrl+Left/Right-selected-but-still-closed tab (tiled mode only --

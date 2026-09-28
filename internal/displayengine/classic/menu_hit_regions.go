@@ -68,6 +68,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	switch {
 	case m.header != nil && m.subMenuMode && m.headerBottom:
 		regions = append(regions, m.header.GetHitRegions(offsetX, offsetY+m.footerY)...)
+		regions = append(regions, m.footerLabelRegion(offsetX, offsetY, ZDialog+15)...)
 	case m.header != nil && m.subMenuMode:
 		regions = append(regions, m.header.GetHitRegions(offsetX+layout.SingleBorder(), offsetY+listY)...)
 		listY += m.Layout.ListHeaderHeight

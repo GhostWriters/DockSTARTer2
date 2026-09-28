@@ -190,6 +190,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd, ok := s.resetSection(msg.ID); ok {
 				return s, cmd
 			}
+			if s.findInsOvrHit(msg.ID) {
+				s.tintMenu.InvalidateCache()
+				s.themeMenu.InvalidateCache()
+				return s, nil
+			}
 		}
 		if msg.Button == tea.MouseLeft && s.outerMenu != nil {
 			switch msg.ID {
@@ -353,6 +358,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, uCmd
 		}
 		if key.Matches(msg, displayengine.Keys.Esc) {
+			// Esc first stops editing a Find box, keeping it focused.
+			if box, _ := s.focusedFindBox(); box != nil {
+				box.SetInputEditing(false)
+				s.tintMenu.InvalidateCache()
+				s.themeMenu.InvalidateCache()
+				return s, nil
+			}
 			return s, s.EscapeAction()
 		}
 		switch {
@@ -626,6 +638,8 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 		displayengine.Keys.ToggleConnections,
 		displayengine.Keys.ToggleElements,
 		displayengine.Keys.ToggleFilter,
+		displayengine.Keys.StopEditing,
+		displayengine.Keys.EditInput,
 		displayengine.Keys.SearchWholeWords,
 		displayengine.Keys.SearchVariant,
 		displayengine.Keys.ResetSection,

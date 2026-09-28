@@ -90,6 +90,8 @@ type KeyMap struct {
 	SearchWholeWords key.Binding
 	SearchVariant    key.Binding
 	ResetSection     key.Binding
+	EditInput        key.Binding
+	StopEditing      key.Binding
 	ResetAll         key.Binding
 	SearchBase       key.Binding
 
@@ -126,8 +128,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		},
 		{
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
-			key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt ←/→", "switch tab/col")),
-			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p", "next/previous element")),
+			key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt+←/→ ,/.", "switch tab/col")),
+			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p ]/[", "next/previous element")),
 			k.CycleTab,
 			k.CycleShiftTab,
 			k.ToggleLog,
@@ -323,6 +325,14 @@ var Keys = KeyMap{
 	SearchVariant: key.NewBinding(
 		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
 		key.WithHelp("alt+a", "find variant"),
+	),
+	EditInput: key.NewBinding(
+		key.WithKeys("f2", "space"),
+		key.WithHelp("F2/space", "type in the field again"),
+	),
+	StopEditing: key.NewBinding(
+		key.WithKeys("esc"),
+		key.WithHelp("esc", "stop typing (again: back)"),
 	),
 	ResetSection: key.NewBinding(
 		key.WithKeys("ctrl+r", "alt+r", "ctrl+alt+r"),

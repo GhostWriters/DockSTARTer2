@@ -278,6 +278,9 @@ type MenuModel struct {
 	headerBottom   bool
 	lastHeaderView string
 	footerY        int
+	// footerBottomY is the row of the footer's bottom edge in the last
+	// drawing.
+	footerBottomY int
 	// lastStyleGen, lastScope, and lastViewportHeight complete
 	// renderVariableHeightList's memo key (see recordListMemo).
 	lastStyleGen       uint64
@@ -323,6 +326,11 @@ type MenuModel struct {
 	// SetInputControls); inputPrompt is its prompt (see SetInputPrompt).
 	inputControls func() []TitleControl
 	inputPrompt   string
+	// inputIdle marks an input section focused but not editing (see
+	// SetInputEditing); insOvrLabel draws its INS/OVR mode in its bottom
+	// border while editing (see SetInsOvrLabel).
+	inputIdle   bool
+	insOvrLabel bool
 
 	lastWidth       int
 	lastHeight      int
@@ -961,6 +969,9 @@ func (m *MenuModel) SetBottomBorderLabel(label string) {
 	m.InvalidateCache()
 }
 
+// BottomBorderLabel returns the label set by SetBottomBorderLabel.
+func (m *MenuModel) BottomBorderLabel() string { return m.bottomBorderLabel }
+
 // SetBorderStyle overrides the corner/edge shape of this section's outer
 // bordered box independent of dialogType. Use BorderStyleAuto to revert to
 // the default (DialogTypeConfirm implies angled, everything else square).
@@ -1148,6 +1159,10 @@ func (m *MenuModel) SetDisabled(disabled bool) {
 
 // SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
 func (m *MenuModel) SetSubFocused(focused bool) tea.Cmd {
+	if focused && !m.focusedSub && m.textInput {
+		// An input section starts editing whenever it gains focus.
+		m.inputIdle = false
+	}
 	m.focusedSub = focused
 	var cmd tea.Cmd
 	if focused && m.onSubFocused != nil {
