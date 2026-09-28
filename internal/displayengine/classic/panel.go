@@ -193,13 +193,10 @@ func panelRenderFn() func(string) string {
 
 // applyInputStyles updates the sinput colours from the current theme.
 func (m *PanelModel) applyInputStyles() {
-	styles := GetStyles()
-	bg := styles.Dialog.GetBackground()
+	field := inputFieldStyle(false)
 	tiStyles := textinput.DefaultStyles(true)
-	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Focused.Prompt, tiStyles.Focused.Text = field, field
+	tiStyles.Blurred.Prompt, tiStyles.Blurred.Text = field, field
 	tiStyles.Cursor.Color = TextCursorColor()
 	m.Input.SetStyles(tiStyles)
 }

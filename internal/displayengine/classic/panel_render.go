@@ -20,18 +20,20 @@ import (
 // rendered. Call this (via a real *PanelModel, i.e. &AppModel.panel) once
 // per frame before either of those run.
 func (m *PanelModel) SyncInputPrompt() {
+	// Resolved each frame, so the input follows the active theme.
+	m.applyInputStyles()
 	if m.SessionActive() {
 		return
 	}
-	ctx := GetActiveContext()
+	field := inputFieldStyle(false)
 	typed := strings.TrimSpace(m.Input.Value())
 	switch {
 	case m.PanelMode == "system" && strings.HasPrefix(typed, "!!"):
-		m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!!>{{[-]}}", ctx.Dialog)
+		m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!!>{{[-]}}", field)
 	case m.PanelMode == "system" && strings.HasPrefix(typed, "!"):
-		m.Input.Prompt = RenderThemeText("{{|PromptShell|}} !>{{[-]}}", ctx.Dialog)
+		m.Input.Prompt = RenderThemeText("{{|PromptShell|}} !>{{[-]}}", field)
 	default:
-		m.Input.Prompt = RenderThemeText("{{|Prompt|}}  >{{[-]}}", ctx.Dialog)
+		m.Input.Prompt = RenderThemeText("{{|Prompt|}}  >{{[-]}}", field)
 	}
 }
 
@@ -84,7 +86,7 @@ func (m PanelModel) ViewString() string {
 			marker = lockedMarkerAscii
 		}
 		// Consolidated lock marker and message into the Prompt for reliable styling
-		m.Input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+" Session active — input locked{{[-]}} ", ctx.Dialog)
+		m.Input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+" Session active — input locked{{[-]}} ", inputFieldStyle(false))
 	} else {
 		m.Input.Placeholder = ""
 		st := m.Input.Styles()
@@ -103,10 +105,9 @@ func (m PanelModel) ViewString() string {
 	if m.PanelMode == "system" {
 		inputTitle = "Command (! = System command, !! = Elevated system command)"
 	}
-	inputContent := lipgloss.NewStyle().
-		Width(inputBoxWidth - 2).
-		Background(ctx.Dialog.GetBackground()).
-		Render(m.Input.View())
+	// The cell under the terminal cursor has no style of its own.
+	field := inputFieldStyle(false)
+	inputContent := field.Width(inputBoxWidth - 2).Render(MaintainBackground(m.Input.View(), field))
 	inputBox := RenderBorderedBoxCtx(
 		"{{|"+inputTitleTag+"|}}"+inputTitle+"{{[-]}}",
 		inputContent,

@@ -63,10 +63,12 @@ MarkerInvalid  = "{{[-:-:R]}}"
 #   both render within the header bar, where the ambient background is
 #   always StatusBar already.
 #
-#   Prompt/PromptShell/PromptSudo: style a command-line-style input's own
-#   leading prompt glyph. Plain input keeps the ambient text color (no
-#   fallback needed); a shell command gets Highlight; one that will run
-#   under sudo gets the more alarming MarkerInvalid.
+#   Prompt/PromptShell/PromptSudo: style a text input's own prompt (e.g.
+#   "Find>", or the console panel's ">"), drawn over its field
+#   (InputField). A plain prompt is the field's style, bold -- flags only,
+#   not a reference to InputField, which may be unset; a shell command's
+#   gets Highlight; one that will run under sudo gets the more alarming
+#   MarkerInvalid.
 #
 #   InputField: a text input's field. Unset, it draws Item's text on the
 #   dialog background -- Item's own background is left out, which a
@@ -115,7 +117,7 @@ HeadingTag                 = "{{|Heading|}}"
 HeadingValue               = "{{|Heading|}}"
 HeadingAppDescription      = "{{|Heading|}}"
 MarkerLocked               = "{{|MarkerInvalid|}}"
-Prompt                     = ""
+Prompt                     = "{{[-:-:B]}}"
 PromptShell                = "{{|Highlight|}}"
 PromptSudo                 = "{{|MarkerInvalid|}}"
 ResizeLine                 = "{{|ItemFocused|}}"
