@@ -1148,6 +1148,8 @@ func (m *AppModel) setHeaderFocus(focus displayengine.HeaderFocus) {
 		m.panel.Focused = false
 		m.panelTitleFocused = false
 		m.panel.BlurTitleBar()
+		m.panel.Input.Blur()
+		m.panel.InputFocused = false
 	}
 	m.updateComponentFocus()
 }

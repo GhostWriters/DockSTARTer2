@@ -556,7 +556,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case sinput.PasteMsg, sinput.CutMsg, sinput.SelectAllMsg:
-		if m.InputFocused {
+		if m.InputEditing() {
 			var cmd tea.Cmd
 			m.Input, cmd = m.Input.Update(msg)
 			return m, cmd
@@ -625,6 +625,7 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		unlockCmd := m.lockSession("console.command", false)
 		if !m.SessionActive() {
 			m.InputFocused = true
+			m.inputIdle = false
 			cmd := m.Input.Focus()
 			return m, tea.Batch(unlockCmd, cmd, sinput.Blink)
 		}
@@ -749,10 +750,22 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateInputFocused handles key events when the input bar has focus.
 func (m PanelModel) updateInputFocused(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.inputIdle {
+		switch {
+		case key.Matches(msg, Keys.Esc):
+			m.InputFocused = false
+			m.inputIdle = false
+		case key.Matches(msg, Keys.EditInput), key.Matches(msg, Keys.Enter):
+			m.inputIdle = false
+			cmd := m.Input.Focus()
+			return m, tea.Batch(cmd, sinput.Blink)
+		}
+		return m, nil
+	}
 	switch {
-	case key.Matches(msg, Keys.Esc):
+	case key.Matches(msg, Keys.StopEditing):
 		m.Input.Blur()
-		m.InputFocused = false
+		m.inputIdle = true
 		return m, nil
 
 	case key.Matches(msg, Keys.Up):

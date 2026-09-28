@@ -25,16 +25,35 @@ func (m *PanelModel) SyncInputPrompt() {
 	if m.SessionActive() {
 		return
 	}
-	field := inputFieldStyle(false, m.InputFocused && !m.SessionActive())
+	// The prompt sits outside the field, which has a column each side:
+	// plain, or the focused-row brackets while focused but not editing.
+	outside, _, idle := m.inputStyles()
 	typed := strings.TrimSpace(m.Input.Value())
 	switch {
 	case m.PanelMode == "system" && strings.HasPrefix(typed, "!!"):
-		m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!!>{{[-]}}", field)
+		m.Input.Prompt = RenderThemeText("{{|PromptSudo|}}!!>{{[-]}}", outside)
 	case m.PanelMode == "system" && strings.HasPrefix(typed, "!"):
-		m.Input.Prompt = RenderThemeText("{{|PromptShell|}} !>{{[-]}}", field)
+		m.Input.Prompt = RenderThemeText("{{|PromptShell|}} !>{{[-]}}", outside)
 	default:
-		m.Input.Prompt = RenderThemeText("{{|Prompt|}}  >{{[-]}}", field)
+		m.Input.Prompt = RenderThemeText("{{|Prompt|}}  >{{[-]}}", outside)
 	}
+	m.Input.Prompt += m.inputSlots(outside, idle)[0]
+	// Matches the width ViewString draws the field at.
+	m.Input.SetWidth(max(m.width-2-m.Input.PromptWidth()-2, 1))
+}
+
+// inputSlots returns the columns either side of the input bar's field:
+// plain, or the focused-row brackets while focused but not editing.
+func (m PanelModel) inputSlots(outside lipgloss.Style, idle bool) [2]string {
+	ctx := GetActiveContext()
+	if idle && ctx.MenuBrackets {
+		open, closeCh := bracketGlyphs(ctx)
+		return [2]string{
+			RenderThemeText("{{[-]}}{{|TagBrackets|}}"+open+"{{[-]}}", outside),
+			RenderThemeText("{{[-]}}{{|TagBrackets|}}"+closeCh+"{{[-]}}", outside),
+		}
+	}
+	return [2]string{outside.Render(" "), outside.Render(" ")}
 }
 
 func (m PanelModel) ViewString() string {
@@ -74,7 +93,6 @@ func (m PanelModel) ViewString() string {
 	// Input box — bordered with submenu styling.
 	// RenderTopBorderBoxCtx appends content without side borders, so full m.width is available.
 	inputBoxWidth := m.width
-	m.Input.SetWidth(inputBoxWidth - 2)
 	if m.SessionActive() {
 		m.Input.Placeholder = ""
 		st := m.Input.Styles()
@@ -105,9 +123,19 @@ func (m PanelModel) ViewString() string {
 	if m.PanelMode == "system" {
 		inputTitle = "Command (! = System command, !! = Elevated system command)"
 	}
+	// The field is drawn without the prompt, so its style stays off the
+	// prompt and the columns either side. The text scrolls within the
+	// field; the right column and the cursor take one each.
+	outside, field, idle := m.inputStyles()
+	prefix := m.Input.Prompt
+	prefixWidth := m.Input.PromptWidth()
+	m.Input.SetWidth(max(inputBoxWidth-2-prefixWidth-2, 1))
+	m.Input.Prompt = ""
 	// The cell under the terminal cursor has no style of its own.
-	field := inputFieldStyle(false, m.InputFocused && !m.SessionActive())
-	inputContent := field.Width(inputBoxWidth - 2).Render(MaintainBackground(m.Input.View(), field))
+	view := MaintainBackground(m.Input.View(), field)
+	m.Input.Prompt = prefix
+	fieldWidth := max(inputBoxWidth-2-prefixWidth-1, 1)
+	inputContent := prefix + field.Width(fieldWidth).MaxWidth(fieldWidth).Render(view) + m.inputSlots(outside, idle)[1]
 	inputBox := RenderBorderedBoxCtx(
 		"{{|"+inputTitleTag+"|}}"+inputTitle+"{{[-]}}",
 		inputContent,

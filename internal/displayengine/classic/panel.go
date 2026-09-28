@@ -85,6 +85,9 @@ type PanelModel struct {
 
 	// Console input bar
 	InputFocused bool
+	// inputIdle marks the input bar focused but not editing (see
+	// InputEditing).
+	inputIdle    bool
 	Input        sinput.Model
 	history      []string // in-session command history, oldest first
 	historyIdx   int      // -1 = new command; >=0 = navigating history
@@ -201,12 +204,30 @@ func panelRenderFn() func(string) string {
 	}
 }
 
+// InputEditing reports whether the input bar is focused and editing. Esc
+// stops editing but leaves it focused, so plain keys work as shortcuts;
+// EditInput or Enter edits again, and Esc again leaves it.
+func (m PanelModel) InputEditing() bool { return m.InputFocused && !m.inputIdle }
+
+// inputStyles returns the input bar's styles: outside for the prompt and the
+// columns either side of the field, field for the field, and whether it's
+// focused but not editing, when the field is in the focus color.
+func (m PanelModel) inputStyles() (outside, field lipgloss.Style, idle bool) {
+	idle = m.Focused && m.InputFocused && m.inputIdle && !m.SessionActive()
+	outside = inputFieldStyle(false, false)
+	field = inputFieldStyle(false, m.Focused && m.InputEditing() && !m.SessionActive())
+	if idle {
+		field = GetActiveContext().OptionValueFocused
+	}
+	return outside, field, idle
+}
+
 // applyInputStyles updates the sinput colours from the current theme.
 func (m *PanelModel) applyInputStyles() {
-	field := inputFieldStyle(false, m.InputFocused && !m.SessionActive())
+	outside, field, _ := m.inputStyles()
 	tiStyles := textinput.DefaultStyles(true)
-	tiStyles.Focused.Prompt, tiStyles.Focused.Text = field, field
-	tiStyles.Blurred.Prompt, tiStyles.Blurred.Text = field, field
+	tiStyles.Focused.Prompt, tiStyles.Focused.Text = outside, field
+	tiStyles.Blurred.Prompt, tiStyles.Blurred.Text = outside, field
 	tiStyles.Cursor.Color = TextCursorColor()
 	m.Input.SetStyles(tiStyles)
 }
@@ -570,6 +591,7 @@ func (m *PanelModel) FocusInput() tea.Cmd {
 		return nil
 	}
 	m.InputFocused = true
+	m.inputIdle = false
 	cmd := m.Input.Focus()
 	return tea.Batch(cmd, sinput.Blink)
 }
