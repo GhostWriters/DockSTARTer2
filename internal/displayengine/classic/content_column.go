@@ -403,30 +403,48 @@ func (c *ContentColumn) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c, nil
 	}
 	var focusCmd tea.Cmd
+	refocus := false
 	switch m := msg.(type) {
 	case LayerHitMsg:
-		focusCmd = c.focusHit(m.ID)
+		focusCmd, refocus = c.focusHit(m.ID)
 	case LayerWheelMsg:
-		focusCmd = c.focusHit(m.ID)
+		focusCmd, _ = c.focusHit(m.ID)
 	}
 	item := c.focusedItem()
 	updated, cmd := c.items[item].Update(msg)
 	if updatedContent, ok := updated.(Content); ok {
 		c.items[item] = updatedContent
 	}
+	if refocus {
+		// After the child handled the hit, which may have moved its own
+		// focus (e.g. a tab click showing a pane).
+		focusCmd = c.SetSubFocused(true)
+	}
 	return c, tea.Batch(focusCmd, cmd)
 }
 
 // focusHit moves column-internal focus to the Tab stop whose Content id
-// belongs to, if any.
-func (c *ContentColumn) focusHit(id string) tea.Cmd {
+// belongs to, if any. Failing that, a child that claims id itself (e.g. a
+// TabbedPanes' tab) gets the hit, and refocus reports that it takes focus
+// once it has handled it.
+func (c *ContentColumn) focusHit(id string) (cmd tea.Cmd, refocus bool) {
 	for i, leaf := range c.Items() {
 		if leaf.MatchesID(id) {
 			c.SetSubFocusIndex(i)
-			return c.SetSubFocused(true)
+			return c.SetSubFocused(true), false
 		}
 	}
-	return nil
+	for i, item := range c.items {
+		if !item.MatchesID(id) {
+			continue
+		}
+		c.subFocus = c.base(i)
+		if n := nestedStops(item); n != nil {
+			c.subFocus += n.SubFocusIndex()
+		}
+		return nil, true
+	}
+	return nil, false
 }
 
 // SetSubFocused propagates sub-focus to the child currently holding
