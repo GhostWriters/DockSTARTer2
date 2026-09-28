@@ -17,6 +17,8 @@ func TestKeyAliasesMatchTheirShortcuts(t *testing.T) {
 		"]": displayengine.Keys.Tab,
 		",": displayengine.Keys.TabStripPrev,
 		".": displayengine.Keys.TabStripNext,
+		"<": displayengine.Keys.InnerTabPrev,
+		">": displayengine.Keys.InnerTabNext,
 	} {
 		alias, ok := keyAliases[plain]
 		if !ok {

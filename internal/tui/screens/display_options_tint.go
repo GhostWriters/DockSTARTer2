@@ -97,9 +97,9 @@ func (s *DisplayOptionsScreen) elementPartChanged(element string, part func(conf
 }
 
 // shownTintElement keeps tintElement valid for the shown tab: only Menu
-// outside advanced mode.
+// without Elements.
 func (s *DisplayOptionsScreen) shownTintElement() {
-	if !s.advanced {
+	if !s.showElements {
 		s.tintElement = "menu"
 		return
 	}
@@ -111,66 +111,61 @@ func (s *DisplayOptionsScreen) shownTintElement() {
 	s.tintElement = "menu"
 }
 
-// newElementStrip builds the element tabs, marking the elements whose part
-// of the settings changed.
-func (s *DisplayOptionsScreen) newElementStrip(id string, part func(config.AnsiElementColors) config.AnsiElementColors) *displayengine.TabStrip {
+// newElementStrip builds the element tabs, marking the elements with
+// changed settings.
+func (s *DisplayOptionsScreen) newElementStrip() *displayengine.TabStrip {
 	elements := tintElementsFor(s.editType)
 	labels := make([]string, len(elements))
 	for i, e := range elements {
 		labels[i] = tintElementLabels[e]
 	}
-	strip := &displayengine.TabStrip{ID: id, Labels: labels, Active: tintElementIndex(elements, s.tintElement)}
-	strip.Changed = func(i int) bool { return s.elementPartChanged(elements[i], part) }
+	strip := &displayengine.TabStrip{ID: "appearance_elements", Labels: labels, Active: tintElementIndex(elements, s.tintElement)}
+	strip.Changed = func(i int) bool {
+		return s.elementPartChanged(elements[i], func(e config.AnsiElementColors) config.AnsiElementColors { return e })
+	}
 	return strip
 }
 
-// elementFrameTitle draws strip in a list's own border (see
-// displayengine.FrameTitle), so the list is the element frame.
-func elementFrameTitle(strip *displayengine.TabStrip) *displayengine.FrameTitle {
-	return &displayengine.FrameTitle{
-		Render: func(avail int, focused bool, ctx displayengine.StyleContext) string {
-			return strip.Render(avail, focused, ctx)
-		},
-		HitRegions: func(x, y, avail int, ctx displayengine.StyleContext) []displayengine.HitRegion {
-			return strip.HitRegions(x, y, avail, displayengine.ZDialog+10, ctx, nil)
-		},
-		Widgets: func() []displayengine.WidgetDef { return nil },
-	}
+// themePaneShown reports whether the Theme pane shows: for the Menu
+// element, since ProgramBox and CLI have no theme.
+func (s *DisplayOptionsScreen) themePaneShown() bool {
+	return s.tintElement == "menu"
 }
 
-// elementStripHit handles a click on either list's element tabs.
+// panesFocused reports whether focus is inside the Theme/Tint/Overrides
+// panes.
+func (s *DisplayOptionsScreen) panesFocused() bool {
+	leaf := s.focusedSettingsLeaf()
+	return leaf != nil && leaf != s.optionsMenu
+}
+
+// elementStripHit handles a click on the element tabs.
 func (s *DisplayOptionsScreen) elementStripHit(id string) (tea.Cmd, bool) {
-	for _, strip := range []*displayengine.TabStrip{s.tintStrip, s.overrideStrip} {
-		if strip == nil {
-			continue
+	strip := s.elementStrip
+	if strip == nil {
+		return nil, false
+	}
+	if i, ok := strip.TabFromID(id); ok {
+		element := tintElementsFor(s.editType)[i]
+		return func() tea.Msg { return tintElementMsg{element: element} }, true
+	}
+	if d, ok := strip.ScrollFromID(id); ok {
+		strip.ScrollBy(d)
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
 		}
-		if i, ok := strip.TabFromID(id); ok {
-			element := tintElementsFor(s.editType)[i]
-			return func() tea.Msg { return tintElementMsg{element: element} }, true
-		}
-		if d, ok := strip.ScrollFromID(id); ok {
-			strip.ScrollBy(d)
-			s.tintMenu.InvalidateCache()
-			s.overrideMenu.InvalidateCache()
-			return nil, true
-		}
+		return nil, true
 	}
 	return nil, false
 }
 
 // tintPaneColumn and overridePaneColumn build the Tint and Overrides panes'
-// contents: in advanced mode each list's border carries the element tabs,
-// with Tab walking every element; otherwise just the Menu element's list.
-// The Find box, when expanded, sits below the Tint list's rows, sharing its
-// border.
+// contents: the shown element's list. The Find box, when expanded, sits
+// below the Tint list's rows, sharing its border.
 func (s *DisplayOptionsScreen) tintPaneColumn() *displayengine.ContentColumn {
 	s.tintFilterList = displayengine.NewFooteredList(s.tintSearchMenu, s.tintMenu)
 	s.tintFilterList.SetSectionShown(s.tintFilterShown)
-	if !s.advanced {
-		return displayengine.NewContentColumn(s.tintFilterList)
-	}
-	s.tintMenu.SetFrameTitle(elementFrameTitle(s.tintStrip))
-	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.tintFilterList)))
+	return displayengine.NewContentColumn(s.tintFilterList)
 }
 
 // toggleTintFilter expands or collapses the Tint list's Find box.
@@ -182,24 +177,7 @@ func (s *DisplayOptionsScreen) toggleTintFilter() tea.Cmd {
 }
 
 func (s *DisplayOptionsScreen) overridePaneColumn() *displayengine.ContentColumn {
-	if !s.advanced {
-		return displayengine.NewContentColumn(s.overrideMenu)
-	}
-	s.overrideMenu.SetFrameTitle(elementFrameTitle(s.overrideStrip))
-	return displayengine.NewContentColumn(s.perElement(displayengine.NewContentColumn(s.overrideMenu)))
-}
-
-// perElement repeats column's Tab stops once per element tab (see
-// displayengine.RepeatedStops), so Tab walks through every element.
-func (s *DisplayOptionsScreen) perElement(column *displayengine.ContentColumn) *displayengine.RepeatedStops {
-	return displayengine.NewRepeatedStops(column,
-		func() int { return len(tintElementsFor(s.editType)) },
-		func() int { return tintElementIndex(tintElementsFor(s.editType), s.tintElement) },
-		func(tab int) {
-			s.tintElement = tintElementsFor(s.editType)[tab]
-			s.syncTintMenus()
-			s.selectCheckedTint()
-		})
+	return displayengine.NewContentColumn(s.overrideMenu)
 }
 
 // toggleTintEnabled and toggleOverrideEnabled flip the shown element's tint
@@ -335,8 +313,8 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 // box.
 func (s *DisplayOptionsScreen) buildTintMenus() {
 	s.shownTintElement()
-	s.tintStrip = s.newElementStrip("appearance_tint_elements", tintPart)
-	s.overrideStrip = s.newElementStrip("appearance_override_elements", overridePart)
+	s.elementStrip = s.newElementStrip()
+	s.elementFrame = &tabFrame{strip: s.elementStrip, focused: s.panesFocused}
 
 	list := displayengine.NewMenuModel(displayengine.IDTintPanel, config.ConnTypeLabel(s.editType)+" Tint", "", s.tintListItems())
 	s.tintSearchMenu, s.tintSearchInput = newFindBox(tintSearchID, s.tintQuery, "Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant and Base, which narrow to light or dark, and to base16 or base24, schemes, apply either way.",
@@ -346,7 +324,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 	list.SetFooterBar(&displayengine.FooterBar{
 		Controls: func() []displayengine.TitleControl {
 			return []displayengine.TitleControl{
-				{Label: "Variant", Key: 'r', Value: func() string { return searchOptionLabel(s.tintVariant) }, Help: "Show all, light, or dark schemes"},
+				{Label: "Variant", Key: 'a', Value: func() string { return searchOptionLabel(s.tintVariant) }, Help: "Show all, light, or dark schemes"},
 				{Label: "Base", Key: 'b', Value: func() string { return searchOptionLabel(s.tintSystem) }, Help: "Show all, base16, or base24 schemes"},
 			}
 		},
@@ -357,6 +335,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 			Changed: func() bool { return s.stagedTint().TintEnabled != s.baseTint().TintEnabled }, Help: "Turn Enabled on or off"},
 	})
 	list.SetTitleChanged(func() bool { return s.stagedTint().Tint != s.baseTint().Tint })
+	list.SetTitleIcons(sectionResetIcons(func() bool { return s.elementPartChanged(s.tintElement, tintPart) }))
 	list.SetMinTagWidth(s.tintTagWidth())
 	list.SetItemHelpFunc(s.buildTintItemHelp)
 	list.SetHelpPageText("Choose an ANSI color scheme to tint this element with.")
@@ -374,6 +353,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 	overrides.SetHelpItemPrefix("Override")
 	overrides.SetTitleCheckbox("Enabled", 'e', func() bool { return s.stagedTint().OverrideEnabled },
 		func() bool { return s.stagedTint().OverrideEnabled != s.baseTint().OverrideEnabled })
+	overrides.SetTitleIcons(sectionResetIcons(func() bool { return s.elementPartChanged(s.tintElement, overridePart) }))
 	overrides.SetTitleChanged(func() bool {
 		staged, base := overridePart(*s.stagedTint()), overridePart(s.baseTint())
 		staged.OverrideEnabled, base.OverrideEnabled = false, false
@@ -553,7 +533,7 @@ func (s *DisplayOptionsScreen) syncTintMenus() {
 	}
 	s.shownTintElement()
 	active := tintElementIndex(tintElementsFor(s.editType), s.tintElement)
-	s.tintStrip.Active, s.overrideStrip.Active = active, active
+	s.elementStrip.Active = active
 	overrideCursor := s.overrideMenu.Index()
 	s.overrideMenu.SetItems(s.overrideItems())
 	s.overrideMenu.Select(overrideCursor)

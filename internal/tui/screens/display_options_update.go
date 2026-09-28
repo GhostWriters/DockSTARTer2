@@ -186,8 +186,18 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case displayengine.LayerHitMsg:
-		if msg.Button == tea.MouseLeft && s.outerMenu != nil && msg.ID == s.outerMenu.TitleCheckboxID() {
-			return s, s.toggleAdvanced()
+		if msg.Button == tea.MouseLeft && s.tintMenu != nil {
+			if cmd, ok := s.resetSection(msg.ID); ok {
+				return s, cmd
+			}
+		}
+		if msg.Button == tea.MouseLeft && s.outerMenu != nil {
+			switch msg.ID {
+			case s.outerMenu.TitleControlID(0):
+				return s, s.toggleConnections()
+			case s.outerMenu.TitleControlID(1):
+				return s, s.toggleElements()
+			}
 		}
 		if msg.Button == tea.MouseLeft && s.tintMenu != nil {
 			switch msg.ID {
@@ -235,10 +245,29 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tintElementMsg:
+		themeShown := s.themePaneShown()
 		s.tintElement = msg.element
-		s.syncTintMenus()
+		if s.themePaneShown() == themeShown {
+			s.syncTintMenus()
+			s.selectCheckedTint()
+			return s, nil
+		}
+		// The Theme pane comes or goes: rebuild, keeping focus on the same
+		// list (Tint when it was Theme's).
+		focusID := ""
+		switch leaf := s.focusedSettingsLeaf(); leaf {
+		case nil, s.optionsMenu:
+		case s.themeMenu, s.themeFindMenu:
+			focusID = s.tintMenu.ID()
+		default:
+			focusID = leaf.ID()
+		}
+		cmd := s.rebuild(false, func() {})
 		s.selectCheckedTint()
-		return s, nil
+		if focusID != "" {
+			cmd = tea.Batch(cmd, s.focusSettingsStop(focusID))
+		}
+		return s, cmd
 
 	case tintPickMsg:
 		el := s.stagedTint()
@@ -300,6 +329,17 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.unlocked = true
 		return s, s.switchTab(msg.connType, msg.focusFrame)
 
+	case displayOptionsBackMsg:
+		return s, s.confirmBack()
+
+	case displayOptionsLeaveMsg:
+		theme.Unload("Preview")
+		return s, navigateBack()
+
+	case connectionsUnlockedMsg:
+		s.unlocked = true
+		return s, s.toggleConnections()
+
 	case tea.MouseWheelMsg, displayengine.ToggleFocusedMsg:
 		return s.delegateToOuterMenu(msg)
 
@@ -317,17 +357,23 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, displayengine.Keys.TabStripPrev):
-			return s, s.cycleTab(-1)
+			return s, s.navigateTabs(0, -1)
 		case key.Matches(msg, displayengine.Keys.TabStripNext):
-			return s, s.cycleTab(1)
+			return s, s.navigateTabs(0, 1)
+		case key.Matches(msg, displayengine.Keys.InnerTabPrev):
+			return s, s.navigateTabs(1, -1)
+		case key.Matches(msg, displayengine.Keys.InnerTabNext):
+			return s, s.navigateTabs(1, 1)
 		case key.Matches(msg, displayengine.Keys.ToggleLoadDefaults) && s.focusedSettingsLeaf() == s.themeMenu:
 			return s, func() tea.Msg { return toggleLoadThemeDefaultsMsg{} }
 		case key.Matches(msg, displayengine.Keys.ToggleEnabled) && s.focusedSettingsLeaf() == s.tintMenu:
 			return s, s.toggleTintEnabled()
 		case key.Matches(msg, displayengine.Keys.ToggleEnabled) && s.focusedSettingsLeaf() == s.overrideMenu:
 			return s, s.toggleOverrideEnabled()
-		case key.Matches(msg, displayengine.Keys.ToggleAdvanced) && !s.findBoxFocused():
-			return s, s.toggleAdvanced()
+		case key.Matches(msg, displayengine.Keys.ToggleConnections) && !s.findBoxFocused():
+			return s, s.toggleConnections()
+		case key.Matches(msg, displayengine.Keys.ToggleElements) && !s.findBoxFocused():
+			return s, s.toggleElements()
 		case key.Matches(msg, displayengine.Keys.ToggleFilter) && s.tintFrameFocused():
 			return s, s.toggleTintFilter()
 		case key.Matches(msg, displayengine.Keys.ToggleFilter) && s.themeFrameFocused():
@@ -336,7 +382,11 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.toggleThemeWholeWords()
 		case key.Matches(msg, displayengine.Keys.SearchWholeWords) && s.tintFrameFocused() && s.tintFilterShown:
 			return s, s.toggleTintWholeWords()
-		case key.Matches(msg, displayengine.Keys.SearchVariant) && s.tintFrameFocused():
+		case key.Matches(msg, displayengine.Keys.ResetAll):
+			return s, s.outerMenu.SetProcessingBtnDeferred(displayengine.IDResetButton, s.handleReset())
+		case key.Matches(msg, displayengine.Keys.ResetSection):
+			return s, s.resetFocusedList()
+		case key.Matches(msg, displayengine.Keys.SearchVariant) && s.tintFrameFocused() && !s.findBoxFocused():
 			return s, s.showTintVariantPicker()
 		case key.Matches(msg, displayengine.Keys.SearchBase) && s.tintFrameFocused():
 			return s, s.showTintBasePicker()
@@ -484,7 +534,6 @@ var optionTagToUIField = map[string]string{
 	"Radio Brackets":       "RadioBrackets",
 	"Tab Layout":           "TabLayout",
 	"Show Preview":         "ShowPreview",
-	"Advanced Appearance":  "Advanced",
 	"Theme/Tint Layout":    "PaneLayout",
 	"Markdown Hyperlinks":  "MarkdownHyperlinks",
 	"Hyperlinks":           "Hyperlinks",
@@ -517,8 +566,6 @@ func (s *DisplayOptionsScreen) syncOptionsMenu() {
 			items[i].Checked = s.config.Appearance.Ptr(s.editType).LineNumberBrackets
 		case "Show Preview":
 			items[i].Checked = a.ShowPreview
-		case "Advanced Appearance":
-			items[i].Checked = a.Advanced
 		case "Theme/Tint Layout":
 			items[i].Desc = s.dropdownDesc(tabLayoutDesc(a.PaneLayout))
 		case "Tab Layout":
@@ -574,10 +621,15 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 		displayengine.Keys.ToggleEnabled,
 		displayengine.Keys.ToggleLoadDefaults,
 		displayengine.Keys.EnvClosePane,
-		displayengine.Keys.ToggleAdvanced,
+		displayengine.Keys.InnerTabPrev,
+		displayengine.Keys.InnerTabNext,
+		displayengine.Keys.ToggleConnections,
+		displayengine.Keys.ToggleElements,
 		displayengine.Keys.ToggleFilter,
 		displayengine.Keys.SearchWholeWords,
 		displayengine.Keys.SearchVariant,
+		displayengine.Keys.ResetSection,
+		displayengine.Keys.ResetAll,
 		displayengine.Keys.SearchBase,
 	})
 }
@@ -614,11 +666,11 @@ func (s *DisplayOptionsScreen) IsMaximized() bool {
 
 // EscapeAction implements tui.EscapeActioner: mirrors the Esc key handler.
 func (s *DisplayOptionsScreen) EscapeAction() tea.Cmd {
-	theme.Unload("Preview")
 	if s.isRoot {
+		theme.Unload("Preview")
 		return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDExitButton, tui.ConfirmExitAction())
 	}
-	return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, navigateBack())
+	return s.outerMenu.SetProcessingBtnDeferred(displayengine.IDBackButton, s.confirmBack())
 }
 
 // ClearProcessingState clears spinner state on all inner menus.

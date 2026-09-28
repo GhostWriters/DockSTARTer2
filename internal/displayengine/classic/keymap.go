@@ -79,13 +79,18 @@ type KeyMap struct {
 	ToggleLoadDefaults key.Binding
 
 	// Show or hide a screen's advanced settings
-	ToggleAdvanced key.Binding
+	ToggleConnections key.Binding
+	ToggleElements    key.Binding
+	InnerTabNext      key.Binding
+	InnerTabPrev      key.Binding
 
 	// A search's options: whole words or partial, and its variant and
 	// base pickers
 	ToggleFilter     key.Binding
 	SearchWholeWords key.Binding
 	SearchVariant    key.Binding
+	ResetSection     key.Binding
+	ResetAll         key.Binding
 	SearchBase       key.Binding
 
 	// Jump to the previous/next group of sections
@@ -291,9 +296,21 @@ var Keys = KeyMap{
 		key.WithKeys("ctrl+d", "alt+d", "ctrl+alt+d"),
 		key.WithHelp("alt+d", "load theme defaults on/off"),
 	),
-	ToggleAdvanced: key.NewBinding(
-		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
-		key.WithHelp("alt+a", "show/hide advanced"),
+	ToggleConnections: key.NewBinding(
+		key.WithKeys("alt+c", "ctrl+alt+c"),
+		key.WithHelp("alt+c", "show/hide connection tabs"),
+	),
+	ToggleElements: key.NewBinding(
+		key.WithKeys("alt+m", "ctrl+alt+m"),
+		key.WithHelp("alt+m", "show/hide element tabs"),
+	),
+	InnerTabNext: key.NewBinding(
+		key.WithKeys("ctrl+shift+right", "alt+shift+right", "ctrl+alt+shift+right"),
+		key.WithHelp("alt+shift+→/>", "next inner tab"),
+	),
+	InnerTabPrev: key.NewBinding(
+		key.WithKeys("ctrl+shift+left", "alt+shift+left", "ctrl+alt+shift+left"),
+		key.WithHelp("alt+shift+←/<", "prev inner tab"),
 	),
 	ToggleFilter: key.NewBinding(
 		key.WithKeys("ctrl+f", "alt+f", "ctrl+alt+f"),
@@ -304,8 +321,16 @@ var Keys = KeyMap{
 		key.WithHelp("alt+o", "find whole words/partial"),
 	),
 	SearchVariant: key.NewBinding(
+		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
+		key.WithHelp("alt+a", "find variant"),
+	),
+	ResetSection: key.NewBinding(
 		key.WithKeys("ctrl+r", "alt+r", "ctrl+alt+r"),
-		key.WithHelp("alt+r", "find variant"),
+		key.WithHelp("alt+r", "reset focused list"),
+	),
+	ResetAll: key.NewBinding(
+		key.WithKeys("ctrl+shift+r", "alt+shift+r", "ctrl+alt+shift+r"),
+		key.WithHelp("alt+shift+r", "reset all"),
 	),
 	SearchBase: key.NewBinding(
 		key.WithKeys("ctrl+b", "alt+b", "ctrl+alt+b"),

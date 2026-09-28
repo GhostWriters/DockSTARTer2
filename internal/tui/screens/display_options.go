@@ -33,9 +33,9 @@ type DisplayOptionsScreen struct {
 	themeFindInput  *sinput.Model
 	themeFindList   *displayengine.HeaderedList // Theme list with the Find box below its rows
 	tintSearchInput *sinput.Model
-	tintStrip       *displayengine.TabStrip  // Tint list's element tabs (advanced mode)
+	elementStrip    *displayengine.TabStrip  // Menu/ProgramBox/CLI tabs (with Elements)
+	elementFrame    *tabFrame                // the element tabs' frame around the panes
 	overrideMenu    *displayengine.MenuModel // Overrides pane color slot list
-	overrideStrip   *displayengine.TabStrip  // Overrides list's element tabs (advanced mode)
 	panes           *displayengine.TabbedPanes
 	isRoot          bool // true when launched directly via -M appearance; hides Back button
 
@@ -82,7 +82,8 @@ type DisplayOptionsScreen struct {
 	// connType is the session's own connection type; editType is the one
 	// whose tab is shown. unlocked reports whether this session may edit
 	// other connection types' tabs: always for Local, and for a remote
-	// session once it passes the sudo gate, until the screen closes.
+	// session once it passes the sudo gate (asked when Connections is turned
+	// on), until the screen closes.
 	connType string
 	editType string
 	unlocked bool
@@ -90,11 +91,12 @@ type DisplayOptionsScreen struct {
 	tabs  *displayengine.TabStrip
 	frame *tabFrame
 
-	// advanced shows the connection-type and element tabs; otherwise only
-	// the session's own settings and the Menu element show. Starts from the
-	// Advanced Appearance option; the title bar checkbox (Ctrl+A) changes
-	// it for this visit only.
-	advanced bool
+	// showConnections shows the connection-type tabs, otherwise only the
+	// session's own settings; showElements the Menu/ProgramBox/CLI tabs on
+	// the Tint and Overrides lists, otherwise only Menu's. Both start off
+	// each visit; the title bar checkboxes (Alt+C, Alt+M) turn them on.
+	showConnections bool
+	showElements    bool
 
 	// tintElement is the tint element ("menu", "programbox", "cli") the Tint
 	// pane shows; tintCatalog the schemes it offers.
@@ -145,6 +147,17 @@ type tabUnlockedMsg struct {
 	focusFrame bool
 }
 
+// connectionsUnlockedMsg reports that the sudo gate passed for showing the
+// connection-type tabs.
+type connectionsUnlockedMsg struct{}
+
+// displayOptionsBackMsg asks to leave the screen (see confirmBack);
+// displayOptionsLeaveMsg leaves it.
+type (
+	displayOptionsBackMsg  struct{}
+	displayOptionsLeaveMsg struct{}
+)
+
 // displayOptionsAbortMsg is sent when Apply is attempted but blocked (e.g. command lock).
 // Handled by Update to clear the processing spinner without applying changes.
 type displayOptionsAbortMsg struct{}
@@ -170,7 +183,6 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 		themeFileCache:    make(map[string]theme.ThemeFile),
 		loadThemeDefaults: true,
 		tintElement:       "menu",
-		advanced:          cfg.Appearance.ForConnType(connType).Advanced,
 		previewViewport:   viewport.New(),
 		// Must match mockupMenu's own ID in buildPreviewSection exactly --
 		// MatchesID checks msgID.Contains(m.ID()), so the scrollbar's hit
@@ -321,15 +333,6 @@ func (s *DisplayOptionsScreen) initMenus() {
 			SpaceAction: s.toggleShowPreview(),
 		},
 		{
-			Tag:         "Advanced Appearance",
-			Desc:        "Start with the connection-type and element tabs shown",
-			Help:        "Show the Local / SSH Server / Web Server tabs and the ProgramBox/CLI tint tabs when this screen opens (Space to toggle; Ctrl+A shows or hides them for now)",
-			IsCheckbox:  true,
-			Checked:     s.config.Appearance.Ptr(s.editType).Advanced,
-			Selectable:  true,
-			SpaceAction: s.toggleAdvancedOption(),
-		},
-		{
 			Tag:  "Theme/Tint Layout",
 			Desc: s.dropdownDesc(tabLayoutDesc(s.config.Appearance.Ptr(s.editType).PaneLayout)),
 			Help: "Default layout of the Theme and Tint panes; Ctrl+W switches it while here (Enter for options)",
@@ -473,11 +476,14 @@ func (s *DisplayOptionsScreen) initMenus() {
 		outerMenu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Apply", ZoneID: displayengine.IDApplyButton, Action: applyAction, Help: "Apply and save appearance settings."},
 			{Label: "Reset", ZoneID: displayengine.IDResetButton, Action: resetAction, Help: "Discard staged changes and revert to the current saved settings."},
-			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: navigateBack(), Help: "Return to the previous screen."},
+			{Label: "Back", ZoneID: displayengine.IDBackButton, Action: func() tea.Msg { return displayOptionsBackMsg{} }, Help: "Return to the previous screen."},
 			{Label: "Exit", ZoneID: displayengine.IDExitButton, Action: tui.ConfirmExitAction(), Help: "Exit the application."},
 		})
 	}
-	outerMenu.SetTitleCheckbox("Advanced", 'a', func() bool { return s.advanced }, nil)
+	outerMenu.SetTitleControls([]displayengine.TitleControl{
+		{Label: "Connections", Key: 'c', Checked: func() bool { return s.showConnections }, Help: "Show or hide the Local / SSH Server / Web Server tabs"},
+		{Label: "Elements", Key: 'm', Checked: func() bool { return s.showElements }, Help: "Show or hide the Menu / ProgramBox / CLI tabs"},
+	})
 	// Title-bar refresh icon mirrors the Reset button, matching the tabbed
 	// vars editor's use of the same widget for its own reload action. Extra
 	// widgets go before Help/Close, which stay rightmost by convention (see
@@ -495,36 +501,52 @@ func (s *DisplayOptionsScreen) initMenus() {
 	// (every child section below already calls SetMaximized(true) for the
 	// same reason) and should always claim the height it's given.
 	outerMenu.SetMaximized(true)
-	// Theme and Tint panes (see TabbedPanes), keeping the layout and shown
-	// pane across rebuilds.
-	layout, shown := s.baseConfig.Appearance.Ptr(s.connType).PaneLayout, 0
+	// Theme, Tint, and Overrides panes (see TabbedPanes) -- no Theme for
+	// the ProgramBox and CLI elements, which have none -- keeping the layout
+	// and shown pane across rebuilds.
+	layout, shownLabel := s.baseConfig.Appearance.Ptr(s.connType).PaneLayout, ""
 	if s.panes != nil {
-		layout, shown = s.panes.Layout(), s.panes.Active()
+		layout, shownLabel = s.panes.Layout(), s.panes.Strip.Labels[s.panes.Active()]
 	}
 	s.buildTintMenus()
-	s.panes = displayengine.NewTabbedPanes("appearance_panes", []string{"Theme", "Tint", "Overrides"},
-		[]*displayengine.ContentColumn{
-			s.themePaneColumn(),
-			s.tintPaneColumn(),
-			s.overridePaneColumn(),
-		}, layout)
-	s.panes.Strip.Active = shown
-	s.panes.Changed = func(pane int) bool {
-		switch pane {
-		case 0:
-			return s.themeChanged()
-		case 1:
-			return s.elementPartChanged("", tintPart)
-		}
-		return s.elementPartChanged("", overridePart)
+	type paneSpec struct {
+		label   string
+		column  *displayengine.ContentColumn
+		changed func() bool
 	}
+	var specs []paneSpec
+	if s.themePaneShown() {
+		specs = append(specs, paneSpec{"Theme", s.themePaneColumn(), s.themeChanged})
+	}
+	specs = append(specs,
+		paneSpec{"Tint", s.tintPaneColumn(), func() bool { return s.elementPartChanged("", tintPart) }},
+		paneSpec{"Overrides", s.overridePaneColumn(), func() bool { return s.elementPartChanged("", overridePart) }})
+	labels := make([]string, len(specs))
+	columns := make([]*displayengine.ContentColumn, len(specs))
+	for i, p := range specs {
+		labels[i], columns[i] = p.label, p.column
+	}
+	s.panes = displayengine.NewTabbedPanes("appearance_panes", labels, columns, layout)
+	for i, label := range labels {
+		if label == shownLabel {
+			s.panes.Strip.Active = i
+		}
+	}
+	s.panes.Changed = func(i int) bool { return specs[i].changed() }
 	themeMenu.SetTitleChanged(s.themeChanged)
 	optionsMenu.SetTitleChanged(s.optionsChanged)
-	// The connection-type tab frame only shows in advanced mode.
-	settingsColumn := displayengine.NewContentColumn(s.panes, optionsMenu)
-	if s.advanced {
+	themeMenu.SetTitleIcons(sectionResetIcons(s.themeChanged))
+	optionsMenu.SetTitleIcons(sectionResetIcons(s.optionsChanged))
+	// The element tabs frame the panes with Elements; the connection-type
+	// tabs frame those and the options with Connections.
+	var panes displayengine.Content = s.panes
+	if s.showElements {
+		panes = newTabFrameSection(s.panes, s.elementFrame, true, true)
+	}
+	settingsColumn := displayengine.NewContentColumn(panes, optionsMenu)
+	if s.showConnections {
 		settingsColumn = displayengine.NewContentColumn(
-			newTabFrameSection(s.panes, s.frame, true, false),
+			newTabFrameSection(panes, s.frame, true, false),
 			newTabFrameSection(optionsMenu, s.frame, false, true),
 		)
 	}
@@ -701,13 +723,16 @@ func (s *DisplayOptionsScreen) focusFrame() tea.Cmd {
 	return s.layoutRow.SetSubFocused(true)
 }
 
-// toggleAdvanced shows or hides the connection-type and element tabs for
-// this visit; hiding them goes back to the session's own tab and the Menu
-// element.
-func (s *DisplayOptionsScreen) toggleAdvanced() tea.Cmd {
+// toggleConnections shows or hides the connection-type tabs for this visit;
+// hiding them goes back to the session's own tab. A remote session passes
+// the sudo gate before they show.
+func (s *DisplayOptionsScreen) toggleConnections() tea.Cmd {
+	if !s.showConnections && !s.unlocked {
+		return s.askSudo(connectionsUnlockedMsg{})
+	}
 	return s.rebuild(false, func() {
-		s.advanced = !s.advanced
-		if !s.advanced && s.editType != s.connType {
+		s.showConnections = !s.showConnections
+		if !s.showConnections && s.editType != s.connType {
 			ct := s.connType
 			s.editType = ct
 			s.tabs.Active = connTypeIndex(ct)
@@ -720,20 +745,56 @@ func (s *DisplayOptionsScreen) toggleAdvanced() tea.Cmd {
 	})
 }
 
-// toggleAdvancedOption flips the shown tab's Advanced Appearance option
-// (advanced's default).
-func (s *DisplayOptionsScreen) toggleAdvancedOption() tea.Cmd {
-	return func() tea.Msg {
-		newState := !s.config.Appearance.Ptr(s.editType).Advanced
-		return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-			cfg.Appearance.Ptr(s.editType).Advanced = newState
-		}}
+// toggleElements shows or hides the Menu/ProgramBox/CLI tabs for this
+// visit; hiding them goes back to Menu.
+func (s *DisplayOptionsScreen) toggleElements() tea.Cmd {
+	return s.rebuild(false, func() {
+		s.showElements = !s.showElements
+	})
+}
+
+// navigateTabs moves delta tabs along the tabs at level (0 the outermost
+// shown): the connection-type tabs, the Menu/ProgramBox/CLI tabs, then the
+// Theme/Tint/Overrides panes, skipping those not shown.
+func (s *DisplayOptionsScreen) navigateTabs(level, delta int) tea.Cmd {
+	var levels []func(int) tea.Cmd
+	if s.showConnections {
+		levels = append(levels, s.cycleTab)
 	}
+	if s.showElements {
+		levels = append(levels, s.cycleElement)
+	}
+	levels = append(levels, s.cyclePane)
+	if level >= len(levels) {
+		return nil
+	}
+	return levels[level](delta)
+}
+
+// cyclePane shows and focuses the previous (-1) or next (1) pane.
+func (s *DisplayOptionsScreen) cyclePane(delta int) tea.Cmd {
+	if s.panes == nil {
+		return nil
+	}
+	menus := map[string]*displayengine.MenuModel{"Theme": s.themeMenu, "Tint": s.tintMenu, "Overrides": s.overrideMenu}
+	menu := menus[s.panes.Strip.Labels[s.panes.PaneAfter(delta)]]
+	if menu == nil {
+		return nil
+	}
+	return s.focusSettingsStop(menu.ID())
+}
+
+// cycleElement moves to the previous (-1) or next (1) element's tab.
+func (s *DisplayOptionsScreen) cycleElement(delta int) tea.Cmd {
+	elements := tintElementsFor(s.editType)
+	n := len(elements)
+	element := elements[(tintElementIndex(elements, s.tintElement)+delta+n)%n]
+	return func() tea.Msg { return tintElementMsg{element: element} }
 }
 
 // cycleTab moves to the previous (-1) or next (1) connection type's tab.
 func (s *DisplayOptionsScreen) cycleTab(delta int) tea.Cmd {
-	if !s.advanced {
+	if !s.showConnections {
 		return nil
 	}
 	n := len(config.ConnTypes)
@@ -743,6 +804,12 @@ func (s *DisplayOptionsScreen) cycleTab(delta int) tea.Cmd {
 // unlockTab asks for the sudo password before a remote session may edit
 // other connection types' settings, then switches to connType.
 func (s *DisplayOptionsScreen) unlockTab(connType string, focusFrame bool) tea.Cmd {
+	return s.askSudo(tabUnlockedMsg{connType: connType, focusFrame: focusFrame})
+}
+
+// askSudo asks for the sudo password a remote session needs to edit other
+// connection types' settings, returning passed once it's verified.
+func (s *DisplayOptionsScreen) askSudo(passed tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		pass, err := tui.PromptText("Sudo Authentication",
 			"Password required to edit other connection types' appearance settings:", true)
@@ -755,7 +822,7 @@ func (s *DisplayOptionsScreen) unlockTab(connType string, focusFrame bool) tea.C
 		if msg := verifySudoPassword(pass); msg != "" {
 			return tui.ShowMessageDialogMsg{Title: "Authentication Failed", Message: msg, Type: tui.MessageError}
 		}
-		return tabUnlockedMsg{connType: connType, focusFrame: focusFrame}
+		return passed
 	}
 }
 
@@ -1825,6 +1892,24 @@ func (s *DisplayOptionsScreen) optionsChanged() bool {
 	staged.Theme, base.Theme = "", ""
 	staged.AnsiColors, base.AnsiColors = config.AnsiColors{}, config.AnsiColors{}
 	return !reflect.DeepEqual(staged, base)
+}
+
+// confirmBack leaves the screen, first asking to discard any tab's
+// unapplied changes.
+func (s *DisplayOptionsScreen) confirmBack() tea.Cmd {
+	changed := false
+	for _, ct := range config.ConnTypes {
+		changed = changed || s.tabChanged(ct)
+	}
+	if !changed {
+		return func() tea.Msg { return displayOptionsLeaveMsg{} }
+	}
+	return func() tea.Msg {
+		if !tui.Confirm("Unapplied Changes", "Discard the unapplied appearance changes?", false) {
+			return nil
+		}
+		return displayOptionsLeaveMsg{}
+	}
 }
 
 // unappliedTabs returns the connection types, other than the shown one,

@@ -292,8 +292,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
 			"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
 			"--theme-menu-brackets", "--theme-no-menu-brackets",
-			"--theme-show-preview", "--theme-no-show-preview",
-			"--theme-advanced", "--theme-no-advanced":
+			"--theme-show-preview", "--theme-no-show-preview":
 			// An optional connection-type list.
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])

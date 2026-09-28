@@ -394,22 +394,25 @@ func shouldForwardResult(result any) bool {
 
 // keyAliases are plain keys that stand in for a shortcut while no text
 // field has focus: [ and ] for the previous and next screen element, , and .
-// for the previous and next tab.
+// for the previous and next tab, < and > for the previous and next inner
+// (second-level) tab.
 var keyAliases = map[string]tea.KeyPressMsg{
 	"[": {Code: 'p', Mod: tea.ModCtrl},
 	"]": {Code: 'n', Mod: tea.ModCtrl},
 	",": {Code: tea.KeyLeft, Mod: tea.ModCtrl},
 	".": {Code: tea.KeyRight, Mod: tea.ModCtrl},
+	"<": {Code: tea.KeyLeft, Mod: tea.ModCtrl | tea.ModShift},
+	">": {Code: tea.KeyRight, Mod: tea.ModCtrl | tea.ModShift},
 }
 
 // keyAlias returns msg as the shortcut it stands in for (see keyAliases),
 // unless a text field has focus, where it types.
 func (m *AppModel) keyAlias(msg tea.Msg) tea.Msg {
 	kp, ok := msg.(tea.KeyPressMsg)
-	if !ok || kp.Mod != 0 {
+	if !ok || kp.Mod&^tea.ModShift != 0 {
 		return msg
 	}
-	alias, ok := keyAliases[kp.String()]
+	alias, ok := keyAliases[kp.Text]
 	if !ok || m.isTextInputActive() {
 		return msg
 	}

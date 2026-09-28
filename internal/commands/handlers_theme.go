@@ -224,7 +224,6 @@ var (
 	setSpinner        = func(a *config.Appearance, v bool) { a.Spinner = v }
 	setMenuBrackets   = func(a *config.Appearance, v bool) { a.MenuBrackets = v }
 	setShowPreview    = func(a *config.Appearance, v bool) { a.ShowPreview = v }
-	setAdvanced       = func(a *config.Appearance, v bool) { a.Advanced = v }
 )
 
 // themeToggles holds every per-connection-type on/off --theme-* command.
@@ -257,8 +256,6 @@ var themeToggles = map[string]themeToggle{
 	"--theme-no-menu-brackets":   {setMenuBrackets, false},
 	"--theme-show-preview":       {setShowPreview, true},
 	"--theme-no-show-preview":    {setShowPreview, false},
-	"--theme-advanced":           {setAdvanced, true},
-	"--theme-no-advanced":        {setAdvanced, false},
 }
 
 // themeValueSetting is one per-connection-type --theme-* command taking a
