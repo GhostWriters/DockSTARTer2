@@ -6,6 +6,7 @@
 package enveditor
 
 import (
+	"image/color"
 	"slices"
 	"strings"
 	"time"
@@ -1748,4 +1749,53 @@ func (m *Model) VisualRowToLogical(visualRow int) int {
 		curr += n
 	}
 	return -1
+}
+
+// SetCursorRowStyles draws the cursor's line -- every row it wraps to --
+// in styles instead of the focused ones, e.g. to mark the line being
+// edited; nil draws it like the others.
+func (m *Model) SetCursorRowStyles(styles *StyleState) {
+	m.cursorRowStyles = styles
+}
+
+// RemapStyles returns s with every text style's colors moved from one
+// scheme to another: fromFg/fromBg (e.g. the dialog's) become toFg/toBg,
+// either way round, and an unset color becomes toFg or toBg; any other
+// color is kept, on toBg when it has no background of its own.
+func RemapStyles(s StyleState, fromFg, fromBg, toFg, toBg color.Color) StyleState {
+	remap := func(st lipgloss.Style) lipgloss.Style {
+		fg, bg := st.GetForeground(), st.GetBackground()
+		switch {
+		case isNoColor(fg) || sameColor(fg, fromFg):
+			st = st.Foreground(toFg)
+		case sameColor(fg, fromBg):
+			st = st.Foreground(toBg)
+		}
+		switch {
+		case isNoColor(bg) || sameColor(bg, fromBg):
+			st = st.Background(toBg)
+		case sameColor(bg, fromFg):
+			st = st.Background(toFg)
+		}
+		return st
+	}
+	for _, st := range []*lipgloss.Style{&s.Base, &s.Text, &s.CursorLine, &s.ModifiedText, &s.ReadOnlyText,
+		&s.CommentText, &s.InvalidText, &s.DuplicateText, &s.BuiltinText, &s.PendingDeleteText} {
+		*st = remap(*st)
+	}
+	return s
+}
+
+func isNoColor(c color.Color) bool {
+	_, ok := c.(lipgloss.NoColor)
+	return c == nil || ok
+}
+
+func sameColor(a, b color.Color) bool {
+	if isNoColor(a) || isNoColor(b) {
+		return false
+	}
+	ar, ag, ab, aa := a.RGBA()
+	br, bg, bb, ba := b.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
 }

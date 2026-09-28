@@ -303,6 +303,12 @@ func (w line) Hash() string {
 
 // Model is the Bubble Tea model for this text area element.
 type Model struct {
+	// cursorRowStyles, when set, draws the cursor's line -- every row it
+	// wraps to -- instead of the focused styles (see SetCursorRowStyles);
+	// inCursorRow marks rendering that line's text.
+	cursorRowStyles *StyleState
+	inCursorRow     bool
+
 	Err error
 
 	// General settings.
@@ -1026,6 +1032,9 @@ func (m Model) Focused() bool {
 // activeStyle returns the appropriate set of styles to use depending on
 // whether the textarea is focused or blurred.
 func (m Model) activeStyle() *StyleState {
+	if m.inCursorRow && m.cursorRowStyles != nil {
+		return m.cursorRowStyles
+	}
 	// Always return focused styles so syntax highlighting doesn't disappear when tabbing away.
 	return &m.styles.Focused
 }
@@ -1977,6 +1986,11 @@ func (m *Model) view() string {
 		} else {
 			style = styles.computedText()
 		}
+		// The text of the cursor's line, in cursorRowStyles when set.
+		textStyle := style
+		if m.row == l && m.cursorRowStyles != nil {
+			textStyle = m.cursorRowStyles.computedCursorLine()
+		}
 
 		charIndex := 0
 		for wl, wrappedLine := range wrappedLines {
@@ -2020,8 +2034,9 @@ func (m *Model) view() string {
 				wrappedLine = []rune(strings.TrimSuffix(string(wrappedLine), " "))
 				padding -= m.width - strwidth
 			}
+			m.inCursorRow = m.row == l
 			if m.row == l && lineInfo.RowOffset == wl {
-				s.WriteString(m.renderRunes(wrappedLine[:lineInfo.ColumnOffset], l, charIndex, style))
+				s.WriteString(m.renderRunes(wrappedLine[:lineInfo.ColumnOffset], l, charIndex, textStyle))
 				hasChar := lineInfo.ColumnOffset < len(wrappedLine)
 				cursorChar := " "
 				if hasChar {
@@ -2033,7 +2048,7 @@ func (m *Model) view() string {
 					// other character (selection, validation, etc. all
 					// still apply via renderRunes) since the terminal's own
 					// cursor is what marks this position, not this text.
-					s.WriteString(m.renderRunes([]rune(cursorChar), l, charIndex+lineInfo.ColumnOffset, style))
+					s.WriteString(m.renderRunes([]rune(cursorChar), l, charIndex+lineInfo.ColumnOffset, textStyle))
 				case !m.isEditableAtCursor():
 					// The virtual cursor can only really fake a bar (blink)
 					// or block (reverse) shape -- neither reads as "you
@@ -2068,12 +2083,13 @@ func (m *Model) view() string {
 					s.WriteString(m.styles.Cursor.Style.Render(cursorChar))
 				}
 				if hasChar {
-					s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, style))
+					s.WriteString(m.renderRunes(wrappedLine[lineInfo.ColumnOffset+1:], l, charIndex+lineInfo.ColumnOffset+1, textStyle))
 				}
 			} else {
-				s.WriteString(m.renderRunes(wrappedLine, l, charIndex, style))
+				s.WriteString(m.renderRunes(wrappedLine, l, charIndex, textStyle))
 			}
-			s.WriteString(style.Render(strutil.Repeat(" ", max(0, padding))))
+			s.WriteString(textStyle.Render(strutil.Repeat(" ", max(0, padding))))
+			m.inCursorRow = false
 			s.WriteRune('\n')
 			charIndex += len(wrappedLine)
 		}

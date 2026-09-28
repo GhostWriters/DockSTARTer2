@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
 	"fmt"
 	"strings"
@@ -228,6 +229,16 @@ func endCappedLine(length int, start, end, fill string) []string {
 func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	tab := m.tabs[idx]
 	editor := tab.editor
+	// The line being edited, every row it wraps to, in the input field's
+	// colors (see enveditor.RemapStyles).
+	if focused && m.focus == envFocusEditor && !m.editorIdle {
+		dialog, field := displayengine.GetStyles().Dialog, displayengine.InputFieldStyle(true)
+		row := enveditor.RemapStyles(editor.Styles().Focused, dialog.GetForeground(), dialog.GetBackground(),
+			field.GetForeground(), field.GetBackground())
+		editor.SetCursorRowStyles(&row)
+	} else {
+		editor.SetCursorRowStyles(nil)
+	}
 	// Sync this render-local copy's focus to what's actually being
 	// rendered, rather than trusting m.tabs[idx].editor's own focus flag --
 	// several focus-transition sites (Save/Refresh/Cancel/Exit buttons,
