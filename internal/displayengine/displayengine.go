@@ -310,6 +310,8 @@ var (
 	NewRepeatedStops               = classic.NewRepeatedStops
 	NewHeaderedList                = classic.NewHeaderedList
 	NewFooteredList                = classic.NewFooteredList
+	InputFieldStyle                = classic.InputFieldStyle
+	InputTextStyles                = classic.InputTextStyles
 	StyleGeneration                = classic.StyleGeneration
 	NewContextMenuModel            = classic.NewContextMenuModel
 	NewHeaderModel                 = classic.NewHeaderModel

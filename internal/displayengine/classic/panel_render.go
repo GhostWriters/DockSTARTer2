@@ -25,7 +25,7 @@ func (m *PanelModel) SyncInputPrompt() {
 	if m.SessionActive() {
 		return
 	}
-	field := inputFieldStyle(false)
+	field := inputFieldStyle(false, m.InputFocused && !m.SessionActive())
 	typed := strings.TrimSpace(m.Input.Value())
 	switch {
 	case m.PanelMode == "system" && strings.HasPrefix(typed, "!!"):
@@ -86,7 +86,7 @@ func (m PanelModel) ViewString() string {
 			marker = lockedMarkerAscii
 		}
 		// Consolidated lock marker and message into the Prompt for reliable styling
-		m.Input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+" Session active — input locked{{[-]}} ", inputFieldStyle(false))
+		m.Input.Prompt = RenderThemeText("{{|MarkerLocked|}}"+marker+" Session active — input locked{{[-]}} ", inputFieldStyle(false, m.InputFocused && !m.SessionActive()))
 	} else {
 		m.Input.Placeholder = ""
 		st := m.Input.Styles()
@@ -106,7 +106,7 @@ func (m PanelModel) ViewString() string {
 		inputTitle = "Command (! = System command, !! = Elevated system command)"
 	}
 	// The cell under the terminal cursor has no style of its own.
-	field := inputFieldStyle(false)
+	field := inputFieldStyle(false, m.InputFocused && !m.SessionActive())
 	inputContent := field.Width(inputBoxWidth - 2).Render(MaintainBackground(m.Input.View(), field))
 	inputBox := RenderBorderedBoxCtx(
 		"{{|"+inputTitleTag+"|}}"+inputTitle+"{{[-]}}",

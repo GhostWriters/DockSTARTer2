@@ -95,7 +95,7 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	ti.CharLimit = 128
 	ti.Focus()
 
-	ti.SetStyles(sinputStyles(false))
+	ti.SetStyles(sinputStyles(false, false))
 
 	inp := sinput.New(ti)
 	inpPtr := &inp
@@ -113,7 +113,8 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 	m.ContentRenderer = func(contentWidth int) string {
 		// Resolved on each render, so the input follows the active theme and
 		// the section's disabled state.
-		(*inpPtr).SetStyles(sinputStyles(m.disabled))
+		editing := m.focusedSub && m.InputEditing() && !m.disabled
+		(*inpPtr).SetStyles(sinputStyles(m.disabled, editing))
 		if m.insOvrLabel {
 			m.bottomBorderLabel = ""
 			if m.InputEditing() {
@@ -123,7 +124,7 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 				}
 			}
 		}
-		field := inputFieldStyle(m.disabled)
+		field := inputFieldStyle(m.disabled, editing)
 		if m.inputPrompt != "" {
 			(*inpPtr).Prompt = RenderThemeText("{{|Prompt|}}"+m.inputPrompt+"{{[-]}}", field)
 		}
@@ -260,8 +261,8 @@ func SinputSectionInit() tea.Cmd {
 
 // sinputStyles returns an input section's text styles for the active
 // theme (see inputFieldStyle).
-func sinputStyles(disabled bool) textinput.Styles {
-	field := inputFieldStyle(disabled)
+func sinputStyles(disabled, editing bool) textinput.Styles {
+	field := inputFieldStyle(disabled, editing)
 	ts := textinput.DefaultStyles(true)
 	ts.Focused.Prompt, ts.Focused.Text = field, field
 	ts.Blurred.Prompt, ts.Blurred.Text = field, field
@@ -269,13 +270,22 @@ func sinputStyles(disabled bool) textinput.Styles {
 	return ts
 }
 
+// InputFieldStyle returns a text input's field style (see
+// inputFieldStyle), for inputs drawn outside an input section.
+func InputFieldStyle(editing bool) lipgloss.Style { return inputFieldStyle(false, editing) }
+
+// InputTextStyles returns a text input's text styles (see
+// inputFieldStyle), for inputs drawn outside an input section.
+func InputTextStyles(editing bool) textinput.Styles { return sinputStyles(false, editing) }
+
 // inputFieldStyle returns an input's field style for the active theme:
-// InputField, filled in from the dialog style, or where the theme leaves it
-// unset Item's text on the dialog background; its disabled form (see
-// ResolveDisabledStyle) when disabled.
-func inputFieldStyle(disabled bool) lipgloss.Style {
+// while editing, InputField, filled in from the dialog style, so the field
+// stands out while text is being typed into it; otherwise, or where the
+// theme leaves InputField unset, Item's text on the dialog background. Its
+// disabled form (see ResolveDisabledStyle) when disabled.
+func inputFieldStyle(disabled, editing bool) lipgloss.Style {
 	dialog := GetStyles().Dialog
-	if semstyle.GetRawTagCode("InputField") == "" {
+	if !editing || semstyle.GetRawTagCode("InputField") == "" {
 		item := GetStyles().ItemNormal
 		if disabled {
 			item, _ = ResolveDisabledStyle("Item")
