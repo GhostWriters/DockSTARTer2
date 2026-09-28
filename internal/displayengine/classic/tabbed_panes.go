@@ -89,6 +89,12 @@ func NewTabbedPanes(id string, labels []string, panes []*ContentColumn, layout s
 		t.open[i] = true
 	}
 	t.stripStop = &panesStripStop{t: t}
+	// Focus starts on the first pane's first stop, not the strip's.
+	if len(panes) > 0 {
+		if j, ok := panes[0].NextFocusableSub(-1); ok {
+			t.subFocus = 1 + j
+		}
+	}
 	t.Strip.Changed = t.paneChanged
 	t.Strip.ActiveFocus = func() bool { return !t.tiled() || t.stripFocused }
 	for i, label := range labels {
