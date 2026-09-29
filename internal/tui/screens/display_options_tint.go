@@ -380,10 +380,8 @@ func (s *DisplayOptionsScreen) buildTintItemHelp(item displayengine.MenuItem) (i
 		if e.Ref() != ref {
 			continue
 		}
+		// The name, then the details one per line.
 		var parts []string
-		if e.Name != "" {
-			parts = append(parts, e.Name)
-		}
 		if e.Variant != "" {
 			parts = append(parts, "Variant: "+e.Variant)
 		}
@@ -401,7 +399,11 @@ func (s *DisplayOptionsScreen) buildTintItemHelp(item displayengine.MenuItem) (i
 			parts = append(parts, "By: "+e.Author)
 		}
 		parts = append(parts, "Source: "+tintSourceLabel(e.Source), "Reference: "+ref)
-		return item.Tag, strings.Join(parts, "\n\n")
+		text := strings.Join(parts, "\n")
+		if e.Name != "" {
+			text = e.Name + "\n\n" + text
+		}
+		return item.Tag, text
 	}
 	return item.Tag, "Reference: " + ref
 }
