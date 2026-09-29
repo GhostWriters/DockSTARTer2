@@ -482,26 +482,35 @@ func (s *DisplayOptionsScreen) toggleTintWholeWords() tea.Cmd {
 	}
 }
 
-// showTintSearchPicker opens a picker for one search option: title names
-// it, values are its choices ("" for All), and set stores the one picked.
+// showTintSearchPicker opens a picker for one scheme search option (see
+// showSearchPicker).
 func (s *DisplayOptionsScreen) showTintSearchPicker(id, title, current string, values []string, set func(*DisplayOptionsScreen, string)) tea.Cmd {
+	return showSearchPicker(id, title, "schemes", current, values, func(v string) tea.Msg {
+		return tintSearchOptionMsg{func(s *DisplayOptionsScreen) { set(s, v) }}
+	})
+}
+
+// showSearchPicker opens a picker for one list filter: title names it,
+// noun what the list holds, values its choices ("" for All), and picked
+// returns the message storing the one picked.
+func showSearchPicker(id, title, noun, current string, values []string, picked func(string) tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		items := make([]displayengine.MenuItem, len(values))
 		applyFuncs := make([]tea.Cmd, len(values))
 		sel := 0
 		for i, v := range values {
-			items[i] = displayengine.MenuItem{Tag: searchOptionLabel(v), Help: "Show " + strings.ToLower(searchOptionLabel(v)) + " schemes", IsRadioButton: true, Selectable: true, Checked: v == current}
+			items[i] = displayengine.MenuItem{Tag: searchOptionLabel(v), Help: "Show " + strings.ToLower(searchOptionLabel(v)) + " " + noun, IsRadioButton: true, Selectable: true, Checked: v == current}
 			if v == current {
 				sel = i
 			}
 			applyFuncs[i] = func() tea.Msg {
 				return tea.Batch(
-					func() tea.Msg { return tintSearchOptionMsg{func(s *DisplayOptionsScreen) { set(s, v) }} },
+					func() tea.Msg { return picked(v) },
 					tui.CloseDialog(),
 				)()
 			}
 		}
-		menu := displayengine.NewMenuModel(id, title, "Show only these schemes", items)
+		menu := displayengine.NewMenuModel(id, title, "Show only these "+noun, items)
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(id))
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: radioMenuSelectAction(menu, applyFuncs), Help: "Confirm the marked choice."},

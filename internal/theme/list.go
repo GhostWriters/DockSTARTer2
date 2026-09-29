@@ -4,7 +4,10 @@ import (
 	"DockSTARTer2/internal/paths"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/GhostWriters/semstyle"
 )
 
 // EmbeddedThemeLister is set at startup to provide the list of built-in theme names.
@@ -21,9 +24,12 @@ type ThemeMetadata struct {
 	FileStem    string // file stem, e.g. "GreenScreen" or "Chris's Themes/Chris's Awesome Theme" for a nested user theme; used in ConfigValue and for disambiguation
 	Description string
 	Author      string
-	IsUserTheme bool   // true if sourced from user: (not an embedded built-in)
-	IsInvalid   bool   // true if theme file is corrupted/unparseable
-	ConfigValue string // raw value for config/Load(), e.g. "user:GreenScreen" or "DockSTARTer"
+	Variant     string   // see Variant
+	Hues        string   // its colors' kind, see semtheme.ThemeFile.ColorInfo
+	BaseColors  []string // its colors as basic colors, see semstyle.BasicColor
+	IsUserTheme bool     // true if sourced from user: (not an embedded built-in)
+	IsInvalid   bool     // true if theme file is corrupted/unparseable
+	ConfigValue string   // raw value for config/Load(), e.g. "user:GreenScreen" or "DockSTARTer"
 }
 
 // List returns a list of available themes with their metadata. currentValue
@@ -57,6 +63,9 @@ func List(currentValue string) ([]ThemeMetadata, error) {
 					FileStem:    fileStem,
 					Description: tf.Metadata.Description,
 					Author:      tf.Metadata.Author,
+					Variant:     variantOf(tf),
+					Hues:        tf.ColorInfo().Kind,
+					BaseColors:  baseColorsOf(tf),
 					IsUserTheme: false,
 					IsInvalid:   err != nil,
 					ConfigValue: fileStem,
@@ -121,6 +130,9 @@ func List(currentValue string) ([]ThemeMetadata, error) {
 			FileStem:    fileStem,
 			Description: tf.Metadata.Description,
 			Author:      tf.Metadata.Author,
+			Variant:     variantOf(tf),
+			Hues:        tf.ColorInfo().Kind,
+			BaseColors:  baseColorsOf(tf),
 			IsUserTheme: true,
 			IsInvalid:   err != nil,
 			ConfigValue: configValue,
@@ -129,6 +141,24 @@ func List(currentValue string) ([]ThemeMetadata, error) {
 	})
 
 	return disambiguateNames(metas), nil
+}
+
+// variantOf returns tf's variant (see Variant).
+func variantOf(tf ThemeFile) string {
+	v, _ := Variant(tf)
+	return v
+}
+
+// baseColorsOf returns tf's declared colors as basic colors (see
+// semstyle.BasicColor), each once; none for tint slots.
+func baseColorsOf(tf ThemeFile) []string {
+	var basics []string
+	for _, c := range tf.ColorInfo().Colors {
+		if basic, ok := semstyle.BasicColor(c); ok && !slices.Contains(basics, basic) {
+			basics = append(basics, basic)
+		}
+	}
+	return basics
 }
 
 // disambiguateNames prefixes every user theme's display name with "user:"

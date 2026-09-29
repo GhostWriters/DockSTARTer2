@@ -2,6 +2,8 @@
 name        = "Tinted Theming"
 description = "DockSTARTer2 theme to use with tinted-theming color sets"
 author      = "CLHatch"
+variant     = "tinted"
+colors      = ["$primary", "$secondary", "$accent"]
 
 [syntax]
 semantic_prefix = "{{|"

@@ -2,6 +2,8 @@
 name        = "ZenFocus"
 description = "DockSTARTer2 Zen Focus theme"
 author      = "Gemini AI"
+variant     = "dark"
+colors      = ["$primary", "$secondary", "$accent"]
 
 [syntax]
 semantic_prefix = "{{|"

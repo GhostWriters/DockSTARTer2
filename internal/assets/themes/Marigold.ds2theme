@@ -2,6 +2,8 @@
 name        = "Marigold"
 description = "DockSTARTer2 Marigold theme"
 author      = "Westlin"
+variant     = "dark"
+colors      = ["$primary", "$secondary"]
 
 [syntax]
 semantic_prefix = "{{|"

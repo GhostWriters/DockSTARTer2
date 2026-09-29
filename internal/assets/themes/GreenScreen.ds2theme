@@ -2,6 +2,8 @@
 name        = "GreenScreen"
 description = "DockSTARTer2 Green Screen theme"
 author      = "Westlin"
+variant     = "dark"
+colors      = ["$primary", "$secondary"]
 
 [syntax]
 semantic_prefix = "{{|"

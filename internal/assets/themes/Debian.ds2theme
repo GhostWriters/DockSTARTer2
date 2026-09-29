@@ -2,6 +2,8 @@
 name        = "Debian"
 description = "Debian colors"
 author      = "CLHatch"
+variant     = "light"
+colors      = ["blue", "cyan", "white", "black"]
 
 [syntax]
 semantic_prefix = "{{|"

@@ -17,6 +17,12 @@
 name        = "My Theme"
 description = "A new DockSTARTer2 theme"
 author      = ""
+# variant   = "dark"  # "dark", "light", or "tinted" (colors from a tint, which
+                      # decides dark or light); detected from Dialog's background
+                      # or from naming base00-base17 slots when left out
+# colors    = ["$primary", "$secondary"]  # base colors, as color names or
+                      # $palette names; help calls the theme monochrome, semi-
+                      # monochrome (other colors in its styles), or multi-color
 
 [syntax]
 semantic_prefix = "{{|"

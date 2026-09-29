@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -110,6 +111,12 @@ type DisplayOptionsScreen struct {
 	themeFindShown bool
 	themeQuery     string
 	themePartial   bool
+	// themeVariant and themeHues narrow the Theme list to one variant and
+	// one kind of colors ("" for all), and themeHueColors to themes built on
+	// any of those basic colors, whether or not Find shows.
+	themeVariant   string
+	themeHues      string
+	themeHueColors []string
 	// tintPartial matches the search's terms anywhere in a word rather
 	// than as whole words; tintVariant and tintSystem narrow it to light
 	// or dark and to base16 or base24 schemes ("" for all).
@@ -240,8 +247,16 @@ func (s *DisplayOptionsScreen) initMenus() {
 		{Label: "Find", Key: 'f', Checked: func() bool { return s.themeFindShown }, Help: "Show or hide the theme search box"},
 		{Label: "Load Defaults", Key: 'd', Checked: func() bool { return s.loadThemeDefaults }, Help: "Turn Load Defaults on or off"},
 	})
+	s.themeMenu.SetFooterBar(&displayengine.FooterBar{
+		Controls: func() []displayengine.TitleControl {
+			return []displayengine.TitleControl{
+				{Label: "Variant", Key: 'a', Value: func() string { return searchOptionLabel(s.themeVariant) }, Help: "Show all, dark, light, or tinted themes"},
+				{Label: "Hues", Key: 'u', Value: s.themeHuesLabel, Help: "Show all, monochrome, semi-monochrome, or multi-color themes, or themes built on some colors"},
+			}
+		},
+	})
 	s.themeFindMenu, s.themeFindInput = newFindBox(themeFindID, s.themeQuery,
-		"Show only themes whose name, description, or author contains every word typed, comma-separated. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) shows every theme again.",
+		"Show only themes whose name, description, or author contains every word typed, comma-separated. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant and Hues, which narrow to dark, light, or tinted themes, and to monochrome, semi-monochrome, or multi-color ones, apply either way.",
 		&s.themePartial, s.applyThemeFind)
 
 	// 3. Options Menu
@@ -936,8 +951,18 @@ func (s *DisplayOptionsScreen) buildThemeItemHelp(item displayengine.MenuItem) (
 	if desc != "" {
 		parts = append(parts, desc)
 	}
+	var details []string
 	if tf.Metadata.Author != "" {
-		parts = append(parts, "By: "+tf.Metadata.Author)
+		details = append(details, "By: "+tf.Metadata.Author)
+	}
+	if variant := s.themeVariantText(tf); variant != "" {
+		details = append(details, variant)
+	}
+	if colors := themeColorsText(tf); colors != "" {
+		details = append(details, colors)
+	}
+	if len(details) > 0 {
+		parts = append(parts, strings.Join(details, "\n"))
 	}
 	if defaults, derr := theme.FileDefaults(tf); derr == nil {
 		if defaultsText := formatThemeDefaults(defaults); defaultsText != "" {
@@ -948,6 +973,60 @@ func (s *DisplayOptionsScreen) buildThemeItemHelp(item displayengine.MenuItem) (
 		return "", ""
 	}
 	return item.Tag, strings.Join(parts, "\n\n")
+}
+
+// themeVariantText returns the "Variant:" help line for tf (see
+// theme.Variant): noting when it's detected, and for a tinted theme the
+// menu tint being edited and whether that's dark or light.
+func (s *DisplayOptionsScreen) themeVariantText(tf theme.ThemeFile) string {
+	variant, detected := theme.Variant(tf)
+	if variant == "" {
+		return ""
+	}
+	var notes []string
+	if detected {
+		notes = append(notes, "detected")
+	}
+	if variant == theme.VariantTinted {
+		menu := s.config.Appearance.Ptr(s.editType).AnsiColors.ElementPtr("menu")
+		switch {
+		case !menu.TintEnabled || menu.Tint == "":
+			notes = append(notes, "no tint set")
+		case s.catalogTintVariant(menu.Tint) != "":
+			notes = append(notes, "currently "+s.catalogTintVariant(menu.Tint)+", from "+menu.Tint)
+		default:
+			notes = append(notes, "from "+menu.Tint)
+		}
+	}
+	if len(notes) == 0 {
+		return "Variant: " + variant
+	}
+	return "Variant: " + variant + " (" + strings.Join(notes, "; ") + ")"
+}
+
+// themeColorsText returns the "Colors:" help line for tf's declared base
+// colors (see semtheme.ThemeFile.ColorInfo), "" when it declares none.
+func themeColorsText(tf theme.ThemeFile) string {
+	info := tf.ColorInfo()
+	switch info.Kind {
+	case "":
+		return ""
+	case theme.ColorsTinted:
+		return "Colors: from the tint"
+	case theme.ColorsSemiMonochrome:
+		return "Colors: " + strings.Join(info.Colors, ", ") + " (" + info.Kind + "; also " + strings.Join(info.Extra, ", ") + ")"
+	}
+	return "Colors: " + strings.Join(info.Colors, ", ") + " (" + info.Kind + ")"
+}
+
+// catalogTintVariant returns the tint catalog's variant for ref, "" if unknown.
+func (s *DisplayOptionsScreen) catalogTintVariant(ref string) string {
+	for _, e := range s.tintCatalog {
+		if e.Ref() == ref {
+			return e.Variant
+		}
+	}
+	return ""
 }
 
 // HelpContext implements displayengine.HelpContextProvider.
@@ -1778,7 +1857,9 @@ func (s *DisplayOptionsScreen) themeListItems(selected string) []displayengine.M
 		matches = commands.WordMatcher(s.themeQuery, s.themePartial)
 	}
 	for _, t := range s.themes {
-		if matches != nil && !matches(t.Name, t.Description, t.Author) {
+		if matches != nil && !matches(t.Name, t.Description, t.Author) ||
+			s.themeVariant != "" && t.Variant != s.themeVariant || s.themeHues != "" && t.Hues != s.themeHues ||
+			len(s.themeHueColors) > 0 && !slices.ContainsFunc(s.themeHueColors, func(c string) bool { return slices.Contains(t.BaseColors, c) }) {
 			if selected == t.ConfigValue {
 				foundCurrent = true
 			}

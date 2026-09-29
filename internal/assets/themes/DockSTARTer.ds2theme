@@ -2,6 +2,8 @@
 name        = "DockSTARTer"
 description = "The default DockSTARTer2 theme"
 author      = "CLHatch"
+variant     = "light"
+colors      = ["$primary", "$secondary", "$accent", "red"]
 
 [syntax]
 semantic_prefix = "{{|"

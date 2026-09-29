@@ -94,6 +94,7 @@ type KeyMap struct {
 	StopEditing      key.Binding
 	ResetAll         key.Binding
 	SearchBase       key.Binding
+	SearchHues       key.Binding
 
 	// Jump to the previous/next group of sections
 	SectionPrev key.Binding
@@ -345,6 +346,10 @@ var Keys = KeyMap{
 	SearchBase: key.NewBinding(
 		key.WithKeys("ctrl+b", "alt+b", "ctrl+alt+b"),
 		key.WithHelp("alt+b", "find base"),
+	),
+	SearchHues: key.NewBinding(
+		key.WithKeys("ctrl+u", "alt+u", "ctrl+alt+u"),
+		key.WithHelp("alt+u", "find hues"),
 	),
 	SectionPrev: key.NewBinding(
 		key.WithKeys("ctrl+up", "alt+up", "ctrl+alt+up"),

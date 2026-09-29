@@ -2,6 +2,8 @@
 name        = "Magenta Rise"
 description = "DockSTARTer2 Magenta Rise theme"
 author      = "Westlin"
+variant     = "dark"
+colors      = ["$primary", "$secondary"]
 
 [syntax]
 semantic_prefix = "{{|"
@@ -269,9 +271,9 @@ primary = "magenta"  # = "white"
 
 ## Keys, progress, and indicators
   KeyCap             = "{{[::-R]}}"           # = "{{[-:-:R]}}"
-  ProgressWaiting    = "{{[white:black]}}"    # = "{{[-:-:D]}}"
-  ProgressInProgress = "{{[white:black:B]}}"  # = "{{|Highlight|}}"
-  ProgressCompleted  = "{{[black:white]}}"    # = "{{|Highlight|}}"
+  ProgressWaiting    = "{{[$primary:$secondary]}}"    # = "{{[-:-:D]}}"
+  ProgressInProgress = "{{[$primary:$secondary:B]}}"  # = "{{|Highlight|}}"
+  ProgressCompleted  = "{{[$secondary:$primary]}}"    # = "{{|Highlight|}}"
 
 ## Inline text highlights
   Highlight       = "{{|Dialog:::B|}}"     # = "{{[-:-:B]}}"

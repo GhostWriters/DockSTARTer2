@@ -2,6 +2,8 @@
 name        = "Firehouse"
 description = "DockSTARTer2 Firehouse theme"
 author      = "Westlin"
+variant     = "light"
+colors      = ["$primary", "$secondary", "$accent"]
 
 [syntax]
 semantic_prefix = "{{|"

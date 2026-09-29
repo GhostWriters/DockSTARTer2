@@ -2,6 +2,8 @@
 name        = "Summertime"
 description = "DockSTARTer2 Summertime theme"
 author      = "Westlin"
+variant     = "dark"
+colors      = ["$primary", "$secondary", "$screen_bg", "$accent"]
 
 [syntax]
 semantic_prefix = "{{|"

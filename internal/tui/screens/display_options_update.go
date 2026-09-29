@@ -218,6 +218,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return s, s.toggleTintEnabled()
 			case s.overrideMenu.TitleCheckboxID():
 				return s, s.toggleOverrideEnabled()
+			case s.themeMenu.FooterBarControlID(0):
+				return s, s.showThemeVariantPicker()
+			case s.themeMenu.FooterBarControlID(1):
+				return s, s.showThemeHuesPicker()
 			case s.tintMenu.FooterBarControlID(0):
 				return s, s.showTintVariantPicker()
 			case s.tintMenu.FooterBarControlID(1):
@@ -297,6 +301,17 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		s.syncTintMenus()
 		s.refreshPreviewTint()
+		if s.outerMenu != nil {
+			s.outerMenu.InvalidateCache()
+		}
+		return s, nil
+
+	case themeSearchOptionMsg:
+		msg.apply(s)
+		s.syncThemeList()
+		if s.themeFindMenu != nil {
+			s.themeFindMenu.InvalidateCache()
+		}
 		if s.outerMenu != nil {
 			s.outerMenu.InvalidateCache()
 		}
@@ -402,6 +417,10 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.showTintVariantPicker()
 		case key.Matches(msg, displayengine.Keys.SearchBase) && s.tintFrameFocused():
 			return s, s.showTintBasePicker()
+		case key.Matches(msg, displayengine.Keys.SearchVariant) && s.themeFrameFocused() && !s.findBoxFocused():
+			return s, s.showThemeVariantPicker()
+		case key.Matches(msg, displayengine.Keys.SearchHues) && s.themeFrameFocused() && !s.findBoxFocused():
+			return s, s.showThemeHuesPicker()
 		case key.Matches(msg, displayengine.Keys.EnvClosePane) && s.panes != nil && s.focusedSettingsLeaf() != nil:
 			return s, s.panes.CloseFocused()
 		case key.Matches(msg, displayengine.Keys.SectionPrev):
@@ -645,6 +664,7 @@ func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
 		displayengine.Keys.ResetSection,
 		displayengine.Keys.ResetAll,
 		displayengine.Keys.SearchBase,
+		displayengine.Keys.SearchHues,
 	})
 }
 

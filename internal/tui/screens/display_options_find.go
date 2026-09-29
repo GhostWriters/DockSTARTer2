@@ -2,7 +2,13 @@ package screens
 
 import (
 	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui"
+	"slices"
+	"strings"
+
 	"DockSTARTer2/internal/tui/components/sinput"
+	"github.com/GhostWriters/semstyle"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -150,6 +156,78 @@ func (s *DisplayOptionsScreen) syncThemeList() {
 	}
 	s.markThemeList()
 	s.themeMenu.InvalidateCache()
+}
+
+// themeSearchOptionMsg sets one of the Theme list's filters.
+type themeSearchOptionMsg struct{ apply func(*DisplayOptionsScreen) }
+
+// showThemeVariantPicker and showThemeHuesPicker open the Theme list's
+// Variant and Hues pickers.
+func (s *DisplayOptionsScreen) showThemeVariantPicker() tea.Cmd {
+	return showSearchPicker("theme_search_variant", "Variant", "themes", s.themeVariant,
+		[]string{"", theme.VariantDark, theme.VariantLight, theme.VariantTinted},
+		func(v string) tea.Msg {
+			return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeVariant = v }}
+		})
+}
+
+// showThemeHuesPicker's picker has a radio group for the kind of colors and
+// a checkbox for each basic color, a theme showing when its base colors
+// include any checked one.
+func (s *DisplayOptionsScreen) showThemeHuesPicker() tea.Cmd {
+	const id = "theme_search_hues"
+	return func() tea.Msg {
+		kinds := []string{"", theme.ColorsMonochrome, theme.ColorsSemiMonochrome, theme.ColorsMultiColor}
+		items := []displayengine.MenuItem{{Tag: "Kind", IsSeparator: true}}
+		sel := 1
+		for _, k := range kinds {
+			if k == s.themeHues {
+				sel = len(items)
+			}
+			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(k), Help: "Show " + strings.ToLower(searchOptionLabel(k)) + " themes",
+				IsRadioButton: true, Selectable: true, Checked: k == s.themeHues, Metadata: map[string]string{"kind": k}})
+		}
+		items = append(items, displayengine.MenuItem{Tag: "Colors", IsSeparator: true})
+		for _, c := range semstyle.BasicColors {
+			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(c), Help: "Show themes built on " + c + ", with any other checked color",
+				IsCheckbox: true, Selectable: true, Checked: slices.Contains(s.themeHueColors, c), Metadata: map[string]string{"color": c}})
+		}
+		menu := displayengine.NewMenuModel(id, "Hues", "Show only these themes", items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(id))
+		done := func() tea.Msg {
+			kind, colors := "", []string(nil)
+			for _, it := range menu.GetItems() {
+				switch {
+				case it.IsRadioButton && it.Checked:
+					kind = it.Metadata["kind"]
+				case it.IsCheckbox && it.Checked:
+					colors = append(colors, it.Metadata["color"])
+				}
+			}
+			return tea.Batch(
+				func() tea.Msg {
+					return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeHues, s.themeHueColors = kind, colors }}
+				},
+				tui.CloseDialog(),
+			)()
+		}
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Action: done, Help: "Confirm the marked choices."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
+		menu.Select(sel)
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
+}
+
+// themeHuesLabel is the Theme list's Hues filter as its footer shows it:
+// the kind, then any checked colors.
+func (s *DisplayOptionsScreen) themeHuesLabel() string {
+	label := searchOptionLabel(s.themeHues)
+	if len(s.themeHueColors) > 0 {
+		label += ": " + strings.Join(s.themeHueColors, ", ")
+	}
+	return label
 }
 
 // findBoxFocused reports whether a Find box holds focus and is editing.

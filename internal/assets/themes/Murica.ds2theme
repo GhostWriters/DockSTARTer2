@@ -2,6 +2,8 @@
 name        = "Murica"
 description = "DockSTARTer2 Murica Heck Yea! theme"
 author      = "Westlin"
+variant     = "light"
+colors      = ["red", "white", "$accent"]
 
 [syntax]
 semantic_prefix = "{{|"

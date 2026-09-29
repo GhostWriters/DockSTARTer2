@@ -2,6 +2,8 @@
 name        = "Whiptail Ripoff"
 description = "DockSTARTer2 Whiptail ripoff theme"
 author      = "Westlin"
+variant     = "light"
+colors      = ["yellow", "blue", "white", "black", "red"]
 
 [syntax]
 semantic_prefix = "{{|"
