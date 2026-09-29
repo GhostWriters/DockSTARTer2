@@ -382,21 +382,31 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		}
 	}
 
+	if err := checkSpace(exeDir, size); err != nil {
+		return err
+	}
+
 	// Staged beside the binary when this user can write there; otherwise in
 	// a temp folder, then copied beside it with sudo.
 	staged, err := os.CreateTemp(exeDir, "."+exeName+".update-*")
 	if err == nil {
 		defer os.Remove(staged.Name())
-		if err := checkSpace(exeDir, size); err != nil {
-			staged.Close()
-			return err
-		}
 		if err := writeStaged(staged, tr, size); err != nil {
 			return err
 		}
-		if err := os.Rename(staged.Name(), exe); err != nil {
+		err := os.Rename(staged.Name(), exe)
+		if err == nil {
+			return nil
+		}
+		if !os.IsPermission(err) {
 			return fmt.Errorf("failed to replace '%s': %w", exe, err)
 		}
+		// Staged, but only root may replace the binary (e.g. a root-owned
+		// binary in a sticky folder); same filesystem, so still one step.
+		if err := sudoRun(ctx, "mv", staged.Name(), exe); err != nil {
+			return fmt.Errorf("sudo update failed: %w", err)
+		}
+		restoreOwnerMode(ctx, exe)
 		return nil
 	}
 	if !os.IsPermission(err) {
@@ -409,9 +419,6 @@ func installUpdate(ctx context.Context, assetURL string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 	if err := checkSpace(tmpDir, size); err != nil {
-		return err
-	}
-	if err := checkSpace(exeDir, size); err != nil {
 		return err
 	}
 	tmpFile, err := os.Create(filepath.Join(tmpDir, exeName))
@@ -435,21 +442,26 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		}
 		return fmt.Errorf("sudo update failed: %w", err)
 	}
+	restoreOwnerMode(ctx, exe)
+	return nil
+}
 
-	// Restore ownership (to match the parent directory owner) and mode
-	// (0755, executable): sudo cp can leave either wrong depending on the
-	// OS/umask. Native (via CAP_CHOWN/CAP_FOWNER, if this process already
-	// holds them from an earlier auto_setcap grant) wherever possible,
-	// sudo chown/chmod only for whichever piece isn't -- never assumed to
-	// need sudo just because the copy itself did.
-	if dirInfo, err := os.Stat(exeDir); err == nil {
-		if dirStat, ok := dirInfo.Sys().(*syscall.Stat_t); ok {
-			if err := system.FixOwnerMode(ctx, exe, int(dirStat.Uid), int(dirStat.Gid), 0755); err != nil {
-				logger.Warn(ctx, "Failed to restore ownership/mode on '%s': %v", exe, err)
-			}
+// restoreOwnerMode gives exe, replaced with sudo, its folder's owner and
+// mode 0755, which the sudo copy or move can leave wrong depending on the
+// OS/umask. Native (via CAP_CHOWN/CAP_FOWNER, if this process already holds
+// them from an earlier auto_setcap grant) wherever possible, sudo
+// chown/chmod only for whichever piece isn't -- never assumed to need sudo
+// just because the replacement did.
+func restoreOwnerMode(ctx context.Context, exe string) {
+	dirInfo, err := os.Stat(filepath.Dir(exe))
+	if err != nil {
+		return
+	}
+	if dirStat, ok := dirInfo.Sys().(*syscall.Stat_t); ok {
+		if err := system.FixOwnerMode(ctx, exe, int(dirStat.Uid), int(dirStat.Gid), 0755); err != nil {
+			logger.Warn(ctx, "Failed to restore ownership/mode on '%s': %v", exe, err)
 		}
 	}
-	return nil
 }
 
 // writeStaged writes size bytes from r to f, makes it executable, and closes
