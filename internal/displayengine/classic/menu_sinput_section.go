@@ -122,7 +122,7 @@ func newSinputSectionWithEcho(id, title, initialValue string, echoMode textinput
 		outside := inputFieldStyle(m.disabled, false)
 		area := inputFieldStyle(m.disabled, editing)
 		if idle {
-			area = ctx.OptionValueFocused
+			area = inputFieldFocusedStyle()
 		}
 		ts := sinputStyles(m.disabled, editing)
 		ts.Focused.Prompt, ts.Blurred.Prompt = outside, outside
@@ -300,6 +300,12 @@ func InputFieldStyle(editing bool) lipgloss.Style { return inputFieldStyle(false
 // InputTextStyles returns a text input's text styles (see
 // inputFieldStyle), for inputs drawn outside an input section.
 func InputTextStyles(editing bool) textinput.Styles { return sinputStyles(false, editing) }
+
+// inputFieldFocusedStyle returns the field style of an input focused but not
+// editing: InputFieldFocused, filled in from the dialog style.
+func inputFieldFocusedStyle() lipgloss.Style {
+	return styleWithFallback("InputFieldFocused", GetStyles().Dialog)
+}
 
 // inputFieldStyle returns an input's field style for the active theme:
 // while editing, InputField, filled in from the dialog style, so the field

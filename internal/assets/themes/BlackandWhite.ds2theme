@@ -280,6 +280,8 @@ direct_suffix   = "]}}"
 # Prompt                  = "{{[-:-:B]}}"
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
+# InputField              = ""
+# InputFieldFocused       = "{{|TagFocused|}}"
   TextCursor              = "{{[$primary:$secondary:-B]}}"  # = "{{[-:-:R]}}"
 # TextCursorFlash         = "{{|TextCursor:::R|}}"
 

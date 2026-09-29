@@ -310,7 +310,8 @@ focus_border    = "base05" # "Focus elements" borders: the focus indicators
 # Prompt                  = "{{[-:-:B]}}"
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
-  InputField              = "{{[$primary:$field_bg]}}"
+  InputField              = "{{[$primary:$field_bg]}}"         # = ""
+# InputFieldFocused       = "{{|TagFocused|}}"
   TextCursor              = "{{[$secondary:$primary:-B]}}"     # = "{{[-:-:R]}}"
   TextCursorFlash         = "{{[$primary:$selection:B]}}"      # = "{{|TextCursor:::R|}}"
 

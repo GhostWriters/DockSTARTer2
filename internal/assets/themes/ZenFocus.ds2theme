@@ -282,6 +282,8 @@ accent    = "$highlight"
 # Prompt                  = "{{[-:-:B]}}"
 # PromptShell             = "{{|Highlight|}}"
 # PromptSudo              = "{{|MarkerInvalid|}}"
+# InputField              = ""
+# InputFieldFocused       = "{{|TagFocused|}}"
   TextCursor              = "{{[black:$highlight:-B]}}"  # = "{{[-:-:R]}}"
   TextCursorFlash         = "{{[black:white:-B]}}"       # = "{{|TextCursor:::R|}}"
 

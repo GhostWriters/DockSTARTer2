@@ -26,7 +26,7 @@ TEMPLATE = os.path.join(THEMES, '.TEMPLATE.ds2theme')
 VALUE = r'("(?:[^"\\]|\\.)*"|\'[^\']*\')'
 KEY = re.compile(r'^(\s*#?\s*)([A-Za-z][A-Za-z0-9]*)(\s*)=\s*(.*?)\s*$')
 ACTIVE = re.compile(r'^(\s+)([A-Za-z][A-Za-z0-9]*)\s*=\s*' + VALUE + r'\s*(?:#\s*=\s*(.*?))?\s*$')
-COMMENTED = re.compile(r'^#\s*([A-Za-z][A-Za-z0-9]*)\s*=\s*' + VALUE + r'\s*$')
+COMMENTED = re.compile(r'^#\s*([A-Za-z][A-Za-z0-9]*)\s*=\s*' + VALUE + r'\s*(#.*?)?\s*$')
 FB_KEY = re.compile(r'^([A-Za-z][A-Za-z0-9]*)\s*=\s*' + VALUE)
 
 
@@ -105,13 +105,14 @@ def add_missing(text, order, values):
 
 
 def parse(line):
-    """(kind, key, value, indent) for a key line, else None."""
+    """(kind, key, value, indent, note) for a key line, else None; note is
+    a commented line's own trailing comment, kept as written."""
     m = ACTIVE.match(line)
     if m:
-        return 'active', m.group(2), m.group(3), m.group(1)
+        return 'active', m.group(2), m.group(3), m.group(1), ''
     m = COMMENTED.match(line)
     if m:
-        return 'commented', m.group(1), m.group(2), '# '
+        return 'commented', m.group(1), m.group(2), '# ', m.group(3) or ''
     return None
 
 
@@ -127,18 +128,21 @@ def align(text, values):
         while j < end and parse(lines[j]) is not None:
             j += 1
         rows = []
-        for kind, key, value, indent in (parse(line) for line in lines[i:j]):
+        for kind, key, value, indent, note in (parse(line) for line in lines[i:j]):
             if kind == 'commented' and key in values:
                 value = values[key]
-            rows.append((kind, key, value, indent))
-        eq = max(len(indent) + len(key) for _, key, _, indent in rows) + 1
-        heads = [indent + key + ' ' * (eq - len(indent) - len(key)) + '= ' + value for _, key, value, indent in rows]
+            rows.append((kind, key, value, indent, note))
+        eq = max(len(indent) + len(key) for _, key, _, indent, _ in rows) + 1
+        heads = [indent + key + ' ' * (eq - len(indent) - len(key)) + '= ' + value for _, key, value, indent, _ in rows]
         # Past every line in the block, annotated or not.
         col = max(len(head) for head in heads) + 2
-        for n, ((kind, key, value, _), head) in enumerate(zip(rows, heads)):
-            # Annotated unless the value is its fallback anyway.
+        for n, ((kind, key, value, _, note), head) in enumerate(zip(rows, heads)):
+            # Annotated unless the value is its fallback anyway; a commented
+            # line's own note sits in the same column.
             if kind == 'active' and key in values and value != values[key]:
                 head += ' ' * (col - len(head)) + '# = ' + values[key]
+            elif note:
+                head += ' ' * (col - len(head)) + note
             lines[i + n] = head
         i = j
     return '\n'.join(lines)

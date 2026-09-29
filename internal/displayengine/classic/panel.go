@@ -211,13 +211,13 @@ func (m PanelModel) InputEditing() bool { return m.InputFocused && !m.inputIdle 
 
 // inputStyles returns the input bar's styles: outside for the prompt and the
 // columns either side of the field, field for the field, and whether it's
-// focused but not editing, when the field is in the focus color.
+// focused but not editing, when the field is in the InputFieldFocused style.
 func (m PanelModel) inputStyles() (outside, field lipgloss.Style, idle bool) {
 	idle = m.Focused && m.InputFocused && m.inputIdle && !m.SessionActive()
 	outside = inputFieldStyle(false, false)
 	field = inputFieldStyle(false, m.Focused && m.InputEditing() && !m.SessionActive())
 	if idle {
-		field = GetActiveContext().OptionValueFocused
+		field = inputFieldFocusedStyle()
 	}
 	return outside, field, idle
 }
