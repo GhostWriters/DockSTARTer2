@@ -137,11 +137,10 @@ func decodeWeak(src map[string]any, dst any) error {
 
 // migrateToAppearance moves settings from older config file layouts into
 // every connection type's [appearance.<type>] block: [ui]'s settings (when
-// there is no [appearance] table), settings kept directly in [appearance]
-// itself, and each connection type's [ansi_palette.<type>] table (into
-// [appearance.<type>.ansi_palette]). panel_local becomes local's panel and
-// panel_remote ssh's and web's. A connection type whose block already
-// carries a given setting is left alone.
+// there is no [appearance] table) and each connection type's
+// [ansi_palette.<type>] table (into [appearance.<type>.ansi_palette]).
+// panel_local becomes local's panel and panel_remote ssh's and web's. A
+// connection type whose block already carries a given setting is left alone.
 func migrateToAppearance(data []byte, conf *AppConfig) {
 	var raw map[string]any
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -149,9 +148,9 @@ func migrateToAppearance(data []byte, conf *AppConfig) {
 	}
 	appearance, _ := raw["appearance"].(map[string]any)
 
-	shared := appearance
-	if ui, ok := raw["ui"].(map[string]any); ok && appearance == nil {
-		shared = ui
+	var shared map[string]any
+	if appearance == nil {
+		shared, _ = raw["ui"].(map[string]any)
 	}
 	for _, ct := range ConnTypes {
 		block, _ := appearance[ct].(map[string]any)

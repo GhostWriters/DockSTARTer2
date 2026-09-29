@@ -57,40 +57,6 @@ panel_remote = "none"
 	}
 }
 
-// TestMigrateSharedAppearanceSettings covers settings kept directly in
-// [appearance], which move into every connection type's block unless the
-// block already has them.
-func TestMigrateSharedAppearanceSettings(t *testing.T) {
-	conf := loadFromBytes(t, `
-[appearance]
-refresh_rate = 100
-panel_local = "console"
-panel_remote = "none"
-show_preview = false
-
-[appearance.web]
-theme = "Murica"
-refresh_rate = 200
-panel = "log"
-`)
-	for _, ct := range ConnTypes {
-		a := conf.Appearance.ForConnType(ct)
-		wantRate, wantPanel := 100, "none"
-		switch ct {
-		case "local":
-			wantPanel = "console"
-		case "web":
-			wantRate, wantPanel = 200, "log"
-		}
-		if a.RefreshRate != wantRate || a.Panel != wantPanel || a.ShowPreview {
-			t.Errorf("%s: refresh_rate=%d panel=%q show_preview=%v, want %d/%q/false", ct, a.RefreshRate, a.Panel, a.ShowPreview, wantRate, wantPanel)
-		}
-	}
-	if got := conf.Appearance.Web.Theme; got != "Murica" {
-		t.Errorf("web theme = %q, want Murica", got)
-	}
-}
-
 func TestMigrateTopLevelAnsiPalette(t *testing.T) {
 	conf := loadFromBytes(t, `
 [ansi_palette.web.menu]
