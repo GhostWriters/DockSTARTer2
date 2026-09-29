@@ -336,109 +336,174 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 	return nil
 }
 
-// installUpdate downloads and installs the binary from the given URL.
+// updateSpaceMargin is room kept free beyond the new binary itself when
+// checking for space to stage it.
+const updateSpaceMargin = 16 << 20
+
+// installUpdate downloads the binary from the given URL and replaces the
+// running one with it. The new binary is written in full beside the old one,
+// on the same filesystem, then renamed over it in one step, so an update
+// that fails partway -- no space left, a dropped download -- leaves the
+// working binary as it was.
 func installUpdate(ctx context.Context, assetURL string) error {
-	// Get current executable path
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
+	exeDir, exeName := filepath.Dir(exe), filepath.Base(exe)
 
-	// Create temp dir
-	tmpDir, err := os.MkdirTemp("", "ds2-update-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp dir: %w", err)
+	if !strings.HasSuffix(assetURL, ".tar.gz") && !strings.HasSuffix(assetURL, ".tgz") {
+		return fmt.Errorf("unsupported format: %s", assetURL)
 	}
-	defer os.RemoveAll(tmpDir)
-
 	logger.Info(ctx, "Downloading update from {{|URL|}}%s{{[-]}}", assetURL)
 	resp, err := http.Get(assetURL)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
 	defer resp.Body.Close()
-
-	tmpExe := filepath.Join(tmpDir, filepath.Base(exe))
-
-	// Handle compressed formats
-	if strings.HasSuffix(assetURL, ".tar.gz") || strings.HasSuffix(assetURL, ".tgz") {
-		gw, err := gzip.NewReader(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to create gzip reader: %w", err)
-		}
-		defer gw.Close()
-		tr := tar.NewReader(gw)
-
-		found := false
-		for {
-			header, err := tr.Next()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return fmt.Errorf("failed to read tar header: %w", err)
-			}
-
-			// Simple heuristic: if name matches exe name
-			if filepath.Base(header.Name) == filepath.Base(exe) {
-				out, err := os.Create(tmpExe)
-				if err != nil {
-					return fmt.Errorf("failed to create temp file: %w", err)
-				}
-				if _, err := io.Copy(out, tr); err != nil {
-					out.Close()
-					return fmt.Errorf("failed to extract: %w", err)
-				}
-				out.Close()
-				found = true
-				break
-			}
-		}
-		if !found {
+	gw, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gw.Close()
+	tr := tar.NewReader(gw)
+	var size int64
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
 			return fmt.Errorf("executable not found in archive")
 		}
-	} else {
-		return fmt.Errorf("unsupported format: %s", assetURL)
+		if err != nil {
+			return fmt.Errorf("failed to read tar header: %w", err)
+		}
+		if filepath.Base(header.Name) == exeName {
+			size = header.Size
+			break
+		}
 	}
 
-	if err := os.Chmod(tmpExe, 0755); err != nil {
-		return fmt.Errorf("failed to chmod: %w", err)
-	}
-
-	// Replace current executable
-	// Try to replace the current executable
-
-	// We will try to mv tmpExe -> exe
-	// If it fails with permission, we try sudo.
-
-	// Prepare move command
-	err = os.Rename(tmpExe, exe)
+	// Staged beside the binary when this user can write there; otherwise in
+	// a temp folder, then copied beside it with sudo.
+	staged, err := os.CreateTemp(exeDir, "."+exeName+".update-*")
 	if err == nil {
+		defer os.Remove(staged.Name())
+		if err := checkSpace(exeDir, size); err != nil {
+			staged.Close()
+			return err
+		}
+		if err := writeStaged(staged, tr, size); err != nil {
+			return err
+		}
+		if err := os.Rename(staged.Name(), exe); err != nil {
+			return fmt.Errorf("failed to replace '%s': %w", exe, err)
+		}
 		return nil
 	}
-
-	// If direct rename fails, attempt with sudo
-	mvCmd, err := dsexec.SudoCommand(ctx, "mv", tmpExe, exe)
-	if err != nil {
-		return fmt.Errorf("sudo update failed: %w", err)
+	if !os.IsPermission(err) {
+		return fmt.Errorf("failed to stage update in '%s': %w", exeDir, err)
 	}
-	if out, err := mvCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("sudo update failed: %s: %w", string(out), err)
+
+	tmpDir, err := os.MkdirTemp("", "ds2-update-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	if err := checkSpace(tmpDir, size); err != nil {
+		return err
+	}
+	if err := checkSpace(exeDir, size); err != nil {
+		return err
+	}
+	tmpFile, err := os.Create(filepath.Join(tmpDir, exeName))
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	if err := writeStaged(tmpFile, tr, size); err != nil {
+		return err
+	}
+	stagedPath := filepath.Join(exeDir, "."+exeName+".update")
+	if err := sudoRun(ctx, "cp", tmpFile.Name(), stagedPath); err != nil {
+		if rmCmd, rmErr := dsexec.SudoCommand(ctx, "rm", "-f", stagedPath); rmErr == nil {
+			_ = rmCmd.Run()
+		}
+		return fmt.Errorf("sudo update failed staging '%s': %w", stagedPath, err)
+	}
+	// Same filesystem, so this replaces the binary in one step.
+	if err := sudoRun(ctx, "mv", stagedPath, exe); err != nil {
+		if rmCmd, rmErr := dsexec.SudoCommand(ctx, "rm", "-f", stagedPath); rmErr == nil {
+			_ = rmCmd.Run()
+		}
+		return fmt.Errorf("sudo update failed: %w", err)
 	}
 
 	// Restore ownership (to match the parent directory owner) and mode
-	// (0755, executable): sudo mv can leave either wrong depending on the
+	// (0755, executable): sudo cp can leave either wrong depending on the
 	// OS/umask. Native (via CAP_CHOWN/CAP_FOWNER, if this process already
 	// holds them from an earlier auto_setcap grant) wherever possible,
 	// sudo chown/chmod only for whichever piece isn't -- never assumed to
-	// need sudo just because the mv itself did.
-	if dirInfo, err := os.Stat(filepath.Dir(exe)); err == nil {
+	// need sudo just because the copy itself did.
+	if dirInfo, err := os.Stat(exeDir); err == nil {
 		if dirStat, ok := dirInfo.Sys().(*syscall.Stat_t); ok {
 			if err := system.FixOwnerMode(ctx, exe, int(dirStat.Uid), int(dirStat.Gid), 0755); err != nil {
 				logger.Warn(ctx, "Failed to restore ownership/mode on '%s': %v", exe, err)
 			}
 		}
 	}
+	return nil
+}
 
+// writeStaged writes size bytes from r to f, makes it executable, and closes
+// it, returning an error when the copy comes up short or any step fails, as
+// when the disk fills.
+func writeStaged(f *os.File, r io.Reader, size int64) error {
+	n, err := io.Copy(f, r)
+	if err == nil && n != size {
+		err = fmt.Errorf("wrote %d of %d bytes", n, size)
+	}
+	if err == nil {
+		err = f.Chmod(0755)
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("failed to write update to '%s': %w", f.Name(), err)
+	}
+	return nil
+}
+
+// checkSpace returns an error when dir's filesystem hasn't room for size
+// bytes plus updateSpaceMargin; nil when it can't tell.
+func checkSpace(dir string, size int64) error {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(dir, &st); err != nil {
+		return nil
+	}
+	free := uint64(st.Bavail) * uint64(st.Bsize)
+	need := uint64(size) + updateSpaceMargin
+	if free < need {
+		return fmt.Errorf("not enough free space in '%s' to update: %s needed, %s free -- the current binary is unchanged", dir, formatBytes(need), formatBytes(free))
+	}
+	return nil
+}
+
+// formatBytes returns n in MiB, e.g. "42.0 MiB".
+func formatBytes(n uint64) string {
+	return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+}
+
+// sudoRun runs name with args under sudo; a failure's error includes the
+// command's output.
+func sudoRun(ctx context.Context, name string, args ...string) error {
+	cmd, err := dsexec.SudoCommand(ctx, name, args...)
+	if err != nil {
+		return err
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s: %w", strings.TrimSpace(string(out)), err)
+	}
 	return nil
 }
