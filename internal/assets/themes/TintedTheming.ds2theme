@@ -343,6 +343,7 @@ focus_border    = "base05" # "Focus elements" borders: the focus indicators
 # Var             = "{{|Highlight|}}"
 # User            = "{{|Highlight|}}"
 # Theme           = "{{|Highlight|}}"
+# Tint            = "{{|Theme|}}"
   Yes             = "{{[$success::B]}}"    # = "{{|Highlight|}}"
   No              = "{{[$error::B]}}"      # = "{{|TitleError|}}"
 

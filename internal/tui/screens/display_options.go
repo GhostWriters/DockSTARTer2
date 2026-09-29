@@ -489,7 +489,12 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 	// 4. Outer "Appearance Settings" dialog (sections container + buttons)
 	outerMenu := displayengine.NewMenuModel("appearance_outer", "Appearance Settings", "", nil)
-	applyAction := func() tea.Msg { return s.handleApply()() }
+	applyAction := func() tea.Msg {
+		if connTypes := s.tintThemeMismatches(); len(connTypes) > 0 {
+			return s.tintThemeDialog(connTypes)
+		}
+		return s.handleApply()()
+	}
 	resetAction := func() tea.Msg { return s.handleReset()() }
 	if s.isRoot {
 		outerMenu.SetButtons([]displayengine.ButtonDef{

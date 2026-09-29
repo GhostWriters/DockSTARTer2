@@ -314,6 +314,7 @@ bg = "$secondary"
 # Var             = "{{|Highlight|}}"
 # User            = "{{|Highlight|}}"
 # Theme           = "{{|Highlight|}}"
+# Tint            = "{{|Theme|}}"
   Yes             = "{{|TitleSuccess|}}"   # = "{{|Highlight|}}"
   No              = "{{|TitleError|}}"
 

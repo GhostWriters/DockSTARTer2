@@ -332,6 +332,7 @@ direct_suffix   = "]}}"
 # Var             = "{{|Highlight|}}"
 # User            = "{{|Highlight|}}"
 # Theme           = "{{|Highlight|}}"
+# Tint            = "{{|Theme|}}"
 # Yes             = "{{|Highlight|}}"
 # No              = "{{|TitleError|}}"
 

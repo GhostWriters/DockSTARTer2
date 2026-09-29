@@ -387,6 +387,7 @@ IPAddress       = "{{|Highlight|}}"
 Var             = "{{|Highlight|}}"
 User            = "{{|Highlight|}}"
 Theme           = "{{|Highlight|}}"
+Tint            = "{{|Theme|}}"
 
 ## Status bar
 # Optional header-bar (Status*) tags that fall back to another tag when

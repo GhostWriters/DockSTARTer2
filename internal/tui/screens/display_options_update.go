@@ -312,6 +312,16 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
+	case tintThemeChoiceMsg:
+		s.ClearProcessingState()
+		switch {
+		case msg.useTinted:
+			s.stageTintedTheme(msg.connTypes)
+		case msg.apply:
+			return s, s.handleApply()
+		}
+		return s, nil
+
 	case themeSearchOptionMsg:
 		msg.apply(s)
 		s.syncThemeList()
