@@ -15,6 +15,13 @@ import (
 // actual render.
 const FlowItemSpacing = 2
 
+// focusedOptionValue swaps a dropdown value's styles (see
+// DropdownValueMarkup) for their focused forms, for a focused row.
+var focusedOptionValue = strings.NewReplacer(
+	"{{|OptionValueBrackets|}}", "{{|OptionValueBracketsFocused|}}",
+	"{{|OptionValue|}}", "{{|OptionValueFocused|}}",
+)
+
 // renderFlow renders items in a horizontal flow layout for compact menus
 func (m *MenuModel) renderFlow() string {
 	layout := GetLayout()
@@ -163,7 +170,7 @@ func (m *MenuModel) renderFlowContent(maxWidth int) string {
 				space = RenderChangedMarker(ctx)
 			}
 			if isSelected {
-				itemContent += space + ctx.OptionValueFocused.Render(GetPlainText(item.Desc))
+				itemContent += space + RenderThemeText(focusedOptionValue.Replace(item.Desc), ctx.OptionValueFocused)
 			} else {
 				itemContent += space + RenderThemeText(item.Desc, neutralStyle)
 			}

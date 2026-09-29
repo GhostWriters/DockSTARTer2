@@ -1414,6 +1414,13 @@ func titleControlRender(markup string, ctx StyleContext, large bool) string {
 	return RenderThemeText(markup, ctx.Dialog)
 }
 
+// DropdownValueMarkup returns value as a dropdown shows it, "(value)▼": the
+// value in the OptionValue style, the parentheses and arrow in
+// OptionValueBrackets.
+func DropdownValueMarkup(value string) string {
+	return "{{|OptionValueBrackets|}}({{[-]}}{{|OptionValue|}}" + value + "{{[-]}}{{|OptionValueBrackets|}})▼{{[-]}}"
+}
+
 // titleControlLabel renders c's label with its Key letter (the first match,
 // ignoring case) drawn as its shortcut (Tag and TagKey). Each style resets
 // before the next, so attributes like bold don't carry over.
@@ -1483,7 +1490,7 @@ func titleControlPiecesFor(controls []TitleControl, ctx StyleContext, large bool
 			if c.Value != nil {
 				value = c.Value()
 			}
-			shown := titleControlRender("{{|OptionValue|}}"+value+"▼{{[-]}}", ctx, large)
+			shown := titleControlRender(DropdownValueMarkup(value), ctx, large)
 			pieces = append(pieces, before+label+pad+shown+after)
 			continue
 		}

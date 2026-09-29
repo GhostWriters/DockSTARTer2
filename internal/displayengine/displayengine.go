@@ -310,6 +310,7 @@ var (
 	NewRepeatedStops               = classic.NewRepeatedStops
 	NewHeaderedList                = classic.NewHeaderedList
 	NewFooteredList                = classic.NewFooteredList
+	DropdownValueMarkup            = classic.DropdownValueMarkup
 	InputFieldStyle                = classic.InputFieldStyle
 	InputTextStyles                = classic.InputTextStyles
 	StyleGeneration                = classic.StyleGeneration

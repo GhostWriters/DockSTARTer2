@@ -1077,14 +1077,14 @@ func (s *DisplayOptionsScreen) HelpContext(maxWidth int) displayengine.HelpConte
 func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 	var levels []string
 	if s.config.Appearance.Ptr(s.editType).LineCharacters {
-		levels = []string{"(Off)", "(░)", "(▒)", "(▓)", "(█)"}
+		levels = []string{"Off", "░", "▒", "▓", "█"}
 	} else {
 		levels = []string{
-			"(Off)",
-			"({{|Shadow|}}.{{|OptionValue|}})",
-			"({{|Shadow|}}:{{|OptionValue|}})",
-			"({{|Shadow|}}#{{|OptionValue|}})",
-			"({{|Shadow|}}█{{|OptionValue|}})",
+			"Off",
+			"{{|Shadow|}}.{{|OptionValue|}}",
+			"{{|Shadow|}}:{{|OptionValue|}}",
+			"{{|Shadow|}}#{{|OptionValue|}}",
+			"{{|Shadow|}}█{{|OptionValue|}}",
 		}
 	}
 	if l < 0 || l >= len(levels) {
@@ -1094,12 +1094,12 @@ func (s *DisplayOptionsScreen) shadowLevelToDesc(l int) string {
 }
 
 func (s *DisplayOptionsScreen) borderColorToDesc(c int) string {
-	modes := map[int]string{1: "(1)", 2: "(2)", 3: "(3D)"}
+	modes := map[int]string{1: "1", 2: "2", 3: "3D"}
 	return modes[c]
 }
 
 func (s *DisplayOptionsScreen) dropdownDesc(val string) string {
-	return fmt.Sprintf("{{|OptionValue|}}%s▼{{[-]}}", val)
+	return displayengine.DropdownValueMarkup(val)
 }
 
 func titleAlignDesc(v string) string {
