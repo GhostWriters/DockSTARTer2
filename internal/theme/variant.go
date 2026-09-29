@@ -1,12 +1,12 @@
 package theme
 
 import (
-	"image/color"
 	"strings"
+
+	"DockSTARTer2/internal/colorutil"
 
 	"github.com/GhostWriters/semstyle"
 	semtheme "github.com/GhostWriters/semstyle/theme"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // Theme variants (see Variant).
@@ -46,31 +46,13 @@ func Variant(tf ThemeFile) (variant string, detected bool) {
 	if bg == "" || bg == "-" {
 		return "", false
 	}
-	c := semstyle.ToColor(bg)
-	if basic, ok := c.(ansi.BasicColor); ok && int(basic) < len(xtermColors) {
-		c = xtermColors[basic]
-	}
-	if c == nil {
+	r, g, b, ok := colorutil.RGB(semstyle.ToColor(bg))
+	if !ok {
 		return "", false
 	}
-	r, g, b, _ := c.RGBA()
-	// Perceived brightness, 0 to 0xffff.
-	if 299*r+587*g+114*b < 1000*0x8000 {
+	// Perceived brightness.
+	if 0.299*r+0.587*g+0.114*b < 0.5 {
 		return VariantDark, true
 	}
 	return VariantLight, true
-}
-
-// xtermColors are xterm's default 16 ANSI colors, closer to how most
-// terminals draw them than the VGA values ansi.BasicColor reports (cyan
-// #00cdcd, not #008080).
-var xtermColors = [16]color.Color{
-	color.RGBA{0x00, 0x00, 0x00, 0xff}, color.RGBA{0xcd, 0x00, 0x00, 0xff},
-	color.RGBA{0x00, 0xcd, 0x00, 0xff}, color.RGBA{0xcd, 0xcd, 0x00, 0xff},
-	color.RGBA{0x00, 0x00, 0xee, 0xff}, color.RGBA{0xcd, 0x00, 0xcd, 0xff},
-	color.RGBA{0x00, 0xcd, 0xcd, 0xff}, color.RGBA{0xe5, 0xe5, 0xe5, 0xff},
-	color.RGBA{0x7f, 0x7f, 0x7f, 0xff}, color.RGBA{0xff, 0x00, 0x00, 0xff},
-	color.RGBA{0x00, 0xff, 0x00, 0xff}, color.RGBA{0xff, 0xff, 0x00, 0xff},
-	color.RGBA{0x5c, 0x5c, 0xff, 0xff}, color.RGBA{0xff, 0x00, 0xff, 0xff},
-	color.RGBA{0x00, 0xff, 0xff, 0xff}, color.RGBA{0xff, 0xff, 0xff, 0xff},
 }

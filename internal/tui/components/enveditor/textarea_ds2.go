@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"DockSTARTer2/internal/colorutil"
 	"DockSTARTer2/internal/tui/components/enveditor/memoization"
 
 	tea "charm.land/bubbletea/v2"
@@ -1758,10 +1759,35 @@ func (m *Model) SetCursorRowStyles(styles *StyleState) {
 	m.cursorRowStyles = styles
 }
 
+// minRemapContrast is the least contrast ratio (see colorutil.Contrast) a
+// remapped style's text keeps with its background; white on white is 1.
+const minRemapContrast = 2.0
+
+// readableForeground returns fg, or when it hardly contrasts with bg,
+// preferred if that contrasts, else black or white, whichever does more.
+// fg is kept when either color is the terminal's default, which can't be
+// measured.
+func readableForeground(fg, bg, preferred color.Color) color.Color {
+	if c, ok := colorutil.Contrast(fg, bg); !ok || c >= minRemapContrast {
+		return fg
+	}
+	if c, ok := colorutil.Contrast(preferred, bg); ok && c >= minRemapContrast {
+		return preferred
+	}
+	black, white := lipgloss.Color("#000000"), lipgloss.Color("#ffffff")
+	onBlack, _ := colorutil.Contrast(black, bg)
+	onWhite, _ := colorutil.Contrast(white, bg)
+	if onBlack >= onWhite {
+		return black
+	}
+	return white
+}
+
 // RemapStyles returns s with every text style's colors moved from one
 // scheme to another: fromFg/fromBg (e.g. the dialog's) become toFg/toBg,
 // either way round, and an unset color becomes toFg or toBg; any other
-// color is kept, on toBg when it has no background of its own.
+// color is kept, on toBg when it has no background of its own. Text left
+// hard to read on its new background takes toFg, or black or white.
 func RemapStyles(s StyleState, fromFg, fromBg, toFg, toBg color.Color) StyleState {
 	remap := func(st lipgloss.Style) lipgloss.Style {
 		fg, bg := st.GetForeground(), st.GetBackground()
@@ -1777,7 +1803,7 @@ func RemapStyles(s StyleState, fromFg, fromBg, toFg, toBg color.Color) StyleStat
 		case sameColor(bg, fromFg):
 			st = st.Background(toFg)
 		}
-		return st
+		return st.Foreground(readableForeground(st.GetForeground(), st.GetBackground(), toFg))
 	}
 	for _, st := range []*lipgloss.Style{&s.Base, &s.Text, &s.CursorLine, &s.ModifiedText, &s.ReadOnlyText,
 		&s.CommentText, &s.InvalidText, &s.DuplicateText, &s.BuiltinText, &s.PendingDeleteText} {
