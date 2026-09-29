@@ -345,8 +345,11 @@ func RenderChangedMarker(ctx StyleContext) string {
 func RenderChangedMarkers(ctx StyleContext) (left, right string) {
 	style := ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
 	l, r := changedIndicatorChars(ctx.LineCharacters)
-	return style.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+l+"{{[-]}}", ctx.Prefix)),
-		style.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+r+"{{[-]}}", ctx.Prefix))
+	// Each starts from a full reset, so attributes the text before it left
+	// on (e.g. a dim label) don't carry into it.
+	const reset = "\x1b[m"
+	return reset + style.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+l+"{{[-]}}", ctx.Prefix)),
+		reset + style.Render(theme.ToANSI("{{|PanelTitleChangedIndicator|}}"+r+"{{[-]}}", ctx.Prefix))
 }
 
 // RenderMarkedTitleSegmentCtx is RenderTitleSegmentCtx with, when marker is
