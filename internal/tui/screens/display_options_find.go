@@ -220,6 +220,21 @@ func (s *DisplayOptionsScreen) showThemeHuesPicker() tea.Cmd {
 	}
 }
 
+// Theme list Source filter values.
+const (
+	themeSourceBundled = "bundled"
+	themeSourceUser    = "user"
+)
+
+// showThemeSourcePicker opens the Theme list's Source picker.
+func (s *DisplayOptionsScreen) showThemeSourcePicker() tea.Cmd {
+	return showSearchPicker("theme_search_source", "Source", "themes", s.themeSource,
+		[]string{"", themeSourceBundled, themeSourceUser},
+		func(v string) tea.Msg {
+			return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeSource = v }}
+		})
+}
+
 // themeHuesLabel is the Theme list's Hues filter as its footer shows it:
 // the kind, then any checked colors.
 func (s *DisplayOptionsScreen) themeHuesLabel() string {

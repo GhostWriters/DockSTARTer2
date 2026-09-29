@@ -117,12 +117,18 @@ type DisplayOptionsScreen struct {
 	themeVariant   string
 	themeHues      string
 	themeHueColors []string
+	// themeSource narrows the Theme list to bundled or user themes ("" for
+	// both), whether or not Find shows.
+	themeSource string
 	// tintPartial matches the search's terms anywhere in a word rather
 	// than as whole words; tintVariant and tintSystem narrow it to light
 	// or dark and to base16 or base24 schemes ("" for all).
-	tintPartial     bool
-	tintVariant     string
-	tintSystem      string
+	tintPartial bool
+	tintVariant string
+	tintSystem  string
+	// tintSource narrows the scheme list to one source ("embedded", "user",
+	// or "repo"; "" for all), whether or not Find shows.
+	tintSource      string
 	tintCatalog     []commands.TintEntry
 	tintDownloading bool
 
@@ -252,11 +258,12 @@ func (s *DisplayOptionsScreen) initMenus() {
 			return []displayengine.TitleControl{
 				{Label: "Variant", Key: 'a', Value: func() string { return searchOptionLabel(s.themeVariant) }, Help: "Show all, dark, light, or tinted themes"},
 				{Label: "Hues", Key: 'u', Value: s.themeHuesLabel, Help: "Show all, monochrome, semi-monochrome, or multi-color themes, or themes built on some colors"},
+				{Label: "Source", Key: 's', Value: func() string { return searchOptionLabel(s.themeSource) }, Help: "Show all, bundled, or user themes"},
 			}
 		},
 	})
 	s.themeFindMenu, s.themeFindInput = newFindBox(themeFindID, s.themeQuery,
-		"Show only themes whose name, description, or author contains every word typed, comma-separated. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant and Hues, which narrow to dark, light, or tinted themes, and to monochrome, semi-monochrome, or multi-color ones, apply either way.",
+		"Show only themes whose name, description, or author contains every word typed, comma-separated. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant, Hues, and Source, which narrow to dark, light, or tinted themes, to monochrome, semi-monochrome, or multi-color ones, and to bundled or user ones, apply either way.",
 		&s.themePartial, s.applyThemeFind)
 
 	// 3. Options Menu
@@ -1859,7 +1866,8 @@ func (s *DisplayOptionsScreen) themeListItems(selected string) []displayengine.M
 	for _, t := range s.themes {
 		if matches != nil && !matches(t.Name, t.Description, t.Author) ||
 			s.themeVariant != "" && t.Variant != s.themeVariant || s.themeHues != "" && t.Hues != s.themeHues ||
-			len(s.themeHueColors) > 0 && !slices.ContainsFunc(s.themeHueColors, func(c string) bool { return slices.Contains(t.BaseColors, c) }) {
+			len(s.themeHueColors) > 0 && !slices.ContainsFunc(s.themeHueColors, func(c string) bool { return slices.Contains(t.BaseColors, c) }) ||
+			s.themeSource != "" && t.IsUserTheme != (s.themeSource == themeSourceUser) {
 			if selected == t.ConfigValue {
 				foundCurrent = true
 			}

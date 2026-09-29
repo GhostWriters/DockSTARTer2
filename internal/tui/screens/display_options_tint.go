@@ -235,7 +235,7 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 		if ref == current {
 			found = true
 		}
-		if searchErr != nil || !matches(e) {
+		if searchErr != nil || !matches(e) || s.tintSource != "" && e.Source != s.tintSource {
 			continue
 		}
 		name := e.Name
@@ -264,7 +264,7 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 			Metadata:      map[string]string{"config_value": ref},
 		})
 	}
-	if !commands.TintRepoCloned() && !s.tintSearching() {
+	if !commands.TintRepoCloned() && !s.tintNarrowed() && (s.tintSource == "" || s.tintSource == "repo") {
 		desc := "Adds several hundred schemes from github.com/tinted-theming/schemes"
 		if s.tintDownloading {
 			desc = "Downloading..."
@@ -317,7 +317,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 	s.elementFrame = &tabFrame{strip: s.elementStrip, focused: s.panesFocused}
 
 	list := displayengine.NewMenuModel(displayengine.IDTintPanel, config.ConnTypeLabel(s.editType)+" Tint", "", s.tintListItems())
-	s.tintSearchMenu, s.tintSearchInput = newFindBox(tintSearchID, s.tintQuery, "Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant and Base, which narrow to light or dark, and to base16 or base24, schemes, apply either way.",
+	s.tintSearchMenu, s.tintSearchInput = newFindBox(tintSearchID, s.tintQuery, "Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant, Base, and Source, which narrow to light or dark, to base16 or base24, and to bundled, user, or repo schemes, apply either way.",
 		&s.tintPartial, s.applyTintSearch)
 
 	list.SetHelpItemPrefix("Tint")
@@ -326,6 +326,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 			return []displayengine.TitleControl{
 				{Label: "Variant", Key: 'a', Value: func() string { return searchOptionLabel(s.tintVariant) }, Help: "Show all, light, or dark schemes"},
 				{Label: "Base", Key: 'b', Value: func() string { return searchOptionLabel(s.tintSystem) }, Help: "Show all, base16, or base24 schemes"},
+				{Label: "Source", Key: 's', Value: func() string { return searchOptionLabel(s.tintSource) }, Help: "Show all, bundled, user, or repo schemes"},
 			}
 		},
 	})
@@ -453,8 +454,14 @@ func (s *DisplayOptionsScreen) tintSearch() commands.TintSearch {
 	return search
 }
 
-// tintSearching reports whether Find narrows the scheme list.
+// tintSearching reports whether Find or a filter narrows the scheme list.
 func (s *DisplayOptionsScreen) tintSearching() bool {
+	return s.tintNarrowed() || s.tintSource != ""
+}
+
+// tintNarrowed reports whether Find, Variant, or Base narrows the scheme
+// list: anything but Source.
+func (s *DisplayOptionsScreen) tintNarrowed() bool {
 	return s.tintFilterShown && s.tintQuery != "" || s.tintVariant != "" || s.tintSystem != ""
 }
 
@@ -467,6 +474,8 @@ func searchOptionLabel(v string) string {
 		return "Base16"
 	case "base24":
 		return "Base24"
+	case "embedded":
+		return "Bundled"
 	}
 	return strings.ToUpper(v[:1]) + v[1:]
 }
@@ -526,6 +535,11 @@ func showSearchPicker(id, title, noun, current string, values []string, picked f
 func (s *DisplayOptionsScreen) showTintVariantPicker() tea.Cmd {
 	return s.showTintSearchPicker("tint_search_variant", "Variant", s.tintVariant, []string{"", "light", "dark"},
 		func(s *DisplayOptionsScreen, v string) { s.tintVariant = v })
+}
+
+func (s *DisplayOptionsScreen) showTintSourcePicker() tea.Cmd {
+	return s.showTintSearchPicker("tint_search_source", "Source", s.tintSource, []string{"", "embedded", "user", "repo"},
+		func(s *DisplayOptionsScreen, v string) { s.tintSource = v })
 }
 
 func (s *DisplayOptionsScreen) showTintBasePicker() tea.Cmd {
