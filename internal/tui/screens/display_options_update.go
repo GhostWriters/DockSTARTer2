@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"DockSTARTer2/internal/config"
@@ -317,6 +318,13 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case msg.useTinted:
 			s.stageTintedTheme(msg.connTypes)
+			// Show a tab it was staged on, so its preview can be checked:
+			// the shown one if it's among them, else the first, with the
+			// connection tabs shown. Staging another tab took unlocking it.
+			if len(msg.connTypes) > 0 && !slices.Contains(msg.connTypes, s.editType) && s.unlocked {
+				s.showConnections = true
+				return s, s.switchTab(msg.connTypes[0], false)
+			}
 		case msg.apply:
 			return s, s.handleApply()
 		}
