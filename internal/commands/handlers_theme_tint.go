@@ -807,6 +807,8 @@ type tintTableRow struct {
 	Source                      string
 	Slug, Name, Variant, Author string
 	HasBase16, HasBase24        bool
+	Hues                        []string
+	Kind                        string
 }
 
 // repoTintTableRows builds one tintTableRow per distinct repo slug matching
@@ -860,6 +862,7 @@ func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, 
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
 				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
 			}
+			row.Hues, row.Kind = tintHues(slug, data)
 		}
 		row.Author = author
 		if filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
@@ -899,6 +902,7 @@ func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, er
 					row.HasBase16 = true
 				}
 			}
+			row.Hues, row.Kind = tintHues(row.Slug, data)
 		}
 		row.Author = author
 		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
@@ -931,6 +935,7 @@ func embeddedTintTableRows(filter tintFilter) ([]tintTableRow, error) {
 					row.HasBase16 = true
 				}
 			}
+			row.Hues, row.Kind = tintHues(name, data)
 		}
 		row.Author = author
 		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {

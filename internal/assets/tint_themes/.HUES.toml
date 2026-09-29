@@ -1,0 +1,24 @@
+# Hue tags for well-known tint schemes, used by the Tint list's Hues filter
+# in place of the ones DockSTARTer2 detects from a scheme's background.
+#
+# Keys are scheme slugs (the file name without .yaml, as the Tint list
+# shows it); "*" matches any run of characters. An exact key wins over a
+# pattern, and a longer pattern over a shorter one, so order doesn't matter.
+#
+# Hues: gray, red, orange, yellow, green, cyan, blue, purple, magenta, pink.
+
+[hues]
+# Slate-gray background read as blue; known for its purple and pink.
+"dracula"                 = ["gray", "purple"]
+# Green-gray background read as blue.
+"everforest*"             = ["gray", "green"]
+# Warm backgrounds too muted to detect.
+"gruvbox-dark*"           = ["gray", "yellow", "orange"]
+"gruvbox-material-dark*"  = ["gray", "yellow", "orange"]
+"gruvbox-light*"          = ["yellow", "orange"]
+"gruvbox-material-light*" = ["yellow", "orange"]
+# Neutral background; known for its pink and green.
+"monokai*"                = ["gray", "pink", "green"]
+# Known for rose and purple.
+"rose-pine*"              = ["gray", "purple", "pink"]
+"rose-pine-dawn"          = ["pink", "orange"]

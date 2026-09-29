@@ -229,6 +229,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case s.tintMenu.FooterBarControlID(1):
 				return s, s.showTintBasePicker()
 			case s.tintMenu.FooterBarControlID(2):
+				return s, s.showTintHuesPicker()
+			case s.tintMenu.FooterBarControlID(3):
 				return s, s.showTintSourcePicker()
 			case s.tintSearchMenu.InputControlID(0):
 				return s, s.toggleTintWholeWords()
@@ -427,6 +429,8 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return s, s.showThemeHuesPicker()
 		case key.Matches(msg, displayengine.Keys.SearchSource) && s.themeFrameFocused() && !s.findBoxFocused():
 			return s, s.showThemeSourcePicker()
+		case key.Matches(msg, displayengine.Keys.SearchHues) && s.tintFrameFocused() && !s.findBoxFocused():
+			return s, s.showTintHuesPicker()
 		case key.Matches(msg, displayengine.Keys.SearchSource) && s.tintFrameFocused() && !s.findBoxFocused():
 			return s, s.showTintSourcePicker()
 		case key.Matches(msg, displayengine.Keys.EnvClosePane) && s.panes != nil && s.focusedSettingsLeaf() != nil:

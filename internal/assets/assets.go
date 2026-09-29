@@ -33,6 +33,12 @@ func GetTintTheme(name string) ([]byte, error) {
 	return embeddedFS.ReadFile("tint_themes/" + name + ".yaml")
 }
 
+// GetTintHues reads the embedded tint_themes/.HUES.toml: hue tags for
+// well-known schemes (see the file's own comments).
+func GetTintHues() ([]byte, error) {
+	return embeddedFS.ReadFile("tint_themes/.HUES.toml")
+}
+
 // ListTintThemes returns all scheme names bundled in the embedded
 // tint_themes folder.
 func ListTintThemes() ([]string, error) {

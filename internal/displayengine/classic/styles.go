@@ -272,7 +272,9 @@ type Styles struct {
 	TagFocused    lipgloss.Style
 	TagKey        lipgloss.Style // First letter highlight
 	TagKeyFocused lipgloss.Style
-	TagSpinner    lipgloss.Style // Spinner flanking the tag when processing
+	// PositionIndicator draws a scrolled box's position (its scroll percent).
+	PositionIndicator lipgloss.Style
+	TagSpinner        lipgloss.Style // Spinner flanking the tag when processing
 
 	// Header
 	HeaderBG         lipgloss.Style
@@ -364,6 +366,7 @@ type StyleContext struct {
 	TagFocused           lipgloss.Style
 	TagKey               lipgloss.Style
 	TagKeyFocused        lipgloss.Style
+	PositionIndicator    lipgloss.Style
 	TagSpinner           lipgloss.Style
 	ButtonSpinner        lipgloss.Style
 	LargeButtonSpinner   lipgloss.Style
@@ -451,6 +454,7 @@ func GetActiveContext() StyleContext {
 		TagFocused:           cs.TagFocused,
 		TagKey:               cs.TagKey,
 		TagKeyFocused:        cs.TagKeyFocused,
+		PositionIndicator:    cs.PositionIndicator,
 		TagSpinner:           cs.TagSpinner,
 		ButtonSpinner:        cs.ButtonSpinner,
 		LargeButtonSpinner:   cs.LargeButtonSpinner,
@@ -756,6 +760,7 @@ func buildStyles(a config.Appearance) Styles {
 	s.TagFocused = styleWithFallback("TagFocused", s.Dialog)
 	s.TagKey = styleWithFallback("TagKey", s.Dialog)
 	s.TagKeyFocused = styleWithFallback("TagKeyFocused", s.Dialog)
+	s.PositionIndicator = styleWithFallback("PositionIndicator", s.Dialog)
 	s.TagSpinner = styleWithFallback("TagSpinner", s.Dialog)
 
 	s.ButtonSpinner = styleWithFallback("ButtonSpinner", s.ButtonActive)

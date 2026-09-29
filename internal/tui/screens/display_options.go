@@ -120,6 +120,9 @@ type DisplayOptionsScreen struct {
 	// themeSource narrows the Theme list to bundled or user themes ("" for
 	// both), whether or not Find shows.
 	themeSource string
+	// themeFound and tintFound count the themes and schemes the Theme and
+	// Tint lists show (see foundStatus).
+	themeFound, tintFound int
 	// tintPartial matches the search's terms anywhere in a word rather
 	// than as whole words; tintVariant and tintSystem narrow it to light
 	// or dark and to base16 or base24 schemes ("" for all).
@@ -127,8 +130,12 @@ type DisplayOptionsScreen struct {
 	tintVariant string
 	tintSystem  string
 	// tintSource narrows the scheme list to one source ("embedded", "user",
-	// or "repo"; "" for all), whether or not Find shows.
+	// or "repo"; "" for all), tintHues to one kind of colors, and
+	// tintHueColors to schemes known by any of those hues, whether or not
+	// Find shows.
 	tintSource      string
+	tintHues        string
+	tintHueColors   []string
 	tintCatalog     []commands.TintEntry
 	tintDownloading bool
 
@@ -254,10 +261,11 @@ func (s *DisplayOptionsScreen) initMenus() {
 		{Label: "Load Defaults", Key: 'd', Checked: func() bool { return s.loadThemeDefaults }, Help: "Turn Load Defaults on or off"},
 	})
 	s.themeMenu.SetFooterBar(&displayengine.FooterBar{
+		Status: func() (string, string) { return foundStatus(s.themeFound) },
 		Controls: func() []displayengine.TitleControl {
 			return []displayengine.TitleControl{
 				{Label: "Variant", Key: 'a', Value: func() string { return searchOptionLabel(s.themeVariant) }, Help: "Show all, dark, light, or tinted themes"},
-				{Label: "Hues", Key: 'u', Value: s.themeHuesLabel, Help: "Show all, monochrome, semi-monochrome, or multi-color themes, or themes built on some colors"},
+				{Label: "Hues", Key: 'u', Value: func() string { return huesLabel(s.themeHues, s.themeHueColors) }, Help: "Show all, monochrome, semi-monochrome, or multi-color themes, or themes built on some colors"},
 				{Label: "Source", Key: 's', Value: func() string { return searchOptionLabel(s.themeSource) }, Help: "Show all, bundled, or user themes"},
 			}
 		},
@@ -1859,6 +1867,7 @@ func savedIndex(values []string, saved string, fallback int) int {
 func (s *DisplayOptionsScreen) themeListItems(selected string) []displayengine.MenuItem {
 	var bundledThemes, userThemes, otherThemes []displayengine.MenuItem
 	foundCurrent := false
+	s.themeFound = 0
 	var matches func(fields ...string) bool
 	if s.themeFindShown && s.themeQuery != "" {
 		matches = commands.WordMatcher(s.themeQuery, s.themePartial)
@@ -1885,6 +1894,7 @@ func (s *DisplayOptionsScreen) themeListItems(selected string) []displayengine.M
 		if checked {
 			foundCurrent = true
 		}
+		s.themeFound++
 		item := displayengine.MenuItem{
 			Tag:           t.Name,
 			Desc:          descTag + desc,

@@ -3,6 +3,7 @@ package screens
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"DockSTARTer2/internal/commands"
@@ -230,14 +231,18 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 		"repo":     {Label: "Repo (tinted-theming)"},
 	}
 	found := current == ""
+	s.tintFound = 0
 	for _, e := range s.tintCatalog {
 		ref := e.Ref()
 		if ref == current {
 			found = true
 		}
-		if searchErr != nil || !matches(e) || s.tintSource != "" && e.Source != s.tintSource {
+		if searchErr != nil || !matches(e) || s.tintSource != "" && e.Source != s.tintSource ||
+			s.tintHues != "" && e.Kind != s.tintHues ||
+			len(s.tintHueColors) > 0 && !slices.ContainsFunc(s.tintHueColors, func(h string) bool { return slices.Contains(e.Hues, h) }) {
 			continue
 		}
+		s.tintFound++
 		name := e.Name
 		if name == "" {
 			name = e.Slug
@@ -317,15 +322,17 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 	s.elementFrame = &tabFrame{strip: s.elementStrip, focused: s.panesFocused}
 
 	list := displayengine.NewMenuModel(displayengine.IDTintPanel, config.ConnTypeLabel(s.editType)+" Tint", "", s.tintListItems())
-	s.tintSearchMenu, s.tintSearchInput = newFindBox(tintSearchID, s.tintQuery, "Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant, Base, and Source, which narrow to light or dark, to base16 or base24, and to bundled, user, or repo schemes, apply either way.",
+	s.tintSearchMenu, s.tintSearchInput = newFindBox(tintSearchID, s.tintQuery, "Show only schemes whose name, slug, variant, or author contains every word typed, comma-separated. \"base16\" or \"base24\" shows only that format -- the same search --tint-list and --tint-table use. Word matches whole words only; turn it off to match part of a word. Turning Find off (Alt+F, or its checkbox in the list's title) stops matching the typed words; Variant, Base, Hues, and Source, which narrow to light or dark, to base16 or base24, to monochrome or multi-color or some hues, and to bundled, user, or repo schemes, apply either way.",
 		&s.tintPartial, s.applyTintSearch)
 
 	list.SetHelpItemPrefix("Tint")
 	list.SetFooterBar(&displayengine.FooterBar{
+		Status: func() (string, string) { return foundStatus(s.tintFound) },
 		Controls: func() []displayengine.TitleControl {
 			return []displayengine.TitleControl{
 				{Label: "Variant", Key: 'a', Value: func() string { return searchOptionLabel(s.tintVariant) }, Help: "Show all, light, or dark schemes"},
 				{Label: "Base", Key: 'b', Value: func() string { return searchOptionLabel(s.tintSystem) }, Help: "Show all, base16, or base24 schemes"},
+				{Label: "Hues", Key: 'u', Value: func() string { return huesLabel(s.tintHues, s.tintHueColors) }, Help: "Show all, monochrome, or multi-color schemes, or schemes known by some hues"},
 				{Label: "Source", Key: 's', Value: func() string { return searchOptionLabel(s.tintSource) }, Help: "Show all, bundled, user, or repo schemes"},
 			}
 		},
@@ -396,6 +403,13 @@ func (s *DisplayOptionsScreen) buildTintItemHelp(item displayengine.MenuItem) (i
 		if len(systems) > 0 {
 			parts = append(parts, "Formats: "+strings.Join(systems, ", "))
 		}
+		if len(e.Hues) > 0 {
+			hues := "Hues: " + strings.Join(e.Hues, ", ")
+			if e.Kind == commands.TintKindMonochrome {
+				hues += " (monochrome)"
+			}
+			parts = append(parts, hues)
+		}
 		if e.Author != "" {
 			parts = append(parts, "By: "+e.Author)
 		}
@@ -459,10 +473,11 @@ func (s *DisplayOptionsScreen) tintSearching() bool {
 	return s.tintNarrowed() || s.tintSource != ""
 }
 
-// tintNarrowed reports whether Find, Variant, or Base narrows the scheme
-// list: anything but Source.
+// tintNarrowed reports whether Find, Variant, Base, or Hues narrows the
+// scheme list: anything but Source.
 func (s *DisplayOptionsScreen) tintNarrowed() bool {
-	return s.tintFilterShown && s.tintQuery != "" || s.tintVariant != "" || s.tintSystem != ""
+	return s.tintFilterShown && s.tintQuery != "" || s.tintVariant != "" || s.tintSystem != "" ||
+		s.tintHues != "" || len(s.tintHueColors) > 0
 }
 
 // searchOptionLabel names a search option's value, "" being All.
@@ -535,6 +550,16 @@ func showSearchPicker(id, title, noun, current string, values []string, picked f
 func (s *DisplayOptionsScreen) showTintVariantPicker() tea.Cmd {
 	return s.showTintSearchPicker("tint_search_variant", "Variant", s.tintVariant, []string{"", "light", "dark"},
 		func(s *DisplayOptionsScreen, v string) { s.tintVariant = v })
+}
+
+// showTintHuesPicker opens the Tint list's Hues picker, a scheme showing
+// when it's known by any checked hue.
+func (s *DisplayOptionsScreen) showTintHuesPicker() tea.Cmd {
+	return showHuesPicker("tint_search_hues", "schemes", "known by",
+		[]string{"", commands.TintKindMonochrome, commands.TintKindMultiColor}, commands.TintHueNames,
+		s.tintHues, s.tintHueColors, func(kind string, colors []string) tea.Msg {
+			return tintSearchOptionMsg{func(s *DisplayOptionsScreen) { s.tintHues, s.tintHueColors = kind, colors }}
+		})
 }
 
 func (s *DisplayOptionsScreen) showTintSourcePicker() tea.Cmd {

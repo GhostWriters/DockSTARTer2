@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"slices"
+	"strconv"
 	"strings"
 
 	"DockSTARTer2/internal/tui/components/sinput"
@@ -171,28 +172,37 @@ func (s *DisplayOptionsScreen) showThemeVariantPicker() tea.Cmd {
 		})
 }
 
-// showThemeHuesPicker's picker has a radio group for the kind of colors and
-// a checkbox for each basic color, a theme showing when its base colors
-// include any checked one.
+// showThemeHuesPicker opens the Theme list's Hues picker, a theme showing
+// when its base colors include any checked one.
 func (s *DisplayOptionsScreen) showThemeHuesPicker() tea.Cmd {
-	const id = "theme_search_hues"
+	return showHuesPicker("theme_search_hues", "themes", "built on",
+		[]string{"", theme.ColorsMonochrome, theme.ColorsSemiMonochrome, theme.ColorsMultiColor}, semstyle.BasicColors[:],
+		s.themeHues, s.themeHueColors, func(kind string, colors []string) tea.Msg {
+			return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeHues, s.themeHueColors = kind, colors }}
+		})
+}
+
+// showHuesPicker opens a Hues picker: a radio group of kinds ("" for All)
+// and a checkbox for each color, noun naming what the list holds and verb
+// how one relates to a color; picked returns the message storing the
+// marked kind and colors.
+func showHuesPicker(id, noun, verb string, kinds, colors []string, kind string, checked []string, picked func(kind string, colors []string) tea.Msg) tea.Cmd {
 	return func() tea.Msg {
-		kinds := []string{"", theme.ColorsMonochrome, theme.ColorsSemiMonochrome, theme.ColorsMultiColor}
 		items := []displayengine.MenuItem{{Tag: "Kind", IsSeparator: true}}
 		sel := 1
 		for _, k := range kinds {
-			if k == s.themeHues {
+			if k == kind {
 				sel = len(items)
 			}
-			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(k), Help: "Show " + strings.ToLower(searchOptionLabel(k)) + " themes",
-				IsRadioButton: true, Selectable: true, Checked: k == s.themeHues, Metadata: map[string]string{"kind": k}})
+			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(k), Help: "Show " + strings.ToLower(searchOptionLabel(k)) + " " + noun,
+				IsRadioButton: true, Selectable: true, Checked: k == kind, Metadata: map[string]string{"kind": k}})
 		}
 		items = append(items, displayengine.MenuItem{Tag: "Colors", IsSeparator: true})
-		for _, c := range semstyle.BasicColors {
-			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(c), Help: "Show themes built on " + c + ", with any other checked color",
-				IsCheckbox: true, Selectable: true, Checked: slices.Contains(s.themeHueColors, c), Metadata: map[string]string{"color": c}})
+		for _, c := range colors {
+			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(c), Help: "Show " + noun + " " + verb + " " + c + ", with any other checked color",
+				IsCheckbox: true, Selectable: true, Checked: slices.Contains(checked, c), Metadata: map[string]string{"color": c}})
 		}
-		menu := displayengine.NewMenuModel(id, "Hues", "Show only these themes", items)
+		menu := displayengine.NewMenuModel(id, "Hues", "Show only these "+noun, items)
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(id))
 		done := func() tea.Msg {
 			kind, colors := "", []string(nil)
@@ -204,12 +214,7 @@ func (s *DisplayOptionsScreen) showThemeHuesPicker() tea.Cmd {
 					colors = append(colors, it.Metadata["color"])
 				}
 			}
-			return tea.Batch(
-				func() tea.Msg {
-					return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeHues, s.themeHueColors = kind, colors }}
-				},
-				tui.CloseDialog(),
-			)()
+			return tea.Batch(func() tea.Msg { return picked(kind, colors) }, tui.CloseDialog())()
 		}
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: done, Help: "Confirm the marked choices."},
@@ -235,12 +240,15 @@ func (s *DisplayOptionsScreen) showThemeSourcePicker() tea.Cmd {
 		})
 }
 
-// themeHuesLabel is the Theme list's Hues filter as its footer shows it:
-// the kind, then any checked colors.
-func (s *DisplayOptionsScreen) themeHuesLabel() string {
-	label := searchOptionLabel(s.themeHues)
-	if len(s.themeHueColors) > 0 {
-		label += ": " + strings.Join(s.themeHueColors, ", ")
+// foundStatus is a list's count of shown items as its footer bar shows it.
+func foundStatus(n int) (label, value string) { return "Found:", strconv.Itoa(n) }
+
+// huesLabel is a Hues filter as a footer shows it: the kind, then any
+// checked colors.
+func huesLabel(kind string, colors []string) string {
+	label := searchOptionLabel(kind)
+	if len(colors) > 0 {
+		label += ": " + strings.Join(colors, ", ")
 	}
 	return label
 }

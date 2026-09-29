@@ -13,6 +13,10 @@ type TintEntry struct {
 	Source                      string // "embedded", "user", or "repo"
 	Slug, Name, Variant, Author string
 	HasBase16, HasBase24        bool
+	// Hues are the hues it's known by (see TintHueNames), and Kind its
+	// colors' kind (TintKindMonochrome or TintKindMultiColor).
+	Hues []string
+	Kind string
 }
 
 // Ref returns the config.AnsiElementColors.Tint reference that selects e.

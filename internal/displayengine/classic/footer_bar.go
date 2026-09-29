@@ -13,6 +13,10 @@ import (
 // the menu draws.
 type FooterBar struct {
 	Controls func() []TitleControl
+	// Status, when set, is a label and value drawn right of the controls,
+	// such as how many items the list holds, the value in the ListCount
+	// style; left out when it doesn't fit.
+	Status func() (label, value string)
 }
 
 // SetFooterBar draws bar in this submenu's bottom border; nil removes it.
@@ -94,7 +98,7 @@ func (m *MenuModel) footerBarLine(width int, bottom, focused bool, pct string, c
 		case focused:
 			leftT, rightT = "┫", "┣"
 		}
-		tail = style.Render(leftT) + ctx.TagKey.Bold(true).Render(pct) + style.Render(rightT+strutil.Repeat(h, 2)+right)
+		tail = style.Render(leftT) + ctx.PositionIndicator.Render(pct) + style.Render(rightT+strutil.Repeat(h, 2)+right)
 	}
 	head := style.Render(left + h)
 	if label := m.footerLabel(); bottom && label != "" {
@@ -135,7 +139,20 @@ func (m *MenuModel) footerBarLine(width int, bottom, focused bool, pct string, c
 		group += w
 		n++
 	}
-	x := max(width-reserved-1-group, headW)
+	// The status, right of the controls, when it fits beside them.
+	status := ""
+	if m.footerBar.Status != nil {
+		if label, value := m.footerBar.Status(); label != "" || value != "" {
+			pad := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
+			status = style.Render(h) + pad + titleControlRender("{{|Tag|}}"+label+"{{[-]}}", ctx, false) + pad +
+				RenderThemeText("{{|ListCount|}}"+value+"{{[-]}}", ctx.Dialog) + pad
+			if headW+group+WidthWithoutZones(status)+1+reserved > width {
+				status = ""
+			}
+		}
+	}
+	statusW := WidthWithoutZones(status)
+	x := max(width-reserved-1-group-statusW, headW)
 	line := head + style.Render(strutil.Repeat(h, x-headW))
 	regions := make([]footerBarRegion, 0, n)
 	for i := range n {
@@ -149,6 +166,8 @@ func (m *MenuModel) footerBarLine(width int, bottom, focused bool, pct string, c
 		x += w
 	}
 	m.footerBarRegions = regions
+	line += status
+	x += statusW
 	return line + style.Render(strutil.Repeat(h, max(width-x-tailW, 0))) + tail
 }
 
