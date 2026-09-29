@@ -476,10 +476,6 @@ func (s *DisplayOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
-	case displayOptionsAbortMsg:
-		s.ClearProcessingState()
-		return s, nil
-
 	case displayengine.ConfigChangedMsg:
 		// Stop any in-flight spinner before rebuilding styles — spinner ticks firing
 		// during the rebuild cause intermediate renders that look like a flash.

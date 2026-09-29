@@ -623,7 +623,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Error(context.Background(), "%s", msg.Err.Error())
 		}
 		unlockCmd := m.lockSession("console.command", false)
-		if !m.SessionActive() {
+		// Ready for the next command -- unless the panel was switched to a
+		// mode without an input box, or closed, while this one ran.
+		if !m.SessionActive() && m.HasInputBox() && m.Expanded {
 			m.InputFocused = true
 			m.inputIdle = false
 			cmd := m.Input.Focus()

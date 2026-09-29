@@ -178,10 +178,6 @@ type (
 	displayOptionsLeaveMsg struct{}
 )
 
-// displayOptionsAbortMsg is sent when Apply is attempted but blocked (e.g. command lock).
-// Handled by Update to clear the processing spinner without applying changes.
-type displayOptionsAbortMsg struct{}
-
 // NewDisplayOptionsScreen creates a new consolidated display options screen.
 // isRoot suppresses the Back button when this screen is the entry point.
 func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen {
@@ -443,11 +439,10 @@ func (s *DisplayOptionsScreen) initMenus() {
 
 		// -- Panel, links, and timing --
 		{
-			Tag:           "Panel Mode",
-			Desc:          s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.Ptr(s.editType).Panel)),
-			Help:          "Choose the panel shown below the menus (Enter for options)",
-			Action:        s.showPanelDropdown(),
-			IsDestructive: true,
+			Tag:    "Panel Mode",
+			Desc:   s.dropdownDesc(s.panelModeToDesc(s.config.Appearance.Ptr(s.editType).Panel)),
+			Help:   "Choose the panel shown below the menus (Enter for options)",
+			Action: s.showPanelDropdown(),
 		},
 		{
 			Tag:  "Hyperlinks",
@@ -1670,10 +1665,6 @@ func (s *DisplayOptionsScreen) promptRefreshRate() tea.Cmd {
 
 func (s *DisplayOptionsScreen) handleApply() tea.Cmd {
 	return func() tea.Msg {
-		// Do not apply if any options settings are locked (e.g. panel command running).
-		if s.optionsMenu.AnyLocked() {
-			return displayOptionsAbortMsg{}
-		}
 		// 1. Apply Theme (Find the actually checked radio option)
 		themeSelected := s.previewTheme
 		for _, item := range s.themeMenu.GetItems() {
