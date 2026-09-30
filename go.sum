@@ -24,8 +24,8 @@ github.com/Azure/go-ansiterm v0.0.0-20260914234754-15785f84ba1c h1:KOGMapqG8kPI4
 github.com/Azure/go-ansiterm v0.0.0-20260914234754-15785f84ba1c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679 h1:qNT7R4qrN+5u5ajSbqSW1opHP4LA8lzA+ASyw5MQZjs=
 github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679/go.mod h1:blbwPQh4DTlCZEfk1BLU4oMIhLda2U+A840Uag9DsZw=
-github.com/Gaurav-Gosain/sip v0.8.2 h1:sRl0aVLi60DdN6LimIaNCr/vph+1D1z8SoRARIwugSM=
-github.com/Gaurav-Gosain/sip v0.8.2/go.mod h1:ifR4r2NIpE4cGB4V5t5sz59+OsJnNfE2DyM/ATd4z+k=
+github.com/Gaurav-Gosain/sip v0.8.3 h1:iutL1dmeOa5W504AcIuJlsOHMJEZvyzPyfwBzl+sPbk=
+github.com/Gaurav-Gosain/sip v0.8.3/go.mod h1:B2+L/qaIOBgmwYG25IBjTRVET2OdYQ/Ixe2DP/opxog=
 github.com/GhostWriters/semstyle v0.3.2 h1:MWCrnC44et/tPDhaDvqQPf5HGX8/SvQmaUarrtQlc0U=
 github.com/GhostWriters/semstyle v0.3.2/go.mod h1:wrQNHzQZeTWflY/DgTMmQ10uXpzYRDD7L0Y/Xer1ZSE=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
