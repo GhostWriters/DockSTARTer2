@@ -59,12 +59,13 @@ func (p base16Palette) isZero() bool {
 // nested under a top-level "palette:" key, hex values "#rrggbb"
 // (https://github.com/tinted-theming/home/blob/main/styling.md).
 type base16Scheme struct {
-	System  string        `yaml:"system"`
-	Name    string        `yaml:"name"`
-	Slug    string        `yaml:"slug"`
-	Author  string        `yaml:"author"`
-	Variant string        `yaml:"variant"`
-	Palette base16Palette `yaml:"palette"`
+	System      string        `yaml:"system"`
+	Name        string        `yaml:"name"`
+	Slug        string        `yaml:"slug"`
+	Author      string        `yaml:"author"`
+	Description string        `yaml:"description"`
+	Variant     string        `yaml:"variant"`
+	Palette     base16Palette `yaml:"palette"`
 }
 
 // base16LegacyScheme is the original base16 spec's format: base00-base0F
@@ -138,11 +139,12 @@ func parseBase16Palette(data []byte) (base16Palette, error) {
 // scheme's own "name" field is free text, e.g. "Default Dark", not always
 // the file's slug).
 type Base16SchemeMeta struct {
-	Name    string
-	Slug    string
-	System  string // "base16" or "base24" -- see ParseBase16SchemeMeta's doc comment
-	Author  string
-	Variant string
+	Name        string
+	Slug        string
+	System      string // "base16" or "base24" -- see ParseBase16SchemeMeta's doc comment
+	Author      string
+	Description string // empty for a legacy-format file, which has no such field
+	Variant     string
 }
 
 // ParseBase16SchemeMeta parses just a base16 scheme YAML file's descriptive
@@ -170,7 +172,7 @@ func ParseBase16SchemeMeta(data []byte) (Base16SchemeMeta, error) {
 		if system == "" {
 			system = "base16"
 		}
-		return Base16SchemeMeta{Name: current.Name, Slug: slug, System: system, Author: current.Author, Variant: current.Variant}, nil
+		return Base16SchemeMeta{Name: current.Name, Slug: slug, System: system, Author: current.Author, Description: current.Description, Variant: current.Variant}, nil
 	}
 
 	var legacy base16LegacyScheme

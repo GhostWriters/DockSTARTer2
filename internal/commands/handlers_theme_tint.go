@@ -804,11 +804,11 @@ func HandleTintList(ctx context.Context, group *CommandGroup) error {
 // tintListLabels' file-level one) -- a repo slug present in both base16/
 // and base24/ is one row with both availability flags set, not two rows.
 type tintTableRow struct {
-	Source                      string
-	Slug, Name, Variant, Author string
-	HasBase16, HasBase24        bool
-	Hues                        []string
-	Kind                        string
+	Source                                   string
+	Slug, Name, Variant, Author, Description string
+	HasBase16, HasBase24                     bool
+	Hues                                     []string
+	Kind                                     string
 }
 
 // repoTintTableRows builds one tintTableRow per distinct repo slug matching
@@ -816,9 +816,7 @@ type tintTableRow struct {
 // subfolder(s) actually have that slug, and Name/Variant read from
 // whichever format is preferred (base24, falling back to base16 -- see
 // ParseBase16Scheme's doc comment). filter.Terms are matched against the
-// slug, Name, Variant, and Author (see config.Base16SchemeMeta) -- Author
-// isn't kept on the row (see tintTableRow's doc comment), just checked here
-// while it's already in scope from parsing the scheme's metadata.
+// slug, Name, Variant, Author, and Description (see config.Base16SchemeMeta).
 func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, error) {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
@@ -857,15 +855,13 @@ func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, 
 			continue
 		}
 		row := tintTableRow{Source: "repo", Slug: slug, HasBase16: a.base16, HasBase24: a.base24}
-		author := ""
 		if data, err := ResolveRepoTintData(ctx, slug); err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
-				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
+				row.Name, row.Variant, row.Author, row.Description = meta.Name, meta.Variant, meta.Author, meta.Description
 			}
 			row.Hues, row.Kind = tintHues(slug, data)
 		}
-		row.Author = author
-		if filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
+		if filter.matchesTerms(row.Slug, row.Name, row.Variant, row.Author, row.Description) {
 			rows = append(rows, row)
 		}
 	}
@@ -875,9 +871,9 @@ func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, 
 // dirTintTableRows builds one tintTableRow per *.yaml file directly under
 // dir matching filter (a flat scheme folder, so exactly one of
 // HasBase16/HasBase24 is set, from that file's own declared "system:"
-// field), sorted by slug. See repoTintTableRows's doc comment for how
-// filter.Terms are matched against metadata not kept on the row. A missing
-// dir is not an error (no user schemes yet).
+// field), sorted by slug. See repoTintTableRows's doc comment for what
+// filter.Terms are matched against. A missing dir is not an error (no user
+// schemes yet).
 func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -892,10 +888,9 @@ func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, er
 			continue
 		}
 		row := tintTableRow{Source: source, Slug: strings.TrimSuffix(e.Name(), ".yaml")}
-		author := ""
 		if data, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
-				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
+				row.Name, row.Variant, row.Author, row.Description = meta.Name, meta.Variant, meta.Author, meta.Description
 				if meta.System == "base24" {
 					row.HasBase24 = true
 				} else {
@@ -904,8 +899,7 @@ func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, er
 			}
 			row.Hues, row.Kind = tintHues(row.Slug, data)
 		}
-		row.Author = author
-		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
+		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, row.Author, row.Description) {
 			rows = append(rows, row)
 		}
 	}
@@ -925,10 +919,9 @@ func embeddedTintTableRows(filter tintFilter) ([]tintTableRow, error) {
 	var rows []tintTableRow
 	for _, name := range names {
 		row := tintTableRow{Source: "embedded", Slug: name}
-		author := ""
 		if data, err := assets.GetTintTheme(name); err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
-				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
+				row.Name, row.Variant, row.Author, row.Description = meta.Name, meta.Variant, meta.Author, meta.Description
 				if meta.System == "base24" {
 					row.HasBase24 = true
 				} else {
@@ -937,8 +930,7 @@ func embeddedTintTableRows(filter tintFilter) ([]tintTableRow, error) {
 			}
 			row.Hues, row.Kind = tintHues(name, data)
 		}
-		row.Author = author
-		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
+		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, row.Author, row.Description) {
 			rows = append(rows, row)
 		}
 	}
@@ -965,10 +957,11 @@ func tintTableRows(ctx context.Context, source string, filter tintFilter) ([]tin
 // args in any order (see splitTintArgs): a "<repo:|user:|embedded:|all:>[,...]"
 // source filter (every source when omitted -- see parseTintSources) and a
 // search term (see parseTintFilter, tintFilter.matchesTerms). Shows a
-// Slug/Scheme/Variant/base16/base24 table (Author is omitted as a column --
-// its GitHub-profile links push most rows well past a normal terminal
-// width -- but is still searchable, since search checks every field a
-// scheme's metadata has, not just what's displayed). A Source column is
+// Slug/Scheme/Variant/base16/base24 table (Author and Description are
+// omitted as columns -- Author's GitHub-profile links and Description's free
+// text push most rows well past a normal terminal width -- but are still
+// searchable, since search checks every field a scheme's metadata has, not
+// just what's displayed). A Source column is
 // added only when more than one source is selected; a single source's
 // table has no such column.
 func HandleTintTable(ctx context.Context, group *CommandGroup) error {

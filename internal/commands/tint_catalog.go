@@ -10,9 +10,9 @@ import (
 
 // TintEntry is one scheme a tint picker can offer.
 type TintEntry struct {
-	Source                      string // "embedded", "user", or "repo"
-	Slug, Name, Variant, Author string
-	HasBase16, HasBase24        bool
+	Source                                   string // "embedded", "user", or "repo"
+	Slug, Name, Variant, Author, Description string
+	HasBase16, HasBase24                     bool
 	// Hues are the hues it's known by (see TintHueNames), and Kind its
 	// colors' kind (TintKindMonochrome or TintKindMultiColor).
 	Hues []string
@@ -92,9 +92,9 @@ func (q TintSearch) Matcher() (func(TintEntry) bool, error) {
 			return false
 		}
 		if q.Partial {
-			return f.containsTerms(e.Slug, e.Name, e.Variant, e.Author)
+			return f.containsTerms(e.Slug, e.Name, e.Variant, e.Author, e.Description)
 		}
-		return f.matchesTerms(e.Slug, e.Name, e.Variant, e.Author)
+		return f.matchesTerms(e.Slug, e.Name, e.Variant, e.Author, e.Description)
 	}, nil
 }
 
