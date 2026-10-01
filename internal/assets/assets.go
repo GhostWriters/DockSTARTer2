@@ -17,6 +17,12 @@ func GetDefaultConfig() ([]byte, error) {
 	return embeddedFS.ReadFile("defaults/dockstarter2.toml")
 }
 
+// GetTerminals returns the content of the embedded terminals.toml: terminals
+// identified by their XTVERSION or DA1 reply.
+func GetTerminals() ([]byte, error) {
+	return embeddedFS.ReadFile("defaults/terminals.toml")
+}
+
 // GetTheme reads a theme from the embedded filesystem.
 func GetTheme(name string) ([]byte, error) {
 	// embed.FS always uses forward slashes regardless of OS.

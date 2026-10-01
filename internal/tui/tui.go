@@ -336,6 +336,10 @@ func NewProgram(model tea.Model, opts ProgramOptions) *tea.Program {
 			tea.WithEnvironment(opts.Environ),
 			tea.WithColorProfile(colorprofile.TrueColor),
 		)
+	} else if p := semstyle.GetPreferredProfile(); p == colorprofile.TrueColor {
+		// Bubble Tea's own detection only sees TERM/COLORTERM/terminfo, not
+		// the startup terminal query (see terminals.DetectProfile).
+		teaOpts = append(teaOpts, tea.WithColorProfile(p))
 	}
 	if opts.InitialWidth > 0 && opts.InitialHeight > 0 {
 		teaOpts = append(teaOpts, tea.WithWindowSize(opts.InitialWidth, opts.InitialHeight))

@@ -1,0 +1,83 @@
+# Terminals identified by their XTVERSION reply (CSI > q), or by their DA1
+# reply (CSI c) when they don't answer XTVERSION.
+#
+# Entries are checked in order; the first whose pattern (Go RE2,
+# case-sensitive unless the pattern says otherwise) matches the reply wins.
+# Each entry needs `match`, `da1`, or both.
+#
+#   name         Display name.
+#   match        Regex matched against the XTVERSION reply. Capture group 1,
+#                if present, is the version compared against min_version.
+#   da1          Regex matched against the DA1 reply's parameters joined with
+#                ";" (e.g. "61;6;7;22"). Only consulted when XTVERSION goes
+#                unanswered.
+#   color        "truecolor", "256", "16", or "auto". Only ever raises the
+#                profile detected from TERM/COLORTERM, never lowers it.
+#                Anything short of "truecolor" is followed by an XTGETTCAP
+#                RGB/Tc query, which can raise it further (XTVERSION matches
+#                only; a da1-only terminal isn't sent XTGETTCAP).
+#   min_version  Optional. `color` applies only when the captured version is
+#                at least this, compared numerically per dot-separated part.
+
+[[terminal]]
+name  = "WezTerm"
+match = '^WezTerm (\d+)'
+color = "truecolor"
+
+[[terminal]]
+name  = "kitty"
+match = '^kitty\(([\d.]+)\)'
+color = "truecolor"
+
+[[terminal]]
+name  = "foot"
+match = '^foot\(([\d.]+)'
+color = "truecolor"
+
+[[terminal]]
+name  = "Ghostty"
+match = '^ghostty ([\d.]+)'
+color = "truecolor"
+
+[[terminal]]
+name  = "iTerm2"
+match = '^iTerm2 ([\d.]+)'
+color = "truecolor"
+
+[[terminal]]
+name  = "Contour"
+match = '^contour ([\d.]+)'
+color = "truecolor"
+
+[[terminal]]
+name  = "Konsole"
+match = '^Konsole ([\d.]+)'
+color = "truecolor"
+
+[[terminal]]
+name  = "VTE"
+match = '^VTE\((\d+)\)'
+color = "truecolor"
+
+# Patch 282 accepts 24-bit SGR, approximated to the palette unless built
+# with direct-color support.
+[[terminal]]
+name        = "XTerm"
+match       = '^XTerm\((\d+)\)'
+color       = "truecolor"
+min_version = "282"
+
+# Windows' pseudo-console, between any Windows terminal and a console program
+# run in it (e.g. ssh.exe). It answers DA1 itself, drops XTVERSION, and
+# re-encodes 24-bit SGR for the terminal hosting it.
+[[terminal]]
+name  = "Windows ConPTY"
+da1   = '^61;6;7;22;23;24;28;32;42$'
+color = "truecolor"
+
+# Reports tmux, not the terminal behind it; truecolor depends on tmux's
+# own terminal-features/Tc setting, which XTGETTCAP reflects.
+[[terminal]]
+name  = "tmux"
+match = '^tmux ([\d.]+)'
+color = "auto"
