@@ -248,17 +248,24 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 			name = e.Slug
 		}
 		desc := name
-		if author := authorName(e.Author); author != "" {
-			desc += " [by " + author + "]"
-		}
 		descTag := "{{|ItemList|}}"
 		if e.Source == "user" {
 			descTag = "{{|ItemListUserDefined|}}"
 		}
+		markup := descTag + name
+		// A repo scheme's name links to its upstream file.
+		if url := e.SourceURL(); url != "" {
+			tag := strings.TrimSuffix(descTag, "|}}")
+			markup = tag + "::::" + url + "|}}" + name + "{{[-]}}" + descTag
+		}
+		if author := authorName(e.Author); author != "" {
+			desc += " [by " + author + "]"
+			markup += " [by " + author + "]"
+		}
 		g := groups[e.Source]
 		g.Items = append(g.Items, displayengine.MenuItem{
 			Tag:           e.Slug,
-			Desc:          descTag + desc,
+			Desc:          markup,
 			Help:          desc,
 			IsRadioButton: true,
 			Selectable:    true,

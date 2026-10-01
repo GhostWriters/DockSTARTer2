@@ -37,3 +37,20 @@ func TestTintSearchMatcher(t *testing.T) {
 		}
 	}
 }
+
+func TestTintEntrySourceURL(t *testing.T) {
+	cases := []struct {
+		e    TintEntry
+		want string
+	}{
+		{TintEntry{Source: "repo", Slug: "dracula", HasBase16: true, HasBase24: true}, tintSchemeURL("base24", "dracula")},
+		{TintEntry{Source: "repo", Slug: "mocha", HasBase16: true}, tintSchemeURL("base16", "mocha")},
+		{TintEntry{Source: "user", Slug: "mine", HasBase16: true}, ""},
+		{TintEntry{Source: "embedded", Slug: "ansi", HasBase16: true}, ""},
+	}
+	for _, c := range cases {
+		if got := c.e.SourceURL(); got != c.want {
+			t.Errorf("%s:%s SourceURL() = %q, want %q", c.e.Source, c.e.Slug, got, c.want)
+		}
+	}
+}

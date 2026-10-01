@@ -22,6 +22,19 @@ type TintEntry struct {
 // Ref returns the config.AnsiElementColors.Tint reference that selects e.
 func (e TintEntry) Ref() string { return e.Source + ":" + e.Slug }
 
+// SourceURL returns the upstream GitHub URL of a repo scheme's file (its
+// base24 file when it has one, as ParseBase16Scheme prefers), or "" for any
+// other source.
+func (e TintEntry) SourceURL() string {
+	if e.Source != "repo" {
+		return ""
+	}
+	if e.HasBase24 {
+		return tintSchemeURL("base24", e.Slug)
+	}
+	return tintSchemeURL("base16", e.Slug)
+}
+
 // TintRepoCloned reports whether the tinted-theming schemes repo has
 // already been downloaded.
 func TintRepoCloned() bool {

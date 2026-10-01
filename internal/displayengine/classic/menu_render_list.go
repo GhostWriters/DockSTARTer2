@@ -504,21 +504,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		var descStr string
 		if (isSelected || isParentOfSelected) && item.Desc != "" {
+			focused, isTagged := focusedItemDesc(item.Desc)
 			switch {
-			case strings.HasPrefix(item.Desc, "{{|ItemListUserDefined|}}"):
+			case isTagged:
 				// Swap to the focused variant instead of stripping the tag,
-				// so the user-defined/built-in distinction survives focus
-				// instead of collapsing to the generic selected-row style.
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListUserDefined|}}", "{{|ItemListUserDefinedFocused|}}", 1), dStyle)
-			case strings.HasPrefix(item.Desc, "{{|ItemListUserTemplate|}}"):
-				// Same reasoning as ItemListUserDefined above -- swap to the
-				// focused variant so the user-template-override distinction
-				// survives focus too.
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListUserTemplate|}}", "{{|ItemListUserTemplateFocused|}}", 1), dStyle)
-			case strings.HasPrefix(item.Desc, "{{|ItemListDeprecated|}}"):
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListDeprecated|}}", "{{|ItemListDeprecatedFocused|}}", 1), dStyle)
-			case strings.HasPrefix(item.Desc, "{{|ItemList|}}"):
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemList|}}", "{{|ItemListFocused|}}", 1), dStyle)
+				// so the user-defined/user-template/deprecated distinction
+				// survives focus instead of collapsing to the generic
+				// selected-row style.
+				descStr = RenderThemeText(focused, dStyle)
 			default:
 				// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
 				// "{{|ItemList|}}..."), which overrides dStyle entirely -- strip
@@ -1237,4 +1230,25 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
 	return resLines, resH, resM
+}
+
+var itemDescTags = []string{"ItemListUserDefined", "ItemListUserTemplate", "ItemListDeprecated", "ItemList"}
+
+var itemDescFocusSwap = func() *strings.Replacer {
+	var pairs []string
+	for _, name := range itemDescTags {
+		pairs = append(pairs, "{{|"+name+"|}}", "{{|"+name+"Focused|}}", "{{|"+name+"::::", "{{|"+name+"Focused::::")
+	}
+	return strings.NewReplacer(pairs...)
+}()
+
+// focusedItemDesc swaps desc's item tags for their Focused variants when desc
+// starts with one (plain or carrying a link URL); ok is false otherwise.
+func focusedItemDesc(desc string) (focused string, ok bool) {
+	for _, name := range itemDescTags {
+		if strings.HasPrefix(desc, "{{|"+name+"|}}") || strings.HasPrefix(desc, "{{|"+name+"::::") {
+			return itemDescFocusSwap.Replace(desc), true
+		}
+	}
+	return "", false
 }

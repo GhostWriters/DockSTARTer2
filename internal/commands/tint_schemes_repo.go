@@ -66,6 +66,12 @@ func repoSchemeSubfolders(name string) (slug string, subs []string) {
 	return name, []string{"base24", "base16"}
 }
 
+// tintSchemeURL returns the GitHub blob URL of the scheme file sub/slug.yaml.
+func tintSchemeURL(sub, slug string) string {
+	return fmt.Sprintf("https://github.com/%s/blob/%s/%s/%s.yaml",
+		tintedThemingSchemesRepo, tintedThemingSchemesBranch, sub, slug)
+}
+
 // RepoTintSourceURL returns the GitHub blob URL for name's scheme file --
 // for --tint's status display, hyperlinking a "repo:<name>" source to the
 // canonical upstream file rather than DS2's own local clone (an
@@ -82,8 +88,7 @@ func RepoTintSourceURL(ctx context.Context, name string) (url string, ok bool) {
 	slug, subs := repoSchemeSubfolders(name)
 	for _, sub := range subs {
 		if _, err := os.Stat(filepath.Join(repoDir, sub, slug+".yaml")); err == nil {
-			return fmt.Sprintf("https://github.com/%s/blob/%s/%s/%s.yaml",
-				tintedThemingSchemesRepo, tintedThemingSchemesBranch, sub, slug), true
+			return tintSchemeURL(sub, slug), true
 		}
 	}
 	return "", false
