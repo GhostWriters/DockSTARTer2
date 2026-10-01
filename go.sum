@@ -28,6 +28,8 @@ github.com/Gaurav-Gosain/sip v0.8.3 h1:iutL1dmeOa5W504AcIuJlsOHMJEZvyzPyfwBzl+sP
 github.com/Gaurav-Gosain/sip v0.8.3/go.mod h1:B2+L/qaIOBgmwYG25IBjTRVET2OdYQ/Ixe2DP/opxog=
 github.com/GhostWriters/semstyle v0.3.2 h1:MWCrnC44et/tPDhaDvqQPf5HGX8/SvQmaUarrtQlc0U=
 github.com/GhostWriters/semstyle v0.3.2/go.mod h1:wrQNHzQZeTWflY/DgTMmQ10uXpzYRDD7L0Y/Xer1ZSE=
+github.com/GhostWriters/semstyle v0.3.3 h1:HGhEO1xNrUZHTZd49tIpCy0o/K6YvtQNFFTZ1qkuzbU=
+github.com/GhostWriters/semstyle v0.3.3/go.mod h1:wrQNHzQZeTWflY/DgTMmQ10uXpzYRDD7L0Y/Xer1ZSE=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
