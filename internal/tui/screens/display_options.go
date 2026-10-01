@@ -140,10 +140,12 @@ type DisplayOptionsScreen struct {
 	tintDownloading bool
 
 	// previewTintKey is the tint key the preview renders under, holding the
-	// shown tab's staged Menu tint (previewTint) -- private to this screen,
-	// so the rest of the screen keeps the live tint until Apply.
+	// shown tab's staged Menu tint -- private to this screen, so the rest of
+	// the screen keeps the live tint until Apply. The ProgramBox and CLI
+	// tints go under keys derived from it (see previewElementKey);
+	// previewTints holds each element's last registered tint.
 	previewTintKey string
-	previewTint    *config.AnsiElementColors
+	previewTints   map[string]config.AnsiElementColors
 
 	// previewCache is computePreviewContent's last result, for the inputs
 	// previewCacheKey names.
@@ -592,15 +594,30 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.refreshChangeMarkers()
 }
 
-// refreshPreviewTint registers the shown tab's staged Menu tint under
-// previewTintKey when it has changed.
-func (s *DisplayOptionsScreen) refreshPreviewTint() {
-	el := s.config.Appearance.ForConnType(s.editType).AnsiColors.Element("menu")
-	if s.previewTint != nil && reflect.DeepEqual(*s.previewTint, el) {
-		return
+// previewElementKey returns the tint key the preview holds element's staged
+// tint under: previewTintKey for Menu, and previewTintKey plus the element for
+// the others, where console.ActivateTintForElement looks for them.
+func (s *DisplayOptionsScreen) previewElementKey(element string) string {
+	if element == "menu" {
+		return s.previewTintKey
 	}
-	s.previewTint = &el
-	tui.RegisterTintKey(context.Background(), s.previewTintKey, el)
+	return s.previewTintKey + "-" + element
+}
+
+// refreshPreviewTint registers the shown tab's staged tint for each element
+// under its previewElementKey when it has changed.
+func (s *DisplayOptionsScreen) refreshPreviewTint() {
+	if s.previewTints == nil {
+		s.previewTints = map[string]config.AnsiElementColors{}
+	}
+	for _, element := range tintElementsFor(s.editType) {
+		el := s.config.Appearance.ForConnType(s.editType).AnsiColors.Element(element)
+		if prev, ok := s.previewTints[element]; ok && reflect.DeepEqual(prev, el) {
+			continue
+		}
+		s.previewTints[element] = el
+		tui.RegisterTintKey(context.Background(), s.previewElementKey(element), el)
+	}
 }
 
 // focusedSettingsMenu returns the settings menu holding focus, or nil when

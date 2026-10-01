@@ -332,6 +332,7 @@ var (
 	Render3DBorder                 = classic.Render3DBorder
 	Render3DBorderCtx              = classic.Render3DBorderCtx
 	RenderBorderedBoxCtx           = classic.RenderBorderedBoxCtx
+	RenderBorderedBoxLineBGCtx     = classic.RenderBorderedBoxLineBGCtx
 	RenderButton                   = classic.RenderButton
 	RenderButtonRow                = classic.RenderButtonRow
 	RenderCenteredButtons          = classic.RenderCenteredButtons

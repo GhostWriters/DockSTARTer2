@@ -504,6 +504,12 @@ func RenderBorderedBoxCtx(rawTitle, content string, contentWidth int, targetHeig
 	return renderBorderedBoxCtxImpl(rawTitle, content, contentWidth, targetHeight, focused, showIndicators, rounded, titleAlign, titleTag, ctx, nil, tbs...)
 }
 
+// RenderBorderedBoxLineBGCtx is RenderBorderedBoxCtx with a 0-based line-index
+// -> background override for lines that carry their own background.
+func RenderBorderedBoxLineBGCtx(rawTitle, content string, contentWidth int, targetHeight int, focused bool, showIndicators bool, rounded bool, titleAlign string, titleTag string, ctx StyleContext, lineBackgrounds map[int]lipgloss.Style, tbs ...TitleBarState) string {
+	return renderBorderedBoxCtxImpl(rawTitle, content, contentWidth, targetHeight, focused, showIndicators, rounded, titleAlign, titleTag, ctx, lineBackgrounds, tbs...)
+}
+
 // renderBorderedBoxCtxImpl is RenderBorderedBoxCtx's shared implementation,
 // with an added lineBackgrounds parameter: an optional 0-based line-index ->
 // background override, consulted instead of ctx.ContentBackground for the
