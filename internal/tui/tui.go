@@ -1636,6 +1636,14 @@ func CloseDialog() tea.Cmd {
 	}
 }
 
+// CloseDialogThen closes the current modal dialog, then runs cmd, so a
+// message meant for what's underneath arrives after the dialog is gone.
+// Batched with the close, it can arrive first and go to the dialog, which
+// drops it.
+func CloseDialogThen(cmd tea.Cmd) tea.Cmd {
+	return tea.Sequence(CloseDialog(), cmd)
+}
+
 // CloseDialogWithResult returns a command to close the current modal dialog with a result
 func CloseDialogWithResult(result any) tea.Cmd {
 	return func() tea.Msg {

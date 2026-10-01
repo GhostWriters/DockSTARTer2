@@ -214,7 +214,7 @@ func showHuesPicker(id, noun, verb string, kinds, colors []string, kind string, 
 					colors = append(colors, it.Metadata["color"])
 				}
 			}
-			return tea.Batch(func() tea.Msg { return picked(kind, colors) }, tui.CloseDialog())()
+			return tui.CloseDialogThen(func() tea.Msg { return picked(kind, colors) })()
 		}
 		menu.SetButtons([]displayengine.ButtonDef{
 			{Label: "Done", ZoneID: "btn-select", Action: done, Help: "Confirm the marked choices."},

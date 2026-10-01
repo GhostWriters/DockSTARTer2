@@ -93,7 +93,7 @@ func (s *DisplayOptionsScreen) tintThemeDialog(connTypes []string) tea.Msg {
 	question += "\n\nSwitch to the " + themeName(tintedThemeName) + " theme and check the preview before applying?"
 	choose := func(msg tintThemeChoiceMsg) func() tea.Msg {
 		msg.connTypes = connTypes
-		return func() tea.Msg { return tea.Batch(func() tea.Msg { return msg }, tui.CloseDialog())() }
+		return tui.CloseDialogThen(func() tea.Msg { return msg })
 	}
 	outer := displayengine.NewMenuModel("tint_theme_check", "Theme Not Made for Tints", "", nil)
 	outer.SetMaximized(false)

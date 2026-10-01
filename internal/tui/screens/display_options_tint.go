@@ -534,12 +534,7 @@ func showSearchPicker(id, title, noun, current string, values []string, picked f
 			if v == current {
 				sel = i
 			}
-			applyFuncs[i] = func() tea.Msg {
-				return tea.Batch(
-					func() tea.Msg { return picked(v) },
-					tui.CloseDialog(),
-				)()
-			}
+			applyFuncs[i] = tui.CloseDialogThen(func() tea.Msg { return picked(v) })
 		}
 		menu := displayengine.NewMenuModel(id, title, "Show only these "+noun, items)
 		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(id))

@@ -1195,14 +1195,9 @@ func radioMenuSelectAction(menu *displayengine.MenuModel, applyFuncs []tea.Cmd) 
 }
 
 func (s *DisplayOptionsScreen) titleAlignAction(apply func(*config.AppConfig, string), val string) func() tea.Msg {
-	return func() tea.Msg {
-		return tea.Batch(
-			func() tea.Msg {
-				return updateDisplayOptionMsg{func(cfg *config.AppConfig) { apply(cfg, val) }}
-			},
-			tui.CloseDialog(),
-		)()
-	}
+	return tui.CloseDialogThen(func() tea.Msg {
+		return updateDisplayOptionMsg{func(cfg *config.AppConfig) { apply(cfg, val) }}
+	})
 }
 
 func (s *DisplayOptionsScreen) showTitleAlignDropdown(menuName, label string, getter func() string, apply func(*config.AppConfig, string)) tea.Cmd {
@@ -1327,16 +1322,11 @@ func (s *DisplayOptionsScreen) showPanelDropdown() tea.Cmd {
 		currentMode := s.config.Appearance.Ptr(editType).Panel
 
 		applyChange := func(mode string) tea.Cmd {
-			return func() tea.Msg {
-				return tea.Batch(
-					func() tea.Msg {
-						return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
-							cfg.Appearance.Ptr(editType).Panel = mode
-						}}
-					},
-					tui.CloseDialog(),
-				)()
-			}
+			return tui.CloseDialogThen(func() tea.Msg {
+				return updateDisplayOptionMsg{func(cfg *config.AppConfig) {
+					cfg.Appearance.Ptr(editType).Panel = mode
+				}}
+			})
 		}
 
 		currentLower := strings.ToLower(currentMode)
@@ -1408,8 +1398,8 @@ func (s *DisplayOptionsScreen) showPanelDropdown() tea.Cmd {
 							}
 						}
 
-						// Success: Apply the change persistently and close dialog
-						return tea.Batch(applyChange("system"), tui.CloseDialog())()
+						// Success: close the confirm, then the dropdown, then apply.
+						return tui.CloseDialogThen(applyChange("system"))()
 					}()
 				}
 				confirm := tui.NewConfirmModel(title, msg, false, onConfirm, tui.CloseDialog())
