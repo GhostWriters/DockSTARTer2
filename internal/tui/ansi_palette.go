@@ -23,6 +23,16 @@ func resolveTintRef(ctx context.Context, ref string) ([]byte, error) {
 	return data, err
 }
 
+// TintSchemeColors returns the colors ref's scheme sets, before any
+// overrides.
+func TintSchemeColors(ctx context.Context, ref string) (config.AnsiElementColors, error) {
+	data, err := resolveTintRef(ctx, ref)
+	if err != nil {
+		return config.AnsiElementColors{}, err
+	}
+	return config.ParseBase16Scheme(data)
+}
+
 // tintKeyForConnType is console.TintKeyForConnType -- kept as a local alias
 // since every call site in this file already refers to the unqualified
 // name.

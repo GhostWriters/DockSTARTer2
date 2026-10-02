@@ -374,7 +374,7 @@ func (s *DisplayOptionsScreen) buildTintMenus() {
 		staged.OverrideEnabled, base.OverrideEnabled = false, false
 		return staged != base
 	})
-	overrides.SetHelpPageText("Set individual colors for this element, applied on top of its tint. Enter to edit a color; clear it to use the tint's.")
+	overrides.SetHelpPageText("Set individual colors for this element, applied on top of its tint. Each row shows the color without an override (the tint's, or the terminal's own without a tint), then the override that replaces it. Enter to edit a color; clear it for no override.")
 	overrides.SetSubMenuMode(true)
 	overrides.SetVariableHeight(true)
 	overrides.SetIsDialog(false)

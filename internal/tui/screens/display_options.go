@@ -147,6 +147,13 @@ type DisplayOptionsScreen struct {
 	previewTintKey string
 	previewTints   map[string]config.AnsiElementColors
 
+	// schemeColors caches each tint ref's own colors for the Overrides
+	// pane's rows; a ref that failed to load maps to nil.
+	schemeColors map[string]*config.AnsiElementColors
+
+	// schemeTintRef is the tint ref last registered under schemeTintKey.
+	schemeTintRef string
+
 	// previewCache is computePreviewContent's last result, for the inputs
 	// previewCacheKey names.
 	previewCache    previewContent

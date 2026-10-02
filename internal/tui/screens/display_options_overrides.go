@@ -2,6 +2,7 @@ package screens
 
 import (
 	"context"
+	"image/color"
 	"reflect"
 	"regexp"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/GhostWriters/semstyle"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // overrideSlot is one color an element's overrides can set.
@@ -96,43 +98,125 @@ func validOverrideColor(v string) bool {
 // overrideEditMsg stages value for slot base on the shown element.
 type overrideEditMsg struct{ base, value string }
 
-// overrideItems returns one row per override slot with its staged value, a
-// swatch, its other names, and its suggested usage; Enter edits it.
+// overrideItems returns one row per override slot: its color without an
+// override, the staged override, its other names, and its suggested usage;
+// Enter edits it.
 func (s *DisplayOptionsScreen) overrideItems() []displayengine.MenuItem {
 	el := s.stagedTint()
 	base := s.baseTint()
+	scheme := s.overrideSchemeColors(el)
 	var items []displayengine.MenuItem
 	for g, group := range overrideGroups {
 		items = append(items, displayengine.MenuItem{Tag: group.label, IsSeparator: true, IsCategory: true})
 		for _, slot := range group.slots {
 			names, usage := overrideNotes(g, slot)
-			items = append(items, s.overrideItem(el, base, slot, names, usage))
+			items = append(items, s.overrideItem(el, base, scheme, slot, names, usage))
 		}
 	}
 	return items
 }
 
-// overrideValueWidth is the value column's width, so the notes after it
-// line up.
-const overrideValueWidth = 9
+// overrideSchemeColors returns the colors el's tint sets, or nil when its
+// tint is off or won't load (either way, it renders untinted).
+func (s *DisplayOptionsScreen) overrideSchemeColors(el *config.AnsiElementColors) *config.AnsiElementColors {
+	if !el.TintEnabled || el.Tint == "" {
+		return nil
+	}
+	colors, ok := s.schemeColors[el.Tint]
+	if !ok {
+		if c, err := tui.TintSchemeColors(context.Background(), el.Tint); err == nil {
+			colors = &c
+		}
+		if s.schemeColors == nil {
+			s.schemeColors = map[string]*config.AnsiElementColors{}
+		}
+		s.schemeColors[el.Tint] = colors
+	}
+	return colors
+}
 
-// overrideItem returns slot's row: its staged value and a swatch, then its
-// other names and suggested usage; changed when the value differs from
-// base.
-func (s *DisplayOptionsScreen) overrideItem(el *config.AnsiElementColors, base config.AnsiElementColors, slot overrideSlot, names, usage string) displayengine.MenuItem {
+// overrideValueWidth is a color column's width before its swatch, so the
+// columns after it line up: the longest terminal color name, bright-magenta.
+const overrideValueWidth = 14
+
+// overrideCell returns text padded to overrideValueWidth, then swatch.
+func overrideCell(text, swatch string) string {
+	return text + strutil.Repeat(" ", overrideValueWidth-len([]rune(text))) + swatch
+}
+
+// colorSwatch returns value's swatch, or blank space if it isn't a color.
+func colorSwatch(value string) string {
+	if hex := colorHex(value); value != "" && hex != "" {
+		return "{{[" + hex + "]}}███{{[-]}}"
+	}
+	return "   "
+}
+
+// tintSwatch returns slot base's swatch as the tint registered under key
+// colors it, or the terminal's own palette for key "". The row is drawn
+// under the screen's tint, so it's rendered here and embedded as escape
+// codes.
+func tintSwatch(key, base string) string {
+	var sw string
+	console.ActivateTintKey(key, func() { sw = semstyle.ToANSI("{{[" + base + "]}}███") })
+	return sw + "\x1b[39m"
+}
+
+// slotColor returns the color slot base resolves to under the tint
+// registered under key ("" for none): "#rrggbb", or the name of the terminal
+// color it falls back to (e.g. "bright-black").
+func slotColor(key, base string) string {
+	var c color.Color
+	console.ActivateTintKey(key, func() { c = semstyle.ToColor(base) })
+	if b, ok := c.(ansi.BasicColor); ok {
+		if b < 8 {
+			return semstyle.BasicColors[b]
+		}
+		return "bright-" + semstyle.BasicColors[b-8]
+	}
+	return semstyle.ToColorStr(c)
+}
+
+// schemeTintKey returns the tint key holding ref's scheme alone, without
+// overrides, registering it when ref changes. It gives a row the derived
+// color of a slot the scheme doesn't set.
+func (s *DisplayOptionsScreen) schemeTintKey(ref string) string {
+	key := s.previewTintKey + "-scheme"
+	if s.schemeTintRef != ref {
+		s.schemeTintRef = ref
+		tui.RegisterTintKey(context.Background(), key, config.AnsiElementColors{Tint: ref, TintEnabled: true})
+	}
+	return key
+}
+
+// overrideItem returns slot's row: the color it has without an override
+// (the tint's, or the terminal's own without one), then the staged
+// override, then its other names and suggested usage; changed when the
+// override differs from base.
+func (s *DisplayOptionsScreen) overrideItem(el *config.AnsiElementColors, base config.AnsiElementColors, scheme *config.AnsiElementColors, slot overrideSlot, names, usage string) displayengine.MenuItem {
 	value := ""
 	if f := overrideField(el, slot.base); f != nil {
 		value = *f
 	}
-	shown := value
-	if shown == "" {
-		shown = "(tint's)"
+	beforeText, beforeSwatch := slotColor("", slot.base), tintSwatch("", slot.base)
+	if scheme != nil {
+		before := ""
+		if f := overrideField(scheme, slot.base); f != nil {
+			before = *f
+		}
+		if before == "" {
+			// A scheme without this slot gets a color derived from the others.
+			before = slotColor(s.schemeTintKey(el.Tint), slot.base)
+		}
+		beforeText, beforeSwatch = before, colorSwatch(before)
 	}
-	swatch := "   "
-	if hex := colorHex(value); value != "" && hex != "" {
-		swatch = "{{[" + hex + "]}}███{{[-]}}"
+	// Without an override, the color before it is the one in effect, so it's
+	// swatched here too.
+	afterText, afterSwatch := value, colorSwatch(value)
+	if value == "" {
+		afterText, afterSwatch = "(none)", beforeSwatch
 	}
-	desc := "{{|ItemList|}}" + slot.base + "  " + shown + strutil.Repeat(" ", overrideValueWidth-len([]rune(shown))) + swatch
+	desc := "{{|ItemList|}}" + slot.base + "  " + overrideCell(beforeText, beforeSwatch) + "  →  " + overrideCell(afterText, afterSwatch)
 	switch {
 	case names != "" && usage != "":
 		desc += "  " + names + "; " + usage
@@ -154,7 +238,7 @@ func (s *DisplayOptionsScreen) overrideItem(el *config.AnsiElementColors, base c
 		Tag:        slot.label,
 		Desc:       desc,
 		Changed:    changed,
-		Help:       help + "; Enter to edit, empty to use the tint's",
+		Help:       help + "; Enter to edit, empty for no override",
 		Selectable: true,
 		Action:     s.promptOverride(slot, value),
 		Metadata:   map[string]string{"slot": slot.base},
@@ -177,7 +261,7 @@ func colorHex(v string) string {
 func (s *DisplayOptionsScreen) promptOverride(slot overrideSlot, current string) tea.Cmd {
 	return func() tea.Msg {
 		result, err := console.TextPrompt(context.Background(), func(context.Context, any, ...any) {},
-			"Override "+slot.label, "Enter a hex value (#rrggbb) or color name for "+slot.label+" ("+slot.base+"); leave empty to use the tint's", false, current)
+			"Override "+slot.label, "Enter a hex value (#rrggbb) or color name for "+slot.label+" ("+slot.base+"); leave empty for no override", false, current)
 		if err != nil {
 			return nil
 		}
