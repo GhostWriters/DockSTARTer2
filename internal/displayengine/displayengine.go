@@ -311,6 +311,7 @@ var (
 	NewHeaderedList                = classic.NewHeaderedList
 	NewFooteredList                = classic.NewFooteredList
 	DropdownValueMarkup            = classic.DropdownValueMarkup
+	ChangedIndicatorChars          = classic.ChangedIndicatorChars
 	InputFieldStyle                = classic.InputFieldStyle
 	InputTextStyles                = classic.InputTextStyles
 	StyleGeneration                = classic.StyleGeneration

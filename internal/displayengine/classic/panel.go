@@ -146,17 +146,17 @@ func (m *PanelModel) AdvanceSpinners(now time.Time) bool {
 }
 
 // changedIndicatorChar returns the changed marker drawn before a changed label
-// (see changedIndicatorChars), for callers that need only its presence or
+// (see ChangedIndicatorChars), for callers that need only its presence or
 // width.
 func changedIndicatorChar(lineCharacters bool) string {
-	left, _ := changedIndicatorChars(lineCharacters)
+	left, _ := ChangedIndicatorChars(lineCharacters)
 	return left
 }
 
-// changedIndicatorChars returns the changed markers drawn before and after a
-// changed label, pointing in at it: "»" and "«", or "*" and "*" without line
+// ChangedIndicatorChars returns the changed markers drawn before and after a
+// changed label or value, pointing in at it: "»" and "«", or "*" and "*" without line
 // characters. Both are in every monospace font's basic set and single-width.
-func changedIndicatorChars(lineCharacters bool) (left, right string) {
+func ChangedIndicatorChars(lineCharacters bool) (left, right string) {
 	if lineCharacters {
 		return "»", "«"
 	}
@@ -172,7 +172,7 @@ func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, chan
 	}
 	if m.panelChanged && !m.Expanded {
 		ctx := GetActiveContext()
-		left, right := changedIndicatorChars(ctx.LineCharacters)
+		left, right := ChangedIndicatorChars(ctx.LineCharacters)
 		return left, right, true
 	}
 	return "", "", false

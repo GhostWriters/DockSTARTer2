@@ -341,10 +341,10 @@ func RenderChangedMarker(ctx StyleContext) string {
 }
 
 // RenderChangedMarkers returns the changed markers drawn before and after a
-// changed label (see changedIndicatorChars), styled like RenderChangedMarker.
+// changed label (see ChangedIndicatorChars), styled like RenderChangedMarker.
 func RenderChangedMarkers(ctx StyleContext) (left, right string) {
 	style := ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
-	l, r := changedIndicatorChars(ctx.LineCharacters)
+	l, r := ChangedIndicatorChars(ctx.LineCharacters)
 	// Each starts from a full reset, so attributes the text before it left
 	// on (e.g. a dim label) don't carry into it.
 	const reset = "\x1b[m"

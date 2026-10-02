@@ -191,8 +191,8 @@ func (s *DisplayOptionsScreen) schemeTintKey(ref string) string {
 
 // overrideItem returns slot's row: the color it has without an override
 // (the tint's, or the terminal's own without one), then the staged
-// override, then its other names and suggested usage; changed when the
-// override differs from base.
+// override, then its other names and suggested usage; the override is
+// marked changed when it differs from base.
 func (s *DisplayOptionsScreen) overrideItem(el *config.AnsiElementColors, base config.AnsiElementColors, scheme *config.AnsiElementColors, slot overrideSlot, names, usage string) displayengine.MenuItem {
 	value := ""
 	if f := overrideField(el, slot.base); f != nil {
@@ -216,16 +216,25 @@ func (s *DisplayOptionsScreen) overrideItem(el *config.AnsiElementColors, base c
 	if value == "" {
 		afterText, afterSwatch = "(none)", beforeSwatch
 	}
-	desc := "{{|ItemList|}}" + slot.base + "  " + overrideCell(beforeText, beforeSwatch) + "  →  " + overrideCell(afterText, afterSwatch)
+	changed := false
+	if f := overrideField(&base, slot.base); f != nil {
+		changed = *f != value
+	}
+	// A changed override is marked on its value, in the spaces on either side
+	// of it, rather than on the row's label.
+	markL, markR := " ", " "
+	if changed {
+		l, r := displayengine.ChangedIndicatorChars(displayengine.ActiveAppearance().LineCharacters)
+		markL = "{{|PanelTitleChangedIndicator|}}" + l + "{{[-]}}{{|ItemList|}}"
+		markR = "{{|PanelTitleChangedIndicator|}}" + r + "{{[-]}}{{|ItemList|}}"
+	}
+	desc := "{{|ItemList|}}" + slot.base + "  " + overrideCell(beforeText, beforeSwatch) + "  → " +
+		markL + afterText + markR + strutil.Repeat(" ", overrideValueWidth-len([]rune(afterText))-1) + afterSwatch
 	switch {
 	case names != "" && usage != "":
 		desc += "  " + names + "; " + usage
 	case names != "" || usage != "":
 		desc += "  " + names + usage
-	}
-	changed := false
-	if f := overrideField(&base, slot.base); f != nil {
-		changed = *f != value
 	}
 	help := "Override the " + slot.label + " color (" + slot.base + ")"
 	if names != "" {
@@ -237,7 +246,6 @@ func (s *DisplayOptionsScreen) overrideItem(el *config.AnsiElementColors, base c
 	return displayengine.MenuItem{
 		Tag:        slot.label,
 		Desc:       desc,
-		Changed:    changed,
 		Help:       help + "; Enter to edit, empty for no override",
 		Selectable: true,
 		Action:     s.promptOverride(slot, value),
