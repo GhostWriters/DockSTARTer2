@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -26,6 +27,7 @@ import (
 	"DockSTARTer2/internal/serve"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/system"
+	"DockSTARTer2/internal/terminals"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/update"
@@ -137,6 +139,25 @@ func run() (exitCode int) {
 
 	slog.SetDefault(logger.NewLogger())
 
+	// TERM/COLORTERM often understate a terminal reached over SSH; ask the
+	// terminal itself. Skipped when output isn't a terminal, so a query never
+	// lands in redirected output.
+	if !nonInteractive && console.IsStdoutTTY() {
+		terminals.Debugf = func(format string, args ...any) {
+			logger.Debug(context.Background(), format, args...)
+		}
+		base := console.GetPreferredProfile()
+		logger.Debug(context.Background(), "Color profile from environment: %s", base)
+		p, info := terminals.DetectProfile(base, int(os.Stdin.Fd()), os.Stdin, os.Stdout, terminals.DefaultQueryTimeout)
+		if p != base {
+			console.SetPreferredProfile(p)
+			logger.SetColorProfile(p)
+		}
+		if info.Name != "" {
+			logger.Debug(context.Background(), "Terminal: %s, color profile %s (detected %s)", strings.TrimSpace(info.Name+" "+info.Version), p, base)
+		}
+	}
+
 	// Must happen before any real work (including config loading, which can
 	// create files) -- see CheckNotRoot's doc comment for why. Normal sudo
 	// invocations never reach this as root anymore (demoted above); this
@@ -166,10 +187,7 @@ func run() (exitCode int) {
 	var earlyConf config.AppConfig
 	{
 		earlyConf = config.LoadAppConfig()
-		console.LineCharacters = earlyConf.UI.LineCharacters
-		console.SpinnerEnabled = earlyConf.UI.Spinner
-		console.SpinnerSpeed = earlyConf.UI.SpinnerSpeed
-		console.HyperlinksMode = earlyConf.UI.Hyperlinks
+		earlyConf.Appearance.ApplyToConsole()
 	}
 
 	// Re-tighten permissions on DS2's own config/state/log files every
@@ -369,7 +387,7 @@ func run() (exitCode int) {
 	// (see TagProcessorHandler.Handle), which only reflects the correct tint
 	// if the key is already the active one by then.
 	restoreTint = tui.BeginTintForElement("local", "cli")
-	tui.RegisterConnTypeTints(ctx, "local", config.LoadAppConfig().AnsiColors.Local)
+	tui.RegisterConnTypeTints(ctx, "local", config.LoadAppConfig().Appearance.Local.AnsiColors)
 
 	stopStartupSpinner := console.StartSpinner()
 

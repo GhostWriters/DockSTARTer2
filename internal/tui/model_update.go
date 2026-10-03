@@ -2,7 +2,6 @@ package tui
 
 import (
 	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
@@ -47,6 +46,8 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+
+	msg = m.keyAlias(msg)
 
 	var cmds []tea.Cmd
 
@@ -162,14 +163,17 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case globalTickMsg:
 		// Advance all active spinners before the repaint so the frame is already
 		// updated when Bubble Tea flushes the frame to the terminal.
-		m.panel.AdvanceSpinners(msg.time)
-		if sa, ok := m.dialog.(SpinnerAdvancer); ok {
-			sa.AdvanceSpinners(msg.time)
+		advanced := m.panel.AdvanceSpinners(msg.time)
+		if sa, ok := m.dialog.(SpinnerAdvancer); ok && sa.AdvanceSpinners(msg.time) {
+			advanced = true
 		}
-		if sa, ok := m.activeScreen.(SpinnerAdvancer); ok {
-			sa.AdvanceSpinners(msg.time)
+		if sa, ok := m.activeScreen.(SpinnerAdvancer); ok && sa.AdvanceSpinners(msg.time) {
+			advanced = true
 		}
-		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd())
+		// A tick that moved nothing reuses the last frame, unless a
+		// coalesced motion/wheel frame is still waiting to be drawn.
+		m.renderSkipped = !advanced && !m.renderPending && m.haveCachedView
+		return m, logger.BatchRecoverTUI(m.ctx, globalTickCmd(m.connType))
 
 	case displayengine.PanelLineMsg:
 		// Freeze auto-follow while the log-panel scrollbar thumb is being
@@ -180,6 +184,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.panel = updated.(displayengine.PanelModel)
 		if m.panelInteractionActive() {
 			m.renderSkipped = !m.interactionRenderDue()
+			m.renderPending = m.renderPending || m.renderSkipped
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
@@ -199,6 +204,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dialog = dialog
 			if m.dialogInteractionActive() {
 				m.renderSkipped = !m.interactionRenderDue()
+				m.renderPending = m.renderPending || m.renderSkipped
 			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -208,6 +214,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.panel = updated.(displayengine.PanelModel)
 			if m.panelInteractionActive() {
 				m.renderSkipped = !m.interactionRenderDue()
+				m.renderPending = m.renderPending || m.renderSkipped
 			}
 			return m, logger.BatchRecoverTUI(m.ctx, cmd)
 		}
@@ -219,6 +226,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateExitLocked()
 		if m.panelInteractionActive() {
 			m.renderSkipped = !m.interactionRenderDue()
+			m.renderPending = m.renderPending || m.renderSkipped
 		}
 		return m, logger.BatchRecoverTUI(m.ctx, cmd)
 
@@ -281,6 +289,7 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.(type) {
 		case tea.MouseMotionMsg, tea.MouseWheelMsg:
 			m.renderSkipped = !m.interactionRenderDue()
+			m.renderPending = m.renderPending || m.renderSkipped
 		}
 
 		if handled {
@@ -848,13 +857,10 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case displayengine.ConfigChangedMsg:
 		m.config = msg.Config
-		console.SpinnerEnabled = msg.Config.UI.Spinner
-		console.RefreshRate = msg.Config.UI.RefreshRate
-		console.SpinnerSpeed = console.AlignToRefreshRate(msg.Config.UI.SpinnerSpeed, msg.Config.UI.RefreshRate)
-		console.LineCharacters = msg.Config.UI.LineCharacters
-		console.HyperlinksMode = msg.Config.UI.Hyperlinks
-		_, _ = theme.Load(m.config.UI.Theme, "")
-		RegisterConnTypeTints(m.ctx, m.connType, m.config.AnsiColors.ForConnType(m.connType))
+		msg.Config.Appearance.ApplyToConsole()
+		_, _ = theme.Load(m.config.Appearance.Local.Theme, "")
+		RegisterConnTypeTints(m.ctx, m.connType, m.config.Appearance.ForConnType(m.connType).AnsiColors)
+		RegisterConnTypeTheme(m.ctx, m.connType, m.config)
 		m.invalidateAllCaches()
 		m.backdrop.Header.SyncFlags()
 		updated, _ := m.panel.Update(msg)
@@ -1142,6 +1148,8 @@ func (m *AppModel) setHeaderFocus(focus displayengine.HeaderFocus) {
 		m.panel.Focused = false
 		m.panelTitleFocused = false
 		m.panel.BlurTitleBar()
+		m.panel.Input.Blur()
+		m.panel.InputFocused = false
 	}
 	m.updateComponentFocus()
 }
@@ -1209,7 +1217,7 @@ func (m *AppModel) invalidateAllCaches() {
 // Returns true if the log panel height changed (caller should resize the active screen/dialog).
 func (m *AppModel) applyPanelMax() bool {
 	layout := displayengine.GetLayout()
-	hasShadow := displayengine.CurrentConfig().UI.Shadow
+	hasShadow := displayengine.ActiveAppearance().Shadow
 	headerH := 1
 	if m.backdrop != nil {
 		headerH = m.backdrop.Header.Height()
@@ -1305,7 +1313,7 @@ func (m AppModel) getContentArea() (int, int) {
 	// Use backdropHeight() to account for log panel
 	bh := m.backdropHeight()
 	layout := displayengine.GetLayout()
-	hasShadow := displayengine.CurrentConfig().UI.Shadow
+	hasShadow := displayengine.ActiveAppearance().Shadow
 	headerH := 1
 	helplineH := layout.HelplineHeight
 	if m.backdrop != nil {
@@ -1328,7 +1336,7 @@ func (m AppModel) getDialogArea(d tea.Model) (int, int) {
 			headerH = m.backdrop.ChromeHeight() - 1
 			helplineH = m.backdrop.HelplineActualHeight()
 		}
-		return layout.ContentArea(m.width, m.height, m.config.UI.Shadow, true, headerH, helplineH)
+		return layout.ContentArea(m.width, m.height, m.config.Appearance.ForConnType(m.connType).Shadow, true, headerH, helplineH)
 	}
 	return m.getContentArea()
 }

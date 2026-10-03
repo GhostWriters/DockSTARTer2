@@ -277,7 +277,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 		}
 	}
 
-	tickInterval := time.Duration(console.SpinnerSpeed) * time.Millisecond
+	tickInterval := time.Duration(console.SpinnerSpeedFor(console.ConnTypeFromContext(ctx))) * time.Millisecond
 	if tickInterval <= 0 {
 		tickInterval = 100 * time.Millisecond
 	}

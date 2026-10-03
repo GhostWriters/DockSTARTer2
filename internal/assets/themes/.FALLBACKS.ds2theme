@@ -40,6 +40,7 @@ ButtonActive   = "{{[-:-:R]}}"
 IconInactive   = ""
 IconFocused    = "{{[-:-:R]}}"
 IconPressed    = "{{[-:-:RB]}}"
+IconDisabled   = "{{|IconInactive:::bD|}}"
 Highlight      = "{{[-:-:B]}}"
 MarkerInvalid  = "{{[-:-:R]}}"
 
@@ -62,10 +63,16 @@ MarkerInvalid  = "{{[-:-:R]}}"
 #   both render within the header bar, where the ambient background is
 #   always StatusBar already.
 #
-#   Prompt/PromptShell/PromptSudo: style a command-line-style input's own
-#   leading prompt glyph. Plain input keeps the ambient text color (no
-#   fallback needed); a shell command gets Highlight; one that will run
-#   under sudo gets the more alarming MarkerInvalid.
+#   Prompt/PromptShell/PromptSudo: style a text input's own prompt (e.g.
+#   "Find>", or the console panel's ">"), drawn over its field
+#   (InputField). A plain prompt is the field's style, bold -- flags only,
+#   not a reference to InputField, which may be unset; a shell command's
+#   gets Highlight; one that will run under sudo gets the more alarming
+#   MarkerInvalid.
+#
+#   InputField: a text input's field. Unset, it draws Item's text on the
+#   dialog background -- Item's own background is left out, which a
+#   name reference can't express, so there is no fallback entry.
 #
 #   ResizeLine: styles the tabbed env editor's split-gutter line while
 #   actively being dragged/keyboard-resized -- a solid reverse-video block
@@ -84,6 +91,8 @@ ItemFocused                = "{{[-:-:R]}}"
 TagFocused                 = "{{[-:-:R]}}"
 TagKey                     = "{{[-:-:B]}}"
 TagKeyFocused              = "{{|TagFocused|}}"
+PositionIndicator          = "{{|TagKey:::B|}}"
+ListCount                  = "{{|PositionIndicator|}}"
 TagBrackets                = "{{|Dialog|}}"
 TagSpinner                 = "{{|Tag|}}"
 ItemList                   = "{{|Item|}}"
@@ -99,6 +108,8 @@ ProgramBox                 = "{{[~]}}"
 Shadow                     = "{{|Screen:::D|}}"
 OptionValue                = "{{|Dialog|}}"
 OptionValueFocused         = "{{|TagFocused|}}"
+OptionValueBrackets        = "{{|OptionValue|}}"
+OptionValueBracketsFocused = "{{|OptionValueFocused|}}"
 LargeTitle                 = "{{|Title|}}"
 LargeTitleArea             = "{{|StatusBar|}}"
 StatusFields               = "{{[-]}}"
@@ -110,9 +121,11 @@ HeadingTag                 = "{{|Heading|}}"
 HeadingValue               = "{{|Heading|}}"
 HeadingAppDescription      = "{{|Heading|}}"
 MarkerLocked               = "{{|MarkerInvalid|}}"
-Prompt                     = ""
+Prompt                     = "{{[-:-:B]}}"
 PromptShell                = "{{|Highlight|}}"
 PromptSudo                 = "{{|MarkerInvalid|}}"
+InputField                 = ""
+InputFieldFocused          = "{{|TagFocused|}}"
 ResizeLine                 = "{{|ItemFocused|}}"
 MarkerAdded                = "{{|Highlight|}}"
 MarkerDeleted              = "{{|MarkerInvalid|}}"
@@ -208,6 +221,24 @@ LargeTitleAreaSuccess        = "{{|LargeTitleArea|}}"
 LargeTitleAreaQuestion       = "{{|LargeTitleArea|}}"
 LargeTitleFocusIndicator     = "{{|TitleFocusIndicator|}}"
 LargeTitleUnfocusedIndicator = "{{|TitleUnfocusedIndicator|}}"
+# Title bar controls: checkboxes, their labels and shortcut letters, and
+# dropdown values drawn in a title bar (e.g. "[x] Enabled", "Variant All▼").
+# Small title bars fall back to the list styles; large ones to the large
+# title bar's own colors.
+TitleControlCheckboxOn            = "{{|CheckboxOn|}}"
+TitleControlCheckboxOff           = "{{|CheckboxOff|}}"
+TitleControlCheckboxBrackets      = "{{|CheckboxBracketsOff|}}"
+TitleControlTag                   = "{{|Tag|}}"
+TitleControlTagKey                = "{{|TagKey|}}"
+TitleControlOptionValue           = "{{|OptionValue|}}"
+TitleControlOptionValueBrackets   = "{{|OptionValueBrackets|}}"
+LargeTitleControlCheckboxOn       = "{{|LargeTitleControlCheckboxOff:::B|}}"
+LargeTitleControlCheckboxOff      = "{{[-]}}"
+LargeTitleControlCheckboxBrackets = "{{[-]}}"
+LargeTitleControlTag              = "{{[-]}}"
+LargeTitleControlTagKey           = "{{|LargeTitleControlTag:::B|}}"
+LargeTitleControlOptionValue      = "{{|LargeTitleControlTag|}}"
+LargeTitleControlOptionValueBrackets = "{{|LargeTitleControlOptionValue|}}"
 
 ## Item list
 # Optional ItemList-variant tags that fall back to another tag when the
@@ -254,48 +285,64 @@ IconHelpPressed             = "{{|IconPressed|}}"
 LargeIconHelpInactive       = "{{|IconHelpInactive|}}"
 LargeIconHelpFocused        = "{{|LargeIconFocused|}}"
 LargeIconHelpPressed        = "{{|LargeIconPressed|}}"
+IconHelpDisabled            = "{{|IconDisabled|}}"
+LargeIconHelpDisabled       = "{{|IconHelpDisabled|}}"
 IconRefreshInactive         = "{{|IconInactive|}}"
 IconRefreshFocused          = "{{|IconFocused|}}"
 IconRefreshPressed          = "{{|IconPressed|}}"
 LargeIconRefreshInactive    = "{{|IconRefreshInactive|}}"
 LargeIconRefreshFocused     = "{{|LargeIconFocused|}}"
 LargeIconRefreshPressed     = "{{|LargeIconPressed|}}"
+IconRefreshDisabled         = "{{|IconDisabled|}}"
+LargeIconRefreshDisabled    = "{{|IconRefreshDisabled|}}"
 IconExitInactive            = "{{|IconInactive|}}"
 IconExitFocused             = "{{|IconFocused|}}"
 IconExitPressed             = "{{|IconPressed|}}"
 LargeIconExitInactive       = "{{|IconExitInactive|}}"
 LargeIconExitFocused        = "{{|LargeIconFocused|}}"
 LargeIconExitPressed        = "{{|LargeIconPressed|}}"
+IconExitDisabled            = "{{|IconDisabled|}}"
+LargeIconExitDisabled       = "{{|IconExitDisabled|}}"
 IconResizeUpInactive        = "{{[-]}}"
 IconResizeUpFocused         = "{{|IconFocused|}}"
 IconResizeUpPressed         = "{{|IconPressed|}}"
 LargeIconResizeUpInactive   = "{{|IconResizeUpInactive|}}"
 LargeIconResizeUpFocused    = "{{|LargeIconFocused|}}"
 LargeIconResizeUpPressed    = "{{|LargeIconPressed|}}"
+IconResizeUpDisabled        = "{{|IconResizeUpInactive:::bD|}}"
+LargeIconResizeUpDisabled   = "{{|IconResizeUpDisabled|}}"
 IconResizeDnInactive        = "{{[-]}}"
 IconResizeDnFocused         = "{{|IconFocused|}}"
 IconResizeDnPressed         = "{{|IconPressed|}}"
 LargeIconResizeDnInactive   = "{{|IconResizeDnInactive|}}"
 LargeIconResizeDnFocused    = "{{|LargeIconFocused|}}"
 LargeIconResizeDnPressed    = "{{|LargeIconPressed|}}"
+IconResizeDnDisabled        = "{{|IconResizeDnInactive:::bD|}}"
+LargeIconResizeDnDisabled   = "{{|IconResizeDnDisabled|}}"
 IconMaximizeInactive        = "{{|IconInactive|}}"
 IconMaximizeFocused         = "{{|IconFocused|}}"
 IconMaximizePressed         = "{{|IconPressed|}}"
 LargeIconMaximizeInactive   = "{{|IconMaximizeInactive|}}"
 LargeIconMaximizeFocused    = "{{|LargeIconFocused|}}"
 LargeIconMaximizePressed    = "{{|LargeIconPressed|}}"
+IconMaximizeDisabled        = "{{|IconDisabled|}}"
+LargeIconMaximizeDisabled   = "{{|IconMaximizeDisabled|}}"
 IconSideBySideInactive      = "{{|IconInactive|}}"
 IconSideBySideFocused       = "{{|IconFocused|}}"
 IconSideBySidePressed       = "{{|IconPressed|}}"
 LargeIconSideBySideInactive = "{{|IconSideBySideInactive|}}"
 LargeIconSideBySideFocused  = "{{|LargeIconFocused|}}"
 LargeIconSideBySidePressed  = "{{|LargeIconPressed|}}"
+IconSideBySideDisabled      = "{{|IconDisabled|}}"
+LargeIconSideBySideDisabled = "{{|IconSideBySideDisabled|}}"
 IconStackedInactive         = "{{|IconInactive|}}"
 IconStackedFocused          = "{{|IconFocused|}}"
 IconStackedPressed          = "{{|IconPressed|}}"
 LargeIconStackedInactive    = "{{|IconStackedInactive|}}"
 LargeIconStackedFocused     = "{{|LargeIconFocused|}}"
 LargeIconStackedPressed     = "{{|LargeIconPressed|}}"
+IconStackedDisabled         = "{{|IconDisabled|}}"
+LargeIconStackedDisabled    = "{{|IconStackedDisabled|}}"
 
 ## Checkboxes
 # Fallback targets for the Checkbox/Radio tag family produced by
@@ -346,6 +393,7 @@ IPAddress       = "{{|Highlight|}}"
 Var             = "{{|Highlight|}}"
 User            = "{{|Highlight|}}"
 Theme           = "{{|Highlight|}}"
+Tint            = "{{|Theme|}}"
 
 ## Status bar
 # Optional header-bar (Status*) tags that fall back to another tag when

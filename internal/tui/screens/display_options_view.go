@@ -47,6 +47,31 @@ func (s *DisplayOptionsScreen) View() tea.View {
 // settings/preview row, via ContentColumn/appearanceLayoutRow) recursively
 // supplies every child region below it, including the collapsed-preview
 // expand indicator (see appearanceLayoutRow.GetHitRegions).
+// GetInputCursor implements tui.InputCursorProvider: the terminal cursor
+// sits in a Find box while it has focus, placed by the box's own
+// hit region.
+func (s *DisplayOptionsScreen) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	box, input := s.focusedFindBox()
+	if box == nil {
+		return 0, 0, tea.CursorBar, false
+	}
+	// Hit regions record the input's absolute text X; keep it.
+	saved := input.ScreenTextX()
+	defer input.SetScreenTextX(saved)
+	for _, r := range s.GetHitRegions(0, 0) {
+		if r.ID != box.ID()+".sinput" {
+			continue
+		}
+		shape = tea.CursorBar
+		if input.IsOverwrite() {
+			shape = tea.CursorBlock
+		}
+		// CursorColumn counts the prompt; +1 is the section padding.
+		return r.X + 1 + input.CursorColumn(), r.Y, shape, true
+	}
+	return 0, 0, tea.CursorBar, false
+}
+
 func (s *DisplayOptionsScreen) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {
 	if s.outerMenu == nil {
 		return nil

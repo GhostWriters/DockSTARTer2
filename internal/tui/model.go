@@ -326,8 +326,13 @@ type AppModel struct {
 	renderSkipped bool
 
 	// cachedView is the most recently composed frame, returned by View()
-	// when renderSkipped is set.
-	cachedView tea.View
+	// when renderSkipped is set; haveCachedView reports there is one.
+	cachedView     tea.View
+	haveCachedView bool
+
+	// renderPending is set while a coalesced motion/wheel frame hasn't been
+	// drawn yet, so the next tick draws it even if nothing animated.
+	renderPending bool
 
 	// lastPanelInteraction / lastDialogInteraction record when a wheel event
 	// last landed on the log panel / modal dialog respectively. Streamed
@@ -441,7 +446,7 @@ func (m *AppModel) Send(msg tea.Msg) {
 // Init implements tea.Model
 func (m *AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
-		globalTickCmd(),
+		globalTickCmd(m.connType),
 		m.backdrop.Init(),
 		m.panel.Init(),
 	}
@@ -456,6 +461,7 @@ func (m *AppModel) Init() tea.Cmd {
 		// querying it too would be harmless but pointless.
 		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes))
 	}
-	RegisterConnTypeTints(m.ctx, m.connType, m.config.AnsiColors.ForConnType(m.connType))
+	RegisterConnTypeTints(m.ctx, m.connType, m.config.Appearance.ForConnType(m.connType).AnsiColors)
+	RegisterConnTypeTheme(m.ctx, m.connType, m.config)
 	return logger.BatchRecoverTUI(m.ctx, cmds...)
 }

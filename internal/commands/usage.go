@@ -255,7 +255,7 @@ func GetUsage(target string, noHeading bool) string {
 		)
 	}
 
-	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder") {
+	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder", "--config-panel") {
 		printStr(
 			"{{|UsageCommand|}}--config-show{{[-]}}",
 			"{{|UsageCommand|}}--show-config{{[-]}}",
@@ -264,6 +264,8 @@ func GetUsage(target string, noHeading bool) string {
 			"	Sets the folder where application variables are stored.",
 			"{{|UsageCommand|}}--config-compose-folder{{[-]}} {{|UsageFile|}}<path>{{[-]}}",
 			"	Sets the folder where the docker-compose.yml file is stored.",
+			"{{|UsageCommand|}}--config-panel{{[-]}} {{|UsageOption|}}<log|console|none>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Sets which panel shows below the menus (see {{|UsageCommand|}}-T{{[-]}} for connection types).",
 		)
 	}
 	if match("--disconnect", "--server") {
@@ -503,56 +505,64 @@ func GetUsage(target string, noHeading bool) string {
 		"--theme-checkbox-brackets", "--theme-radio-brackets",
 		"--theme-menu-brackets", "--theme-no-menu-brackets",
 		"--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks", "--theme-show-preview", "--theme-no-show-preview",
+		"--theme-pane-layout",
 		"--theme-extract", "--theme-extract-all") {
 		printStr(
-			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}]",
+			"{{|UsageCommand|}}-T --theme{{[-]}} [{{|UsageTheme|}}<themename>{{[-]}} | {{|UsageTheme|}}user:<themename>{{[-]}} | {{|UsageTheme|}}<path>.ds2theme{{[-]}} | {{|UsageTheme|}}file:<path>{{[-]}}] [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Apply a theme. No arg shows the current theme.",
 			"	  {{|UsageTheme|}}<themename>{{[-]}}: embedded theme   {{|UsageTheme|}}user:<themename>{{[-]}}: user themes folder",
 			"	  {{|UsageTheme|}}<path>.ds2theme{{[-]}} or {{|UsageTheme|}}file:<path>{{[-]}}: arbitrary file path",
+			"	This and the commands below marked with a connection-type list set that setting separately for",
+			"	{{|UsageOption|}}local{{[-]}}, {{|UsageOption|}}ssh{{[-]}}, and {{|UsageOption|}}web{{[-]}} sessions; omitting it targets all three. A value-taking",
+			"	command given only a type list shows the current value for those types.",
+			"	  {{|UsageOption|}}local{{[-]}}: DS2 run in a terminal on this machine (including one reached through a normal SSH login)",
+			"	  {{|UsageOption|}}ssh{{[-]}}: DS2's own SSH server   {{|UsageOption|}}web{{[-]}}: DS2's own web server",
 			"{{|UsageCommand|}}--theme-list{{[-]}}",
 			"	Lists the available themes",
 			"{{|UsageCommand|}}--theme-table{{[-]}}",
 			"	Lists the available themes in a table format",
-			"{{|UsageCommand|}}--theme-lines{{[-]}} | {{|UsageCommand|}}--theme-no-lines{{[-]}}",
+			"{{|UsageCommand|}}--theme-lines{{[-]}} | {{|UsageCommand|}}--theme-no-lines{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn line drawing characters on or off in the GUI",
-			"{{|UsageCommand|}}--theme-borders{{[-]}} | {{|UsageCommand|}}--theme-no-borders{{[-]}}",
+			"{{|UsageCommand|}}--theme-borders{{[-]}} | {{|UsageCommand|}}--theme-no-borders{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn borders on or off in the GUI",
-			"{{|UsageCommand|}}--theme-large-buttons{{[-]}} | {{|UsageCommand|}}--theme-no-large-buttons{{[-]}}",
+			"{{|UsageCommand|}}--theme-large-buttons{{[-]}} | {{|UsageCommand|}}--theme-no-large-buttons{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn large (bordered) button style on or off in the GUI",
-			"{{|UsageCommand|}}--theme-shadows{{[-]}} | {{|UsageCommand|}}--theme-no-shadows{{[-]}}",
+			"{{|UsageCommand|}}--theme-shadows{{[-]}} | {{|UsageCommand|}}--theme-no-shadows{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn shadows on or off in the GUI",
-			"{{|UsageCommand|}}--theme-shadow-level{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
+			"{{|UsageCommand|}}--theme-shadow-level{{[-]}} {{|UsageOption|}}<level>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set the shadow level (0-4 or off/light/medium/dark/solid)",
-			"{{|UsageCommand|}}--theme-scrollbars{{[-]}} | {{|UsageCommand|}}--theme-no-scrollbars{{[-]}}",
+			"{{|UsageCommand|}}--theme-scrollbars{{[-]}} | {{|UsageCommand|}}--theme-no-scrollbars{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn the scrollbar on or off in the GUI",
-			"{{|UsageCommand|}}--theme-spinners{{[-]}} | {{|UsageCommand|}}--theme-no-spinners{{[-]}}",
+			"{{|UsageCommand|}}--theme-spinners{{[-]}} | {{|UsageCommand|}}--theme-no-spinners{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn the CLI spinner on or off",
-			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
-			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().UI.RefreshRate),
-			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}}",
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().Appearance.Local.SpinnerSpeed),
+			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().Appearance.Local.RefreshRate),
+			"{{|UsageCommand|}}--theme-border-color{{[-]}} {{|UsageOption|}}<level>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set the border color (1=Border, 2=Border2, 3=Both)",
-			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"{{|UsageCommand|}}--theme-dialog-title{{[-]}} {{|UsageOption|}}<align>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set dialog title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
-			"{{|UsageCommand|}}--theme-submenu-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"{{|UsageCommand|}}--theme-submenu-title{{[-]}} {{|UsageOption|}}<align>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set submenu title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
-			"{{|UsageCommand|}}--theme-panel-title{{[-]}} {{|UsageOption|}}<align>{{[-]}}",
+			"{{|UsageCommand|}}--theme-panel-title{{[-]}} {{|UsageOption|}}<align>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set log panel title alignment ({{|UsageOption|}}left{{[-]}} or {{|UsageOption|}}center{{[-]}})",
-			"{{|UsageCommand|}}--theme-checkbox-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"{{|UsageCommand|}}--theme-checkbox-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set checkbox bracket visibility ({{|UsageOption|}}never{{[-]}}, {{|UsageOption|}}selected{{[-]}}, or {{|UsageOption|}}always{{[-]}})",
-			"{{|UsageCommand|}}--theme-radio-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"{{|UsageCommand|}}--theme-radio-brackets{{[-]}} {{|UsageOption|}}<mode>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set radio button bracket visibility ({{|UsageOption|}}never{{[-]}}, {{|UsageOption|}}selected{{[-]}}, or {{|UsageOption|}}always{{[-]}})",
-			"{{|UsageCommand|}}--theme-menu-brackets{{[-]}} | {{|UsageCommand|}}--theme-no-menu-brackets{{[-]}}",
+			"{{|UsageCommand|}}--theme-menu-brackets{{[-]}} | {{|UsageCommand|}}--theme-no-menu-brackets{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Turn brackets around the focused menu item's tag on or off",
-			"{{|UsageCommand|}}--theme-tab-layout{{[-]}} {{|UsageOption|}}<layout>{{[-]}}",
+			"{{|UsageCommand|}}--theme-tab-layout{{[-]}} {{|UsageOption|}}<layout>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set the vars editor's tab layout when 2 tabs are open ({{|UsageOption|}}maximized{{[-]}}, {{|UsageOption|}}sidebyside{{[-]}}, or {{|UsageOption|}}stacked{{[-]}})",
-			"{{|UsageCommand|}}--theme-markdown-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"{{|UsageCommand|}}--theme-markdown-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set markdown hyperlink rendering ({{|UsageOption|}}off{{[-]}}, {{|UsageOption|}}inline{{[-]}}, or {{|UsageOption|}}auto{{[-]}})",
-			"{{|UsageCommand|}}--theme-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}}",
+			"{{|UsageCommand|}}--theme-hyperlinks{{[-]}} {{|UsageOption|}}<mode>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Set DS2's own console/path hyperlink rendering ({{|UsageOption|}}off{{[-]}}, {{|UsageOption|}}inline{{[-]}}, or {{|UsageOption|}}auto{{[-]}})",
-			"{{|UsageCommand|}}--theme-show-preview{{[-]}} | {{|UsageCommand|}}--theme-no-show-preview{{[-]}}",
+			"{{|UsageCommand|}}--theme-show-preview{{[-]}} | {{|UsageCommand|}}--theme-no-show-preview{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Show or hide the Appearance Settings preview panel by default",
+			"{{|UsageCommand|}}--theme-pane-layout{{[-]}} {{|UsageOption|}}<layout>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			"	Set the layout of Appearance Settings' Theme/Tint/Overrides panes ({{|UsageOption|}}maximized{{[-]}}, {{|UsageOption|}}sidebyside{{[-]}}, or {{|UsageOption|}}stacked{{[-]}})",
 			"{{|UsageCommand|}}--theme-extract{{[-]}} {{|UsageTheme|}}<themename>{{[-]}} {{|UsageOption|}}<destdir>{{[-]}} {{|UsageOption|}}<filename>{{[-]}}",
 			"	Extract a theme to a file (use {{|UsageTheme|}}user:<name>{{[-]}} for user themes; {{|UsageOption|}}user:{{[-]}} as destdir for the user themes folder)",
 			"{{|UsageCommand|}}--theme-extract-all{{[-]}} {{|UsageOption|}}<destdir>{{[-]}}",
@@ -603,14 +613,14 @@ func GetUsage(target string, noHeading bool) string {
 	}
 	if match("--theme-spinner-speed") {
 		printStr(
-			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().UI.SpinnerSpeed),
+			"{{|UsageCommand|}}--theme-spinner-speed{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set spinner frame speed in milliseconds (50-5000, default %d)", config.DefaultConfig().Appearance.Local.SpinnerSpeed),
 		)
 	}
 	if match("--theme-refresh-rate") {
 		printStr(
-			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}}",
-			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().UI.RefreshRate),
+			"{{|UsageCommand|}}--theme-refresh-rate{{[-]}} {{|UsageOption|}}<ms>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
+			fmt.Sprintf("	Set screen repaint interval in milliseconds (16-1000, default %d)", config.DefaultConfig().Appearance.Local.RefreshRate),
 		)
 	}
 	if match("-u", "--update", "--update-app", "--update-templates") {

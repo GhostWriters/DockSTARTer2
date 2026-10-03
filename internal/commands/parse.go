@@ -259,8 +259,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 				}
 			}
 
-		case "-t", "--test", "--man", "--config-pm", "--config-folder", "--config-compose-folder", "--theme-border-color",
-			"--theme-spinner-speed", "--theme-refresh-rate",
+		case "-t", "--test", "--man", "--config-pm", "--config-folder", "--config-compose-folder",
 			"--edit-app", "--start-edit-app",
 			"--env-edit", "--env-edit-lower", "--env-appfiles":
 			if i >= len(expandedArgs) || strings.HasPrefix(expandedArgs[i], "-") {
@@ -269,9 +268,38 @@ func Parse(args []string) ([]CommandGroup, error) {
 			currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 			i++
 
-		case "-T", "--theme", "-S", "--select", "--menu-config-app-select", "--menu-app-select", "--theme-shadow-level",
+		case "-T", "--theme", "--theme-shadow-level", "--theme-border-color",
 			"--theme-dialog-title", "--theme-submenu-title", "--theme-panel-title",
-			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-tab-layout", "--theme-markdown-hyperlinks", "--theme-hyperlinks":
+			"--theme-checkbox-brackets", "--theme-radio-brackets", "--theme-tab-layout", "--theme-pane-layout",
+			"--theme-spinner-speed", "--theme-refresh-rate",
+			"--theme-markdown-hyperlinks", "--theme-hyperlinks", "--config-panel":
+			// An optional value, then an optional connection-type list (see
+			// splitThemeValueArgs).
+			for range 2 {
+				if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+					currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+					i++
+				} else {
+					break
+				}
+			}
+
+		case "--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
+			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
+			"--theme-large-buttons", "--theme-no-large-buttons",
+			"--theme-large-titlebars", "--theme-no-large-titlebars",
+			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
+			"--theme-scrollbar", "--theme-no-scrollbar", "--theme-scrollbars", "--theme-no-scrollbars",
+			"--theme-spinner", "--theme-no-spinner", "--theme-spinners", "--theme-no-spinners",
+			"--theme-menu-brackets", "--theme-no-menu-brackets",
+			"--theme-show-preview", "--theme-no-show-preview":
+			// An optional connection-type list.
+			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
+				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
+				i++
+			}
+
+		case "-S", "--select", "--menu-config-app-select", "--menu-app-select":
 			if i < len(expandedArgs) && !strings.HasPrefix(expandedArgs[i], "-") {
 				currentGroup.Args = append(currentGroup.Args, expandedArgs[i])
 				i++
@@ -374,7 +402,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 					break
 				}
 			}
-			if typeElementArgs := currentGroup.Args[1:]; len(typeElementArgs) > 0 {
+			if len(currentGroup.Args) > 1 {
+				typeElementArgs := currentGroup.Args[1:]
 				if err := checkCLIConnTypeScope(expandedArgs, cmd, i-len(typeElementArgs), typeElementArgs); err != nil {
 					return nil, err
 				}
@@ -473,16 +502,7 @@ func Parse(args []string) ([]CommandGroup, error) {
 			"--edit-global", "--start-edit-global",
 			"-l", "--list", "--list-added", "--list-builtin", "--list-deprecated", "--list-enabled", "--list-disabled", "--list-nondeprecated", "--list-referenced",
 			"--config-pm-list", "--config-pm-table", "--config-pm-existing-list", "--config-pm-existing-table",
-			"--config-show", "--show-config",
-			"--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
-			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
-			"--theme-large-buttons", "--theme-no-large-buttons",
-			"--theme-large-titlebars", "--theme-no-large-titlebars",
-			"--theme-shadows", "--theme-no-shadows", "--theme-shadow", "--theme-no-shadow",
-			"--theme-scrollbar", "--theme-no-scrollbar",
-			"--theme-spinner", "--theme-no-spinner",
-			"--theme-menu-brackets", "--theme-no-menu-brackets",
-			"--theme-show-preview", "--theme-no-show-preview":
+			"--config-show", "--show-config":
 			// Do nothing, consumesUntilDash is false
 
 		default:

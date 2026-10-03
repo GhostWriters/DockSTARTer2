@@ -2,8 +2,10 @@ package classic
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"unicode"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -36,6 +38,9 @@ type MenuItem struct {
 
 	// Layout support
 	IsSeparator bool // Whether this is a non-selectable header/separator
+	// IsCategory, with IsSeparator, makes it a category heading, drawn with
+	// a heavy line.
+	IsCategory bool
 
 	// Grouped list support (app selection with instances)
 	IsGroupHeader     bool   // App name header row; checkbox shows group-enabled state (read-only)
@@ -43,6 +48,7 @@ type MenuItem struct {
 	IsAddInstance     bool   // "[+] Add instance…" action row
 	IsEditing         bool   // Inline text-input row for new instance name entry
 	IsNew             bool   // Newly added this session (not yet saved; used to allow rename)
+	Changed           bool   // Has an unapplied change: drawn between changed markers, which take the spaces around its label or value
 	IsReferenced      bool   // Has env vars / compose reference but no __ENABLED; locked from rename
 	WasAdded          bool   // Whether this item was added (present in .env) when the screen loaded (for gutter diff)
 	ShowEnabledGutter bool   // Whether to show the Enabled (E/D) gutter column
@@ -116,9 +122,10 @@ type MenuModel struct {
 	listFocusOverride bool
 
 	// Sub-menu mode (for consolidated screens)
-	subMenuMode bool
-	focusedSub  bool // If false, use normal borders. If true, use thick borders.
-	disabled    bool // When true, renders title with TitleSubMenuDisabled style.
+	subMenuMode  bool
+	focusedSub   bool // If false, use normal borders. If true, use thick borders.
+	frameFocused bool // Draw the border focused although the list isn't (see SetFrameFocused)
+	disabled     bool // When true, renders title with TitleSubMenuDisabled style.
 
 	// submenuWidgets opts a submenu-mode menu into rendering its own title
 	// bar widgets (via ConfigureWidgets) on its border -- off by default so
@@ -184,6 +191,7 @@ type MenuModel struct {
 	variableHeight  bool                                      // Allow list to expand naturally up to layout limits
 	Interceptor     func(tea.Msg, *MenuModel) (tea.Cmd, bool) // Optional custom message handler
 	ContentRenderer func(contentWidth int) string             // Optional: replaces list content in viewSubMenu
+	textInput       bool                                      // A text input section (see NewSinputSection): typed keys go to it
 	onSubFocused    func() tea.Cmd                            // Optional: called when section gains sub-focus
 
 	// wantsAllMessages opts this section into updateSections' catch-all
@@ -256,11 +264,77 @@ type MenuModel struct {
 
 	// Memoization for expensive rendering
 	lastView         string
-	cacheValid       bool // Indicates if lastView is up-to-date with current state
-	lastStateVersion int  // renderVersion snapshot when lastView was saved
+	cacheValid       bool   // Indicates if lastView is up-to-date with current state
+	lastStateVersion int    // renderVersion snapshot when lastView was saved
+	lastViewStamp    string // viewStamp when lastView was saved
+	pendingViewStamp string // viewStamp at the start of the draw in progress
 
 	// Memoization specifically for the variable-height list (separated to avoid border recursion loops)
-	lastListView    string
+	lastListView string
+
+	// header is a section drawn inside a submenu's border above its list
+	// (see SetHeader), or below it sharing the border when headerBottom
+	// (see SetFooter); lastHeaderView is its last drawing, to redraw this
+	// menu when it changes. footerY is the footer's row within the last
+	// drawing.
+	header         Content
+	headerBottom   bool
+	lastHeaderView string
+	footerY        int
+	// footerBottomY is the row of the footer's bottom edge in the last
+	// drawing.
+	footerBottomY int
+	// lastStyleGen, lastScope, and lastViewportHeight complete
+	// renderVariableHeightList's memo key (see recordListMemo).
+	lastStyleGen       uint64
+	lastScope          string
+	lastViewportHeight int
+
+	// rowCache holds list rows' renderings by content (see
+	// renderVariableHeightList), valid while rowCacheStamp matches; off
+	// when rowCacheOff (see SetRowCache).
+	rowCache      map[string]cachedRow
+	rowCacheStamp string
+	rowCacheOff   bool
+
+	// minTagWidth is the narrowest the label column gets (see
+	// SetMinTagWidth).
+	minTagWidth int
+
+	// savedRadio is the saved radio row's index plus one, 0 for none (see
+	// SetSavedRadio).
+	savedRadio int
+
+	// titleChanged, when set, reports whether the title should carry the
+	// changed marker (see SetTitleChanged).
+	titleChanged func() bool
+
+	// titleControls are drawn at the right end of the title bar (see
+	// SetTitleControls).
+	titleControls []TitleControl
+
+	// frameTitle, when set, is an enclosing frame's title drawn in place of
+	// this menu's own (see SetFrameTitle).
+	frameTitle *FrameTitle
+	// titleIcons are drawn at the right of the title (see SetTitleIcons).
+	titleIcons func() []WidgetDef
+	// footerBar is drawn in the bottom border (see SetFooterBar);
+	// footerBarRegions and footerBarY place its last drawing.
+	footerBar        *FooterBar
+	footerBarRegions []footerBarRegion
+	footerBarY       int
+	// darkBorder draws every edge in the Border2 style (see SetDarkBorder).
+	darkBorder bool
+	// inputControls are drawn at the right of an input section's row (see
+	// SetInputControls); inputPrompt is its prompt (see SetInputPrompt).
+	inputControls func() []TitleControl
+	inputPrompt   string
+	// inputIdle marks an input section focused but not editing (see
+	// SetInputEditing); insOvrLabel draws its INS/OVR mode in its bottom
+	// border while editing (see SetInsOvrLabel).
+	inputIdle   bool
+	insOvrLabel bool
+
 	lastWidth       int
 	lastHeight      int
 	lastIndex       int
@@ -791,6 +865,9 @@ func (m *MenuModel) MatchesID(msgID string) bool {
 // WantsHorizontalKeys reports true when this menu has a contentRenderer (the
 // sinput text-input kind), which consumes Left/Right itself for cursor
 // movement via its own interceptor. Part of the Content interface.
+// IsTextInput reports whether this is a text input section.
+func (m *MenuModel) IsTextInput() bool { return m.textInput }
+
 func (m *MenuModel) WantsHorizontalKeys() bool {
 	return m.ContentRenderer != nil
 }
@@ -814,6 +891,46 @@ func (m *MenuModel) SetWantsAllMessages(v bool) {
 // Part of the Content interface.
 func (m *MenuModel) Focusable() bool {
 	return !m.isPlainTextKind && !m.nonFocusable && !m.disabled
+}
+
+// SetFrameFocused draws this submenu's border as focused, as when a section
+// inside it (see SetHeader) holds focus, without making its list active.
+func (m *MenuModel) SetFrameFocused(v bool) {
+	if m.frameFocused != v {
+		m.frameFocused = v
+		m.InvalidateCache()
+	}
+}
+
+// SetHeader draws section inside this submenu's border above its list, like
+// a subtitle: the list, and its scrollbar, start below it. The caller routes
+// focus and messages to it (see HeaderedList).
+func (m *MenuModel) SetHeader(section Content) {
+	m.header, m.headerBottom = section, false
+	m.lastHeaderView = ""
+	m.InvalidateCache()
+}
+
+// SetFooter draws section, a bordered box as wide as this submenu, in place
+// of the submenu's bottom border: the two share their side edges, and the
+// footer's top edge divides it from the list. The caller routes focus and
+// messages to it (see NewFooteredList).
+func (m *MenuModel) SetFooter(section Content) {
+	m.header, m.headerBottom = section, true
+	m.lastHeaderView = ""
+	m.InvalidateCache()
+}
+
+// headerHeight returns how many rows the header or footer adds to a
+// submenu sectionWidth wide.
+func (m *MenuModel) headerHeight(sectionWidth int) int {
+	if m.header == nil || !m.subMenuMode {
+		return 0
+	}
+	if m.headerBottom {
+		return max(m.header.SectionHeight(sectionWidth)-GetLayout().SingleBorder(), 0)
+	}
+	return m.header.SectionHeight(max(sectionWidth-GetLayout().BorderWidth(), 1))
 }
 
 // SetBorderless skips viewSubMenu's outer bordered-box wrap for this
@@ -854,6 +971,9 @@ func (m *MenuModel) SetBottomBorderLabel(label string) {
 	m.bottomBorderLabel = label
 	m.InvalidateCache()
 }
+
+// BottomBorderLabel returns the label set by SetBottomBorderLabel.
+func (m *MenuModel) BottomBorderLabel() string { return m.bottomBorderLabel }
 
 // SetBorderStyle overrides the corner/edge shape of this section's outer
 // bordered box independent of dialogType. Use BorderStyleAuto to revert to
@@ -1042,6 +1162,10 @@ func (m *MenuModel) SetDisabled(disabled bool) {
 
 // SetSubFocused sets the focus state specifically for sub-menu mode (thick vs normal border)
 func (m *MenuModel) SetSubFocused(focused bool) tea.Cmd {
+	if focused && !m.focusedSub && m.textInput {
+		// An input section starts editing whenever it gains focus.
+		m.inputIdle = false
+	}
 	m.focusedSub = focused
 	var cmd tea.Cmd
 	if focused && m.onSubFocused != nil {
@@ -1242,6 +1366,222 @@ func RenderMenuGutter(item MenuItem, showLockGutter bool, activityGutterWidth in
 	}
 
 	return res
+}
+
+// SetTitleChanged makes the title carry the changed marker whenever fn
+// reports true -- e.g. while the section has unapplied changes.
+func (m *MenuModel) SetTitleChanged(fn func() bool) {
+	m.titleChanged = fn
+}
+
+// TitleControl is a checkbox or a dropdown drawn at the right end of a
+// menu's title bar; its owner handles clicks on its hit region (see
+// TitleControlID).
+type TitleControl struct {
+	Label   string
+	Key     rune          // the label's letter drawn as its shortcut (TagKey), if any
+	Checked func() bool   // a checkbox, checked whenever this reports true
+	Value   func() string // a dropdown showing this value, when Checked is nil
+	Changed func() bool   // optional: changed markers take the spaces around the label
+	Help    string        // hit region label
+}
+
+// SetTitleControls draws controls, in order, at the right end of the title
+// bar, before any widgets.
+func (m *MenuModel) SetTitleControls(controls []TitleControl) {
+	m.titleControls = controls
+}
+
+// SetTitleCheckbox draws a single labeled checkbox (e.g. "[x] Enabled") as
+// the title bar's only control (see SetTitleControls), with key as its
+// shortcut letter.
+func (m *MenuModel) SetTitleCheckbox(label string, key rune, checked, changed func() bool) {
+	m.SetTitleControls([]TitleControl{{Label: label, Key: key, Checked: checked, Changed: changed, Help: "Turn " + label + " on or off"}})
+}
+
+// titleControlRender renders markup for a title control, whose style tags
+// name the TitleControl* styles without their prefix: on the large title
+// row the LargeTitleControl* styles over that row's area (ctx.Dialog).
+func titleControlRender(markup string, ctx StyleContext, large bool) string {
+	prefix := "TitleControl"
+	if large {
+		prefix = "LargeTitleControl"
+	}
+	markup = strings.ReplaceAll(markup, "{{|", "{{|"+prefix)
+	if large {
+		return RenderThemeTextCtx(markup, ctx)
+	}
+	return RenderThemeText(markup, ctx.Dialog)
+}
+
+// DropdownValueMarkup returns value as a dropdown shows it, "(value)▼": the
+// value in the OptionValue style, the parentheses and arrow in
+// OptionValueBrackets.
+func DropdownValueMarkup(value string) string {
+	return "{{|OptionValueBrackets|}}({{[-]}}{{|OptionValue|}}" + value + "{{[-]}}{{|OptionValueBrackets|}})▼{{[-]}}"
+}
+
+// titleControlLabel renders c's label with its Key letter (the first match,
+// ignoring case) drawn as its shortcut (Tag and TagKey). Each style resets
+// before the next, so attributes like bold don't carry over.
+func titleControlLabel(c TitleControl, ctx StyleContext, large bool) string {
+	markup := "{{|Tag|}}" + c.Label + "{{[-]}}"
+	if c.Key != 0 {
+		runes := []rune(c.Label)
+		for i, r := range runes {
+			if unicode.ToLower(r) == unicode.ToLower(c.Key) {
+				markup = "{{|Tag|}}" + string(runes[:i]) + "{{[-]}}{{|TagKey|}}" + string(r) +
+					"{{[-]}}{{|Tag|}}" + string(runes[i+1:]) + "{{[-]}}"
+				break
+			}
+		}
+	}
+	return titleControlRender(markup, ctx, large)
+}
+
+// titleControlCheckbox renders a title checkbox's glyph: brackets
+// (CheckboxBrackets) around its mark (CheckboxOn or CheckboxOff).
+func titleControlCheckbox(checked bool, ctx StyleContext, large bool) string {
+	runes := []rune(GetPlainText(renderCheckbox(false, checked, ctx.LineCharacters, false, "always", lipgloss.NewStyle(), lipgloss.NewStyle())))
+	mark := "CheckboxOff"
+	if checked {
+		mark = "CheckboxOn"
+	}
+	if len(runes) < 3 {
+		return titleControlRender("{{|"+mark+"|}}"+string(runes)+"{{[-]}}", ctx, large)
+	}
+	last := len(runes) - 1
+	return titleControlRender("{{|CheckboxBrackets|}}"+string(runes[0])+"{{[-]}}{{|"+mark+"|}}"+string(runes[1:last])+
+		"{{[-]}}{{|CheckboxBrackets|}}"+string(runes[last])+"{{[-]}}", ctx, large)
+}
+
+// TitleControlID returns the hit region ID of title control i.
+func (m *MenuModel) TitleControlID(i int) string { return m.id + ".titlectl" + strconv.Itoa(i) }
+
+// TitleCheckboxID returns the hit region ID of the first title control.
+func (m *MenuModel) TitleCheckboxID() string { return m.TitleControlID(0) }
+
+// titleControlPieces returns each title control as drawn in the border: a
+// checkbox and its label styled like a checkbox row, or a label and its
+// value styled like an option dropdown -- with the changed markers in place
+// of the spaces around the label when changed. Styled by the TitleControl*
+// styles, or with large for the large title row by the LargeTitleControl*
+// ones; both are the same width.
+func (m *MenuModel) titleControlPieces(ctx StyleContext, large bool) []string {
+	return titleControlPiecesFor(m.titleControls, ctx, large)
+}
+
+// titleControlPiecesFor returns controls as drawn in a border (see
+// titleControlPieces).
+func titleControlPiecesFor(controls []TitleControl, ctx StyleContext, large bool) []string {
+	pieces := make([]string, 0, len(controls))
+	pad := lipgloss.NewStyle().Background(ctx.Dialog.GetBackground()).Render(" ")
+	if large {
+		pad = " "
+	}
+	for _, c := range controls {
+		before, after := pad, pad
+		if c.Changed != nil && c.Changed() {
+			before, after = RenderChangedMarkers(ctx)
+		}
+		label := titleControlLabel(c, ctx, large)
+		if c.Checked == nil {
+			value := ""
+			if c.Value != nil {
+				value = c.Value()
+			}
+			shown := titleControlRender(DropdownValueMarkup(value), ctx, large)
+			pieces = append(pieces, before+label+pad+shown+after)
+			continue
+		}
+		glyph := titleControlCheckbox(c.Checked(), ctx, large)
+		pieces = append(pieces, pad+glyph+before+label+after)
+	}
+	return pieces
+}
+
+// largeTitleControlsSegment returns the title controls as drawn on the large
+// title row.
+func (m *MenuModel) largeTitleControlsSegment(ctx StyleContext) string {
+	return strings.Join(m.titleControlPieces(ctx, true), "")
+}
+
+// titleControlRegions returns the title controls' hit regions for a box at
+// (offsetX, offsetY), matching where the title bar places them: just before
+// any widgets at the right end, on the large title row when there is one.
+func (m *MenuModel) titleControlRegions(offsetX, offsetY, zOrder int) []HitRegion {
+	ctx := GetActiveContext()
+	pieces := m.titleControlPieces(ctx, false)
+	// A small title bar separates the controls with a stretch of the border
+	// line (see TitleBarState.RightSegments).
+	sep := 1
+	if m.Layout.LargeTitleBar {
+		sep = 0
+	}
+	total := sep * (len(pieces) - 1)
+	for _, p := range pieces {
+		total += WidthWithoutZones(p)
+	}
+	widgets := 0
+	if m.frameTitle != nil {
+		widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", append(m.titleIconDefs(), m.frameTitle.Widgets()...), ctx))
+	} else if icons := m.ownTitleIcons(); len(icons) > 0 {
+		widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", icons, ctx))
+	} else if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
+		if m.Layout.LargeTitleBar {
+			widgets = lipgloss.Width(RenderThemeTextCtx(buildLargeTitleBarWidgets(false, "", "", m.ActiveWidgets(), ctx), ctx))
+		} else {
+			widgets = WidthWithoutZones(BuildDialogTitleWidgets(false, "", "", m.ActiveWidgets(), ctx))
+		}
+	}
+	if widgets > 0 && sep > 0 && len(pieces) > 0 {
+		total += sep // the border line before the widgets
+	}
+	right := offsetX + m.GetInnerContentWidth() + GetLayout().BorderWidth() - 2
+	x := right - widgets - total
+	regions := make([]HitRegion, 0, len(pieces))
+	for i, p := range pieces {
+		w := WidthWithoutZones(p)
+		regions = append(regions, HitRegion{
+			ID: m.TitleControlID(i), X: x, Y: TitleBarWidgetY(offsetY, m.Layout.LargeTitleBar),
+			Width: w, Height: 1, ZOrder: zOrder, Label: m.titleControls[i].Help,
+		})
+		x += w + sep
+	}
+	return regions
+}
+
+// SetSavedRadio names the radio row holding the saved value: while another
+// row is checked, it carries the changed marker. -1 turns this off.
+func (m *MenuModel) SetSavedRadio(index int) {
+	m.savedRadio = index + 1
+}
+
+// savedRadioTag returns the saved radio row's tag when another row is
+// checked, else "".
+func (m *MenuModel) savedRadioTag() string {
+	saved := m.savedRadio - 1
+	if saved < 0 || saved >= len(m.items) || m.items[saved].Checked {
+		return ""
+	}
+	return m.items[saved].Tag
+}
+
+// SetRowCache turns the list's row cache on (the default) or off. The
+// list reuses each row's rendering, by its content, across frames and item
+// changes: moving focus, or a filtered list's items coming and going, only
+// renders rows not already drawn.
+func (m *MenuModel) SetRowCache(enabled bool) {
+	m.rowCacheOff = !enabled
+}
+
+// SetMinTagWidth keeps the label column at least width wide, so it stays
+// put while the items change (e.g. as a search narrows the list).
+func (m *MenuModel) SetMinTagWidth(width int) {
+	if m.minTagWidth != width {
+		m.minTagWidth = width
+		m.InvalidateCache()
+	}
 }
 
 func (m *MenuModel) SetItem(index int, item MenuItem) {
@@ -1457,8 +1797,8 @@ func (m *MenuModel) helpContextForIdx(idx int) HelpContext {
 // NewMenuModel(id, title, "", nil) wrapping content sections, the pattern
 // used by Config Menu/Main Menu/Options Menu/etc.), m.list.Index() and
 // m.cursor are meaningless -- the real focused item lives inside whichever
-// content section currently has focus. Recurses through ContentRow wrappers
-// to find the actual *MenuModel. Returns m itself when it has real items
+// content section currently has focus. Recurses through ContentRow/
+// ContentColumn and ContentWrapper layers to find the actual *MenuModel. Returns m itself when it has real items
 // (the plain-list case) or no focusable section was found.
 func (m *MenuModel) focusedSectionMenu() *MenuModel {
 	if len(m.items) > 0 || len(m.contentSections) == 0 {
@@ -1476,6 +1816,10 @@ func (m *MenuModel) focusedSectionMenu() *MenuModel {
 				return m
 			}
 			c = items[idx]
+			continue
+		}
+		if w, ok := c.(ContentWrapper); ok {
+			c = w.Unwrap()
 			continue
 		}
 		break

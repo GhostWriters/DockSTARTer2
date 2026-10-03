@@ -86,6 +86,13 @@ type Content interface {
 
 var _ Content = (*MenuModel)(nil)
 
+// ContentWrapper is a Content that decorates another one (e.g. adding a
+// frame around it). Lookups that need the underlying section, such as
+// finding the focused section's menu, unwrap through it.
+type ContentWrapper interface {
+	Unwrap() Content
+}
+
 // SubFocusable is implemented by a Content that itself contains multiple Tab
 // stops (e.g. ContentRow, ContentColumn, or a composite wrapping one of
 // them) -- Tab/Shift-Tab cycling (menu_sections.go) checks for this instead
@@ -98,6 +105,16 @@ type SubFocusable interface {
 	NextFocusableSub(from int) (int, bool)
 	PrevFocusableSub(from int) (int, bool)
 	Items() []Content
+}
+
+// GroupJumper is a SubFocusable whose Tab stops form groups (e.g. a
+// column's sections, or a TabbedPanes' panes) that Ctrl+Up/Down jump
+// between.
+type GroupJumper interface {
+	// GroupStop returns the first Tab stop of the group after (dir > 0) or
+	// before (dir < 0) the one holding stop from; from may be -1 or
+	// NumTabStops() to enter from before the first or after the last.
+	GroupStop(from, dir int) (int, bool)
 }
 
 var (

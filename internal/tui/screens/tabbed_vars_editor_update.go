@@ -16,6 +16,9 @@ import (
 
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+	if m.focus != envFocusEditor {
+		m.editorIdle = false
+	}
 
 	if tickCmd, ok := m.btnRow.Update(msg); ok {
 		return m, tickCmd
@@ -129,6 +132,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Left click moves focus and cursor
 			m.focus = envFocusEditor
+			m.editorIdle = false
 			if len(m.tabs) > 0 {
 				m.tabs[m.activeTab].editor.Focus()
 
@@ -309,6 +313,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						return m, nil
 					}
+					m.editorIdle = false
 					var cmd tea.Cmd
 					m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 						X:      relX,
@@ -339,6 +344,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slot, _ := m.paneSlotFor(idx)
 			editorW := m.paneContentWidth[slot] - layout.BorderWidth()
 			if relX >= 0 && relY >= 0 && relY < m.paneEditorHeight[slot] && relX < editorW {
+				m.editorIdle = false
 				var cmd tea.Cmd
 				m.tabs[idx].editor, cmd = m.tabs[idx].editor.Update(tea.MouseClickMsg{
 					X:      relX,
@@ -532,6 +538,19 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+		}
+
+		// Esc first stops editing, keeping focus in the editor; Space edits
+		// again.
+		if m.focus == envFocusEditor && len(m.tabs) > 0 {
+			switch {
+			case !m.editorIdle && msg.String() == "esc":
+				m.editorIdle = true
+				return m, nil
+			case m.editorIdle && key.Matches(msg, displayengine.Keys.Space):
+				m.editorIdle = false
+				return m, nil
+			}
 		}
 
 		switch {
@@ -1038,7 +1057,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			isMouse = true
 		}
 
-		if !isMouse {
+		if !isMouse && !m.editorIdle {
 			// Before passing the key to the editor, snapshot the cursor row and the
 			// line content so we can detect when the cursor leaves an ENABLED line.
 			tab := &m.tabs[m.activeTab]

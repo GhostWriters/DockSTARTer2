@@ -8,8 +8,8 @@ import (
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/theme"
 
 	semstyle "github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/colorprofile"
@@ -21,6 +21,16 @@ import (
 func resolveTintRef(ctx context.Context, ref string) ([]byte, error) {
 	data, _, err := commands.ResolveTintRefData(ctx, ref)
 	return data, err
+}
+
+// TintSchemeColors returns the colors ref's scheme sets, before any
+// overrides.
+func TintSchemeColors(ctx context.Context, ref string) (config.AnsiElementColors, error) {
+	data, err := resolveTintRef(ctx, ref)
+	if err != nil {
+		return config.AnsiElementColors{}, err
+	}
+	return config.ParseBase16Scheme(data)
 }
 
 // tintKeyForConnType is console.TintKeyForConnType -- kept as a local alias
@@ -70,20 +80,28 @@ func RegisterConnTypeTints(ctx context.Context, connType string, colors config.A
 // connecting terminal a palette override, since not every terminal honors
 // one.
 func registerElementTint(ctx context.Context, connType, elementName string, element config.AnsiElementColors) {
-	key := console.TintKeyForConnTypeElement(connType, elementName)
+	RegisterTintKey(ctx, console.TintKeyForConnTypeElement(connType, elementName), element)
+}
+
+// RegisterTintKey resolves element's palette and registers it under key
+// (see registerElementTint), or unregisters key when element tints nothing.
+func RegisterTintKey(ctx context.Context, key string, element config.AnsiElementColors) {
 	if !element.OverrideEnabled {
 		element = withoutExplicitFields(element)
 	}
+	variant := ""
 	if element.TintEnabled {
-		element = resolveAnsiColors(ctx, element)
+		element, variant = resolveAnsiColors(ctx, element)
 	}
 	palette, empty := colorsToPalette(element)
+	palette.Variant = variant
 	if empty {
 		semstyle.UnregisterTint(key)
 	} else {
 		semstyle.RegisterTint(key, palette)
 	}
-	theme.ClearSemanticCache()
+	displayengine.InvalidateStyles()
+	invalidateShadowCache()
 }
 
 // withoutExplicitFields returns element with its 16 explicit color fields
@@ -116,7 +134,7 @@ func ActivateTintFor(connType string, fn func()) {
 // after which the whole invocation's console output -- not just command
 // dispatch -- reflects connType's tint.
 func BeginTintFor(connType string) (restore func()) {
-	return semstyle.BeginTint(tintKeyForConnType(connType))
+	return beginRenderScope(connType, tintKeyForConnType(connType))
 }
 
 // BeginTintForElement is BeginTintFor targeting a specific element (see
@@ -126,7 +144,18 @@ func BeginTintFor(connType string) (restore func()) {
 // begin/restore-pair form for the same early-return-scattered-startup
 // reason BeginTintFor itself exists.
 func BeginTintForElement(connType, element string) (restore func()) {
-	return semstyle.BeginTint(console.TintKeyForConnTypeElement(connType, element))
+	return beginRenderScope(connType, console.TintKeyForConnTypeElement(connType, element))
+}
+
+// beginRenderScope activates tintKey, connType's theme namespace, and
+// connType itself (see console.ActiveConnType) until restore is called.
+func beginRenderScope(connType, tintKey string) (restore func()) {
+	restoreScope := semstyle.BeginRenderScope(tintKey, console.ThemePrefixForConnType(connType))
+	restoreConnType := console.SetActiveConnType(connType)
+	return func() {
+		restoreConnType()
+		restoreScope()
+	}
 }
 
 // ActivateTintForElement is console.ActivateTintForElement -- makes
@@ -221,6 +250,9 @@ func warnTintOnce(ctx context.Context, ref, format string, args ...any) {
 
 // resolveAnsiColors layers colors' own explicit fields over its configured
 // Tint (if set), so an individually-set field always wins over the scheme.
+// It also returns the scheme's variant ("dark" or "light", empty when the
+// scheme doesn't say), which orders the palette's derived backgrounds (see
+// semstyle.Palette.Variant).
 //
 // Any failure to load or parse it warns (once per ref per process run, see
 // warnTintOnce) and falls back to colors' own explicit fields (or no tint
@@ -230,19 +262,20 @@ func warnTintOnce(ctx context.Context, ref, format string, args ...any) {
 // otherwise changed out from under an existing, once-valid configuration,
 // not an unset default (colors.Tint == "" is handled separately, above,
 // and never reaches this far).
-func resolveAnsiColors(ctx context.Context, colors config.AnsiElementColors) config.AnsiElementColors {
+func resolveAnsiColors(ctx context.Context, colors config.AnsiElementColors) (config.AnsiElementColors, string) {
 	if colors.Tint == "" {
-		return colors
+		return colors, ""
 	}
 	data, err := resolveTintRef(ctx, colors.Tint)
 	if err != nil {
 		warnTintOnce(ctx, colors.Tint, "ansi_palette: could not load tint %q: %v", colors.Tint, err)
-		return colors
+		return colors, ""
 	}
 	scheme, err := config.ParseBase16Scheme(data)
 	if err != nil {
 		warnTintOnce(ctx, colors.Tint, "ansi_palette: could not parse tint %q: %v", colors.Tint, err)
-		return colors
+		return colors, ""
 	}
-	return colors.WithDefaults(scheme)
+	meta, _ := config.ParseBase16SchemeMeta(data)
+	return colors.WithDefaults(scheme), meta.Variant
 }

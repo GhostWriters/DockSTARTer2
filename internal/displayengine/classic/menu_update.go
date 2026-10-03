@@ -802,9 +802,17 @@ func (m *MenuModel) handleSpace() (tea.Model, tea.Cmd) {
 
 // SetSize updates the menu dimensions and resizes the list
 func (m *MenuModel) SetSize(width, height int) {
+	// Screens re-apply their size on every render. An unchanged size keeps
+	// a cacheable menu's view, which its view stamp validates instead (see
+	// CheckCache); any other menu is drawn again, keeping only its list memo
+	// (see renderVariableHeightList).
+	if width != m.width || height != m.height {
+		m.InvalidateCache()
+	} else if !m.cacheableView() {
+		m.cacheValid = false
+	}
 	m.width = width
 	m.height = height
-	m.InvalidateCache()
 
 	// If in flow mode, calculate height based on content
 	if m.flowMode {
@@ -954,13 +962,22 @@ func (m *MenuModel) calculateLayout() {
 		subtitleHeight = lipgloss.Height(subtitleStyle.Render(subStr))
 	}
 
+	// The header drawn above a submenu's list (see SetHeader).
+	headerHeight := m.headerHeight(m.width)
+	switch {
+	case headerHeight > 0 && m.headerBottom:
+		m.header.SetSize(m.width, headerHeight+GetLayout().SingleBorder())
+	case headerHeight > 0:
+		m.header.SetSize(max(m.width-GetLayout().BorderWidth(), 1), headerHeight)
+	}
+
 	// 3. Button and Shadow Heights
 	// Button height is 3 with borders, or 1 if space is too tight for them.
 	// innerBoxWidth mirrors the width passed to renderSimpleButtons in ViewString.
 	innerBoxWidth := listWidth + GetLayout().BorderWidth()
 	buttonHeight := ButtonRowHeight(innerBoxWidth, 0, m.GetButtonSpecsForState()...)
 	shadowHeight := 0
-	hasShadow := currentConfig.UI.Shadow
+	hasShadow := ActiveAppearance().Shadow
 	if hasShadow {
 		shadowHeight = DialogShadowHeight
 	}
@@ -979,7 +996,7 @@ func (m *MenuModel) calculateLayout() {
 		// Sub-menu overhead: subtitle + own borders (2) + buttons.
 		// Title is embedded in the top border line by RenderBorderedBoxCtx, so it does
 		// not consume a content row and is NOT counted here.
-		overhead = subtitleHeight + layout.BorderHeight() + buttonBudget
+		overhead = subtitleHeight + headerHeight + layout.BorderHeight() + buttonBudget
 		maxListHeight = m.height - overhead
 	} else {
 		// Full dialog overhead: borders, subtitle, buttons, shadow.
@@ -996,7 +1013,7 @@ func (m *MenuModel) calculateLayout() {
 
 	// Large titlebar: deduct from list budget; drop titlebar first when space is tight.
 	// Submenus always use small titlebar regardless of config.
-	enabled := !m.subMenuMode && m.title != "" && currentConfig.UI.LargeTitleBars
+	enabled := !m.subMenuMode && m.title != "" && ActiveAppearance().LargeTitleBars
 	useLargeTitleBar, maxListHeight := DecideLargeTitleBar(enabled, maxListHeight, 3)
 	if useLargeTitleBar {
 		overhead += LargeTitleBarOverhead
@@ -1032,15 +1049,16 @@ func (m *MenuModel) calculateLayout() {
 	}
 
 	m.Layout = DialogLayout{
-		Width:          m.width,
-		Height:         m.height,
-		HeaderHeight:   overhead - layout.BorderHeight(), // Store the reserved overhead height
-		ViewportHeight: listHeight,
-		ButtonHeight:   buttonHeight,
-		ShadowHeight:   shadowHeight,
-		Overhead:       overhead,
-		SubtitleHeight: subtitleHeight,
-		LargeTitleBar:  useLargeTitleBar,
+		Width:            m.width,
+		Height:           m.height,
+		HeaderHeight:     overhead - layout.BorderHeight(), // Store the reserved overhead height
+		ViewportHeight:   listHeight,
+		ButtonHeight:     buttonHeight,
+		ShadowHeight:     shadowHeight,
+		Overhead:         overhead,
+		SubtitleHeight:   subtitleHeight,
+		ListHeaderHeight: m.listHeaderHeight(headerHeight),
+		LargeTitleBar:    useLargeTitleBar,
 	}
 
 	m.list.SetSize(listWidth, listHeight)
@@ -1220,6 +1238,36 @@ func (m *MenuModel) syncSelectionToViewport() {
 	}
 
 	maxIdx := len(m.items) - 1
+
+	// A variable-height list's ViewStartY counts rendered rows, not items:
+	// keep the cursor on an item that lies within the visible rows.
+	if m.variableHeight {
+		low, high := m.ViewStartY, m.ViewStartY+visible-1
+		idx := m.list.Index()
+		target := -1
+		if m.RowOffsetForIndex(idx) < low {
+			target = m.IndexForRowOffset(low)
+			if m.RowOffsetForIndex(target) < low && target < maxIdx {
+				target++
+			}
+		} else if m.RowOffsetForIndex(idx+1)-1 > high {
+			target = m.IndexForRowOffset(high)
+			if m.RowOffsetForIndex(target+1)-1 > high && target > m.IndexForRowOffset(low) {
+				target--
+			}
+		}
+		if target < 0 {
+			return
+		}
+		m.list.Select(min(max(target, 0), maxIdx))
+		for m.list.Index() < maxIdx && m.items[m.list.Index()].IsSeparator && target <= idx {
+			m.list.CursorDown()
+		}
+		for m.list.Index() > 0 && m.items[m.list.Index()].IsSeparator {
+			m.list.CursorUp()
+		}
+		return
+	}
 
 	// Range [low, high]
 	low := m.ViewStartY

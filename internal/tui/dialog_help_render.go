@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
@@ -30,7 +31,7 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	}
 
 	source := m.contextInfo.DocMarkdown
-	mode := config.LoadAppConfig().UI.MarkdownHyperlinks
+	mode := config.LoadAppConfig().Appearance.ForConnType(console.ActiveConnType()).MarkdownHyperlinks
 
 	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
 	// Auto (link text + visible URL) and strips the resulting OSC8 escapes
@@ -220,7 +221,7 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	// Build per-page binding column groups (greedy column packing).
-	allCols := m.keyMap.FullHelp()
+	allCols := splitTallColumns(m.keyMap.FullHelp())
 	bPages := buildBindingPages(m.help, allCols, maxLineWidth)
 	m.help.SetWidth(targetWidth) // restore after measurement in buildBindingPages
 	if len(bPages) == 0 {

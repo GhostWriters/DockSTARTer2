@@ -8,9 +8,10 @@ variant: "dark"
 # variant (base12-base17) instead of base16's fallback of reusing the
 # normal color -- see ParseBase16Scheme's doc comment for the mapping.
 # base01/02/04/06/09/0F/10/11 have no terminal ANSI assignment (they're
-# base16/base24's background-shade and "orange"/"brown" category slots);
-# their values here are unused by the 16-slot mapping and just plausible
-# fill.
+# base16/base24's background-shade and "orange"/"brown" category slots).
+# Their values follow the guide's ordering around the 16: base01/02
+# between black and bright black, base04 and base06 around white, and
+# base10/11 black, since nothing is darker than a pure black base00.
 # If tinted-theming ever publishes an equivalent upstream scheme, this file
 # can be removed and a bare/"repo:" --tint reference will resolve the name
 # from the real repo clone instead.

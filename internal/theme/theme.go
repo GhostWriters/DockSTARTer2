@@ -213,7 +213,11 @@ func Load(themeNameOrURI string, prefix string) (*ThemeDefaults, error) {
 			// For active theme loads, persist the fallback to config
 			if prefix == "" {
 				conf := config.LoadAppConfig()
-				conf.UI.Theme = "DockSTARTer"
+				for _, ct := range config.ConnTypes {
+					if a := conf.Appearance.Ptr(ct); a.Theme == themeNameOrURI {
+						a.Theme = "DockSTARTer"
+					}
+				}
 				_ = config.SaveAppConfig(conf)
 				// Load default theme but still return an error so the caller knows the switch occurred
 				deflts, defaultErr := Load("DockSTARTer", "")
@@ -366,77 +370,77 @@ func GetThemeFile(themeName string) (ThemeFile, error) {
 	return tf, nil
 }
 
-// ApplyThemeDefaults updates the app config with any defaults provided by the theme.
+// ApplyThemeDefaults updates a with any defaults provided by the theme.
 // It returns a map of all settings provided by the theme and their values.
-func ApplyThemeDefaults(conf *config.AppConfig, defaults ThemeDefaults) map[string]string {
+func ApplyThemeDefaults(a *config.Appearance, defaults ThemeDefaults) map[string]string {
 	applied := make(map[string]string)
 	if defaults.Borders != nil {
-		conf.UI.Borders = *defaults.Borders
-		applied["Borders"] = fmt.Sprintf("%v", conf.UI.Borders)
+		a.Borders = *defaults.Borders
+		applied["Borders"] = fmt.Sprintf("%v", a.Borders)
 	}
 	if defaults.LargeButtons != nil {
-		conf.UI.LargeButtons = *defaults.LargeButtons
-		applied["Large Buttons"] = fmt.Sprintf("%v", conf.UI.LargeButtons)
+		a.LargeButtons = *defaults.LargeButtons
+		applied["Large Buttons"] = fmt.Sprintf("%v", a.LargeButtons)
 	}
 	if defaults.LargeTitleBars != nil {
-		conf.UI.LargeTitleBars = *defaults.LargeTitleBars
-		applied["Large Title Bars"] = fmt.Sprintf("%v", conf.UI.LargeTitleBars)
+		a.LargeTitleBars = *defaults.LargeTitleBars
+		applied["Large Title Bars"] = fmt.Sprintf("%v", a.LargeTitleBars)
 	}
 	if defaults.LineCharacters != nil {
-		conf.UI.LineCharacters = *defaults.LineCharacters
-		applied["Line Characters"] = fmt.Sprintf("%v", conf.UI.LineCharacters)
+		a.LineCharacters = *defaults.LineCharacters
+		applied["Line Characters"] = fmt.Sprintf("%v", a.LineCharacters)
 	}
 	if defaults.Shadow != nil {
-		conf.UI.Shadow = *defaults.Shadow
-		applied["Shadow"] = fmt.Sprintf("%v", conf.UI.Shadow)
+		a.Shadow = *defaults.Shadow
+		applied["Shadow"] = fmt.Sprintf("%v", a.Shadow)
 	}
 	if defaults.ShadowLevel != nil {
-		conf.UI.ShadowLevel = *defaults.ShadowLevel
-		applied["Shadow Level"] = fmt.Sprintf("%d", conf.UI.ShadowLevel)
+		a.ShadowLevel = *defaults.ShadowLevel
+		applied["Shadow Level"] = fmt.Sprintf("%d", a.ShadowLevel)
 	}
 	if defaults.Scrollbar != nil {
-		conf.UI.Scrollbar = *defaults.Scrollbar
-		applied["Scrollbar"] = fmt.Sprintf("%v", conf.UI.Scrollbar)
+		a.Scrollbar = *defaults.Scrollbar
+		applied["Scrollbar"] = fmt.Sprintf("%v", a.Scrollbar)
 	}
 	if defaults.Spinner != nil {
-		conf.UI.Spinner = *defaults.Spinner
-		applied["Spinner"] = fmt.Sprintf("%v", conf.UI.Spinner)
+		a.Spinner = *defaults.Spinner
+		applied["Spinner"] = fmt.Sprintf("%v", a.Spinner)
 	}
 	if defaults.MenuBrackets != nil {
-		conf.UI.MenuBrackets = *defaults.MenuBrackets
-		applied["Menu Brackets"] = fmt.Sprintf("%v", conf.UI.MenuBrackets)
+		a.MenuBrackets = *defaults.MenuBrackets
+		applied["Menu Brackets"] = fmt.Sprintf("%v", a.MenuBrackets)
 	}
 	if defaults.LineNumberBrackets != nil {
-		conf.UI.LineNumberBrackets = *defaults.LineNumberBrackets
-		applied["Line Number Brackets"] = fmt.Sprintf("%v", conf.UI.LineNumberBrackets)
+		a.LineNumberBrackets = *defaults.LineNumberBrackets
+		applied["Line Number Brackets"] = fmt.Sprintf("%v", a.LineNumberBrackets)
 	}
 	if defaults.CheckboxBrackets != nil {
-		conf.UI.CheckboxBrackets = *defaults.CheckboxBrackets
-		applied["Checkbox Brackets"] = conf.UI.CheckboxBrackets
+		a.CheckboxBrackets = *defaults.CheckboxBrackets
+		applied["Checkbox Brackets"] = a.CheckboxBrackets
 	}
 	if defaults.RadioBrackets != nil {
-		conf.UI.RadioBrackets = *defaults.RadioBrackets
-		applied["Radio Brackets"] = conf.UI.RadioBrackets
+		a.RadioBrackets = *defaults.RadioBrackets
+		applied["Radio Brackets"] = a.RadioBrackets
 	}
 	if defaults.BorderColor != nil {
-		conf.UI.BorderColor = *defaults.BorderColor
-		applied["Border Color"] = fmt.Sprintf("%d", conf.UI.BorderColor)
+		a.BorderColor = *defaults.BorderColor
+		applied["Border Color"] = fmt.Sprintf("%d", a.BorderColor)
 	}
 	if defaults.DialogTitleAlign != nil {
-		conf.UI.DialogTitleAlign = *defaults.DialogTitleAlign
-		applied["Dialog Title Align"] = conf.UI.DialogTitleAlign
+		a.DialogTitleAlign = *defaults.DialogTitleAlign
+		applied["Dialog Title Align"] = a.DialogTitleAlign
 	}
 	if defaults.SubmenuTitleAlign != nil {
-		conf.UI.SubmenuTitleAlign = *defaults.SubmenuTitleAlign
-		applied["Submenu Title Align"] = conf.UI.SubmenuTitleAlign
+		a.SubmenuTitleAlign = *defaults.SubmenuTitleAlign
+		applied["Submenu Title Align"] = a.SubmenuTitleAlign
 	}
 	if defaults.PanelTitleAlign != nil {
-		conf.UI.PanelTitleAlign = *defaults.PanelTitleAlign
-		applied["Panel Title Align"] = conf.UI.PanelTitleAlign
+		a.PanelTitleAlign = *defaults.PanelTitleAlign
+		applied["Panel Title Align"] = a.PanelTitleAlign
 	}
 	if defaults.TabLayout != nil {
-		conf.UI.TabLayout = *defaults.TabLayout
-		applied["Tab Layout"] = conf.UI.TabLayout
+		a.TabLayout = *defaults.TabLayout
+		applied["Tab Layout"] = a.TabLayout
 	}
 	return applied
 }
@@ -449,10 +453,18 @@ func init() {
 // fields not in legacyPresent, and resets an unrecognized DS1 theme name to
 // the default theme.
 func applyMigrationThemeDefaults(conf *config.AppConfig, legacyPresent map[string]bool) {
-	if legacyPresent["Theme"] && !isBuiltInTheme(conf.UI.Theme) {
-		conf.UI.Theme = "DockSTARTer"
+	for _, ct := range config.ConnTypes {
+		applyMigrationThemeDefaultsTo(conf.Appearance.Ptr(ct), legacyPresent)
 	}
-	tf, err := GetThemeFile(conf.UI.Theme)
+}
+
+// applyMigrationThemeDefaultsTo is applyMigrationThemeDefaults for one
+// connection type's Appearance.
+func applyMigrationThemeDefaultsTo(a *config.Appearance, legacyPresent map[string]bool) {
+	if legacyPresent["Theme"] && !isBuiltInTheme(a.Theme) {
+		a.Theme = "DockSTARTer"
+	}
+	tf, err := GetThemeFile(a.Theme)
 	if err != nil {
 		return
 	}
@@ -512,7 +524,7 @@ func applyMigrationThemeDefaults(conf *config.AppConfig, legacyPresent map[strin
 	if legacyPresent["TabLayout"] {
 		filtered.TabLayout = nil
 	}
-	ApplyThemeDefaults(conf, filtered)
+	ApplyThemeDefaults(a, filtered)
 }
 
 // isBuiltInTheme reports whether name matches one of DS2's embedded themes.
@@ -673,7 +685,7 @@ func SemanticStyleWithRegistry(tag string, prefix string, useConsole bool) lipgl
 	// different tint (or no tint) than the one active now -- without this,
 	// a style resolved once (e.g. at logger init, before any tint is
 	// active) would never be recomputed even after a tint change.
-	cacheKey := "tag:" + registryKey + ":" + prefix + ":" + tag + ":" + semstyle.ActiveTintKey()
+	cacheKey := "tag:" + registryKey + ":" + prefix + ":" + tag + ":" + semstyle.ActiveThemePrefix() + ":" + semstyle.ActiveTintKey()
 	cacheMu.RLock()
 	s, ok := semanticStyleCache[cacheKey]
 	cacheMu.RUnlock()
@@ -720,7 +732,7 @@ func SemanticRawStyleWithRegistry(name string, prefix string, useConsole bool) l
 	}
 	// See SemanticStyleWithRegistry's matching comment on why the active
 	// tint key is part of this cache key too.
-	cacheKey := "raw:" + registryKey + ":" + prefix + ":" + name + ":" + semstyle.ActiveTintKey()
+	cacheKey := "raw:" + registryKey + ":" + prefix + ":" + name + ":" + semstyle.ActiveThemePrefix() + ":" + semstyle.ActiveTintKey()
 	cacheMu.RLock()
 	if s, ok := semanticStyleCache[cacheKey]; ok {
 		cacheMu.RUnlock()

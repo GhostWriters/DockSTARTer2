@@ -17,6 +17,12 @@ func GetDefaultConfig() ([]byte, error) {
 	return embeddedFS.ReadFile("defaults/dockstarter2.toml")
 }
 
+// GetTerminals returns the content of the embedded terminals.toml: terminals
+// identified by their XTVERSION or DA1 reply.
+func GetTerminals() ([]byte, error) {
+	return embeddedFS.ReadFile("defaults/terminals.toml")
+}
+
 // GetTheme reads a theme from the embedded filesystem.
 func GetTheme(name string) ([]byte, error) {
 	// embed.FS always uses forward slashes regardless of OS.
@@ -31,6 +37,12 @@ func GetTheme(name string) ([]byte, error) {
 // (or "repo:") reference picking it up from the real repo instead.
 func GetTintTheme(name string) ([]byte, error) {
 	return embeddedFS.ReadFile("tint_themes/" + name + ".yaml")
+}
+
+// GetTintHues reads the embedded tint_themes/.HUES.toml: hue tags for
+// well-known schemes (see the file's own comments).
+func GetTintHues() ([]byte, error) {
+	return embeddedFS.ReadFile("tint_themes/.HUES.toml")
 }
 
 // ListTintThemes returns all scheme names bundled in the embedded

@@ -392,6 +392,55 @@ func shouldForwardResult(result any) bool {
 	return true
 }
 
+// keyAliases are plain keys that stand in for a shortcut while no text
+// field has focus: [ and ] for the previous and next screen element, , and .
+// for the previous and next tab, < and > for the previous and next inner
+// (second-level) tab.
+var keyAliases = map[string]tea.KeyPressMsg{
+	"[": {Code: 'p', Mod: tea.ModCtrl},
+	"]": {Code: 'n', Mod: tea.ModCtrl},
+	",": {Code: tea.KeyLeft, Mod: tea.ModCtrl},
+	".": {Code: tea.KeyRight, Mod: tea.ModCtrl},
+	"<": {Code: tea.KeyLeft, Mod: tea.ModCtrl | tea.ModShift},
+	">": {Code: tea.KeyRight, Mod: tea.ModCtrl | tea.ModShift},
+}
+
+// keyAlias returns msg as the shortcut it stands in for (see keyAliases),
+// unless a text field has focus, where it types. Where the focused dialog
+// or screen has only one tier of tabs (it doesn't report HasInnerTabs), <
+// and > move along it like , and .
+func (m *AppModel) keyAlias(msg tea.Msg) tea.Msg {
+	kp, ok := msg.(tea.KeyPressMsg)
+	if !ok || kp.Mod&^tea.ModShift != 0 {
+		return msg
+	}
+	text := kp.Text
+	if !m.hasInnerTabs() {
+		switch text {
+		case "<":
+			text = ","
+		case ">":
+			text = "."
+		}
+	}
+	alias, ok := keyAliases[text]
+	if !ok || m.isTextInputActive() {
+		return msg
+	}
+	return alias
+}
+
+// hasInnerTabs reports whether the dialog, or the screen when none is open,
+// handles the inner-tab keys itself.
+func (m *AppModel) hasInnerTabs() bool {
+	var target any = m.activeScreen
+	if m.dialog != nil {
+		target = m.dialog
+	}
+	t, ok := target.(interface{ HasInnerTabs() bool })
+	return ok && t.HasInnerTabs()
+}
+
 // isTextInputActive reports whether a focused text cursor is currently
 // showing anywhere -- the dialog, the active screen (e.g. the env editor),
 // or the console panel's own input, checked in the same priority order

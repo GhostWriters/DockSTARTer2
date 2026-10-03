@@ -64,6 +64,16 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		listY += subtitleH
 	}
 
+	// The header drawn above a submenu's list (see SetHeader).
+	switch {
+	case m.header != nil && m.subMenuMode && m.headerBottom:
+		regions = append(regions, m.header.GetHitRegions(offsetX, offsetY+m.footerY)...)
+		regions = append(regions, m.footerLabelRegion(offsetX, offsetY, ZDialog+15)...)
+	case m.header != nil && m.subMenuMode:
+		regions = append(regions, m.header.GetHitRegions(offsetX+layout.SingleBorder(), offsetY+listY)...)
+		listY += m.Layout.ListHeaderHeight
+	}
+
 	// Full dialogs have a NESTED inner border around the list (1 line).
 	// Sub-menus only have the one outer border.
 	if !m.subMenuMode {
@@ -81,6 +91,10 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	baseZ := ZScreen
 	if m.isDialog {
 		baseZ = ZDialog
+	}
+
+	if m.footerBar != nil && m.subMenuMode {
+		regions = append(regions, m.footerBarHitRegions(offsetX, offsetY, baseZ+10)...)
 	}
 
 	// Submenu frame catch-all: covers the full bordered panel including title and border chars.
@@ -390,7 +404,7 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	// 3b. Scrollbar hit regions (when scrollbar is active)
-	if currentConfig.UI.Scrollbar && m.Scroll.Info.Needed {
+	if ActiveAppearance().Scrollbar && m.Scroll.Info.Needed {
 		var sbX int
 		switch {
 		case m.FlowColumns >= 2 && m.MaxFlowRows > 0:
@@ -495,11 +509,25 @@ func (m *MenuModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	// ConfigureWidgets adds extras). Widgets appear at the right of the
 	// title bar (row 0). Sub-menus only get them if opted in (see
 	// SetSubmenuWidgetsEnabled) -- most never do.
-	if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
+	if m.frameTitle != nil {
+		// An enclosing frame's title and widgets (see SetFrameTitle).
+		ctx := GetActiveContext()
+		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+		x, avail, widgets := m.frameTitleLayout(dialogWidth-GetLayout().BorderWidth(), ctx)
+		regions = append(regions, m.frameTitle.HitRegions(offsetX+x, offsetY, avail, ctx)...)
+		regions = append(regions, m.titleWidgetRegions(m.frameTitle.WidgetID, offsetX, offsetY, dialogWidth, widgets, baseZ, ctx)...)
+	} else if icons := m.ownTitleIcons(); len(icons) > 0 {
+		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
+		regions = append(regions, m.titleWidgetRegions("", offsetX, offsetY, dialogWidth, icons, baseZ, GetActiveContext())...)
+	} else if m.title != "" && (!m.subMenuMode || m.submenuWidgets) {
 		// Use actual rendered dialog width, not m.width — non-maximized menus render
 		// narrower than m.width based on content, so the widget X must match.
 		dialogWidth := m.GetInnerContentWidth() + GetLayout().BorderWidth()
 		regions = append(regions, TitleBarHitRegionsFor(m.id, offsetX, offsetY, dialogWidth, m.Layout.LargeTitleBar, m.ActiveWidgets(), baseZ)...)
+	}
+
+	if len(m.titleControls) > 0 {
+		regions = append(regions, m.titleControlRegions(offsetX, offsetY, baseZ+10)...)
 	}
 
 	// Extra hit regions from section helpers (e.g. sinput text area).

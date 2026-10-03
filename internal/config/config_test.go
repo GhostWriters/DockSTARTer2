@@ -37,12 +37,8 @@ func TestConfigMigration(t *testing.T) {
 	// point the app to a temp location if we can.
 
 	// Actually, let's just test Save and Load first.
-	conf := AppConfig{
-		UI: UIConfig{
-			Theme:   "TestTheme",
-			Borders: false,
-		},
-	}
+	conf := AppConfig{}
+	conf.Appearance.Web = Appearance{Theme: "TestTheme", Borders: false}
 
 	err = SaveAppConfig(conf)
 	if err != nil {
@@ -50,10 +46,10 @@ func TestConfigMigration(t *testing.T) {
 	}
 
 	loaded := LoadAppConfig()
-	if loaded.UI.Theme != "TestTheme" {
-		t.Errorf("Expected Theme 'TestTheme', got '%s'", loaded.UI.Theme)
+	if loaded.Appearance.Web.Theme != "TestTheme" {
+		t.Errorf("Expected Theme 'TestTheme', got '%s'", loaded.Appearance.Web.Theme)
 	}
-	if loaded.UI.Borders != false {
-		t.Errorf("Expected Borders false, got %v", loaded.UI.Borders)
+	if loaded.Appearance.Web.Borders != false {
+		t.Errorf("Expected Borders false, got %v", loaded.Appearance.Web.Borders)
 	}
 }

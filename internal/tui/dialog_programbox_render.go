@@ -197,19 +197,13 @@ func (m *ProgramBoxModel) SetSize(w, h int) {
 // GetHelpText returns the dynamic help text based on the current state
 // Implements displayengine.DynamicHelpProvider interface for use with DialogWithBackdrop
 func (m *ProgramBoxModel) GetHelpText() string {
-	scrollInfo := ""
-	if m.sv.TotalLineCount() > m.sv.VisibleLineCount() {
-		scrollPercent := m.sv.ScrollPercent()
-		scrollInfo = fmt.Sprintf(" | %d%%", int(scrollPercent*100))
-	}
-
 	if m.done {
 		if m.err != nil {
-			return "Error: " + m.err.Error() + scrollInfo + " | Press Enter or Esc to close"
+			return "Error: " + m.err.Error() + " | Press Enter or Esc to close"
 		}
-		return "Complete" + scrollInfo + " | Press Enter or Esc to close | PgUp/PgDn to scroll"
+		return "Complete | Press Enter or Esc to close | PgUp/PgDn to scroll"
 	}
-	return "Running." + scrollInfo + " | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
+	return "Running. | Press Ctrl+C to cancel | PgUp/PgDn to scroll"
 }
 
 // HelpText satisfies the model_update.go helpline interface (mirrors GetHelpText).
@@ -228,11 +222,8 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
 
-	console.SpinnerEnabled = cfg.UI.Spinner
-	console.SpinnerSpeed = console.AlignToRefreshRate(cfg.UI.SpinnerSpeed, cfg.UI.RefreshRate)
-	console.LineCharacters = cfg.UI.LineCharacters
-	console.HyperlinksMode = cfg.UI.Hyperlinks
-	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
+	cfg.Appearance.ApplyToConsole()
+	if _, err := theme.Load(cfg.Appearance.Local.Theme, ""); err == nil {
 		displayengine.InitStyles(cfg)
 	}
 
@@ -246,7 +237,7 @@ func RunProgramBox(ctx context.Context, title, subtitle, command string, task fu
 	model := NewAppModelStandalone(ctx, cfg, "local", "cli", parseSessionKey(nil), nil, dialogModel)
 
 	// Create Bubble Tea program
-	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.UI.RefreshRate})
+	p := NewProgram(model, ProgramOptions{RefreshRate: cfg.Appearance.Local.RefreshRate})
 
 	registerCallbacks()
 	defer func() {

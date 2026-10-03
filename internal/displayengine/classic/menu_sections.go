@@ -1,6 +1,8 @@
 package classic
 
 import (
+	"unicode"
+
 	"DockSTARTer2/internal/tui/components/sinput"
 
 	"charm.land/bubbles/v2/key"
@@ -121,6 +123,13 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		// Every printable key types into a focused text input.
+		if m.focusedItem == FocusList && m.focusedSection >= 0 && m.focusedSection < n &&
+			IsTypedText(msg) && isTextInput(focusedLeaf(m.contentSections[m.focusedSection])) {
+			cmd := m.updateSection(m.focusedSection, msg)
+			m.InvalidateCache()
+			return m, cmd, true
+		}
 		if key.Matches(msg, Keys.CycleTab) && !anyFocusable {
 			// Pure information box (no focusable section, e.g. all plain-text)
 			// -- Tab has nothing to cycle to but the buttons, which already
@@ -291,12 +300,11 @@ func (m *MenuModel) updateSections(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 						}
 					}
 				}
-				var focusCmd tea.Cmd
-				if m.focusedSection != i {
-					m.focusedSection = i
-					m.focusedItem = FocusList
-				}
-				focusCmd = m.updateSectionFocus()
+				// A click in a section takes focus from the buttons, even when
+				// the section is already the current one (dual focus).
+				m.focusedSection = i
+				m.focusedItem = FocusList
+				focusCmd := m.updateSectionFocus()
 				cmd := m.updateSection(i, msg)
 				m.InvalidateCache()
 				return m, tea.Batch(focusCmd, cmd), true
@@ -565,7 +573,7 @@ func (m *MenuModel) SectionHeight(sectionWidth int) int {
 	case m.ContentRenderer != nil:
 		return 1 + layout.BorderHeight()
 	default:
-		return len(m.items) + layout.BorderHeight()
+		return len(m.items) + layout.BorderHeight() + m.headerHeight(sectionWidth)
 	}
 }
 
@@ -732,7 +740,7 @@ func (m *MenuModel) calculateSectionLayout() {
 		// embeds the title in the border line itself (tbs.Show is forced
 		// false for subMenuMode) -- so reserving LargeTitleBarOverhead rows
 		// here for one would leave a permanent gap nothing ever fills.
-		titleBarEnabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
+		titleBarEnabled := m.title != "" && ActiveAppearance().LargeTitleBars && !m.subMenuMode
 		if titleBarEnabled {
 			naturalInner += LargeTitleBarOverhead
 		}
@@ -769,7 +777,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	// keep its overhead using a much smaller, unrelated threshold while an
 	// expandable section (e.g. a scrollable list) still ends up squeezed
 	// well below what it actually needs.
-	enabled := m.title != "" && currentConfig.UI.LargeTitleBars && !m.subMenuMode
+	enabled := m.title != "" && ActiveAppearance().LargeTitleBars && !m.subMenuMode
 	useLargeTitleBar, _ := DecideLargeTitleBar(enabled, innerHeight-fixedTotal-buttonBudget, comfortThreshold)
 	if useLargeTitleBar {
 		innerHeight -= LargeTitleBarOverhead
@@ -824,7 +832,7 @@ func (m *MenuModel) calculateSectionLayout() {
 	}
 
 	shadowHeight := 0
-	if currentConfig.UI.Shadow {
+	if ActiveAppearance().Shadow {
 		shadowHeight = DialogShadowHeight
 	}
 
@@ -864,4 +872,33 @@ func (m *MenuModel) SetFocusedSection(idx int) {
 		sec.SetSubFocused(i == idx)
 	}
 	m.InvalidateCache()
+}
+
+// IsTypedText reports whether msg types a printable character, rather than
+// being a named key like Tab.
+func IsTypedText(msg tea.KeyPressMsg) bool {
+	r := []rune(msg.Text)
+	return len(r) == 1 && unicode.IsPrint(r[0])
+}
+
+// focusedLeaf returns the Content holding c's focus, descending through
+// nested Tab stops.
+func focusedLeaf(c Content) Content {
+	for {
+		sf, ok := c.(SubFocusable)
+		if !ok {
+			return c
+		}
+		items, i := sf.Items(), sf.SubFocusIndex()
+		if i < 0 || i >= len(items) || items[i] == c {
+			return c
+		}
+		c = items[i]
+	}
+}
+
+// isTextInput reports whether c is a text input section.
+func isTextInput(c Content) bool {
+	t, ok := c.(interface{ IsTextInput() bool })
+	return ok && t.IsTextInput()
 }

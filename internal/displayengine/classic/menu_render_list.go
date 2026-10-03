@@ -1,6 +1,7 @@
 package classic
 
 import (
+	"fmt"
 	"strings"
 
 	"DockSTARTer2/internal/strutil"
@@ -37,8 +38,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 	ctx := GetActiveContext()
 	layout := GetLayout()
 
-	// Memoization Check
+	// Memoization Check. Skipped while an item shows a processing spinner,
+	// whose frame isn't part of the key.
 	if m.lastListView != "" &&
+		m.processingItemIdx < 0 &&
+		m.lastStyleGen == StyleGeneration() &&
+		m.lastScope == StylesScopeKey() &&
+		m.lastViewportHeight == m.Layout.ViewportHeight &&
 		m.lastWidth == m.width &&
 		m.lastHeight == m.height &&
 		m.lastIndex == m.list.Index() &&
@@ -125,14 +131,34 @@ func (m *MenuModel) renderVariableHeightList() string {
 			mainItems = append(mainItems, item)
 		}
 	}
-	maxTagLen := calculateMaxTagLength(mainItems)
+	maxTagLen := max(calculateMaxTagLength(mainItems), m.minTagWidth)
 
 	var renderedItems []string
 	var itemHeights []int
 	var itemMappings []int
 
+	// Rows are reused by content while the list-wide settings below are
+	// unchanged; none are cached while an item shows a processing spinner.
+	savedTag := m.savedRadioTag()
+	// Any checkbox-like row gives every row a checkbox-width prefix.
+	hasAnyCheckboxes := false
+	for _, it := range visibleItems {
+		if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
+			hasAnyCheckboxes = true
+			break
+		}
+	}
+	cacheRows := !m.rowCacheOff && m.processingItemIdx < 0
+	if stamp := fmt.Sprint(m.width, m.variableHeight, StyleGeneration(), StylesScopeKey(), ActiveAppearance(), ctx.LineCharacters,
+		m.activeColumn, m.itemPaddingWidth, m.showLockGutter, m.activityGutterWidth, m.disabled, filter, maxTagLen,
+		m.IsListActive(), savedTag, hasAnyCheckboxes); stamp != m.rowCacheStamp || m.rowCache == nil || len(m.rowCache) > rowCacheLimit {
+		m.rowCache = map[string]cachedRow{}
+		m.rowCacheStamp = stamp
+	}
+
 	for i := 0; i < len(visibleItems); i++ {
 		item := visibleItems[i]
+		item.Changed = item.Changed || (savedTag != "" && item.IsRadioButton && item.Tag == savedTag)
 		isAppSelect := m.id == "app-select"
 		isSelected := i == selectedVisibleIndex && m.IsListActive()
 
@@ -196,13 +222,24 @@ func (m *MenuModel) renderVariableHeightList() string {
 		}
 
 		if item.IsSeparator {
-			line := ""
-			if item.Tag != "" {
-				line = RenderThemeText(item.Tag, theme.ThemeSemanticStyle("{{|TagKey|}}"))
-			} else {
-				line = strutil.Repeat("─", listContentWidth)
+			// A labeled separator is a divider line with its label set in
+			// near the left end: "── Label ──────".
+			lineStyle := neutralStyle.PaddingLeft(0)
+			sepChar := GetStyles().SepChar
+			if item.IsCategory {
+				sepChar = "="
+				if ctx.LineCharacters {
+					sepChar = "━"
+				}
 			}
-			renderedItems = append(renderedItems, neutralStyle.PaddingLeft(0).Render(line))
+			line := lineStyle.Render(strutil.Repeat(sepChar, listContentWidth))
+			if item.Tag != "" {
+				label := GetPlainText(item.Tag)
+				lead := min(2, listContentWidth)
+				fill := max(listContentWidth-lead-2-lipgloss.Width(label), 0)
+				line = lineStyle.Render(strutil.Repeat(sepChar, lead) + " " + label + " " + strutil.Repeat(sepChar, fill))
+			}
+			renderedItems = append(renderedItems, line)
 			itemHeights = append(itemHeights, 1)
 			itemMappings = append(itemMappings, i)
 			continue
@@ -219,6 +256,18 @@ func (m *MenuModel) renderVariableHeightList() string {
 			rowStyle := neutralStyle.Width(maxWidth)
 			renderedItems = append(renderedItems, rowStyle.Render(line)+semstyle.CodeReset)
 			itemHeights = append(itemHeights, 1)
+			itemMappings = append(itemMappings, i)
+			continue
+		}
+
+		rowKey := cachedRowKey{selected: isSelected, parentOfSelected: isParentOfSelected, disabled: isDisabled}
+		contentKey := ""
+		if cacheRows {
+			contentKey = rowContentKey(item)
+		}
+		if r, ok := m.rowCache[contentKey]; cacheRows && ok && r.key == rowKey {
+			renderedItems = append(renderedItems, r.text)
+			itemHeights = append(itemHeights, r.height)
 			itemMappings = append(itemMappings, i)
 			continue
 		}
@@ -436,14 +485,6 @@ func (m *MenuModel) renderVariableHeightList() string {
 		// Prefix width calculation (Left of the Tag)
 		var gutterWidth int
 
-		hasAnyCheckboxes := false
-		for _, it := range visibleItems {
-			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
-				hasAnyCheckboxes = true
-				break
-			}
-		}
-
 		menuPrefixWidth := 0
 		if isAppSelect {
 			menuPrefixWidth = 11 // cbAdd(3) + sp(1) + cbEnabled(3) + cbExpand(3) + sp(1)
@@ -463,21 +504,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		var descStr string
 		if (isSelected || isParentOfSelected) && item.Desc != "" {
+			focused, isTagged := focusedItemDesc(item.Desc)
 			switch {
-			case strings.HasPrefix(item.Desc, "{{|ItemListUserDefined|}}"):
+			case isTagged:
 				// Swap to the focused variant instead of stripping the tag,
-				// so the user-defined/built-in distinction survives focus
-				// instead of collapsing to the generic selected-row style.
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListUserDefined|}}", "{{|ItemListUserDefinedFocused|}}", 1), dStyle)
-			case strings.HasPrefix(item.Desc, "{{|ItemListUserTemplate|}}"):
-				// Same reasoning as ItemListUserDefined above -- swap to the
-				// focused variant so the user-template-override distinction
-				// survives focus too.
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListUserTemplate|}}", "{{|ItemListUserTemplateFocused|}}", 1), dStyle)
-			case strings.HasPrefix(item.Desc, "{{|ItemListDeprecated|}}"):
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemListDeprecated|}}", "{{|ItemListDeprecatedFocused|}}", 1), dStyle)
-			case strings.HasPrefix(item.Desc, "{{|ItemList|}}"):
-				descStr = RenderThemeText(strings.Replace(item.Desc, "{{|ItemList|}}", "{{|ItemListFocused|}}", 1), dStyle)
+				// so the user-defined/user-template/deprecated distinction
+				// survives focus instead of collapsing to the generic
+				// selected-row style.
+				descStr = RenderThemeText(focused, dStyle)
 			default:
 				// item.Desc is normally pre-wrapped in its own semstyle tag (e.g.
 				// "{{|ItemList|}}..."), which overrides dStyle entirely -- strip
@@ -541,7 +575,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + cbExpand3 + nameSep
 			} else {
 				// Standard menus or Radio buttons: indicator followed by one space
-				prefixPadding = checkbox + neutralStyle.Render(" ")
+				// (the leading changed marker when the item is changed).
+				space := neutralStyle.Render(" ")
+				if item.Changed {
+					space = RenderChangedMarker(ctx)
+				}
+				prefixPadding = checkbox + space
 			}
 		}
 		prefixWidth = lipgloss.Width(GetPlainText(prefixPadding))
@@ -566,9 +605,13 @@ func (m *MenuModel) renderVariableHeightList() string {
 			spinTagExtra += nameCloseWidth
 		}
 		gapWidth := (maxTagLen - lipgloss.Width(GetPlainText(item.Tag))) + (menuPrefixWidth - prefixWidth) + minGap - spinTagExtra
-		paddingSpaces := strutil.Repeat(" ", max(0, gapWidth))
+		padding := neutralStyle.Render(strutil.Repeat(" ", max(0, gapWidth)))
+		if item.Changed && gapWidth > 0 {
+			_, after := RenderChangedMarkers(ctx)
+			padding = after + neutralStyle.Render(strutil.Repeat(" ", gapWidth-1))
+		}
 
-		firstLine := prefixPadding + tagStr + nameClose + neutralStyle.Render(paddingSpaces) + lines[0]
+		firstLine := prefixPadding + tagStr + nameClose + padding + lines[0]
 		indent := neutralStyle.Render(strutil.Repeat(" ", menuPrefixWidth+maxTagLen+minGap))
 		renderedItemLines := []string{firstLine}
 		for j := 1; j < len(lines); j++ {
@@ -584,6 +627,10 @@ func (m *MenuModel) renderVariableHeightList() string {
 		sep := paddingStr
 		if isAppSelect || isProcessingItem || menuBracketsShown {
 			sep = ""
+		} else if item.Changed && prefixPadding == "" && m.itemPaddingWidth > 0 {
+			// No checkbox space to hold the leading changed marker: it takes
+			// the padding before the label instead.
+			sep = RenderChangedMarker(ctx) + neutralStyle.Render(strutil.Repeat(" ", m.itemPaddingWidth-1))
 		}
 		// Continuation lines always use the normal separator width so they align
 		// with the description column on line 0 (the spinner only affects line 0).
@@ -601,12 +648,15 @@ func (m *MenuModel) renderVariableHeightList() string {
 			}
 		}
 		renderedItems = append(renderedItems, finalItem)
+		rowHeight := 1
 		if m.variableHeight {
-			itemHeights = append(itemHeights, len(lines))
-		} else {
-			itemHeights = append(itemHeights, 1)
+			rowHeight = len(lines)
 		}
+		itemHeights = append(itemHeights, rowHeight)
 		itemMappings = append(itemMappings, i)
+		if cacheRows {
+			m.rowCache[contentKey] = cachedRow{key: rowKey, text: finalItem, height: rowHeight}
+		}
 	}
 
 	totalContentHeight := 0
@@ -726,9 +776,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 		result := strings.Join(viewLines, "\n")
 		m.lastListView = result
 		m.lastHitRegions = newHitRegions
-		m.lastVersion = m.renderVersion
-		m.lastColumn = m.ActiveColumn()
-		m.lastListActive = m.IsListActive()
+		m.recordListMemo(ctx)
 		return result
 	}
 
@@ -877,11 +925,48 @@ func (m *MenuModel) renderVariableHeightList() string {
 	finalResult := strings.Join(viewLines, "\n")
 	m.lastListView = finalResult
 	m.lastHitRegions = newHitRegions
+	m.recordListMemo(ctx)
+	return finalResult
+}
+
+// cachedRowKey is the per-row state a cached row rendering depends on.
+// rowCacheLimit bounds the row cache; past it, the cache starts over.
+const rowCacheLimit = 4096
+
+// rowContentKey identifies what a row draws: every field of item but its
+// actions and help text, which don't affect how it looks.
+func rowContentKey(item MenuItem) string {
+	item.Action, item.SpaceAction, item.Help = nil, nil, ""
+	return fmt.Sprintf("%+v", item)
+}
+
+type cachedRowKey struct {
+	selected, parentOfSelected, disabled bool
+}
+
+// cachedRow is one list row's cached rendering.
+type cachedRow struct {
+	key    cachedRowKey
+	text   string
+	height int
+}
+
+// recordListMemo records the state renderVariableHeightList's memo check
+// compares against, after a full render.
+func (m *MenuModel) recordListMemo(ctx StyleContext) {
+	m.lastWidth = m.width
+	m.lastHeight = m.height
+	m.lastIndex = m.list.Index()
+	m.lastFilter = m.list.FilterValue()
+	m.lastActive = m.IsActive()
+	m.lastListActive = m.IsListActive()
+	m.lastLineChars = ctx.LineCharacters
+	m.lastViewStartY = m.ViewStartY
 	m.lastVersion = m.renderVersion
 	m.lastColumn = m.ActiveColumn()
-	m.lastViewStartY = m.ViewStartY
-	m.lastListActive = m.IsListActive()
-	return finalResult
+	m.lastStyleGen = StyleGeneration()
+	m.lastScope = StylesScopeKey()
+	m.lastViewportHeight = m.Layout.ViewportHeight
 }
 
 // renderSubListSequence handles a contiguous sequence of sub-items by wrapping them in a border.
@@ -1145,4 +1230,25 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
 	return resLines, resH, resM
+}
+
+var itemDescTags = []string{"ItemListUserDefined", "ItemListUserTemplate", "ItemListDeprecated", "ItemList"}
+
+var itemDescFocusSwap = func() *strings.Replacer {
+	var pairs []string
+	for _, name := range itemDescTags {
+		pairs = append(pairs, "{{|"+name+"|}}", "{{|"+name+"Focused|}}", "{{|"+name+"::::", "{{|"+name+"Focused::::")
+	}
+	return strings.NewReplacer(pairs...)
+}()
+
+// focusedItemDesc swaps desc's item tags for their Focused variants when desc
+// starts with one (plain or carrying a link URL); ok is false otherwise.
+func focusedItemDesc(desc string) (focused string, ok bool) {
+	for _, name := range itemDescTags {
+		if strings.HasPrefix(desc, "{{|"+name+"|}}") || strings.HasPrefix(desc, "{{|"+name+"::::") {
+			return itemDescFocusSwap.Replace(desc), true
+		}
+	}
+	return "", false
 }

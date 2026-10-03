@@ -3,6 +3,7 @@ package classic
 import (
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -176,11 +177,26 @@ func (m *MenuModel) ViewString() string {
 		return ""
 	}
 
-	// Return cached view if the state hasn't changed since the last render
-	if cachedView, valid := m.CheckCache(); valid {
-		return cachedView
+	// A changed header redraws this menu (its list keeps its own cache).
+	if m.header != nil && m.subMenuMode {
+		if hv := m.header.ViewString(); hv != m.lastHeaderView {
+			m.lastHeaderView = hv
+			m.cacheValid = false
+		}
 	}
 
+	m.pendingViewStamp, _ = m.viewStamp()
+	if cachedView, valid := m.CheckCache(); valid {
+		if verifyViewCachePath != "" {
+			return m.verifyCachedView(cachedView)
+		}
+		return cachedView
+	}
+	return m.renderView()
+}
+
+// renderView draws the menu, caching the result (see ViewString).
+func (m *MenuModel) renderView() string {
 	// Plain-text kind: a single borderless, theme-styled line -- e.g. a
 	// dialog's subtitle expressed as its own content section. Checked before
 	// subMenuMode since a plain-text section never wants viewSubMenu's border.
@@ -190,7 +206,7 @@ func (m *MenuModel) ViewString() string {
 		if m.plainText == "" {
 			return ""
 		}
-		return m.viewPlainText()
+		return m.saveCacheable(m.viewPlainText())
 	}
 
 	// Borderless contentRenderer sections (e.g. a header or streaming
@@ -204,7 +220,7 @@ func (m *MenuModel) ViewString() string {
 
 	// In Sub-menu mode, we render a simpler view without the global backdrop logic
 	if m.subMenuMode {
-		return m.viewSubMenu()
+		return m.saveCacheable(m.viewSubMenu())
 	}
 
 	// Sections-based layout: stack sub-menus inside the outer border.
@@ -213,7 +229,7 @@ func (m *MenuModel) ViewString() string {
 	}
 
 	if m.flowMode {
-		return m.renderFlow()
+		return m.saveCacheable(m.renderFlow())
 	}
 
 	styles := GetStyles()
@@ -392,6 +408,9 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 
 	ctx := GetActiveContext()
+	if m.darkBorder {
+		ctx.BorderColor, ctx.BorderFlags = ctx.Border2Color, ctx.Border2Flags
+	}
 	ctx.Type = m.dialogType
 	ctx.AngledBorder = m.borderStyle == BorderStyleAngled
 	ctx.SquareBorder = m.borderStyle == BorderStyleSquare
@@ -405,6 +424,7 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 	tbs := m.State()
 	tbs.Show = m.title != "" && (!m.subMenuMode || m.submenuWidgets)
+	tbs.Changed = m.titleChanged != nil && m.titleChanged()
 	if m.titleSpinnerIndicator != nil {
 		tbs.SpinnerIndicator, tbs.SpinnerIndicatorRight = m.titleSpinnerIndicator()
 	} else if m.loadingText != "" {
@@ -412,7 +432,26 @@ func (m *MenuModel) renderBorderWithTitle(content string, contentWidth int, targ
 	}
 	lineBackgrounds := m.sectionLineBackgrounds
 	m.sectionLineBackgrounds = nil
-	rendered := renderBorderedBoxCtxImpl(m.title, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, lineBackgrounds, tbs)
+	tbs.RightSegments = m.titleControlPieces(ctx, false)
+	if len(tbs.RightSegments) > 0 {
+		tbs.LargeRightSegment = m.largeTitleControlsSegment
+	}
+	rawTitle := m.title
+	if icons := m.ownTitleIcons(); len(icons) > 0 {
+		tbs.Show = true
+		tbs.Widgets = icons
+		tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget = false, "", ""
+	}
+	if m.frameTitle != nil {
+		// An enclosing frame's title, with its widgets after the controls.
+		_, avail, widgets := m.frameTitleLayout(contentWidth, ctx)
+		tbs.Show = len(widgets) > 0
+		tbs.Widgets = widgets
+		tbs.Focused, tbs.ActiveWidget, tbs.PressedWidget = false, "", ""
+		rawTitle = m.frameTitle.Render(avail, focused || m.TitleBarFocused(), ctx)
+		titleTag = "RAW"
+	}
+	rendered := renderBorderedBoxCtxImpl(rawTitle, content, contentWidth, targetHeight, focused || m.TitleBarFocused(), true, rounded, align, titleTag, ctx, lineBackgrounds, tbs)
 	if m.bottomBorderLabel != "" {
 		lines := strings.Split(rendered, "\n")
 		if n := len(lines); n > 0 {
@@ -445,6 +484,9 @@ func (m *MenuModel) viewSubMenu() string {
 
 		subStr := RenderThemeText("{{|Subtitle|}}"+m.subtitle, styles.Dialog)
 		innerParts = append(innerParts, subtitleStyle.Render(subStr))
+	}
+	if m.header != nil && !m.headerBottom {
+		innerParts = append(innerParts, m.header.ViewString())
 	}
 
 	// Render core list with scrollbar (or flow layout if flowMode is set)
@@ -505,22 +547,71 @@ func (m *MenuModel) viewSubMenu() string {
 	combined := lipgloss.JoinVertical(lipgloss.Left, innerParts...)
 
 	// 2. Wrap in bordered dialog
+	footer := ""
+	maxHeight := m.height
+	if m.header != nil && m.headerBottom {
+		footer = m.header.ViewString()
+		maxHeight -= lipgloss.Height(footer) - layout.SingleBorder()
+	}
 	targetHeight := lipgloss.Height(combined) + 2
 	if m.maximized {
-		targetHeight = m.height
-	} else if targetHeight > m.height {
-		targetHeight = m.height
+		targetHeight = maxHeight
+	} else if targetHeight > maxHeight {
+		targetHeight = maxHeight
 	}
-	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub, true, "Title")
-
-	// 3. Replace bottom border with scroll-percent indicator if needed
-	if (!m.flowMode || m.MaxFlowRows > 0) && m.Scroll.Info.Needed {
-		if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
-			bottomLine := BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), m.focusedSub, ctx)
-			result = result[:lastNL+1] + bottomLine
+	result := m.renderBorderWithTitle(combined, contentWidth, targetHeight, m.focusedSub || m.frameFocused, true, "Title")
+	// 3. The scroll percent on the list's bottom edge: the footer's top edge
+	// when there is one, else the bottom border, which also carries the
+	// footer bar.
+	scrolled := (!m.flowMode || m.MaxFlowRows > 0) && m.Scroll.Info.Needed
+	pct := ""
+	if scrolled {
+		pct = fmt.Sprintf("%3d%%", int(m.listScrollPercent()*100))
+	}
+	if footer != "" {
+		result = m.joinFooter(result, footer, pct)
+		pct, scrolled = "", false
+	}
+	if lastNL := strings.LastIndex(result, "\n"); lastNL >= 0 {
+		focused := m.focusedSub || m.frameFocused
+		switch {
+		case m.footerBar != nil:
+			m.footerBarY = strings.Count(result, "\n")
+			result = result[:lastNL+1] + m.footerBarLine(m.width, true, focused, pct, true, ctx)
+		case scrolled:
+			result = result[:lastNL+1] + BuildScrollPercentBottomBorder(m.width, m.listScrollPercent(), focused, ctx)
 		}
 	}
 	return result
+}
+
+// footerJunction returns the junction joining a side edge (heavy or not)
+// to a top edge drawn with horizontal, on the left or right side.
+func footerJunction(left, heavySide bool, horizontal rune) string {
+	switch {
+	case horizontal == '═':
+		return map[bool]string{true: "╠", false: "╣"}[left]
+	case heavySide && horizontal == '━':
+		return map[bool]string{true: "┣", false: "┫"}[left]
+	case heavySide:
+		return map[bool]string{true: "┠", false: "┨"}[left]
+	case horizontal == '━':
+		return map[bool]string{true: "┝", false: "┥"}[left]
+	}
+	return map[bool]string{true: "├", false: "┤"}[left]
+}
+
+// joinFooter draws footer in place of box's bottom border (see SetFooter),
+// its top edge a divider joining box's side edges with the scroll percent
+// pct, recording the row it starts on.
+func (m *MenuModel) joinFooter(box, footer, pct string) string {
+	lines := strings.Split(box, "\n")
+	lines = lines[:len(lines)-1]
+	m.footerY = len(lines)
+	footerLines := strings.Split(footer, "\n")
+	m.footerBottomY = m.footerY + len(footerLines) - 1
+	footerLines[0] = m.footerBarLine(m.width, false, m.focusedSub || m.frameFocused, pct, false, GetActiveContext())
+	return strings.Join(append(lines, footerLines...), "\n")
 }
 
 // viewPlainText renders a single line of theme-styled text with no border --

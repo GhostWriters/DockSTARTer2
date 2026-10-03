@@ -49,7 +49,7 @@ func Prune(ctx context.Context, assumeYes bool) error {
 		return fmt.Errorf("failed to get docker client: %w", err)
 	}
 
-	asciiMode := !console.LineCharacters
+	asciiMode := !console.LineCharactersFor(console.ConnTypeFromContext(ctx))
 	imageServices := compose.LoadImageServices(ctx)
 
 	// Pre-flight: capture container ID → service/name BEFORE pruning, so deleted

@@ -68,6 +68,43 @@ type KeyMap struct {
 	EnvResizeSplit key.Binding
 	EnvClosePane   key.Binding
 
+	// Tab strip switching (TabStrip owners)
+	TabStripNext key.Binding
+	TabStripPrev key.Binding
+
+	// Turn the focused list's own enable checkbox on or off
+	ToggleEnabled key.Binding
+
+	// Turn a theme list's Load Defaults on or off
+	ToggleLoadDefaults key.Binding
+
+	// Show or hide a screen's advanced settings
+	ToggleConnections key.Binding
+	ToggleElements    key.Binding
+	InnerTabNext      key.Binding
+	InnerTabPrev      key.Binding
+
+	// A search's options: whole words or partial, and its variant and
+	// base pickers
+	ToggleFilter     key.Binding
+	SearchWholeWords key.Binding
+	SearchVariant    key.Binding
+	ResetSection     key.Binding
+	EditInput        key.Binding
+	StopEditing      key.Binding
+	ResetAll         key.Binding
+	SearchBase       key.Binding
+	SearchHues       key.Binding
+	SearchSource     key.Binding
+
+	// Jump to the previous/next group of sections
+	SectionPrev key.Binding
+	SectionNext key.Binding
+
+	// Appearance Settings preview: show/focus, and back to settings/hide
+	PreviewForward key.Binding
+	PreviewBack    key.Binding
+
 	// Program-wide context menu (keyboard equiv of right-click)
 	ContextMenu key.Binding
 }
@@ -93,8 +130,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		},
 		{
 			key.NewBinding(key.WithKeys("left"), key.WithHelp("←/→", "previous/next button")),
-			key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt ←/→", "switch tab/col")),
-			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p", "next/previous element")),
+			key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt+←/→ ,/.", "switch tab/col")),
+			key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n/p ]/[", "next/previous element")),
 			k.CycleTab,
 			k.CycleShiftTab,
 			k.ToggleLog,
@@ -124,19 +161,19 @@ var Keys = KeyMap{
 	),
 	Tab: key.NewBinding(
 		key.WithKeys("ctrl+n", "alt+n", "ctrl+alt+n"),
-		key.WithHelp("alt+n", "next screen element"),
+		key.WithHelp("alt+n/]", "next screen element"),
 	),
 	ShiftTab: key.NewBinding(
 		key.WithKeys("ctrl+p", "alt+p", "ctrl+alt+p"),
-		key.WithHelp("alt+p", "prev screen element"),
+		key.WithHelp("alt+p/[", "prev screen element"),
 	),
 	CycleTab: key.NewBinding(
-		key.WithKeys("tab", "."),
-		key.WithHelp("tab/.", "next focus"),
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "next focus"),
 	),
 	CycleShiftTab: key.NewBinding(
-		key.WithKeys("shift+tab", ","),
-		key.WithHelp("shift+tab/,", "prev focus"),
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "prev focus"),
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
@@ -225,11 +262,11 @@ var Keys = KeyMap{
 	),
 	EnvNextTab: key.NewBinding(
 		key.WithKeys("ctrl+right", "alt+right", "ctrl+pgdown", "alt+pgdown", "ctrl+alt+right"),
-		key.WithHelp("alt+→", "next tab"),
+		key.WithHelp("alt+→/.", "next tab"),
 	),
 	EnvPrevTab: key.NewBinding(
 		key.WithKeys("ctrl+left", "alt+left", "ctrl+pgup", "alt+pgup", "ctrl+alt+left"),
-		key.WithHelp("alt+←", "prev tab"),
+		key.WithHelp("alt+←/,", "prev tab"),
 	),
 	EnvCycleLayout: key.NewBinding(
 		key.WithKeys("f6", "ctrl+w", "alt+w", "ctrl+alt+w"),
@@ -246,6 +283,94 @@ var Keys = KeyMap{
 	EnvClosePane: key.NewBinding(
 		key.WithKeys("ctrl+q", "alt+q", "ctrl+alt+q"),
 		key.WithHelp("ctrl+q", "close pane"),
+	),
+	TabStripNext: key.NewBinding(
+		key.WithKeys("ctrl+right", "alt+right", "ctrl+alt+right"),
+		key.WithHelp("alt+→/.", "next tab"),
+	),
+	TabStripPrev: key.NewBinding(
+		key.WithKeys("ctrl+left", "alt+left", "ctrl+alt+left"),
+		key.WithHelp("alt+←/,", "prev tab"),
+	),
+	ToggleEnabled: key.NewBinding(
+		key.WithKeys("ctrl+e", "alt+e", "ctrl+alt+e"),
+		key.WithHelp("alt+e", "turn list on/off"),
+	),
+	ToggleLoadDefaults: key.NewBinding(
+		key.WithKeys("ctrl+d", "alt+d", "ctrl+alt+d"),
+		key.WithHelp("alt+d", "load theme defaults on/off"),
+	),
+	ToggleConnections: key.NewBinding(
+		key.WithKeys("alt+c", "ctrl+alt+c"),
+		key.WithHelp("alt+c", "show/hide connection tabs"),
+	),
+	ToggleElements: key.NewBinding(
+		key.WithKeys("alt+m", "ctrl+alt+m"),
+		key.WithHelp("alt+m", "show/hide element tabs"),
+	),
+	InnerTabNext: key.NewBinding(
+		key.WithKeys("ctrl+shift+right", "alt+shift+right", "ctrl+alt+shift+right"),
+		key.WithHelp("alt+shift+→/>", "next inner tab"),
+	),
+	InnerTabPrev: key.NewBinding(
+		key.WithKeys("ctrl+shift+left", "alt+shift+left", "ctrl+alt+shift+left"),
+		key.WithHelp("alt+shift+←/<", "prev inner tab"),
+	),
+	ToggleFilter: key.NewBinding(
+		key.WithKeys("ctrl+f", "alt+f", "ctrl+alt+f"),
+		key.WithHelp("alt+f", "expand/collapse find"),
+	),
+	SearchWholeWords: key.NewBinding(
+		key.WithKeys("ctrl+o", "alt+o", "ctrl+alt+o"),
+		key.WithHelp("alt+o", "find whole words/partial"),
+	),
+	SearchVariant: key.NewBinding(
+		key.WithKeys("ctrl+a", "alt+a", "ctrl+alt+a"),
+		key.WithHelp("alt+a", "find variant"),
+	),
+	EditInput: key.NewBinding(
+		key.WithKeys("f2", "space"),
+		key.WithHelp("F2/space", "type in the field again"),
+	),
+	StopEditing: key.NewBinding(
+		key.WithKeys("esc"),
+		key.WithHelp("esc", "stop typing (again: back)"),
+	),
+	ResetSection: key.NewBinding(
+		key.WithKeys("ctrl+r", "alt+r", "ctrl+alt+r"),
+		key.WithHelp("alt+r", "reset focused list"),
+	),
+	ResetAll: key.NewBinding(
+		key.WithKeys("ctrl+shift+r", "alt+shift+r", "ctrl+alt+shift+r"),
+		key.WithHelp("alt+shift+r", "reset all"),
+	),
+	SearchBase: key.NewBinding(
+		key.WithKeys("ctrl+b", "alt+b", "ctrl+alt+b"),
+		key.WithHelp("alt+b", "find base"),
+	),
+	SearchHues: key.NewBinding(
+		key.WithKeys("ctrl+u", "alt+u", "ctrl+alt+u"),
+		key.WithHelp("alt+u", "find hues"),
+	),
+	SearchSource: key.NewBinding(
+		key.WithKeys("ctrl+s", "alt+s", "ctrl+alt+s"),
+		key.WithHelp("alt+s", "find source"),
+	),
+	SectionPrev: key.NewBinding(
+		key.WithKeys("ctrl+up", "alt+up", "ctrl+alt+up"),
+		key.WithHelp("alt+↑", "previous section group"),
+	),
+	SectionNext: key.NewBinding(
+		key.WithKeys("ctrl+down", "alt+down", "ctrl+alt+down"),
+		key.WithHelp("alt+↓", "next section group"),
+	),
+	PreviewForward: key.NewBinding(
+		key.WithKeys("ctrl+pgdown", "alt+pgdown", "ctrl+alt+pgdown"),
+		key.WithHelp("alt+pgdn", "show/focus preview"),
+	),
+	PreviewBack: key.NewBinding(
+		key.WithKeys("ctrl+pgup", "alt+pgup", "ctrl+alt+pgup"),
+		key.WithHelp("alt+pgup", "focus settings/hide preview"),
 	),
 	ContextMenu: key.NewBinding(
 		key.WithKeys("f3", "ctrl+space", "alt+space", "ctrl+alt+space", "shift+F10", "alt+enter", "ctrl+enter", "ctrl+alt+enter", "menu"),

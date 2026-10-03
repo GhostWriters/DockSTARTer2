@@ -1,0 +1,260 @@
+package screens
+
+import (
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui"
+	"slices"
+	"strconv"
+	"strings"
+
+	"DockSTARTer2/internal/tui/components/sinput"
+	"github.com/GhostWriters/semstyle"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+// newFindBox builds a list's Find box (see displayengine.NewFooteredList):
+// a search input with id starting with query, its Word option showing
+// partial, calling changed after each message it handles.
+func newFindBox(id, query, help string, partial *bool, changed func()) (*displayengine.MenuModel, *sinput.Model) {
+	box, input := displayengine.NewSinputSection(id, "Find", query)
+	box.SetHelpPageText(help + " Esc stops typing, leaving the box focused so plain keys navigate; Space or F2 types again, where the cursor was.")
+	box.SetDarkBorder(true)
+	box.SetInputControls(func() []displayengine.TitleControl { return []displayengine.TitleControl{wordControl(partial)} })
+	box.SetInputPrompt("Find>")
+	box.SetInsOvrLabel(true)
+	prev := box.Interceptor
+	box.SetUpdateInterceptor(func(msg tea.Msg, menu *displayengine.MenuModel) (tea.Cmd, bool) {
+		cmd, handled := prev(msg, menu)
+		if handled {
+			changed()
+		}
+		return cmd, handled
+	})
+	return box, input
+}
+
+// findInsOvrHit toggles insert/overwrite for the Find box whose INS/OVR
+// label id belongs to.
+func (s *DisplayOptionsScreen) findInsOvrHit(id string) bool {
+	for _, f := range []struct {
+		box   *displayengine.MenuModel
+		input *sinput.Model
+	}{{s.tintSearchMenu, s.tintSearchInput}, {s.themeFindMenu, s.themeFindInput}} {
+		if f.box != nil && id == f.box.ID()+"."+displayengine.IDInsOvr {
+			f.input.ToggleOverwrite()
+			f.box.InvalidateCache()
+			return true
+		}
+	}
+	return false
+}
+
+// wordControl is a Find box's Word option: whole words, or part of a word
+// while partial.
+func wordControl(partial *bool) displayengine.TitleControl {
+	return displayengine.TitleControl{Label: "Word", Key: 'o', Checked: func() bool { return !*partial },
+		Help: "Match whole words only, or part of a word"}
+}
+
+// toggleFind expands or collapses a list's Find box, refreshing the list
+// with sync, and focuses the box when expanded or the list when collapsed
+// from the box.
+func (s *DisplayOptionsScreen) toggleFind(shown *bool, list *displayengine.HeaderedList, box, menu *displayengine.MenuModel, sync func()) tea.Cmd {
+	onBox := s.focusedSettingsLeaf() == box
+	*shown = !*shown
+	list.SetSectionShown(*shown)
+	sync()
+	s.SetSize(s.width, s.height)
+	switch {
+	case *shown:
+		return s.focusSettingsStop(box.ID())
+	case onBox:
+		return s.focusSettingsStop(menu.ID())
+	}
+	return nil
+}
+
+// focusSettingsStop focuses the settings Tab stop that id belongs to.
+func (s *DisplayOptionsScreen) focusSettingsStop(id string) tea.Cmd {
+	if s.layoutRow == nil || s.outerMenu == nil {
+		return nil
+	}
+	for i, leaf := range s.layoutRow.settings.Items() {
+		if leaf.MatchesID(id) {
+			s.layoutRow.settings.SetSubFocusIndex(i)
+			return s.focusFrame()
+		}
+	}
+	return nil
+}
+
+// focusedFindBox returns the Find box holding focus and editing (see
+// displayengine.MenuModel.SetInputEditing) and its input, if any.
+func (s *DisplayOptionsScreen) focusedFindBox() (*displayengine.MenuModel, *sinput.Model) {
+	switch leaf := s.focusedSettingsLeaf(); {
+	case leaf == nil:
+	case s.tintSearchMenu != nil && leaf == s.tintSearchMenu && s.tintSearchMenu.InputEditing():
+		return s.tintSearchMenu, s.tintSearchInput
+	case s.themeFindMenu != nil && leaf == s.themeFindMenu && s.themeFindMenu.InputEditing():
+		return s.themeFindMenu, s.themeFindInput
+	}
+	return nil, nil
+}
+
+// themeFindID is the Theme list's Find box section ID.
+const themeFindID = "theme_find_input"
+
+// themePaneColumn builds the Theme pane's contents: the theme list, with its
+// Find box below its rows when expanded.
+func (s *DisplayOptionsScreen) themePaneColumn() *displayengine.ContentColumn {
+	s.themeFindList = displayengine.NewFooteredList(s.themeFindMenu, s.themeMenu)
+	s.themeFindList.SetSectionShown(s.themeFindShown)
+	return displayengine.NewContentColumn(s.themeFindList)
+}
+
+// themeFrameFocused reports whether focus is inside the Theme pane.
+func (s *DisplayOptionsScreen) themeFrameFocused() bool {
+	leaf := s.focusedSettingsLeaf()
+	return leaf != nil && (leaf == s.themeMenu || leaf == s.themeFindMenu)
+}
+
+// toggleThemeFind expands or collapses the Theme list's Find box.
+func (s *DisplayOptionsScreen) toggleThemeFind() tea.Cmd {
+	return s.toggleFind(&s.themeFindShown, s.themeFindList, s.themeFindMenu, s.themeMenu, s.syncThemeList)
+}
+
+// toggleThemeWholeWords flips the Theme Find box's Word option.
+func (s *DisplayOptionsScreen) toggleThemeWholeWords() tea.Cmd {
+	s.themePartial = !s.themePartial
+	s.syncThemeList()
+	s.themeFindMenu.InvalidateCache()
+	return nil
+}
+
+// applyThemeFind re-filters the theme list when the Find text changed.
+func (s *DisplayOptionsScreen) applyThemeFind() {
+	if s.themeFindInput != nil && s.themeFindInput.Value() != s.themeQuery {
+		s.themeQuery = s.themeFindInput.Value()
+		s.syncThemeList()
+	}
+}
+
+// syncThemeList rebuilds the theme list from the staged theme and the Find
+// box, keeping the cursor on the checked theme.
+func (s *DisplayOptionsScreen) syncThemeList() {
+	if s.themeMenu == nil {
+		return
+	}
+	s.themeMenu.SetItems(s.themeListItems(s.config.Appearance.ForConnType(s.editType).Theme))
+	s.themeMenu.Select(0)
+	for i, it := range s.themeMenu.GetItems() {
+		if it.Checked && !it.IsSeparator {
+			s.themeMenu.Select(i)
+			break
+		}
+	}
+	s.markThemeList()
+	s.themeMenu.InvalidateCache()
+}
+
+// themeSearchOptionMsg sets one of the Theme list's filters.
+type themeSearchOptionMsg struct{ apply func(*DisplayOptionsScreen) }
+
+// showThemeVariantPicker and showThemeHuesPicker open the Theme list's
+// Variant and Hues pickers.
+func (s *DisplayOptionsScreen) showThemeVariantPicker() tea.Cmd {
+	return showSearchPicker("theme_search_variant", "Variant", "themes", s.themeVariant,
+		[]string{"", theme.VariantDark, theme.VariantLight, theme.VariantTinted},
+		func(v string) tea.Msg {
+			return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeVariant = v }}
+		})
+}
+
+// showThemeHuesPicker opens the Theme list's Hues picker, a theme showing
+// when its base colors include any checked one.
+func (s *DisplayOptionsScreen) showThemeHuesPicker() tea.Cmd {
+	return showHuesPicker("theme_search_hues", "themes", "built on",
+		[]string{"", theme.ColorsMonochrome, theme.ColorsSemiMonochrome, theme.ColorsMultiColor}, semstyle.BasicColors[:],
+		s.themeHues, s.themeHueColors, func(kind string, colors []string) tea.Msg {
+			return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeHues, s.themeHueColors = kind, colors }}
+		})
+}
+
+// showHuesPicker opens a Hues picker: a radio group of kinds ("" for All)
+// and a checkbox for each color, noun naming what the list holds and verb
+// how one relates to a color; picked returns the message storing the
+// marked kind and colors.
+func showHuesPicker(id, noun, verb string, kinds, colors []string, kind string, checked []string, picked func(kind string, colors []string) tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		items := []displayengine.MenuItem{{Tag: "Kind", IsSeparator: true}}
+		sel := 1
+		for _, k := range kinds {
+			if k == kind {
+				sel = len(items)
+			}
+			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(k), Help: "Show " + strings.ToLower(searchOptionLabel(k)) + " " + noun,
+				IsRadioButton: true, Selectable: true, Checked: k == kind, Metadata: map[string]string{"kind": k}})
+		}
+		items = append(items, displayengine.MenuItem{Tag: "Colors", IsSeparator: true})
+		for _, c := range colors {
+			items = append(items, displayengine.MenuItem{Tag: searchOptionLabel(c), Help: "Show " + noun + " " + verb + " " + c + ", with any other checked color",
+				IsCheckbox: true, Selectable: true, Checked: slices.Contains(checked, c), Metadata: map[string]string{"color": c}})
+		}
+		menu := displayengine.NewMenuModel(id, "Hues", "Show only these "+noun, items)
+		menu.SetUpdateInterceptor(tui.RadioGroupInterceptor(id))
+		done := func() tea.Msg {
+			kind, colors := "", []string(nil)
+			for _, it := range menu.GetItems() {
+				switch {
+				case it.IsRadioButton && it.Checked:
+					kind = it.Metadata["kind"]
+				case it.IsCheckbox && it.Checked:
+					colors = append(colors, it.Metadata["color"])
+				}
+			}
+			return tui.CloseDialogThen(func() tea.Msg { return picked(kind, colors) })()
+		}
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Action: done, Help: "Confirm the marked choices."},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
+		menu.Select(sel)
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
+}
+
+// Theme list Source filter values.
+const (
+	themeSourceBundled = "bundled"
+	themeSourceUser    = "user"
+)
+
+// showThemeSourcePicker opens the Theme list's Source picker.
+func (s *DisplayOptionsScreen) showThemeSourcePicker() tea.Cmd {
+	return showSearchPicker("theme_search_source", "Source", "themes", s.themeSource,
+		[]string{"", themeSourceBundled, themeSourceUser},
+		func(v string) tea.Msg {
+			return themeSearchOptionMsg{func(s *DisplayOptionsScreen) { s.themeSource = v }}
+		})
+}
+
+// foundStatus is a list's count of shown items as its footer bar shows it.
+func foundStatus(n int) (label, value string) { return "Found:", strconv.Itoa(n) }
+
+// huesLabel is a Hues filter as a footer shows it: the kind, then any
+// checked colors.
+func huesLabel(kind string, colors []string) string {
+	label := searchOptionLabel(kind)
+	if len(colors) > 0 {
+		label += ": " + strings.Join(colors, ", ")
+	}
+	return label
+}
+
+// findBoxFocused reports whether a Find box holds focus and is editing.
+func (s *DisplayOptionsScreen) findBoxFocused() bool {
+	box, _ := s.focusedFindBox()
+	return box != nil
+}

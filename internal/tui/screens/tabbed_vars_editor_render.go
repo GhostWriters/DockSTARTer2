@@ -5,6 +5,7 @@ import (
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
 	"fmt"
 	"strings"
@@ -88,9 +89,12 @@ func (m *TabbedVarsEditorModel) ViewString() string {
 		// Global INS/OVR for the currently focused pane, once on the tab-list
 		// box's own bottom border rather than repeated on every pane (see
 		// renderPane).
-		modeLabel := "INS"
-		if m.tabs[m.activeTab].editor.IsOverwrite() {
-			modeLabel = "OVR"
+		modeLabel := ""
+		if !m.editorIdle {
+			modeLabel = "INS"
+			if m.tabs[m.activeTab].editor.IsOverwrite() {
+				modeLabel = "OVR"
+			}
 		}
 		lines := strings.Split(body, "\n")
 		if len(lines) > 0 {
@@ -225,6 +229,16 @@ func endCappedLine(length int, start, end, fill string) []string {
 func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	tab := m.tabs[idx]
 	editor := tab.editor
+	// The line being edited, every row it wraps to, in the input field's
+	// colors (see enveditor.RemapStyles).
+	if focused && m.focus == envFocusEditor && !m.editorIdle {
+		dialog, field := displayengine.GetStyles().Dialog, displayengine.InputFieldStyle(true)
+		row := enveditor.RemapStyles(editor.Styles().Focused, dialog.GetForeground(), dialog.GetBackground(),
+			field.GetForeground(), field.GetBackground())
+		editor.SetCursorRowStyles(&row)
+	} else {
+		editor.SetCursorRowStyles(nil)
+	}
 	// Sync this render-local copy's focus to what's actually being
 	// rendered, rather than trusting m.tabs[idx].editor's own focus flag --
 	// several focus-transition sites (Save/Refresh/Cancel/Exit buttons,
@@ -308,7 +322,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	// has no separate tab-list box (its top border doubles as the editor's
 	// own), so there it stays on this pane's own border as always.
 	modeLabel := ""
-	if !m.splitMode {
+	if !m.splitMode && !m.editorIdle {
 		modeLabel = "INS"
 		if editor.IsOverwrite() {
 			modeLabel = "OVR"
@@ -316,7 +330,7 @@ func (m *TabbedVarsEditorModel) renderPane(idx int, focused bool) string {
 	}
 	scrollLabel := ""
 	if editor.TotalDisplayLines() > editor.Height() {
-		scrollLabel = fmt.Sprintf("%d%%", int(editor.ScrollPercent()*100))
+		scrollLabel = fmt.Sprintf("%3d%%", int(editor.ScrollPercent()*100))
 	}
 	lines := strings.Split(innerBox, "\n")
 	if len(lines) > 0 {
@@ -431,6 +445,8 @@ func (m *TabbedVarsEditorModel) FullHelp() [][]key.Binding {
 		displayengine.Keys.EnvDelete,
 		key.NewBinding(key.WithKeys("ctrl+up"), key.WithHelp("alt+↑/↓", "reorder row")),
 		displayengine.Keys.EnvEditValue,
+		displayengine.Keys.StopEditing,
+		key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "type again (after esc)")),
 	}
 	if len(m.tabs) > 1 {
 		editorActions = append(editorActions, displayengine.Keys.EnvNextTab, displayengine.Keys.EnvPrevTab)

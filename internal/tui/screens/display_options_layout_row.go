@@ -21,7 +21,7 @@ const (
 // background regions (see GetHitRegions) -- clicking blank space inside
 // either panel (not on a specific item) still switches which side is active.
 // appearanceExpandPreviewID is the collapsed placeholder's own single cell
-// (see collapsedPreviewView) -- click, or Ctrl+Right from the settings side,
+// (see collapsedPreviewView) -- click, or Ctrl+PgDn from the settings side,
 // to restore the preview.
 const (
 	settingsPanelBGID         = "appearance_settings_panelbg"
@@ -74,6 +74,10 @@ type appearanceLayoutRow struct {
 	// settings-only (matching the pre-existing width auto-collapse) instead
 	// of clipping the indicator column.
 	showCollapsed bool
+
+	// settingsView is the settings side as ViewString last drew it, which
+	// GetHitRegions measures instead of drawing it again.
+	settingsView string
 }
 
 // appearancePreviewHideMsg is dispatched by the preview panel's own Close
@@ -235,6 +239,7 @@ func (r *appearanceLayoutRow) gutterView(height int, showGlyph bool) string {
 // blank otherwise -- then the full preview section if it fits.
 func (r *appearanceLayoutRow) ViewString() string {
 	settingsView := r.settings.ViewString()
+	r.settingsView = settingsView
 	if !r.previewFits && !r.showCollapsed {
 		return settingsView
 	}
@@ -268,7 +273,10 @@ func (r *appearanceLayoutRow) GetHitRegions(offsetX, offsetY int) []displayengin
 	}
 	panelBGZ := baseZ - 2
 
-	settingsView := r.settings.ViewString()
+	settingsView := r.settingsView
+	if settingsView == "" {
+		settingsView = r.settings.ViewString()
+	}
 	regions := []displayengine.HitRegion{{
 		ID:     settingsPanelBGID,
 		X:      offsetX,
@@ -313,11 +321,10 @@ func (r *appearanceLayoutRow) GetHitRegions(offsetX, offsetY int) []displayengin
 }
 
 // SubFocusable implementation, scoped to whichever group (settings or
-// preview) Ctrl/Alt+Left/Right last switched to (r.subFocus) -- Tab still
-// cycles within the active group only (settings' own Load Theme Defaults /
-// Select Theme / Options stops, or preview's single scrollable stop), while
-// Ctrl/Alt+Left/Right (handled in Update below) is the coarser control that
-// switches which group Tab operates on.
+// preview) Ctrl/Alt+PgUp/PgDn last switched to (r.subFocus) -- Tab still
+// cycles within the active group only (settings' own stops, or preview's
+// single scrollable stop), while Ctrl/Alt+PgUp/PgDn (handled in Update below)
+// is the coarser control that switches which group Tab operates on.
 func (r *appearanceLayoutRow) NumTabStops() int {
 	if r.subFocus == 1 {
 		return 1
@@ -365,9 +372,9 @@ func (r *appearanceLayoutRow) canFocusPreview() bool {
 // re-lays-out immediately (reusing r.width/r.height from the last SetSize
 // call -- no external resize trigger needed). Focus always stays on
 // settings after either direction -- showing it (via the expand control or
-// Ctrl+Right) is a separate step from moving focus into it, so a second
-// Ctrl+Right (handled by the EnvNextTab case in Update, once previewHidden
-// is already false) is what actually switches focus there.
+// Ctrl+PgDn) is a separate step from moving focus into it, so a second
+// Ctrl+PgDn (handled by the PreviewForward case in Update, once
+// previewHidden is already false) is what actually switches focus there.
 func (r *appearanceLayoutRow) SetPreviewHidden(hidden bool) tea.Cmd {
 	if hidden == r.previewHidden {
 		return nil
@@ -378,7 +385,7 @@ func (r *appearanceLayoutRow) SetPreviewHidden(hidden bool) tea.Cmd {
 	return r.SetSubFocused(true)
 }
 
-// Update handles Ctrl/Alt+Left/Right itself (switching which group --
+// Update handles Ctrl/Alt+PgUp/PgDn itself (switching which group --
 // settings or preview -- holds row-internal focus), retargets subFocus to
 // whichever child a mouse hit/wheel message's ID actually belongs to
 // (mirroring ContentRow.Update -- without this, hovering/wheeling over
@@ -408,7 +415,7 @@ func (r *appearanceLayoutRow) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return r, cmd
 	}
 	if kp, ok := msg.(tea.KeyPressMsg); ok {
-		if key.Matches(kp, displayengine.Keys.EnvNextTab) {
+		if key.Matches(kp, displayengine.Keys.PreviewForward) {
 			if r.subFocus == 0 {
 				if r.previewHidden {
 					return r, r.SetPreviewHidden(false)
@@ -420,7 +427,7 @@ func (r *appearanceLayoutRow) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return r, nil
 		}
-		if key.Matches(kp, displayengine.Keys.EnvPrevTab) {
+		if key.Matches(kp, displayengine.Keys.PreviewBack) {
 			if r.subFocus == 1 {
 				r.subFocus = 0
 				return r, r.SetSubFocused(true)
@@ -547,9 +554,12 @@ func (r *appearanceLayoutRow) IsProcessing() bool {
 	return r.settings.IsProcessing() || (r.previewFits && r.preview.IsProcessing())
 }
 
-// WantsHorizontalKeys always reports false -- neither column consumes
-// Left/Right itself today (unlike a sinput text field).
-func (r *appearanceLayoutRow) WantsHorizontalKeys() bool { return false }
+// WantsHorizontalKeys reports whether the focused settings section
+// consumes Left/Right itself (e.g. the search box or a tab strip); the
+// preview never does.
+func (r *appearanceLayoutRow) WantsHorizontalKeys() bool {
+	return r.subFocus == 0 && r.settings.WantsHorizontalKeys()
+}
 
 func (r *appearanceLayoutRow) WantsAllMessages() bool {
 	if r.subFocus == 1 {
@@ -563,15 +573,14 @@ func (r *appearanceLayoutRow) WantsAllMessages() bool {
 func (r *appearanceLayoutRow) Focusable() bool { return true }
 
 // ComfortableMinHeight is the row's own floor for the theme list (mirroring
-// ContentColumn's minExpandableFloor) plus room for Load Theme Defaults and
-// a handful of Options rows before Options needs to start scrolling --
-// below this, the outer dialog flattens its button row (see
-// classic.ComfortableMinHeight) rather than squeezing this row further.
+// ContentColumn's minExpandableFloor) plus room for a handful of Options
+// rows before Options starts scrolling; below this, the outer dialog
+// flattens its button row (see classic.ComfortableMinHeight) rather than
+// squeezing this row further.
 func (r *appearanceLayoutRow) ComfortableMinHeight() int {
 	const themeListFloor = 8 // mirrors ContentColumn's minExpandableFloor
-	const loadDefaultsNatural = 3
 	const optionsComfortable = 6
-	return themeListFloor + loadDefaultsNatural + optionsComfortable
+	return themeListFloor + optionsComfortable
 }
 
 var _ displayengine.ComfortableMinHeight = (*appearanceLayoutRow)(nil)

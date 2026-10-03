@@ -127,9 +127,9 @@ func HandleAnsiOverride(ctx context.Context, group *CommandGroup) error {
 	}
 
 	if value == "" {
-		logger.Notice(ctx, "ANSI color override for {{|Var|}}%s{{[-]}} cleared for: {{|Var|}}%s{{[-]}}", slot, strings.Join(connTypes, ", "))
+		logger.Notice(ctx, "ANSI color override for {{|Var|}}%s{{[-]}} cleared for: {{|Var|}}%s{{[-]}}", slot, config.ConnTypeLabels(connTypes))
 	} else {
-		logger.Notice(ctx, "ANSI color override for {{|Var|}}%s{{[-]}} set to {{|Var|}}%s{{[-]}} for: {{|Var|}}%s{{[-]}}", slot, value, strings.Join(connTypes, ", "))
+		logger.Notice(ctx, "ANSI color override for {{|Var|}}%s{{[-]}} set to {{|Var|}}%s{{[-]}} for: {{|Var|}}%s{{[-]}}", slot, value, config.ConnTypeLabels(connTypes))
 	}
 	return nil
 }
@@ -170,9 +170,9 @@ func HandleThemeAnsiOverrideOnOff(ctx context.Context, group *CommandGroup) erro
 	}
 
 	if enabled {
-		logger.Notice(ctx, "ANSI color overrides enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI color overrides enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	} else {
-		logger.Notice(ctx, "ANSI color overrides disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI color overrides disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	}
 	return nil
 }

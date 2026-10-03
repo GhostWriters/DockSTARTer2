@@ -60,15 +60,16 @@ const (
 // DialogLayout stores pre-calculated vertical budgeting for a dialog.
 // This implements the "calculate once, use everywhere" pattern.
 type DialogLayout struct {
-	Width          int
-	Height         int
-	HeaderHeight   int
-	CommandHeight  int
-	ViewportHeight int
-	ButtonHeight   int
-	ShadowHeight   int
-	Overhead       int
-	SubtitleHeight int // actual rendered subtitle height at layout time
+	Width            int
+	Height           int
+	HeaderHeight     int
+	CommandHeight    int
+	ViewportHeight   int
+	ButtonHeight     int
+	ShadowHeight     int
+	Overhead         int
+	SubtitleHeight   int // actual rendered subtitle height at layout time
+	ListHeaderHeight int // height of the section drawn above a submenu's list (see SetHeader)
 
 	LargeTitleBar bool // whether large titlebar is active (pre-computed at layout time)
 
@@ -134,13 +135,13 @@ func (b *BaseDialogModel) CalculateLayout() {
 // All three simple dialog types (confirm, message, prompt) share this calculation.
 func newStandardDialogLayout(width, height int) DialogLayout {
 	shadow := 0
-	if currentConfig.UI.Shadow {
+	if ActiveAppearance().Shadow {
 		shadow = DialogShadowHeight
 	}
 	buttons := DialogButtonHeight
 	// Use large titlebar if enabled and the dialog is tall enough to fit it.
 	// Conservative check: need at least 3 content rows after all overhead.
-	largeTitleBar := currentConfig.UI.LargeTitleBars &&
+	largeTitleBar := ActiveAppearance().LargeTitleBars &&
 		height > DialogBorderHeight+buttons+shadow+LargeTitleBarOverhead+3
 	overhead := DialogBorderHeight + buttons + shadow
 	if largeTitleBar {

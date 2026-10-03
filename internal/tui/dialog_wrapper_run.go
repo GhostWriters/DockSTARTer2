@@ -18,7 +18,7 @@ func RunDialogWithBackdrop[T displayengine.DialogModel](dialog T, helpText strin
 
 	// Initialize TUI if not already done
 	cfg := config.LoadAppConfig()
-	if _, err := theme.Load(cfg.UI.Theme, ""); err == nil {
+	if _, err := theme.Load(cfg.Appearance.Local.Theme, ""); err == nil {
 		displayengine.InitStyles(cfg)
 	}
 

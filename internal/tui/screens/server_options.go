@@ -274,7 +274,7 @@ func (s *ServerOptionsScreen) authModeLabel() string {
 }
 
 func (s *ServerOptionsScreen) dropdownDesc(val string) string {
-	return fmt.Sprintf("{{|OptionValue|}}%s▼{{[-]}}", val)
+	return displayengine.DropdownValueMarkup(val)
 }
 
 func (s *ServerOptionsScreen) passwordDesc() string {

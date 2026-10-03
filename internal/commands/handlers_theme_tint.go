@@ -65,12 +65,8 @@ func parseOptionalConnTypeList(s string) ([]string, error) {
 // for an unrecognized connType.
 func ansiColorsPtr(conf *config.AppConfig, connType string) *config.AnsiColors {
 	switch connType {
-	case "local":
-		return &conf.AnsiColors.Local
-	case "ssh":
-		return &conf.AnsiColors.SSH
-	case "web":
-		return &conf.AnsiColors.Web
+	case "local", "ssh", "web":
+		return &conf.Appearance.Ptr(connType).AnsiColors
 	default:
 		return nil
 	}
@@ -217,6 +213,11 @@ func validateCLIConnTypeScope(typesArg string, elements []string) error {
 // command actually runs.
 func checkCLIConnTypeScope(expandedArgs []string, cmd string, baseIndex int, typeElementArgs []string) error {
 	typesArg, elementsArg := splitTintTypeElementArgs(typeElementArgs)
+	if elementsArg == "" {
+		// No element named: "cli" is skipped for ssh/web when applied (see
+		// setAnsiElementField), not an error.
+		return nil
+	}
 	elements, err := parseOptionalElementList(elementsArg)
 	if err != nil {
 		return &ParseError{Args: expandedArgs, Index: baseIndex + len(typeElementArgs) - 1, FailingCommand: cmd, Message: err.Error()}
@@ -289,7 +290,7 @@ func noticeSkippedCLI(ctx context.Context, skipped []string) {
 }
 
 // applyTintRef validates data as a base16 scheme, then points each of
-// elements' tint (e.g. "embedded:ansi", "repo:dracula",
+// elements' tint (e.g. "embedded:base24-ansi", "repo:base24-dracula",
 // "file:/path/to/scheme.yaml") at ref, for each of connTypes. Also sets
 // TintEnabled, so setting a scheme here always actually renders it --
 // otherwise a "programbox"/"cli" element whose TintEnabled happened to be
@@ -311,7 +312,7 @@ func applyTintRef(ctx context.Context, connTypes, elements []string, data []byte
 	}
 
 	logger.Notice(ctx, "Applied %s color palette:", tintedThemingLink())
-	logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+	logger.Notice(ctx, "\t{{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	printTintDetails(ctx, ref, "\t\t")
 	return nil
 }
@@ -364,11 +365,11 @@ func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc stri
 		return data, "'" + path + "'", err
 	case strings.HasPrefix(ref, "user:"):
 		name := strings.TrimPrefix(ref, "user:")
-		data, err = os.ReadFile(filepath.Join(paths.GetTintsDir(), name+".yaml"))
+		data, err = readSchemeFile(readUserTint, name)
 		return data, "'" + name + "' (user)", err
 	case strings.HasPrefix(ref, "embedded:"):
 		name := strings.TrimPrefix(ref, "embedded:")
-		data, err = assets.GetTintTheme(name)
+		data, err = readSchemeFile(assets.GetTintTheme, name)
 		if err != nil {
 			names, _ := assets.ListTintThemes()
 			err = fmt.Errorf("no bundled scheme named %q (available: %s)", name, strings.Join(names, ", "))
@@ -382,6 +383,26 @@ func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc stri
 		data, err = ResolveRepoTintData(ctx, ref)
 		return data, "'" + ref + "'", err
 	}
+}
+
+// readUserTint reads the user tints folder's scheme file for slug.
+func readUserTint(slug string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(paths.GetTintsDir(), slug+".yaml"))
+}
+
+// readSchemeFile reads a user or bundled scheme with read: the file named
+// name, else, when name carries a system ("base24-ansi"), the file named
+// for the slug after it, since those files are named by slug alone.
+func readSchemeFile(read func(string) ([]byte, error), name string) ([]byte, error) {
+	data, err := read(name)
+	if err != nil {
+		if slug, subs := repoSchemeSubfolders(name); len(subs) == 1 {
+			if d, e := read(slug); e == nil {
+				return d, nil
+			}
+		}
+	}
+	return data, err
 }
 
 // tintBareNameSearchOrder is the source prefixes a bare, unprefixed --tint
@@ -401,7 +422,8 @@ var tintBareNameSearchOrder = []string{"user:", "embedded:", "repo:"}
 // against each of tintBareNameSearchOrder in turn, returning the first
 // that resolves -- which prefix it's found under becomes ref's canonical
 // prefix, so what's persisted to ansi_palette.<connType>.tint is never
-// ambiguous even if a later search finds it under a different source.
+// ambiguous even if a later search finds it under a different source. For
+// the same reason, ref names its scheme's system (see CanonicalTintRef).
 func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, desc string, err error) {
 	if path, ok := strings.CutPrefix(arg, "file:"); ok {
 		if abs, absErr := filepath.Abs(path); absErr == nil {
@@ -414,7 +436,7 @@ func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, d
 	for _, p := range tintBareNameSearchOrder {
 		if strings.HasPrefix(arg, p) {
 			data, desc, err = ResolveTintRefData(ctx, arg)
-			return arg, data, desc, err
+			return CanonicalTintRef(arg), data, desc, err
 		}
 	}
 
@@ -422,7 +444,7 @@ func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, d
 	for _, p := range tintBareNameSearchOrder {
 		d, ds, e := ResolveTintRefData(ctx, p+arg)
 		if e == nil {
-			return p + arg, d, ds, nil
+			return CanonicalTintRef(p + arg), d, ds, nil
 		}
 		errs = append(errs, e.Error())
 	}
@@ -593,6 +615,24 @@ func (f tintFilter) matchesTerms(fields ...string) bool {
 		found := false
 		for _, words := range fieldWords {
 			if containsWordSequence(words, termWords) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// containsTerms is matchesTerms matching each term anywhere in a field
+// (case-insensitive) rather than as whole words.
+func (f tintFilter) containsTerms(fields ...string) bool {
+	for _, term := range f.Terms {
+		found := false
+		for _, field := range fields {
+			if strings.Contains(strings.ToLower(field), term) {
 				found = true
 				break
 			}
@@ -785,9 +825,11 @@ func HandleTintList(ctx context.Context, group *CommandGroup) error {
 // tintListLabels' file-level one) -- a repo slug present in both base16/
 // and base24/ is one row with both availability flags set, not two rows.
 type tintTableRow struct {
-	Source               string
-	Slug, Name, Variant  string
-	HasBase16, HasBase24 bool
+	Source                                   string
+	Slug, Name, Variant, Author, Description string
+	HasBase16, HasBase24                     bool
+	Hues                                     []string
+	Kind                                     string
 }
 
 // repoTintTableRows builds one tintTableRow per distinct repo slug matching
@@ -795,9 +837,7 @@ type tintTableRow struct {
 // subfolder(s) actually have that slug, and Name/Variant read from
 // whichever format is preferred (base24, falling back to base16 -- see
 // ParseBase16Scheme's doc comment). filter.Terms are matched against the
-// slug, Name, Variant, and Author (see config.Base16SchemeMeta) -- Author
-// isn't kept on the row (see tintTableRow's doc comment), just checked here
-// while it's already in scope from parsing the scheme's metadata.
+// slug, Name, Variant, Author, and Description (see config.Base16SchemeMeta).
 func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, error) {
 	repoDir, err := ensureTintedThemingSchemesRepo(ctx)
 	if err != nil {
@@ -836,13 +876,13 @@ func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, 
 			continue
 		}
 		row := tintTableRow{Source: "repo", Slug: slug, HasBase16: a.base16, HasBase24: a.base24}
-		author := ""
 		if data, err := ResolveRepoTintData(ctx, slug); err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
-				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
+				row.Name, row.Variant, row.Author, row.Description = meta.Name, meta.Variant, meta.Author, meta.Description
 			}
+			row.Hues, row.Kind = tintHues(slug, data)
 		}
-		if filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
+		if filter.matchesTerms(row.Slug, row.Name, row.Variant, row.Author, row.Description) {
 			rows = append(rows, row)
 		}
 	}
@@ -852,9 +892,9 @@ func repoTintTableRows(ctx context.Context, filter tintFilter) ([]tintTableRow, 
 // dirTintTableRows builds one tintTableRow per *.yaml file directly under
 // dir matching filter (a flat scheme folder, so exactly one of
 // HasBase16/HasBase24 is set, from that file's own declared "system:"
-// field), sorted by slug. See repoTintTableRows's doc comment for how
-// filter.Terms are matched against metadata not kept on the row. A missing
-// dir is not an error (no user schemes yet).
+// field), sorted by slug. See repoTintTableRows's doc comment for what
+// filter.Terms are matched against. A missing dir is not an error (no user
+// schemes yet).
 func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -869,18 +909,18 @@ func dirTintTableRows(dir, source string, filter tintFilter) ([]tintTableRow, er
 			continue
 		}
 		row := tintTableRow{Source: source, Slug: strings.TrimSuffix(e.Name(), ".yaml")}
-		author := ""
 		if data, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
-				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
+				row.Name, row.Variant, row.Author, row.Description = meta.Name, meta.Variant, meta.Author, meta.Description
 				if meta.System == "base24" {
 					row.HasBase24 = true
 				} else {
 					row.HasBase16 = true
 				}
 			}
+			row.Hues, row.Kind = tintHues(row.Slug, data)
 		}
-		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
+		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, row.Author, row.Description) {
 			rows = append(rows, row)
 		}
 	}
@@ -900,18 +940,18 @@ func embeddedTintTableRows(filter tintFilter) ([]tintTableRow, error) {
 	var rows []tintTableRow
 	for _, name := range names {
 		row := tintTableRow{Source: "embedded", Slug: name}
-		author := ""
 		if data, err := assets.GetTintTheme(name); err == nil {
 			if meta, err := config.ParseBase16SchemeMeta(data); err == nil {
-				row.Name, row.Variant, author = meta.Name, meta.Variant, meta.Author
+				row.Name, row.Variant, row.Author, row.Description = meta.Name, meta.Variant, meta.Author, meta.Description
 				if meta.System == "base24" {
 					row.HasBase24 = true
 				} else {
 					row.HasBase16 = true
 				}
 			}
+			row.Hues, row.Kind = tintHues(name, data)
 		}
-		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, author) {
+		if filter.matchesSystem(row.HasBase16, row.HasBase24) && filter.matchesTerms(row.Slug, row.Name, row.Variant, row.Author, row.Description) {
 			rows = append(rows, row)
 		}
 	}
@@ -938,10 +978,11 @@ func tintTableRows(ctx context.Context, source string, filter tintFilter) ([]tin
 // args in any order (see splitTintArgs): a "<repo:|user:|embedded:|all:>[,...]"
 // source filter (every source when omitted -- see parseTintSources) and a
 // search term (see parseTintFilter, tintFilter.matchesTerms). Shows a
-// Slug/Scheme/Variant/base16/base24 table (Author is omitted as a column --
-// its GitHub-profile links push most rows well past a normal terminal
-// width -- but is still searchable, since search checks every field a
-// scheme's metadata has, not just what's displayed). A Source column is
+// Slug/Scheme/Variant/base16/base24 table (Author and Description are
+// omitted as columns -- Author's GitHub-profile links and Description's free
+// text push most rows well past a normal terminal width -- but are still
+// searchable, since search checks every field a scheme's metadata has, not
+// just what's displayed). A Source column is
 // added only when more than one source is selected; a single source's
 // table has no such column.
 func HandleTintTable(ctx context.Context, group *CommandGroup) error {
@@ -1040,9 +1081,9 @@ func HandleThemeTintOnOff(ctx context.Context, group *CommandGroup) error {
 	}
 
 	if enabled {
-		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI palette tint enabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	} else {
-		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI palette tint disabled for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 	}
 	return nil
 }
@@ -1200,7 +1241,7 @@ func HandleTint(ctx context.Context, group *CommandGroup) error {
 			logger.Error(ctx, "Failed to save tint setting: %v", err)
 			return err
 		}
-		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", strings.Join(connTypes, ", "), strings.Join(elements, ", "))
+		logger.Notice(ctx, "ANSI palette tint cleared for: {{|Var|}}%s{{[-]}} / {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), strings.Join(elements, ", "))
 		return nil
 	}
 
@@ -1227,12 +1268,12 @@ func handleTintStatus(ctx context.Context) error {
 		label string
 		c     config.AnsiColors
 	}{
-		{"local", conf.AnsiColors.Local},
-		{"ssh", conf.AnsiColors.SSH},
-		{"web", conf.AnsiColors.Web},
+		{"local", conf.Appearance.Local.AnsiColors},
+		{"ssh", conf.Appearance.SSH.AnsiColors},
+		{"web", conf.Appearance.Web.AnsiColors},
 	}
 	for _, row := range rows {
-		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", row.label)
+		logger.Notice(ctx, "{{|Var|}}%s:{{[-]}}", config.ConnTypeLabel(row.label))
 		printTintElementStatus(ctx, "menu", row.c.AnsiElementColors)
 		printTintElementStatus(ctx, "programbox", row.c.ProgramBox)
 		if row.label == "local" {

@@ -5,11 +5,13 @@ import (
 	"context"
 	"time"
 
+	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 const (
@@ -83,6 +85,9 @@ type PanelModel struct {
 
 	// Console input bar
 	InputFocused bool
+	// inputIdle marks the input bar focused but not editing (see
+	// InputEditing).
+	inputIdle    bool
 	Input        sinput.Model
 	history      []string // in-session command history, oldest first
 	historyIdx   int      // -1 = new command; >=0 = navigating history
@@ -140,12 +145,22 @@ func (m *PanelModel) AdvanceSpinners(now time.Time) bool {
 	return changed
 }
 
-// changedIndicatorChar returns the character used to signal new content arrived while collapsed.
+// changedIndicatorChar returns the changed marker drawn before a changed label
+// (see ChangedIndicatorChars), for callers that need only its presence or
+// width.
 func changedIndicatorChar(lineCharacters bool) string {
+	left, _ := ChangedIndicatorChars(lineCharacters)
+	return left
+}
+
+// ChangedIndicatorChars returns the changed markers drawn before and after a
+// changed label or value, pointing in at it: "»" and "«", or "*" and "*" without line
+// characters. Both are in every monospace font's basic set and single-width.
+func ChangedIndicatorChars(lineCharacters bool) (left, right string) {
 	if lineCharacters {
-		return "•"
+		return "»", "«"
 	}
-	return "*"
+	return "*", "*"
 }
 
 // currentSpinnerMarker returns the spinner frame to use in the panel title,
@@ -157,29 +172,62 @@ func (m *PanelModel) currentSpinnerMarker() (indicatorL, indicatorR string, chan
 	}
 	if m.panelChanged && !m.Expanded {
 		ctx := GetActiveContext()
-		ch := changedIndicatorChar(ctx.LineCharacters)
-		return ch, ch, true
+		left, right := ChangedIndicatorChars(ctx.LineCharacters)
+		return left, right, true
 	}
 	return "", "", false
 }
 
+// OutputConsoleStyle returns the Console style under the "programbox"
+// element's tint (see console.ActivateTintForElement): the text and
+// background of command output's content area, in the log panel and a
+// ProgramBox, whose borders keep the session's own tint.
+func OutputConsoleStyle() lipgloss.Style {
+	var s lipgloss.Style
+	console.ActivateTintForElement("programbox", func() {
+		s = GetStyles().Console
+	})
+	return s
+}
+
 // panelRenderFn returns the render function for streamvp line rendering.
+// Renders under the "programbox" element's tint (see
+// console.ActivateTintForElement), the same as a ProgramBox's streamed
+// output.
 func panelRenderFn() func(string) string {
-	styles := GetStyles()
 	return func(raw string) string {
-		return RenderConsoleText(raw, styles.Console)
+		var rendered string
+		console.ActivateTintForElement("programbox", func() {
+			rendered = RenderConsoleText(raw, GetStyles().Console)
+		})
+		return rendered
 	}
+}
+
+// InputEditing reports whether the input bar is focused and editing. Esc
+// stops editing but leaves it focused, so plain keys work as shortcuts;
+// EditInput or Enter edits again, and Esc again leaves it.
+func (m PanelModel) InputEditing() bool { return m.InputFocused && !m.inputIdle }
+
+// inputStyles returns the input bar's styles: outside for the prompt and the
+// columns either side of the field, field for the field, and whether it's
+// focused but not editing, when the field is in the InputFieldFocused style.
+func (m PanelModel) inputStyles() (outside, field lipgloss.Style, idle bool) {
+	idle = m.Focused && m.InputFocused && m.inputIdle && !m.SessionActive()
+	outside = inputFieldStyle(false, false)
+	field = inputFieldStyle(false, m.Focused && m.InputEditing() && !m.SessionActive())
+	if idle {
+		field = inputFieldFocusedStyle()
+	}
+	return outside, field, idle
 }
 
 // applyInputStyles updates the sinput colours from the current theme.
 func (m *PanelModel) applyInputStyles() {
-	styles := GetStyles()
-	bg := styles.Dialog.GetBackground()
+	outside, field, _ := m.inputStyles()
 	tiStyles := textinput.DefaultStyles(true)
-	tiStyles.Focused.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Focused.Text = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Prompt = styles.ItemNormal.Background(bg)
-	tiStyles.Blurred.Text = styles.ItemNormal.Background(bg)
+	tiStyles.Focused.Prompt, tiStyles.Focused.Text = outside, field
+	tiStyles.Blurred.Prompt, tiStyles.Blurred.Text = outside, field
 	tiStyles.Cursor.Color = TextCursorColor()
 	m.Input.SetStyles(tiStyles)
 }
@@ -543,6 +591,7 @@ func (m *PanelModel) FocusInput() tea.Cmd {
 		return nil
 	}
 	m.InputFocused = true
+	m.inputIdle = false
 	cmd := m.Input.Focus()
 	return tea.Batch(cmd, sinput.Blink)
 }
@@ -585,7 +634,7 @@ func (m PanelModel) DragScrollbar(mouseY int, drag *ScrollbarDragState, sbAbsTop
 func panelMaxHeight(totalTermHeight int) int {
 	layout := GetLayout()
 	shadowH := 0
-	if currentConfig.UI.Shadow {
+	if ActiveAppearance().Shadow {
 		shadowH = layout.ShadowHeight
 	}
 	usable := totalTermHeight - layout.ChromeHeight(1) - layout.BottomChrome(layout.HelplineHeight) - shadowH

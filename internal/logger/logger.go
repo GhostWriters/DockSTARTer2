@@ -18,7 +18,6 @@ import (
 	"charm.land/lipgloss/v2"
 	charmlog "charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
-	"github.com/muesli/termenv"
 )
 
 // TUIMode suppresses direct console output (stdout/stderr) when active.
@@ -224,9 +223,9 @@ func SetLevel(level slog.Level) {
 }
 
 // SetColorProfile forces the color profile for the console logger.
-func SetColorProfile(profile termenv.Profile) {
+func SetColorProfile(profile colorprofile.Profile) {
 	if consoleLogger != nil {
-		consoleLogger.SetColorProfile(colorprofile.Profile(profile))
+		consoleLogger.SetColorProfile(profile)
 	}
 }
 

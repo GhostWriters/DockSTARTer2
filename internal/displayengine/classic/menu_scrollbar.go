@@ -28,7 +28,7 @@ func DragDoneCmd(id string) tea.Cmd {
 const ScrollbarGutterWidth = 1
 
 // IsScrollbarEnabled reports whether the scrollbar is enabled in the current config.
-func IsScrollbarEnabled() bool { return currentConfig.UI.Scrollbar }
+func IsScrollbarEnabled() bool { return ActiveAppearance().Scrollbar }
 
 // ScrollbarInfo describes the geometry of a rendered scrollbar column.
 // It is returned by applyScrollbarColumnTracked so callers can compute hit regions.
@@ -397,7 +397,7 @@ func BuildDualLabelBottomBorderCtx(totalWidth int, leftLabel, rightLabel string,
 	if rightLabel != "" {
 		parts = append(parts,
 			borderStyle.Render(leftT),
-			labelStyle.Render(rightLabel),
+			ctx.PositionIndicator.Render(rightLabel),
 			borderStyle.Render(rightT),
 			borderStyle.Render(strutil.Repeat(border.Bottom, 1)+border.BottomRight),
 		)
@@ -485,7 +485,7 @@ func (s *ScrollbarDragState) ScrollOffset(mouseY, sbAbsTopY, maxOff int, info Sc
 // totalWidth is the full visual width of the bordered box including side border chars.
 // Only call this when a scrollbar is needed (sbInfo.Needed == true).
 func BuildScrollPercentBottomBorder(totalWidth int, scrollPct float64, focused bool, ctx StyleContext) string {
-	scrollIndicator := ctx.TagKey.Bold(true).Render(fmt.Sprintf("%d%%", int(scrollPct*100)))
+	scrollIndicator := ctx.PositionIndicator.Render(fmt.Sprintf("%3d%%", int(scrollPct*100)))
 
 	var border lipgloss.Border
 	if ctx.LineCharacters {

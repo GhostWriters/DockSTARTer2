@@ -176,6 +176,12 @@ func (m *addVarDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, displayengine.Keys.ForceQuit):
 			return m, m.cancelOrConfirm()
 
+		case m.focus == addVarFocusInput && displayengine.IsTypedText(msg):
+			// "." and "," are typed, not focus shortcuts, in the input.
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
+
 		case key.Matches(msg, displayengine.Keys.Tab), key.Matches(msg, displayengine.Keys.CycleTab):
 			m.cycleFocus(+1)
 			return m, nil
@@ -757,7 +763,12 @@ func (m *addVarDialogModel) ViewString() string {
 
 	// "Variable Name" section — titled bordered box, thick border when focused
 	inputFocused := m.focus == addVarFocusInput
-	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(m.input.View()), "\n")
+	// The field's own style while typing into it (see
+	// displayengine.InputFieldStyle).
+	m.input.SetStyles(displayengine.InputTextStyles(inputFocused))
+	field := displayengine.InputFieldStyle(inputFocused)
+	inputContent := strings.TrimRight(ctx.Dialog.Padding(0, 1).Width(sInnerW).Render(
+		field.Width(max(sInnerW-2, 1)).Render(displayengine.MaintainBackground(m.input.View(), field))), "\n")
 	inputTitleTag := "TitleSubMenu"
 	if inputFocused {
 		inputTitleTag = "TitleSubMenuFocused"

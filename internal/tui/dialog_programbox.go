@@ -125,11 +125,11 @@ type SetProgramBoxHeaderMsg struct {
 
 // newProgramBox creates a new program box dialog (internal use)
 func newProgramBox(title, subtitle, command string) *ProgramBoxModel {
-	styles := displayengine.GetStyles()
+	output := displayengine.OutputConsoleStyle()
 	sv := streamvp.New()
 	sv.SetStyle(lipgloss.NewStyle().
-		Background(styles.Console.GetBackground()).
-		Foreground(styles.Console.GetForeground()))
+		Background(output.GetBackground()).
+		Foreground(output.GetForeground()))
 
 	m := &ProgramBoxModel{
 		title:           title,
@@ -200,14 +200,12 @@ func (m *ProgramBoxModel) okButtons() []displayengine.ButtonDef {
 
 // pbRenderFn returns the render function used by streamvp for the program
 // box. Renders under the "programbox" element's own tint (see
-// ActivateTintForElement) -- its own palette if the active session
-// configured one, else it inherits the session's menu tint unchanged.
+// ActivateTintForElement).
 func pbRenderFn() func(string) string {
-	styles := displayengine.GetStyles()
 	return func(raw string) string {
 		var rendered string
 		ActivateTintForElement("programbox", func() {
-			rendered = displayengine.RenderConsoleText(raw, styles.Console)
+			rendered = displayengine.RenderConsoleText(raw, displayengine.GetStyles().Console)
 		})
 		return rendered
 	}

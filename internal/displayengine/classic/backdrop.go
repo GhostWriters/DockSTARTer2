@@ -103,7 +103,7 @@ func GetAvailableDialogSize(width, height int, hasHalo bool) (int, int) {
 
 	// Use Layout helpers for consistent calculations
 	layout := GetLayout()
-	hasShadow := currentConfig.UI.Shadow
+	hasShadow := ActiveAppearance().Shadow
 
 	// Calculate header height dynamically for sizing
 	header := NewHeaderModel()

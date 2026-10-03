@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/GhostWriters/semstyle"
 )
 
 // previewContentWidth is the fixed inner content width every piece of the
@@ -17,13 +19,12 @@ import (
 const previewContentWidth = 44
 
 // previewContent holds the preview mockup's rendered pieces for the screen's
-// current previewTheme/config. Returned by computePreviewContent, which is
-// called fresh on every render (from the persistent preview section's
-// ContentRenderer/SectionHeightOverride closures in buildPreviewSection) --
-// nothing here is cached across renders.
+// current previewTheme/config. Returned by computePreviewContent, which
+// rebuilds it only when one of its inputs changes (see previewContentKey).
 type previewContent struct {
 	invalid       bool // true if the staged theme failed to load; only invalidLabel is meaningful then
 	invalidLabel  string
+	bare          bool // true for the CLI tab: only buildBackdrop's output, no header, help line, or strip
 	headerBlock   string
 	buildBackdrop func(h int) string
 	helpRow       string
@@ -42,31 +43,145 @@ type previewContent struct {
 // business affecting.
 func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	for _, t := range s.themes {
-		if t.ConfigValue == s.previewTheme && t.IsInvalid {
+		if t.ConfigValue == s.previewTheme && t.IsInvalid && s.previewElement() != "cli" {
 			return previewContent{invalid: true, invalidLabel: "Invalid theme"}
 		}
 	}
+	if key := s.previewContentKey(); key != s.previewCacheKey {
+		console.ActivateTintKey(s.previewTintKey, func() {
+			if s.previewElement() == "cli" {
+				s.previewCache = s.buildCLIPreviewContent()
+			} else {
+				s.previewCache = s.buildPreviewContent()
+			}
+		})
+		s.previewCacheKey = key
+	}
+	return s.previewCache
+}
 
+// previewElement returns the tint element the preview shows: the selected
+// tab's, or Menu when the tabs are hidden.
+func (s *DisplayOptionsScreen) previewElement() string {
+	if s.showElements {
+		return s.tintElement
+	}
+	return "menu"
+}
+
+// previewConsoleLines returns sample console output for the ProgramBox and
+// CLI previews. It uses only console tags and direct colors, never theme
+// tags, since console output isn't themed; the swatches show each of the 16
+// ANSI slots a tint remaps.
+func previewConsoleLines(cli bool) []string {
+	lines := []string{
+		"{{|RunningCommand|}}docker compose up -d{{[-]}}",
+		"{{|Info|}}[INFO]{{[-]}}   Pulling image",
+		"{{|Notice|}}[NOTICE]{{[-]}} Container created",
+		"{{|Warn|}}[WARN]{{[-]}}   Port already in use",
+		"{{|Error|}}[ERROR]{{[-]}}  Failed to start",
+		"Normal output text",
+		"",
+	}
+	if cli {
+		lines = append([]string{"{{|User|}}user{{[-]}}@{{|Program|}}host{{[-]}}:~$ {{|RunningCommand|}}ds2 --up{{[-]}}"}, lines[1:]...)
+	}
+	var normal, bright strings.Builder
+	for _, c := range semstyle.BasicColors {
+		normal.WriteString("{{[:" + c + "]}}  ")
+		bright.WriteString("{{[:bright-" + c + "]}}  ")
+	}
+	return append(lines, normal.String()+"{{[-]}}", bright.String()+"{{[-]}}")
+}
+
+// consolePreviewLines renders previewConsoleLines under the programbox (or
+// cli) element's tint, each padded to width on the Console background.
+func (s *DisplayOptionsScreen) consolePreviewLines(element string, width int) (lines []string, style lipgloss.Style) {
+	console.ActivateTintForElement(element, func() {
+		style = displayengine.GetStyles().Console
+		for _, raw := range previewConsoleLines(element == "cli") {
+			r := displayengine.RenderConsoleText(raw, style)
+			if pad := width - lipgloss.Width(displayengine.GetPlainText(r)); pad > 0 {
+				r += style.Render(strutil.Repeat(" ", pad))
+			}
+			lines = append(lines, r)
+		}
+	})
+	return lines, style
+}
+
+// programBoxPreviewDialog renders the ProgramBox tab's sample dialog under
+// previewCtx: the dialog in the menu's colors around console output in the
+// programbox tint.
+func (s *DisplayOptionsScreen) programBoxPreviewDialog(previewCtx displayengine.StyleContext) string {
+	const innerWidth = 38
+	consoleLines, consoleStyle := s.consolePreviewLines("programbox", innerWidth)
+	lineBGs := map[int]lipgloss.Style{}
+	for i := range consoleLines {
+		lineBGs[i] = consoleStyle
+	}
+	buttonRow := displayengine.RenderCenteredButtonsCtx(innerWidth, previewCtx,
+		displayengine.ButtonSpec{Text: "OK", Active: true},
+	)
+	buttonRow = strings.TrimSuffix(buttonRow, "\n")
+	content := strings.Join(consoleLines, "\n") + "\n\n" + buttonRow
+	dTitle := displayengine.RenderThemeTextCtx("{{|Title|}}Running Command{{[-]}}", previewCtx)
+	return displayengine.RenderBorderedBoxLineBGCtx(dTitle, content, innerWidth, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, lineBGs, displayengine.TitleBarState{Show: true})
+}
+
+// buildCLIPreviewContent renders the CLI tab: just console output in the cli
+// tint, filling the preview.
+func (s *DisplayOptionsScreen) buildCLIPreviewContent() previewContent {
+	width := previewContentWidth
+	lines, style := s.consolePreviewLines("cli", width)
+	filler := style.Render(strutil.Repeat(" ", width))
+	return previewContent{
+		bare: true,
+		buildBackdrop: func(h int) string {
+			out := make([]string, max(h, len(lines)))
+			for i := range out {
+				if i < len(lines) {
+					out[i] = lines[i]
+				} else {
+					out[i] = filler
+				}
+			}
+			return strings.Join(out, "\n")
+		},
+		naturalHeight: len(lines),
+	}
+}
+
+// previewContentKey identifies computePreviewContent's inputs: the staged
+// theme, the shown tab's settings, the theme and tint styles (via their
+// generation), and the rendering scope and layout.
+func (s *DisplayOptionsScreen) previewContentKey() string {
+	return fmt.Sprint(s.previewTheme, s.previewElement(), s.editType, s.config.Appearance.ForConnType(s.editType),
+		displayengine.StyleGeneration(), displayengine.StylesScopeKey(), displayengine.GetLayout())
+}
+
+// buildPreviewContent renders the preview's pieces (see computePreviewContent).
+func (s *DisplayOptionsScreen) buildPreviewContent() previewContent {
 	width := previewContentWidth
 
 	// Resolve the Preview_Border/Preview_Border2 tags based on the staged
 	// Border Color setting, so the mockup reflects the same merge every
 	// other border consumer gets for free -- without touching the shared
 	// theme registry.
-	borderOverrides := displayengine.ResolveThemeOverrides(s.config.UI.BorderColor, "Preview_")
+	borderOverrides := displayengine.ResolveThemeOverrides(s.config.Appearance.Ptr(s.editType).BorderColor, "Preview_")
 
 	bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
 	dContent := displayengine.SemanticRawStyleWithPrefix("Dialog", "Preview_")
 	dBorder1 := borderOverrides["Border"].Style
 	dBorder2 := borderOverrides["Border2"].Style
 
-	pMode := displayengine.EffectivePanelMode(s.config, s.connType)
+	pMode := s.config.Appearance.Ptr(s.editType).Panel
 	showStrip := pMode != "none"
 
 	var b lipgloss.Border
-	if !s.config.UI.Borders {
+	if !s.config.Appearance.Ptr(s.editType).Borders {
 		b = lipgloss.HiddenBorder()
-	} else if s.config.UI.LineCharacters {
+	} else if s.config.Appearance.Ptr(s.editType).LineCharacters {
 		b = lipgloss.RoundedBorder()
 	} else {
 		b = displayengine.RoundedAsciiBorder
@@ -74,10 +189,10 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 
 	// Build StyleContext for the preview
 	previewCtx := displayengine.StyleContext{
-		LineCharacters:      s.config.UI.LineCharacters,
-		DrawBorders:         s.config.UI.Borders,
-		LargeButtons:        s.config.UI.LargeButtons,
-		LargeTitleBars:      s.config.UI.LargeTitleBars,
+		LineCharacters:      s.config.Appearance.Ptr(s.editType).LineCharacters,
+		DrawBorders:         s.config.Appearance.Ptr(s.editType).Borders,
+		LargeButtons:        s.config.Appearance.Ptr(s.editType).LargeButtons,
+		LargeTitleBars:      s.config.Appearance.Ptr(s.editType).LargeTitleBars,
 		LargeTitleArea:      displayengine.SemanticRawStyleWithPrefix("LargeTitleArea", "Preview_"),
 		Screen:              bgStyle,
 		Dialog:              dContent,
@@ -107,15 +222,15 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 		TagKeyFocused:       displayengine.SemanticRawStyleWithPrefix("TagKeyFocused", "Preview_"),
 		Shadow:              displayengine.SemanticRawStyleWithPrefix("Shadow", "Preview_"),
 		ShadowColor:         getPreviewShadowColor(),
-		ShadowLevel:         s.config.UI.ShadowLevel,
+		ShadowLevel:         s.config.Appearance.Ptr(s.editType).ShadowLevel,
 		HelpLine:            displayengine.SemanticRawStyleWithPrefix("Helpline", "Preview_"),
 		StatusSuccess:       displayengine.SemanticRawStyleWithPrefix("TitleNotice", "Preview_"),
 		StatusWarn:          displayengine.SemanticRawStyleWithPrefix("TitleWarn", "Preview_"),
-		DialogTitleAlign:    s.config.UI.DialogTitleAlign,
-		SubmenuTitleAlign:   s.config.UI.SubmenuTitleAlign,
-		PanelTitleAlign:     s.config.UI.PanelTitleAlign,
+		DialogTitleAlign:    s.config.Appearance.Ptr(s.editType).DialogTitleAlign,
+		SubmenuTitleAlign:   s.config.Appearance.Ptr(s.editType).SubmenuTitleAlign,
+		PanelTitleAlign:     s.config.Appearance.Ptr(s.editType).PanelTitleAlign,
 		Prefix:              "Preview_",
-		DrawShadow:          s.config.UI.Shadow,
+		DrawShadow:          s.config.Appearance.Ptr(s.editType).Shadow,
 	}
 
 	paddedLine := func(text string, style lipgloss.Style, fallback string, ctx ...displayengine.StyleContext) string {
@@ -155,7 +270,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 
 	// Border characters (unfocused, since the preview is static)
 	var leftChar, rightChar, bottomChar, bottomLeftChar, bottomRightChar string
-	if s.config.UI.LineCharacters {
+	if s.config.Appearance.Ptr(s.editType).LineCharacters {
 		bottomLeftChar = "╰"
 		bottomRightChar = "╯"
 		leftChar = "│"
@@ -217,56 +332,12 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	bottomBorderRow := bStyle.Render(bottomLeftChar + strutil.Repeat(bottomChar, width-2) + bottomRightChar)
 
 	// --- 2. Backdrop Content (Dialog Simulation) ---
-	contentLines := []string{
-		" {{|Subtitle|}}A Subtitle Line{{[-]}}",
-		"   {{|CommandLine|}}ds2 --theme{{[-]}}",
-		"",
-		" Heading: {{|HeadingValue|}}Value{{[-]}} {{|HeadingTag|}}[*Tag*]{{[-]}}",
-		"",
-		"    Caps: {{|KeyCap|}}[up]{{[-]}} {{|KeyCap|}}[down]{{[-]}} {{|KeyCap|}}[left]{{[-]}} {{|KeyCap|}}[right]",
-		"",
-		" Normal text",
-		" {{|Highlight|}}Highlighted text{{[-]}}",
-		"",
-		// Menu Items Simulation
-		" {{|Item|}}Item 1      Item Description{{[-]}}",
-		" {{|Item|}}Item 2      {{|ItemListUserDefined|}}User Description{{[-]}}",
-		"",
-		" {{|LineComment|}}### Sample comment{{[-]}}",
-		" Var='Default'",
-		" {{|ModifiedText|}}Var='Modified'{{[-]}}",
-		" {{|EnvReadOnly|}}Var='ReadOnly'{{[-]}}",
+	var dialogBox string
+	if s.previewElement() == "programbox" {
+		dialogBox = s.programBoxPreviewDialog(previewCtx)
+	} else {
+		dialogBox = s.menuPreviewDialog(previewCtx)
 	}
-
-	for i, l := range contentLines {
-		contentLines[i] = displayengine.RenderThemeTextCtx(l, previewCtx)
-	}
-	contentStr := strings.Join(contentLines, "\n")
-
-	// Add a button row so large vs flat buttons are visible in the preview.
-	// Show a spinner on OK when spinners are enabled so the style is visible.
-	okSpec := displayengine.ButtonSpec{Text: "OK", Active: true}
-	if console.SpinnerEnabled {
-		okSpec.Spinning = true
-		okSpec.SpinnerFrame = 0
-	}
-	buttonRow := displayengine.RenderCenteredButtonsCtx(38, previewCtx,
-		okSpec,
-		displayengine.ButtonSpec{Text: "Cancel"},
-	)
-	buttonRow = strings.TrimSuffix(buttonRow, "\n")
-	contentStr = strings.TrimSuffix(contentStr, "\n") + "\n" + buttonRow
-
-	titleParts := []string{
-		"{{|Title|}}Title{{[-]}}",
-		"{{|TitleSuccess|}}S{{[-]}}",
-		"{{|TitleWarning|}}W{{[-]}}",
-		"{{|TitleError|}}E{{[-]}}",
-		"{{|TitleQuestion|}}Q{{[-]}}",
-	}
-	dTitle := displayengine.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
-
-	dialogBox := displayengine.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, displayengine.TitleBarState{Show: true})
 	dialogBox = displayengine.AddShadowCtx(dialogBox, previewCtx)
 
 	// Pad dialogBox to full backdrop width with explicit Screen bg chars so no
@@ -308,7 +379,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	label := panelTitleStyle.Render(" " + marker + " " + titleText + " " + marker + " ")
 
 	var leftT, rightT, borderTop, topLeftC, topRightC string
-	if s.config.UI.LineCharacters {
+	if s.config.Appearance.Ptr(s.editType).LineCharacters {
 		leftT = "┤"
 		rightT = "├"
 		borderTop = "─"
@@ -328,7 +399,7 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	// Strip has side borders/corners in the mockup
 	innerWidthStrip := width - 2
 	var leftPad int
-	if s.config.UI.PanelTitleAlign == "left" {
+	if s.config.Appearance.Ptr(s.editType).PanelTitleAlign == "left" {
 		leftPad = 0
 	} else {
 		leftPad = (innerWidthStrip - titleSectionLen) / 2
@@ -390,13 +461,69 @@ func (s *DisplayOptionsScreen) computePreviewContent() previewContent {
 	}
 }
 
+// menuPreviewDialog renders the Menu tab's sample dialog under previewCtx.
+func (s *DisplayOptionsScreen) menuPreviewDialog(previewCtx displayengine.StyleContext) string {
+	contentLines := []string{
+		" {{|Subtitle|}}A Subtitle Line{{[-]}}",
+		"   {{|CommandLine|}}ds2 --theme{{[-]}}",
+		"",
+		" Heading: {{|HeadingValue|}}Value{{[-]}} {{|HeadingTag|}}[*Tag*]{{[-]}}",
+		"",
+		"    Caps: {{|KeyCap|}}[up]{{[-]}} {{|KeyCap|}}[down]{{[-]}} {{|KeyCap|}}[left]{{[-]}} {{|KeyCap|}}[right]",
+		"",
+		" Normal text",
+		" {{|Highlight|}}Highlighted text{{[-]}}",
+		"",
+		// Menu Items Simulation
+		" {{|Item|}}Item 1      Item Description{{[-]}}",
+		" {{|Item|}}Item 2      {{|ItemListUserDefined|}}User Description{{[-]}}",
+		"",
+		" {{|LineComment|}}### Sample comment{{[-]}}",
+		" Var='Default'",
+		" {{|ModifiedText|}}Var='Modified'{{[-]}}",
+		" {{|EnvReadOnly|}}Var='ReadOnly'{{[-]}}",
+	}
+
+	for i, l := range contentLines {
+		contentLines[i] = displayengine.RenderThemeTextCtx(l, previewCtx)
+	}
+	contentStr := strings.Join(contentLines, "\n")
+
+	// Add a button row so large vs flat buttons are visible in the preview.
+	// Show a spinner on OK when spinners are enabled so the style is visible.
+	okSpec := displayengine.ButtonSpec{Text: "OK", Active: true}
+	if console.SpinnerEnabled() {
+		okSpec.Spinning = true
+		okSpec.SpinnerFrame = 0
+	}
+	buttonRow := displayengine.RenderCenteredButtonsCtx(38, previewCtx,
+		okSpec,
+		displayengine.ButtonSpec{Text: "Cancel"},
+	)
+	buttonRow = strings.TrimSuffix(buttonRow, "\n")
+	contentStr = strings.TrimSuffix(contentStr, "\n") + "\n" + buttonRow
+
+	titleParts := []string{
+		"{{|Title|}}Title{{[-]}}",
+		"{{|TitleSuccess|}}S{{[-]}}",
+		"{{|TitleWarning|}}W{{[-]}}",
+		"{{|TitleError|}}E{{[-]}}",
+		"{{|TitleQuestion|}}Q{{[-]}}",
+	}
+	dTitle := displayengine.RenderThemeTextCtx(strings.Join(titleParts, " "), previewCtx)
+
+	return displayengine.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, displayengine.TitleBarState{Show: true})
+}
+
+
 // buildPreviewSection builds the fake preview dialog as a submenu-mode
 // Content section (title "Preview"), for nesting inside the outer Appearance
 // Settings dialog's own section tree instead of rendering as an independent
 // top-level dialog. Built once, like the settings sections, and reused for
 // the screen's lifetime: its ContentRenderer/SectionHeightOverride closures
 // call computePreviewContent fresh every render instead of this MenuModel
-// being torn down and rebuilt to stay theme-live -- reconstructing it would
+// being torn down and rebuilt to stay theme-live (computePreviewContent
+// reuses its last result while nothing changed) -- reconstructing it would
 // also discard its interaction state (focus in particular), which a content
 // change has no business affecting.
 func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
@@ -420,51 +547,9 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 		}
 		return pc.naturalHeight
 	}
-	scrollSection.ContentRenderer = func(contentWidth int) string {
-		pc := s.computePreviewContent()
-		h := scrollSection.Height()
-		if h < 1 {
-			h = 1
-		}
-		if pc.invalid {
-			leftPad := (previewContentWidth - len(pc.invalidLabel)) / 2
-			rightPad := previewContentWidth - len(pc.invalidLabel) - leftPad
-			centeredLine := strutil.Repeat(" ", leftPad) + pc.invalidLabel + strutil.Repeat(" ", rightPad)
-			lines := make([]string, h)
-			for i := range lines {
-				lines[i] = strutil.Repeat(" ", previewContentWidth)
-			}
-			lines[(h-1)/2] = centeredLine
-			return strings.Join(lines, "\n")
-		}
-		parts := []string{pc.headerBlock, pc.buildBackdrop(h - pc.fixedOverhead), pc.helpRow}
-		if pc.showStrip {
-			parts = append(parts, pc.logStripRow)
-		}
-		content := lipgloss.JoinVertical(lipgloss.Left, parts...)
-		ctx := displayengine.GetActiveContext()
-		s.previewViewport.SetWidth(contentWidth)
-		s.previewViewport.SetHeight(h)
-		s.previewViewport.SetContent(content)
-		viewportOutput := s.previewViewport.View()
-		// Pad any shortfall ourselves rather than relying on
-		// viewport.FillHeight -- that pads with truly empty (unstyled)
-		// rows, which shows as a mismatched-background gap instead of a
-		// themed one. This also covers the near-bottom-of-scroll case,
-		// where the remaining slice of content is shorter than h even
-		// though the total content isn't.
-		if short := h - lipgloss.Height(viewportOutput); short > 0 {
-			bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
-			filler := bgStyle.Render(strutil.Repeat(" ", previewContentWidth))
-			fillLines := make([]string, short)
-			for i := range fillLines {
-				fillLines[i] = filler
-			}
-			viewportOutput = viewportOutput + "\n" + strings.Join(fillLines, "\n")
-		}
-		return displayengine.ApplyScrollbar(&s.previewScroll, viewportOutput,
-			s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount(),
-			s.previewViewport.YOffset(), ctx.LineCharacters, ctx)
+	scrollSection.ContentRenderer = func(contentWidth int) (out string) {
+		console.ActivateTintKey(s.previewTintKey, func() { out = s.renderPreview(scrollSection, contentWidth) })
+		return out
 	}
 	scrollSection.ExtraHitRegions = func(offsetX, offsetY, baseZ int) []displayengine.HitRegion {
 		if !s.previewScroll.Info.Needed {
@@ -530,6 +615,60 @@ func (s *DisplayOptionsScreen) buildPreviewSection() *displayengine.MenuModel {
 	}
 	mockupMenu.ConfigureWidgets(closeWidget)
 	return mockupMenu
+}
+
+// renderPreview draws the preview mockup at contentWidth, for section's
+// current height.
+func (s *DisplayOptionsScreen) renderPreview(section *displayengine.MenuModel, contentWidth int) string {
+	pc := s.computePreviewContent()
+	h := section.Height()
+	if h < 1 {
+		h = 1
+	}
+	if pc.invalid {
+		leftPad := (previewContentWidth - len(pc.invalidLabel)) / 2
+		rightPad := previewContentWidth - len(pc.invalidLabel) - leftPad
+		centeredLine := strutil.Repeat(" ", leftPad) + pc.invalidLabel + strutil.Repeat(" ", rightPad)
+		lines := make([]string, h)
+		for i := range lines {
+			lines[i] = strutil.Repeat(" ", previewContentWidth)
+		}
+		lines[(h-1)/2] = centeredLine
+		return strings.Join(lines, "\n")
+	}
+	var parts []string
+	if pc.bare {
+		parts = []string{pc.buildBackdrop(h)}
+	} else {
+		parts = []string{pc.headerBlock, pc.buildBackdrop(h - pc.fixedOverhead), pc.helpRow}
+		if pc.showStrip {
+			parts = append(parts, pc.logStripRow)
+		}
+	}
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	ctx := displayengine.GetActiveContext()
+	s.previewViewport.SetWidth(contentWidth)
+	s.previewViewport.SetHeight(h)
+	s.previewViewport.SetContent(content)
+	viewportOutput := s.previewViewport.View()
+	// Pad any shortfall ourselves rather than relying on
+	// viewport.FillHeight -- that pads with truly empty (unstyled)
+	// rows, which shows as a mismatched-background gap instead of a
+	// themed one. This also covers the near-bottom-of-scroll case,
+	// where the remaining slice of content is shorter than h even
+	// though the total content isn't.
+	if short := h - lipgloss.Height(viewportOutput); short > 0 {
+		bgStyle := displayengine.SemanticRawStyleWithPrefix("Screen", "Preview_")
+		filler := bgStyle.Render(strutil.Repeat(" ", previewContentWidth))
+		fillLines := make([]string, short)
+		for i := range fillLines {
+			fillLines[i] = filler
+		}
+		viewportOutput = viewportOutput + "\n" + strings.Join(fillLines, "\n")
+	}
+	return displayengine.ApplyScrollbar(&s.previewScroll, viewportOutput,
+		s.previewViewport.TotalLineCount(), s.previewViewport.VisibleLineCount(),
+		s.previewViewport.YOffset(), ctx.LineCharacters, ctx)
 }
 
 // previewSectionWidth returns the outer width to assign the preview section

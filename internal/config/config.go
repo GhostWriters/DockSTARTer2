@@ -28,7 +28,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// MinRefreshRateMS and MaxRefreshRateMS bound UI.RefreshRate (screen repaint
+// MinRefreshRateMS and MaxRefreshRateMS bound Appearance.RefreshRate (screen repaint
 // interval, in milliseconds). Shared by config validation, the Appearance
 // menu's prompt, and the Browser Settings dialog's refresh-rate field.
 const (
@@ -57,6 +57,12 @@ var ThemeDefaultsOverlayHook func(conf *AppConfig, legacyPresent map[string]bool
 // installed as a system service) to avoid a config->serve cycle.
 var ServerTLSDefaultHook func(conf *AppConfig, present map[string]bool)
 
+// TintRefMigrationHook, if set, returns a saved tint reference in its
+// canonical form, or ref unchanged (see migrateTintRefs). Set by the
+// commands package, which reads the scheme files, to avoid a
+// config->commands cycle.
+var TintRefMigrationHook func(ref string) string
+
 // DefaultConfig returns an AppConfig populated purely from the embedded defaults TOML.
 func DefaultConfig() AppConfig {
 	var conf AppConfig
@@ -79,11 +85,10 @@ func isMigrationMode(ctx context.Context) bool {
 
 // AppConfig holds the application configuration settings.
 type AppConfig struct {
-	UI         UIConfig          `toml:"ui"`
-	Paths      PathConfig        `toml:"paths"`
-	Server     ServerConfig      `toml:"server"`
-	System     SystemConfig      `toml:"system"`
-	AnsiColors AnsiPaletteConfig `toml:"ansi_palette"`
+	Appearance AppearanceConfig `toml:"appearance"`
+	Paths      PathConfig       `toml:"paths"`
+	Server     ServerConfig     `toml:"server"`
+	System     SystemConfig     `toml:"system"`
 
 	// These are helper fields for runtime use, not saved to TOML
 	Arch       string     `toml:"-"`
@@ -135,25 +140,6 @@ type WebConfig struct {
 	TLS     string `toml:"tls"`
 	TLSCert string `toml:"tls_cert"` // Path to a certificate file, when tls = "cert"
 	TLSKey  string `toml:"tls_key"`  // Path to the certificate's private key, when tls = "cert"
-}
-
-// AnsiPaletteConfig holds optional overrides for the standard 16-color ANSI
-// palette, registered with semstyle as a per-connType tint at session start
-// (see tui.RegisterConnTypeTints) so a theme's named colors (e.g.
-// semstyle's "white"/"black", which otherwise compile to plain ANSI codes)
-// render as literal RGB regardless of the connecting terminal's own
-// default palette -- most relevant for the web frontend, whose client has
-// no user-configured palette of its own the way a real local/SSH terminal
-// (WezTerm, Ghostty, etc.) does. Colors are substituted internally rather
-// than sent as a terminal palette override, since not every terminal
-// honors one.
-//
-// Each of Local/SSH/Web is independently optional and empty by default --
-// this never touches a user's own terminal color scheme unless configured.
-type AnsiPaletteConfig struct {
-	Local AnsiColors `toml:"local"`
-	SSH   AnsiColors `toml:"ssh"`
-	Web   AnsiColors `toml:"web"`
 }
 
 // AnsiElementColors holds one UI element's resolved ANSI palette state --
@@ -316,21 +302,6 @@ func (c *AnsiColors) ElementPtr(element string) *AnsiElementColors {
 	}
 }
 
-// ForConnType returns the palette override for connType ("local", "ssh", or
-// "web"), or a zero-value AnsiColors (no overrides) for anything else.
-func (c AnsiPaletteConfig) ForConnType(connType string) AnsiColors {
-	switch connType {
-	case "local":
-		return c.Local
-	case "ssh":
-		return c.SSH
-	case "web":
-		return c.Web
-	default:
-		return AnsiColors{}
-	}
-}
-
 // Slots returns the palette's 16 entries in ANSI index order (0-15), paired
 // with their configured override value (possibly empty).
 func (c AnsiElementColors) Slots() [16]string {
@@ -386,35 +357,6 @@ type AuthConfig struct {
 	Mode         string `toml:"mode"`
 	Password     string `toml:"password"`       // bcrypt hash of the password
 	AuthKeysFile string `toml:"auth_keys_file"` // Path to authorized_keys file
-}
-
-// UIConfig holds user interface related settings.
-type UIConfig struct {
-	Theme              string `toml:"theme"`
-	Borders            bool   `toml:"borders"`
-	LargeButtons       bool   `toml:"large_buttons"`
-	LargeTitleBars     bool   `toml:"large_title_bars"`
-	LineCharacters     bool   `toml:"line_characters"`
-	Shadow             bool   `toml:"shadow"`
-	ShadowLevel        int    `toml:"shadow_level"` // 0=off, 1=light(░), 2=medium(▒), 3=dark(▓), 4=solid(█)
-	Scrollbar          bool   `toml:"scrollbar"`
-	Spinner            bool   `toml:"spinner"`
-	SpinnerSpeed       int    `toml:"spinner_speed"`        // milliseconds per frame, default 120
-	RefreshRate        int    `toml:"refresh_rate"`         // screen repaint interval in milliseconds, default 60
-	BorderColor        int    `toml:"border_color"`         // 1=Border, 2=Border2, 3=Both
-	DialogTitleAlign   string `toml:"dialog_title_align"`   // "center" or "left"
-	SubmenuTitleAlign  string `toml:"submenu_title_align"`  // "center" or "left"
-	PanelTitleAlign    string `toml:"panel_title_align"`    // "center" or "left"
-	PanelLocal         string `toml:"panel_local"`          // "log", "console", or "none" (for local sessions)
-	PanelRemote        string `toml:"panel_remote"`         // "log", "console", or "none" (for ssh/web sessions)
-	CheckboxBrackets   string `toml:"checkbox_brackets"`    // "never", "selected", or "always" -- the focused row's brackets always show regardless
-	RadioBrackets      string `toml:"radio_brackets"`       // "never", "selected", or "always" -- the focused row's brackets always show regardless
-	MenuBrackets       bool   `toml:"menu_brackets"`        // wrap the focused menu item's tag in [brackets]
-	LineNumberBrackets bool   `toml:"line_number_brackets"` // wrap the focused line's number in [brackets] in the env editor
-	TabLayout          string `toml:"tab_layout"`           // "maximized", "sidebyside", or "stacked" -- default view when the tabbed vars editor has 2 tabs open
-	ShowPreview        bool   `toml:"show_preview"`         // default visibility of the Appearance Settings preview panel
-	MarkdownHyperlinks string `toml:"markdown_hyperlinks"`  // "off", "inline", or "auto" -- OSC8 hyperlink rendering for markdown (help dialog doc page, --man)
-	Hyperlinks         string `toml:"hyperlinks"`           // "off", "inline", or "auto" -- OSC8 hyperlink rendering for DS2's own console/path/link tags (semstyle.HyperlinkModeFunc)
 }
 
 // PathConfig holds directory path settings.
@@ -541,90 +483,14 @@ func CollapseVariables(path string) string {
 func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 	var def AppConfig
 	_ = toml.Unmarshal(defaultConfigBytes(), &def)
-	ui := &conf.UI
 
 	warn := func(field, bad, fixed string) {
 		logger.Warn(ctx, "Config: invalid value for {{|Var|}}%s{{[-]}} ({{|Var|}}%s{{[-]}}) — reset to {{|Var|}}%s{{[-]}}.", field, bad, fixed)
 	}
 
-	if ui.ShadowLevel < 0 || ui.ShadowLevel > 4 {
-		warn("shadow_level", fmt.Sprintf("%d", ui.ShadowLevel), fmt.Sprintf("%d", def.UI.ShadowLevel))
-		ui.ShadowLevel = def.UI.ShadowLevel
-		ui.Shadow = def.UI.Shadow
+	for _, ct := range ConnTypes {
+		sanitizeAppearance(conf.Appearance.Ptr(ct), def.Appearance.ForConnType(ct), "appearance."+ct+".", warn)
 	}
-	if ui.SpinnerSpeed < 50 || ui.SpinnerSpeed > 5000 {
-		warn("spinner_speed", fmt.Sprintf("%d", ui.SpinnerSpeed), fmt.Sprintf("%d", def.UI.SpinnerSpeed))
-		ui.SpinnerSpeed = def.UI.SpinnerSpeed
-	}
-	if ui.RefreshRate < MinRefreshRateMS || ui.RefreshRate > MaxRefreshRateMS {
-		warn("refresh_rate", fmt.Sprintf("%d", ui.RefreshRate), fmt.Sprintf("%d", def.UI.RefreshRate))
-		ui.RefreshRate = def.UI.RefreshRate
-	}
-	if ui.BorderColor < 1 || ui.BorderColor > 3 {
-		warn("border_color", fmt.Sprintf("%d", ui.BorderColor), fmt.Sprintf("%d", def.UI.BorderColor))
-		ui.BorderColor = def.UI.BorderColor
-	}
-	switch ui.DialogTitleAlign {
-	case "left", "center":
-	default:
-		warn("dialog_title_align", ui.DialogTitleAlign, def.UI.DialogTitleAlign)
-		ui.DialogTitleAlign = def.UI.DialogTitleAlign
-	}
-	switch ui.SubmenuTitleAlign {
-	case "left", "center":
-	default:
-		warn("submenu_title_align", ui.SubmenuTitleAlign, def.UI.SubmenuTitleAlign)
-		ui.SubmenuTitleAlign = def.UI.SubmenuTitleAlign
-	}
-	switch ui.PanelTitleAlign {
-	case "left", "center":
-	default:
-		warn("panel_title_align", ui.PanelTitleAlign, def.UI.PanelTitleAlign)
-		ui.PanelTitleAlign = def.UI.PanelTitleAlign
-	}
-	switch ui.PanelLocal {
-	case "log", "console", "none", "system":
-	default:
-		warn("panel_local", ui.PanelLocal, def.UI.PanelLocal)
-		ui.PanelLocal = def.UI.PanelLocal
-	}
-	switch ui.PanelRemote {
-	case "log", "console", "none", "system":
-	default:
-		warn("panel_remote", ui.PanelRemote, def.UI.PanelRemote)
-		ui.PanelRemote = def.UI.PanelRemote
-	}
-	switch ui.TabLayout {
-	case "maximized", "sidebyside", "stacked":
-	default:
-		warn("tab_layout", ui.TabLayout, def.UI.TabLayout)
-		ui.TabLayout = def.UI.TabLayout
-	}
-	switch ui.MarkdownHyperlinks {
-	case "off", "inline", "auto":
-	default:
-		warn("markdown_hyperlinks", ui.MarkdownHyperlinks, def.UI.MarkdownHyperlinks)
-		ui.MarkdownHyperlinks = def.UI.MarkdownHyperlinks
-	}
-	switch ui.Hyperlinks {
-	case "off", "inline", "auto":
-	default:
-		warn("hyperlinks", ui.Hyperlinks, def.UI.Hyperlinks)
-		ui.Hyperlinks = def.UI.Hyperlinks
-	}
-	switch ui.CheckboxBrackets {
-	case "never", "selected", "always":
-	default:
-		warn("checkbox_brackets", ui.CheckboxBrackets, def.UI.CheckboxBrackets)
-		ui.CheckboxBrackets = def.UI.CheckboxBrackets
-	}
-	switch ui.RadioBrackets {
-	case "never", "selected", "always":
-	default:
-		warn("radio_brackets", ui.RadioBrackets, def.UI.RadioBrackets)
-		ui.RadioBrackets = def.UI.RadioBrackets
-	}
-
 	isValidPath := func(p string) bool {
 		expanded := filepath.Clean(ExpandVariables(p))
 		return filepath.IsAbs(expanded)
@@ -637,6 +503,47 @@ func sanitizeConfig(ctx context.Context, conf *AppConfig) {
 		logger.Warn(ctx, "Config: invalid value for {{|Var|}}compose_folder{{[-]}} ({{|Var|}}%s{{[-]}}) — attempting detection.", conf.Paths.ComposeFolder)
 		ResolveComposeFolder(ctx, conf, logNotice)
 	}
+}
+
+// sanitizeAppearance resets any field of a that has an invalid value to
+// def's, reporting each through warn under keyPrefix.
+func sanitizeAppearance(a *Appearance, def Appearance, keyPrefix string, warn func(field, bad, fixed string)) {
+	if a.SpinnerSpeed < 50 || a.SpinnerSpeed > 5000 {
+		warn(keyPrefix+"spinner_speed", fmt.Sprintf("%d", a.SpinnerSpeed), fmt.Sprintf("%d", def.SpinnerSpeed))
+		a.SpinnerSpeed = def.SpinnerSpeed
+	}
+	if a.RefreshRate < MinRefreshRateMS || a.RefreshRate > MaxRefreshRateMS {
+		warn(keyPrefix+"refresh_rate", fmt.Sprintf("%d", a.RefreshRate), fmt.Sprintf("%d", def.RefreshRate))
+		a.RefreshRate = def.RefreshRate
+	}
+	if a.ShadowLevel < 0 || a.ShadowLevel > 4 {
+		warn(keyPrefix+"shadow_level", fmt.Sprintf("%d", a.ShadowLevel), fmt.Sprintf("%d", def.ShadowLevel))
+		a.ShadowLevel = def.ShadowLevel
+		a.Shadow = def.Shadow
+	}
+	if a.BorderColor < 1 || a.BorderColor > 3 {
+		warn(keyPrefix+"border_color", fmt.Sprintf("%d", a.BorderColor), fmt.Sprintf("%d", def.BorderColor))
+		a.BorderColor = def.BorderColor
+	}
+	oneOf := func(field string, v *string, fallback string, valid ...string) {
+		for _, ok := range valid {
+			if *v == ok {
+				return
+			}
+		}
+		warn(keyPrefix+field, *v, fallback)
+		*v = fallback
+	}
+	oneOf("panel", &a.Panel, def.Panel, "log", "console", "none", "system")
+	oneOf("markdown_hyperlinks", &a.MarkdownHyperlinks, def.MarkdownHyperlinks, "off", "inline", "auto")
+	oneOf("hyperlinks", &a.Hyperlinks, def.Hyperlinks, "off", "inline", "auto")
+	oneOf("dialog_title_align", &a.DialogTitleAlign, def.DialogTitleAlign, "left", "center")
+	oneOf("submenu_title_align", &a.SubmenuTitleAlign, def.SubmenuTitleAlign, "left", "center")
+	oneOf("panel_title_align", &a.PanelTitleAlign, def.PanelTitleAlign, "left", "center")
+	oneOf("tab_layout", &a.TabLayout, def.TabLayout, "maximized", "sidebyside", "stacked")
+	oneOf("pane_layout", &a.PaneLayout, def.PaneLayout, "maximized", "sidebyside", "stacked")
+	oneOf("checkbox_brackets", &a.CheckboxBrackets, def.CheckboxBrackets, "never", "selected", "always")
+	oneOf("radio_brackets", &a.RadioBrackets, def.RadioBrackets, "never", "selected", "always")
 }
 
 // ResolveComposeFolder runs compose folder detection and, when multiple candidates
@@ -773,9 +680,9 @@ func migrateAnsiPaletteMenuNesting(data []byte, conf *AppConfig) {
 	cliOff := legacy.AnsiPalette.ApplyToCLI != nil && !*legacy.AnsiPalette.ApplyToCLI
 	programBoxOff := legacy.AnsiPalette.ApplyToProgramBox != nil && !*legacy.AnsiPalette.ApplyToProgramBox
 
-	migrate(&conf.AnsiColors.Local, legacy.AnsiPalette.Local, cliOff, programBoxOff)
-	migrate(&conf.AnsiColors.SSH, legacy.AnsiPalette.SSH, false, programBoxOff)
-	migrate(&conf.AnsiColors.Web, legacy.AnsiPalette.Web, false, programBoxOff)
+	migrate(ansiColorsPtrConfig(conf, "local"), legacy.AnsiPalette.Local, cliOff, programBoxOff)
+	migrate(ansiColorsPtrConfig(conf, "ssh"), legacy.AnsiPalette.SSH, false, programBoxOff)
+	migrate(ansiColorsPtrConfig(conf, "web"), legacy.AnsiPalette.Web, false, programBoxOff)
 }
 
 // migrateAnsiPaletteInheritGap closes a gap from a brief released window
@@ -809,7 +716,7 @@ func migrateAnsiPaletteInheritGap(data []byte, conf *AppConfig) {
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		return
 	}
-	for _, ct := range []string{"local", "ssh", "web"} {
+	for _, ct := range ConnTypes {
 		section, ok := raw.AnsiPalette[ct]
 		if !ok {
 			continue
@@ -818,9 +725,6 @@ func migrateAnsiPaletteInheritGap(data []byte, conf *AppConfig) {
 			continue
 		}
 		c := ansiColorsPtrConfig(conf, ct)
-		if c == nil {
-			continue
-		}
 		if _, hasProgramBox := section["programbox"]; !hasProgramBox {
 			c.ProgramBox = c.AnsiElementColors
 		}
@@ -830,21 +734,29 @@ func migrateAnsiPaletteInheritGap(data []byte, conf *AppConfig) {
 	}
 }
 
+// migrateTintRefs rewrites every element's tint reference in its canonical
+// form (see TintRefMigrationHook), e.g. a repo scheme saved without its
+// system, "repo:dracula", as the one it loads, "repo:base24-dracula".
+func migrateTintRefs(conf *AppConfig) {
+	if TintRefMigrationHook == nil {
+		return
+	}
+	for _, ct := range ConnTypes {
+		c := ansiColorsPtrConfig(conf, ct)
+		for _, element := range []string{"menu", "programbox", "cli"} {
+			if e := c.ElementPtr(element); e.Tint != "" {
+				e.Tint = TintRefMigrationHook(e.Tint)
+			}
+		}
+	}
+}
+
 // ansiColorsPtrConfig returns a pointer to conf's AnsiColors for connType,
 // or nil for an unrecognized connType -- config-package-local counterpart
 // to internal/commands' own ansiColorsPtr (kept separate since neither
 // package imports the other's unexported helpers).
 func ansiColorsPtrConfig(conf *AppConfig, connType string) *AnsiColors {
-	switch connType {
-	case "local":
-		return &conf.AnsiColors.Local
-	case "ssh":
-		return &conf.AnsiColors.SSH
-	case "web":
-		return &conf.AnsiColors.Web
-	default:
-		return nil
-	}
+	return &conf.Appearance.Ptr(connType).AnsiColors
 }
 
 func LoadAppConfig() AppConfig {
@@ -916,8 +828,10 @@ func LoadAppConfig() AppConfig {
 			if ServerTLSDefaultHook != nil {
 				ServerTLSDefaultHook(&conf, present)
 			}
+			migrateToAppearance(data, &conf)
 			migrateAnsiPaletteMenuNesting(data, &conf)
 			migrateAnsiPaletteInheritGap(data, &conf)
+			migrateTintRefs(&conf)
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.
@@ -966,6 +880,9 @@ func TryLoadAppConfig() (AppConfig, error) {
 	if err := toml.Unmarshal(data, &conf); err != nil {
 		return AppConfig{}, err
 	}
+	migrateToAppearance(data, &conf)
+	migrateAnsiPaletteMenuNesting(data, &conf)
+	migrateAnsiPaletteInheritGap(data, &conf)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
@@ -1111,10 +1028,8 @@ func UnmarshalRobust(data []byte, v any) (map[string]bool, error) {
 				present["SubmenuTitleAlign"] = true
 			case "ui.panel_title_align":
 				present["PanelTitleAlign"] = true
-			case "ui.panel_local":
-				present["PanelLocal"] = true
-			case "ui.panel_remote":
-				present["PanelRemote"] = true
+			case "ui.panel_local", "ui.panel_remote":
+				present["Panel"] = true
 			case "ui.checkbox_brackets":
 				present["CheckboxBrackets"] = true
 			case "ui.radio_brackets":
@@ -1191,43 +1106,46 @@ func UnmarshalLegacyIni(data []byte, v *AppConfig) (map[string]bool, error) {
 		v.Paths.ComposeFolder = migrateLegacyPathValue(val)
 		present["ComposeFolder"] = true
 	}
-	if val, ok := raw["Theme"]; ok {
-		v.UI.Theme = val
-		present["Theme"] = true
-	}
+	for _, ct := range ConnTypes {
+		a := v.Appearance.Ptr(ct)
+		if val, ok := raw["Theme"]; ok {
+			a.Theme = val
+			present["Theme"] = true
+		}
 
-	if val, ok := raw["Scrollbar"]; ok {
-		v.UI.Scrollbar = isTrue(val)
-		present["Scrollbar"] = true
-	} else if val, ok := raw["Scrollbars"]; ok {
-		v.UI.Scrollbar = isTrue(val)
-		present["Scrollbar"] = true
-	}
+		if val, ok := raw["Scrollbar"]; ok {
+			a.Scrollbar = isTrue(val)
+			present["Scrollbar"] = true
+		} else if val, ok := raw["Scrollbars"]; ok {
+			a.Scrollbar = isTrue(val)
+			present["Scrollbar"] = true
+		}
 
-	if val, ok := raw["Spinner"]; ok {
-		v.UI.Spinner = isTrue(val)
-		present["Spinner"] = true
-	}
+		if val, ok := raw["Spinner"]; ok {
+			a.Spinner = isTrue(val)
+			present["Spinner"] = true
+		}
 
-	if val, ok := raw["Shadow"]; ok {
-		v.UI.Shadow = isTrue(val)
-		present["Shadow"] = true
-	} else if val, ok := raw["Shadows"]; ok {
-		v.UI.Shadow = isTrue(val)
-		present["Shadow"] = true
-	}
+		if val, ok := raw["Shadow"]; ok {
+			a.Shadow = isTrue(val)
+			present["Shadow"] = true
+		} else if val, ok := raw["Shadows"]; ok {
+			a.Shadow = isTrue(val)
+			present["Shadow"] = true
+		}
 
-	if val, ok := raw["Borders"]; ok {
-		v.UI.Borders = isTrue(val)
-		present["Borders"] = true
-	} else if val, ok := raw["LineCharacters"]; ok {
-		v.UI.Borders = isTrue(val)
-		present["Borders"] = true
-	}
+		if val, ok := raw["Borders"]; ok {
+			a.Borders = isTrue(val)
+			present["Borders"] = true
+		} else if val, ok := raw["LineCharacters"]; ok {
+			a.Borders = isTrue(val)
+			present["Borders"] = true
+		}
 
-	if val, ok := raw["LineCharacters"]; ok {
-		v.UI.LineCharacters = isTrue(val)
-		present["LineCharacters"] = true
+		if val, ok := raw["LineCharacters"]; ok {
+			a.LineCharacters = isTrue(val)
+			present["LineCharacters"] = true
+		}
 	}
 
 	return present, nil
@@ -1275,6 +1193,7 @@ func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, f
 			// (normally populated by LoadAppConfig's finalize step), not Paths
 			// directly -- probe never goes through that step, so populate them
 			// here or the Config/Compose Folder rows render blank.
+			migrateToAppearance(data, &probe)
 			probe.RawPaths = probe.Paths
 			probe.ConfigDir = filepath.Clean(ExpandVariables(probe.Paths.ConfigFolder))
 			probe.ComposeDir = filepath.Clean(ExpandVariables(probe.Paths.ComposeFolder))
@@ -1287,6 +1206,7 @@ func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, f
 
 			// Apply to the actual merged config (defaults already unmarshalled above)
 			legacyPresent, _ = UnmarshalRobust(data, &conf)
+			migrateToAppearance(data, &conf)
 			conf.Paths.ConfigFolder = migrateLegacyPathValue(conf.Paths.ConfigFolder)
 			conf.Paths.ComposeFolder = migrateLegacyPathValue(conf.Paths.ComposeFolder)
 			foundLegacy = true
@@ -1386,6 +1306,8 @@ func ShowAppConfigWithTitle(ctx context.Context, conf *AppConfig, title string) 
 }
 
 // ShowAppConfigWithTitleAndPresent prints a summary table with a custom title, optionally filtering by present keys.
+// Global options come first, followed by a second table comparing each
+// connection type's appearance options side by side.
 func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, title string, presentKeys map[string]bool) {
 	headers := []string{
 		"{{|UsageCommand|}}Option{{[-]}}",
@@ -1395,41 +1317,14 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 
 	keys := []string{
 		"ConfigFolder", "ComposeFolder",
-		"Theme", "Borders", "LargeButtons", "LargeTitleBars", "LineCharacters", "Scrollbar", "Spinner", "SpinnerSpeed", "Shadow", "ShadowLevel", "BorderColor",
-		"DialogTitleAlign", "SubmenuTitleAlign", "PanelTitleAlign", "PanelLocal", "PanelRemote",
-		"CheckboxBrackets", "RadioBrackets", "MenuBrackets", "LineNumberBrackets", "TabLayout", "ShowPreview", "MarkdownHyperlinks", "Hyperlinks",
 		"SSHPort", "WebPort", "AuthMode",
 	}
 	displayNames := map[string]string{
-		"ConfigFolder":       "Config Folder",
-		"ComposeFolder":      "Compose Folder",
-		"Theme":              "Theme",
-		"Borders":            "Borders",
-		"LargeButtons":       "Large Buttons",
-		"LargeTitleBars":     "Large Title Bars",
-		"LineCharacters":     "Line Characters",
-		"Scrollbar":          "Scrollbar",
-		"Spinner":            "Spinner",
-		"SpinnerSpeed":       "Spinner Speed",
-		"Shadow":             "Shadow",
-		"ShadowLevel":        "Shadow Level",
-		"BorderColor":        "Border Color",
-		"DialogTitleAlign":   "Dialog Title Align",
-		"SubmenuTitleAlign":  "Submenu Title Align",
-		"PanelTitleAlign":    "Panel Title Align",
-		"PanelLocal":         "Panel Local",
-		"PanelRemote":        "Panel Remote",
-		"CheckboxBrackets":   "Checkbox Brackets",
-		"RadioBrackets":      "Radio Brackets",
-		"MenuBrackets":       "Menu Brackets",
-		"LineNumberBrackets": "Line Number Brackets",
-		"TabLayout":          "Tab Layout",
-		"ShowPreview":        "Show Preview",
-		"MarkdownHyperlinks": "Markdown Hyperlinks",
-		"Hyperlinks":         "Hyperlinks",
-		"SSHPort":            "SSH Port",
-		"WebPort":            "Web Port",
-		"AuthMode":           "Auth Mode",
+		"ConfigFolder":  "Config Folder",
+		"ComposeFolder": "Compose Folder",
+		"SSHPort":       "SSH Port",
+		"WebPort":       "Web Port",
+		"AuthMode":      "Auth Mode",
 	}
 
 	var data []string
@@ -1439,6 +1334,9 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			return "{{|Var|}}yes{{[-]}}"
 		}
 		return "{{|Var|}}no{{[-]}}"
+	}
+	varValue := func(v any) string {
+		return fmt.Sprintf("{{|Var|}}%v{{[-]}}", v)
 	}
 
 	for _, key := range keys {
@@ -1459,81 +1357,26 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			value = conf.RawPaths.ComposeFolder
 			expandedValue = conf.ComposeDir
 			useFolderColor = true
-		case "Theme":
-			value = conf.UI.Theme
-		case "Borders":
-			value = boolToYesNo(conf.UI.Borders)
-		case "LargeButtons":
-			value = boolToYesNo(conf.UI.LargeButtons)
-		case "LargeTitleBars":
-			value = boolToYesNo(conf.UI.LargeTitleBars)
-		case "LineCharacters":
-			value = boolToYesNo(conf.UI.LineCharacters)
-		case "Scrollbar":
-			value = boolToYesNo(conf.UI.Scrollbar)
-		case "Spinner":
-			value = boolToYesNo(conf.UI.Spinner)
-		case "SpinnerSpeed":
-			value = fmt.Sprintf("{{|Var|}}%dms{{[-]}}", conf.UI.SpinnerSpeed)
-		case "Shadow":
-			value = boolToYesNo(conf.UI.Shadow)
-		case "ShadowLevel":
-			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.ShadowLevel)
-		case "BorderColor":
-			value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.UI.BorderColor)
-		case "DialogTitleAlign":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.DialogTitleAlign)
-		case "SubmenuTitleAlign":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.SubmenuTitleAlign)
-		case "PanelTitleAlign":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelTitleAlign)
-		case "PanelLocal":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelLocal)
-		case "PanelRemote":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.PanelRemote)
-		case "CheckboxBrackets":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.CheckboxBrackets)
-		case "RadioBrackets":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.RadioBrackets)
-		case "MenuBrackets":
-			value = boolToYesNo(conf.UI.MenuBrackets)
-		case "LineNumberBrackets":
-			value = boolToYesNo(conf.UI.LineNumberBrackets)
-		case "TabLayout":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.TabLayout)
-		case "ShowPreview":
-			value = boolToYesNo(conf.UI.ShowPreview)
-		case "MarkdownHyperlinks":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.MarkdownHyperlinks)
-		case "Hyperlinks":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.UI.Hyperlinks)
 		case "SSHPort":
 			if conf.Server.SSH.Port > 0 {
-				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.SSH.Port)
+				value = varValue(conf.Server.SSH.Port)
 			} else {
 				value = "{{|Var|}}not set{{[-]}}"
 			}
 		case "WebPort":
 			if conf.Server.Web.Port > 0 {
-				value = fmt.Sprintf("{{|Var|}}%d{{[-]}}", conf.Server.Web.Port)
+				value = varValue(conf.Server.Web.Port)
 			} else {
 				value = "{{|Var|}}not set{{[-]}}"
 			}
 		case "AuthMode":
-			value = fmt.Sprintf("{{|Var|}}%s{{[-]}}", conf.Server.Auth.Mode)
+			value = varValue(conf.Server.Auth.Mode)
 		}
 
-		data = append(data, displayNames[key])
-
-		switch key {
-		case "Theme":
-			data = append(data, fmt.Sprintf("{{|Var|}}%s{{[-]}}", value))
-		default:
-			// Not hyperlinked even when useFolderColor -- this raw "value" column can hold
-			// an unexpanded placeholder like "${XDG_CONFIG_HOME}", which isn't a real path
-			// to link to. The resolved path (safe to hyperlink) is the expandedValue column.
-			data = append(data, value)
-		}
+		// Not hyperlinked even when useFolderColor -- this raw "value" column can hold
+		// an unexpanded placeholder like "${XDG_CONFIG_HOME}", which isn't a real path
+		// to link to. The resolved path (safe to hyperlink) is the expandedValue column.
+		data = append(data, displayNames[key], value)
 
 		switch {
 		case expandedValue == "":
@@ -1545,29 +1388,151 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 		}
 	}
 
+	appearanceHeaders := []string{"{{|UsageCommand|}}Option{{[-]}}"}
+	for _, ct := range ConnTypes {
+		appearanceHeaders = append(appearanceHeaders, "{{|UsageCommand|}}"+ConnTypeLabel(ct)+"{{[-]}}")
+	}
+	appearanceRows := []struct {
+		key, name string
+		value     func(ct string, a Appearance) string
+	}{
+		{"Theme", "Theme", func(_ string, a Appearance) string { return varValue(a.Theme) }},
+		{"Borders", "Borders", func(_ string, a Appearance) string { return boolToYesNo(a.Borders) }},
+		{"LargeButtons", "Large Buttons", func(_ string, a Appearance) string { return boolToYesNo(a.LargeButtons) }},
+		{"LargeTitleBars", "Large Title Bars", func(_ string, a Appearance) string { return boolToYesNo(a.LargeTitleBars) }},
+		{"LineCharacters", "Line Characters", func(_ string, a Appearance) string { return boolToYesNo(a.LineCharacters) }},
+		{"Scrollbar", "Scrollbar", func(_ string, a Appearance) string { return boolToYesNo(a.Scrollbar) }},
+		{"Spinner", "Spinner", func(_ string, a Appearance) string { return boolToYesNo(a.Spinner) }},
+		{"Shadow", "Shadow", func(_ string, a Appearance) string { return boolToYesNo(a.Shadow) }},
+		{"ShadowLevel", "Shadow Level", func(_ string, a Appearance) string { return varValue(a.ShadowLevel) }},
+		{"BorderColor", "Border Color", func(_ string, a Appearance) string { return varValue(a.BorderColor) }},
+		{"DialogTitleAlign", "Dialog Title Align", func(_ string, a Appearance) string { return varValue(a.DialogTitleAlign) }},
+		{"SubmenuTitleAlign", "Submenu Title Align", func(_ string, a Appearance) string { return varValue(a.SubmenuTitleAlign) }},
+		{"PanelTitleAlign", "Panel Title Align", func(_ string, a Appearance) string { return varValue(a.PanelTitleAlign) }},
+		{"CheckboxBrackets", "Checkbox Brackets", func(_ string, a Appearance) string { return varValue(a.CheckboxBrackets) }},
+		{"RadioBrackets", "Radio Brackets", func(_ string, a Appearance) string { return varValue(a.RadioBrackets) }},
+		{"MenuBrackets", "Menu Brackets", func(_ string, a Appearance) string { return boolToYesNo(a.MenuBrackets) }},
+		{"LineNumberBrackets", "Line Number Brackets", func(_ string, a Appearance) string { return boolToYesNo(a.LineNumberBrackets) }},
+		{"TabLayout", "Tab Layout", func(_ string, a Appearance) string { return varValue(a.TabLayout) }},
+		{"Panel", "Panel", func(_ string, a Appearance) string { return varValue(a.Panel) }},
+		{"ShowPreview", "Show Preview", func(_ string, a Appearance) string { return boolToYesNo(a.ShowPreview) }},
+		{"PaneLayout", "Theme/Tint Layout", func(_ string, a Appearance) string { return varValue(a.PaneLayout) }},
+		{"Hyperlinks", "Hyperlinks", func(_ string, a Appearance) string { return varValue(a.Hyperlinks) }},
+		{"MarkdownHyperlinks", "Markdown Hyperlinks", func(_ string, a Appearance) string { return varValue(a.MarkdownHyperlinks) }},
+		{"RefreshRate", "Refresh Rate", func(_ string, a Appearance) string { return fmt.Sprintf("{{|Var|}}%dms{{[-]}}", a.RefreshRate) }},
+		{"SpinnerSpeed", "Spinner Speed", func(_ string, a Appearance) string { return fmt.Sprintf("{{|Var|}}%dms{{[-]}}", a.SpinnerSpeed) }},
+		{"MenuTint", "Menu Tint", func(_ string, a Appearance) string { return tintSummary(a.AnsiColors.AnsiElementColors) }},
+		{"MenuOverrides", "Menu Color Overrides", func(_ string, a Appearance) string { return overrideSummary(a.AnsiColors.AnsiElementColors) }},
+		{"ProgramBoxTint", "ProgramBox Tint", func(_ string, a Appearance) string { return tintSummary(a.AnsiColors.ProgramBox) }},
+		{"ProgramBoxOverrides", "ProgramBox Color Overrides", func(_ string, a Appearance) string { return overrideSummary(a.AnsiColors.ProgramBox) }},
+		{"CLITint", "CLI Tint", func(ct string, a Appearance) string {
+			if ct != "local" {
+				return notApplicable
+			}
+			return tintSummary(a.AnsiColors.CLI)
+		}},
+		{"CLIOverrides", "CLI Color Overrides", func(ct string, a Appearance) string {
+			if ct != "local" {
+				return notApplicable
+			}
+			return overrideSummary(a.AnsiColors.CLI)
+		}},
+	}
+	var appearanceData []string
+	for _, row := range appearanceRows {
+		if presentKeys != nil && !presentKeys[row.key] {
+			continue
+		}
+		appearanceData = append(appearanceData, row.name)
+		for _, ct := range ConnTypes {
+			appearanceData = append(appearanceData, row.value(ct, conf.Appearance.ForConnType(ct)))
+		}
+	}
+
 	if title == "" {
 		title = "Configuration options stored in '" + console.FormatFilePath(paths.GetConfigFilePath()) + "':"
 	}
+	appearanceTitle := "Appearance options for each connection type (see '{{|UserCommand|}}" + version.CommandName + " --tint{{[-]}}' for tint details):"
 
-	if isMigrationMode(ctx) {
-		logNotice(ctx, title)
+	lineChars := conf.Appearance.Local.LineCharacters
+	renderTable := func(h, d []string) string {
 		var sb strings.Builder
-		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
-		logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
-	} else if w := console.GetTUIWriter(ctx); w != nil {
-		// Route through the caller's writer (e.g. the console panel's pipe)
-		// instead of stdout -- fmt.Println would write straight to the real
-		// terminal, bypassing the TUI's own screen compositing entirely.
-		fmt.Fprintln(w, semstyle.ToANSI(title))
-		var sb strings.Builder
-		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
-		fmt.Fprintln(w, semstyle.ToANSI(sb.String()))
-	} else {
-		fmt.Println(semstyle.ToANSI(title))
-		var sb strings.Builder
-		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, conf.UI.LineCharacters)
-		fmt.Println(semstyle.ToANSI(sb.String()))
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), h, d, lineChars)
+		return sb.String()
 	}
+
+	type section struct {
+		title   string
+		headers []string
+		data    []string
+	}
+	sections := []section{{title, headers, data}}
+	if len(appearanceData) > 0 {
+		sections = append(sections, section{appearanceTitle, appearanceHeaders, appearanceData})
+	}
+
+	for i, sec := range sections {
+		if len(sec.data) == 0 {
+			continue
+		}
+		if isMigrationMode(ctx) {
+			if i > 0 {
+				logNotice(ctx, " ")
+			}
+			logNotice(ctx, sec.title)
+			logNotice(ctx, strings.TrimSuffix(renderTable(sec.headers, sec.data), "\n"))
+		} else if w := console.GetTUIWriter(ctx); w != nil {
+			// Route through the caller's writer (e.g. the console panel's pipe)
+			// instead of stdout -- fmt.Println would write straight to the real
+			// terminal, bypassing the TUI's own screen compositing entirely.
+			fmt.Fprintln(w, semstyle.ToANSI(sec.title))
+			fmt.Fprintln(w, semstyle.ToANSI(renderTable(sec.headers, sec.data)))
+		} else {
+			fmt.Println(semstyle.ToANSI(sec.title))
+			fmt.Println(semstyle.ToANSI(renderTable(sec.headers, sec.data)))
+		}
+	}
+}
+
+// notApplicable marks a --config-show cell for a setting that connection
+// type never uses.
+const notApplicable = "{{|Var|}}n/a{{[-]}}"
+
+// tintSummary is an element's stored tint for --config-show: its reference,
+// or "none", marked "(off)" when disabled.
+func tintSummary(e AnsiElementColors) string {
+	v := e.Tint
+	if v == "" {
+		v = "none"
+	}
+	if !e.TintEnabled {
+		v += " (off)"
+	}
+	return "{{|Var|}}" + v + "{{[-]}}"
+}
+
+// overrideSummary is an element's stored color overrides for --config-show:
+// how many slots are set, marked "(off)" when disabled.
+func overrideSummary(e AnsiElementColors) string {
+	n := 0
+	for _, v := range e.Slots() {
+		if v != "" {
+			n++
+		}
+	}
+	for _, v := range []string{e.Base01, e.Base02, e.Base04, e.Base06, e.Base09, e.Base0F, e.Base10, e.Base11} {
+		if v != "" {
+			n++
+		}
+	}
+	v := "none"
+	if n > 0 {
+		v = fmt.Sprintf("%d set", n)
+	}
+	if !e.OverrideEnabled {
+		v += " (off)"
+	}
+	return "{{|Var|}}" + v + "{{[-]}}"
 }
 
 // logNotice logs a notice message, splitting multi-line messages and logging each separately.
