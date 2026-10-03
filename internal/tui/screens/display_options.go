@@ -809,7 +809,8 @@ func (s *DisplayOptionsScreen) toggleElements() tea.Cmd {
 
 // navigateTabs moves delta tabs along the tabs at level (0 the outermost
 // shown): the connection-type tabs, the Menu/ProgramBox/CLI tabs, then the
-// Theme/Tint/Overrides panes, skipping those not shown.
+// Theme/Tint/Overrides panes, skipping those not shown. A level past the
+// innermost shown moves along the innermost.
 func (s *DisplayOptionsScreen) navigateTabs(level, delta int) tea.Cmd {
 	var levels []func(int) tea.Cmd
 	if s.showConnections {
@@ -819,11 +820,12 @@ func (s *DisplayOptionsScreen) navigateTabs(level, delta int) tea.Cmd {
 		levels = append(levels, s.cycleElement)
 	}
 	levels = append(levels, s.cyclePane)
-	if level >= len(levels) {
-		return nil
-	}
-	return levels[level](delta)
+	return levels[min(level, len(levels)-1)](delta)
 }
+
+// HasInnerTabs reports that this screen handles the inner-tab keys itself
+// (see navigateTabs).
+func (s *DisplayOptionsScreen) HasInnerTabs() bool { return true }
 
 // cyclePane shows and focuses the previous (-1) or next (1) pane.
 func (s *DisplayOptionsScreen) cyclePane(delta int) tea.Cmd {

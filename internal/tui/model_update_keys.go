@@ -406,17 +406,39 @@ var keyAliases = map[string]tea.KeyPressMsg{
 }
 
 // keyAlias returns msg as the shortcut it stands in for (see keyAliases),
-// unless a text field has focus, where it types.
+// unless a text field has focus, where it types. Where the focused dialog
+// or screen has only one tier of tabs (it doesn't report HasInnerTabs), <
+// and > move along it like , and .
 func (m *AppModel) keyAlias(msg tea.Msg) tea.Msg {
 	kp, ok := msg.(tea.KeyPressMsg)
 	if !ok || kp.Mod&^tea.ModShift != 0 {
 		return msg
 	}
-	alias, ok := keyAliases[kp.Text]
+	text := kp.Text
+	if !m.hasInnerTabs() {
+		switch text {
+		case "<":
+			text = ","
+		case ">":
+			text = "."
+		}
+	}
+	alias, ok := keyAliases[text]
 	if !ok || m.isTextInputActive() {
 		return msg
 	}
 	return alias
+}
+
+// hasInnerTabs reports whether the dialog, or the screen when none is open,
+// handles the inner-tab keys itself.
+func (m *AppModel) hasInnerTabs() bool {
+	var target any = m.activeScreen
+	if m.dialog != nil {
+		target = m.dialog
+	}
+	t, ok := target.(interface{ HasInnerTabs() bool })
+	return ok && t.HasInnerTabs()
 }
 
 // isTextInputActive reports whether a focused text cursor is currently
