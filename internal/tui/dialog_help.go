@@ -17,6 +17,25 @@ type subKeyMap struct{ cols [][]keybind.Binding }
 func (s subKeyMap) ShortHelp() []keybind.Binding  { return nil }
 func (s subKeyMap) FullHelp() [][]keybind.Binding { return s.cols }
 
+// splitTallColumns splits each column taller than the first into columns of
+// the first's height, so a screen's long list of extra bindings packs into
+// pages side by side instead of one tall column.
+func splitTallColumns(cols [][]keybind.Binding) [][]keybind.Binding {
+	if len(cols) == 0 || len(cols[0]) == 0 {
+		return cols
+	}
+	rows := len(cols[0])
+	var out [][]keybind.Binding
+	for _, col := range cols {
+		for len(col) > rows {
+			out = append(out, col[:rows])
+			col = col[rows:]
+		}
+		out = append(out, col)
+	}
+	return out
+}
+
 // buildBindingPages greedily packs FullHelp columns into pages that each fit within maxW.
 func buildBindingPages(h help.Model, allCols [][]keybind.Binding, maxW int) []subKeyMap {
 	if len(allCols) == 0 {

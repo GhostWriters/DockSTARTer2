@@ -664,35 +664,41 @@ func (s *DisplayOptionsScreen) ShortHelp() []key.Binding {
 	return displayengine.Keys.ShortHelp()
 }
 
-// FullHelp adds this screen's connection type tab and preview keys to the
-// standard help columns.
+// FullHelp adds this screen's own keys to the standard help columns (which
+// already cover switching tabs), a column per kind: navigation first, so it
+// sits beside the standard navigation keys, then toggles and resets, then
+// the Find boxes.
 func (s *DisplayOptionsScreen) FullHelp() [][]key.Binding {
-	return append(displayengine.Keys.FullHelp(), []key.Binding{
-		displayengine.Keys.TabStripPrev,
-		displayengine.Keys.TabStripNext,
-		displayengine.Keys.PreviewForward,
-		displayengine.Keys.PreviewBack,
-		displayengine.Keys.EnvCycleLayout,
-		displayengine.Keys.SectionPrev,
-		displayengine.Keys.SectionNext,
-		displayengine.Keys.ToggleEnabled,
-		displayengine.Keys.ToggleLoadDefaults,
-		displayengine.Keys.EnvClosePane,
-		displayengine.Keys.InnerTabPrev,
-		displayengine.Keys.InnerTabNext,
-		displayengine.Keys.ToggleConnections,
-		displayengine.Keys.ToggleElements,
-		displayengine.Keys.ToggleFilter,
-		displayengine.Keys.StopEditing,
-		displayengine.Keys.EditInput,
-		displayengine.Keys.SearchWholeWords,
-		displayengine.Keys.SearchVariant,
-		displayengine.Keys.ResetSection,
-		displayengine.Keys.ResetAll,
-		displayengine.Keys.SearchBase,
-		displayengine.Keys.SearchHues,
-		displayengine.Keys.SearchSource,
-	})
+	return append(displayengine.Keys.FullHelp(),
+		[]key.Binding{
+			displayengine.Keys.InnerTabPrev,
+			displayengine.Keys.InnerTabNext,
+			displayengine.Keys.SectionPrev,
+			displayengine.Keys.SectionNext,
+			displayengine.Keys.PreviewForward,
+			displayengine.Keys.PreviewBack,
+			displayengine.Keys.EnvCycleLayout,
+			displayengine.Keys.EnvClosePane,
+		},
+		[]key.Binding{
+			displayengine.Keys.ToggleConnections,
+			displayengine.Keys.ToggleElements,
+			displayengine.Keys.ToggleEnabled,
+			displayengine.Keys.ToggleLoadDefaults,
+			displayengine.Keys.ToggleFilter,
+			displayengine.Keys.ResetSection,
+			displayengine.Keys.ResetAll,
+		},
+		[]key.Binding{
+			displayengine.Keys.EditInput,
+			displayengine.Keys.StopEditing,
+			displayengine.Keys.SearchWholeWords,
+			displayengine.Keys.SearchVariant,
+			displayengine.Keys.SearchHues,
+			displayengine.Keys.SearchBase,
+			displayengine.Keys.SearchSource,
+		},
+	)
 }
 
 func (s *DisplayOptionsScreen) HelpText() string {

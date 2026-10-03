@@ -221,7 +221,7 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	// Build per-page binding column groups (greedy column packing).
-	allCols := m.keyMap.FullHelp()
+	allCols := splitTallColumns(m.keyMap.FullHelp())
 	bPages := buildBindingPages(m.help, allCols, maxLineWidth)
 	m.help.SetWidth(targetWidth) // restore after measurement in buildBindingPages
 	if len(bPages) == 0 {
