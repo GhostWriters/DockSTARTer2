@@ -9,7 +9,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	charm.land/log/v2 v2.0.1
 	charm.land/ssh v0.4.3
-	charm.land/wish/v2 v2.0.4
+	charm.land/wish/v2 v2.0.5
 	github.com/Gaurav-Gosain/sip v0.8.3
 	github.com/GhostWriters/semstyle v0.3.3
 	github.com/Masterminds/semver/v3 v3.5.0
@@ -53,7 +53,7 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20260914234754-15785f84ba1c // indirect
 	github.com/DefangLabs/secret-detector v0.0.0-20250811234530-d4b4214cd679 // indirect
 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // indirect
-	github.com/ProtonMail/go-crypto v1.4.1 // indirect
+	github.com/ProtonMail/go-crypto v1.5.2 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
