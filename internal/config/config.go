@@ -57,6 +57,12 @@ var ThemeDefaultsOverlayHook func(conf *AppConfig, legacyPresent map[string]bool
 // installed as a system service) to avoid a config->serve cycle.
 var ServerTLSDefaultHook func(conf *AppConfig, present map[string]bool)
 
+// TintRefMigrationHook, if set, returns a saved tint reference in its
+// canonical form, or ref unchanged (see migrateTintRefs). Set by the
+// commands package, which reads the scheme files, to avoid a
+// config->commands cycle.
+var TintRefMigrationHook func(ref string) string
+
 // DefaultConfig returns an AppConfig populated purely from the embedded defaults TOML.
 func DefaultConfig() AppConfig {
 	var conf AppConfig
@@ -728,6 +734,23 @@ func migrateAnsiPaletteInheritGap(data []byte, conf *AppConfig) {
 	}
 }
 
+// migrateTintRefs rewrites every element's tint reference in its canonical
+// form (see TintRefMigrationHook), e.g. a repo scheme saved without its
+// system, "repo:dracula", as the one it loads, "repo:base24-dracula".
+func migrateTintRefs(conf *AppConfig) {
+	if TintRefMigrationHook == nil {
+		return
+	}
+	for _, ct := range ConnTypes {
+		c := ansiColorsPtrConfig(conf, ct)
+		for _, element := range []string{"menu", "programbox", "cli"} {
+			if e := c.ElementPtr(element); e.Tint != "" {
+				e.Tint = TintRefMigrationHook(e.Tint)
+			}
+		}
+	}
+}
+
 // ansiColorsPtrConfig returns a pointer to conf's AnsiColors for connType,
 // or nil for an unrecognized connType -- config-package-local counterpart
 // to internal/commands' own ansiColorsPtr (kept separate since neither
@@ -808,6 +831,7 @@ func LoadAppConfig() AppConfig {
 			migrateToAppearance(data, &conf)
 			migrateAnsiPaletteMenuNesting(data, &conf)
 			migrateAnsiPaletteInheritGap(data, &conf)
+			migrateTintRefs(&conf)
 			// Write back only if the merged config differs from what was on disk
 			// (e.g. new keys added in a newer version). Avoids a pointless write
 			// on every load which would also trigger any file watchers.

@@ -45,7 +45,7 @@ func (s *DisplayOptionsScreen) tintThemeMismatches() []string {
 // so they don't count.
 func tintWithoutTintedTheme(a config.Appearance) bool {
 	menu := a.AnsiColors.AnsiElementColors
-	if !menu.TintEnabled || menu.Tint == "" || menu.Tint == "embedded:ansi" {
+	if !menu.TintEnabled || menu.Tint == "" || menu.Tint == "embedded:base24-ansi" {
 		return false
 	}
 	tf, err := theme.GetThemeFile(a.Theme)
@@ -59,7 +59,7 @@ func tintWithoutTintedTheme(a config.Appearance) bool {
 // tintThemeDialog asks whether to use the tinted theme on connTypes (see
 // tintThemeMismatches), apply as staged anyway, or go back.
 func (s *DisplayOptionsScreen) tintThemeDialog(connTypes []string) tea.Msg {
-	// A tint's name without its source, e.g. "0x96f" for "repo:0x96f", and a
+	// A tint's name without its source, e.g. "base24-0x96f" for "repo:base24-0x96f", and a
 	// theme's display name, each in its style.
 	tintName := func(ref string) string {
 		if _, name, ok := strings.Cut(ref, ":"); ok {

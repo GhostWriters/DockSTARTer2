@@ -208,7 +208,7 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 	current := s.stagedTint().Tint
 	saved := s.baseTint().Tint
 	// changedAt marks the saved scheme's row while another is staged.
-	changedAt := func(ref string) bool { return current != saved && ref == saved }
+	changedAt := func(selects func(string) bool) bool { return current != saved && selects(saved) }
 	matches, searchErr := s.tintSearch().Matcher()
 	pick := func(ref string) func() tea.Msg {
 		return func() tea.Msg { return tintPickMsg{ref: ref} }
@@ -220,7 +220,7 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 		IsRadioButton: true,
 		Selectable:    true,
 		Checked:       current == "",
-		Changed:       changedAt(""),
+		Changed:       changedAt(func(ref string) bool { return ref == "" }),
 		SpaceAction:   pick(""),
 		Metadata:      map[string]string{"config_value": ""},
 	}
@@ -233,8 +233,7 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 	found := current == ""
 	s.tintFound = 0
 	for _, e := range s.tintCatalog {
-		ref := e.Ref()
-		if ref == current {
+		if e.Selects(current) {
 			found = true
 		}
 		if searchErr != nil || !matches(e) || s.tintSource != "" && e.Source != s.tintSource ||
@@ -247,34 +246,49 @@ func (s *DisplayOptionsScreen) tintListItems() []displayengine.MenuItem {
 		if name == "" {
 			name = e.Slug
 		}
-		desc := name
 		descTag := "{{|ItemList|}}"
 		if e.Source == "user" {
 			descTag = "{{|ItemListUserDefined|}}"
 		}
-		markup := descTag + name
-		// A repo scheme's name links to its upstream file.
-		if url := e.SourceURL(); url != "" {
-			tag := strings.TrimSuffix(descTag, "|}}")
-			markup = tag + "::::" + url + "|}}" + name + "{{[-]}}" + descTag
+		author := ""
+		if a := authorName(e.Author); a != "" {
+			author = " [by " + a + "]"
 		}
-		if author := authorName(e.Author); author != "" {
-			desc += " [by " + author + "]"
-			markup += " [by " + author + "]"
+		// A row picks the file the Base filter names. A scheme with both
+		// files, one of them applied, gets a row for each with no Base
+		// filter, so the one in use shows and picking again can't switch
+		// files. A single row with no Base filter is checked for either.
+		systems := []string{s.tintSystem}
+		split := s.tintSystem == "" && e.HasBase16 && e.HasBase24 && e.Selects(saved)
+		if split {
+			systems = []string{"base24", "base16"}
 		}
-		g := groups[e.Source]
-		g.Items = append(g.Items, displayengine.MenuItem{
-			Tag:           e.Slug,
-			Desc:          markup,
-			Help:          desc,
-			IsRadioButton: true,
-			Selectable:    true,
-			Checked:       ref == current,
-			Changed:       changedAt(ref),
-			IsUserDefined: e.Source == "user",
-			SpaceAction:   pick(ref),
-			Metadata:      map[string]string{"config_value": ref},
-		})
+		for _, system := range systems {
+			ref := e.RefFor(system)
+			label := ""
+			if len(systems) > 1 {
+				label = " (" + system + ")"
+			}
+			markup := descTag + name
+			// A repo scheme's name links to its upstream file.
+			if url := e.SourceURLFor(system); url != "" {
+				tag := strings.TrimSuffix(descTag, "|}}")
+				markup = tag + "::::" + url + "|}}" + name + "{{[-]}}" + descTag
+			}
+			g := groups[e.Source]
+			g.Items = append(g.Items, displayengine.MenuItem{
+				Tag:           e.Slug,
+				Desc:          markup + label + author,
+				Help:          name + label + author,
+				IsRadioButton: true,
+				Selectable:    true,
+				Checked:       current == ref || !split && s.tintSystem == "" && e.Selects(current),
+				Changed:       changedAt(func(r string) bool { return r == ref }),
+				IsUserDefined: e.Source == "user",
+				SpaceAction:   pick(ref),
+				Metadata:      map[string]string{"config_value": ref},
+			})
+		}
 	}
 	if !commands.TintRepoCloned() && !s.tintNarrowed() && (s.tintSource == "" || s.tintSource == "repo") {
 		desc := "Adds several hundred schemes from github.com/tinted-theming/schemes"
@@ -392,7 +406,7 @@ func (s *DisplayOptionsScreen) buildTintItemHelp(item displayengine.MenuItem) (i
 		return "", ""
 	}
 	for _, e := range s.tintCatalog {
-		if e.Ref() != ref {
+		if !e.Selects(ref) {
 			continue
 		}
 		// The name, then the details one per line.
@@ -590,9 +604,39 @@ func (s *DisplayOptionsScreen) syncTintMenus() {
 	s.overrideMenu.SetItems(s.overrideItems())
 	s.overrideMenu.Select(overrideCursor)
 	cursor := s.tintMenu.Index()
+	var focused displayengine.MenuItem
+	if items := s.tintMenu.GetItems(); cursor >= 0 && cursor < len(items) {
+		focused = items[cursor]
+	}
 	s.tintMenu.SetMinTagWidth(s.tintTagWidth())
 	s.tintMenu.SetItems(s.tintListItems())
-	s.tintMenu.Select(cursor)
+	s.tintMenu.Select(tintCursorFor(s.tintMenu.GetItems(), focused, cursor))
+}
+
+// tintCursorFor returns the index in items of the row focused was, since
+// rows above it can split or merge as the applied scheme changes: the row
+// picking the same tint, else the same scheme's, else cursor.
+func tintCursorFor(items []displayengine.MenuItem, focused displayengine.MenuItem, cursor int) int {
+	ref, ok := focused.Metadata["config_value"]
+	if !ok {
+		return cursor
+	}
+	sameScheme := -1
+	for i, it := range items {
+		if it.IsSeparator {
+			continue
+		}
+		if it.Metadata["config_value"] == ref {
+			return i
+		}
+		if sameScheme < 0 && ref != "" && it.Tag == focused.Tag {
+			sameScheme = i
+		}
+	}
+	if sameScheme >= 0 {
+		return sameScheme
+	}
+	return cursor
 }
 
 // tintTagWidth returns the widest scheme name in the catalog, so the scheme

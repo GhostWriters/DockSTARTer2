@@ -1063,7 +1063,7 @@ func themeColorsText(tf theme.ThemeFile) string {
 // catalogTintVariant returns the tint catalog's variant for ref, "" if unknown.
 func (s *DisplayOptionsScreen) catalogTintVariant(ref string) string {
 	for _, e := range s.tintCatalog {
-		if e.Ref() == ref {
+		if e.Selects(ref) {
 			return e.Variant
 		}
 	}

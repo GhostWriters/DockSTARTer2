@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"DockSTARTer2/internal/assets"
+	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 
@@ -64,6 +66,57 @@ func repoSchemeSubfolders(name string) (slug string, subs []string) {
 		return s, []string{"base16"}
 	}
 	return name, []string{"base24", "base16"}
+}
+
+func init() {
+	config.TintRefMigrationHook = CanonicalTintRef
+}
+
+// CanonicalTintRef returns ref as it's saved, naming its scheme's system
+// the way tinty does: a repo scheme named without one ("repo:dracula", or a
+// bare "dracula" from before refs had sources) as the file it loads,
+// "repo:base24-dracula" or "repo:base16-dracula", and a user or bundled one
+// ("embedded:ansi") with the system its file declares
+// ("embedded:base24-ansi"). Only local files are checked, never the
+// network; a ref whose file isn't found, or a "file:" ref, is returned
+// unchanged.
+func CanonicalTintRef(ref string) string {
+	if strings.HasPrefix(ref, "file:") {
+		return ref
+	}
+	for _, src := range []struct {
+		prefix string
+		read   func(string) ([]byte, error)
+	}{{"user:", readUserTint}, {"embedded:", assets.GetTintTheme}} {
+		name, ok := strings.CutPrefix(ref, src.prefix)
+		if !ok {
+			continue
+		}
+		if _, subs := repoSchemeSubfolders(name); len(subs) == 1 {
+			return ref
+		}
+		data, err := src.read(name)
+		if err != nil {
+			return ref
+		}
+		meta, err := config.ParseBase16SchemeMeta(data)
+		if err != nil || meta.System != "base16" && meta.System != "base24" {
+			return ref
+		}
+		return src.prefix + meta.System + "-" + name
+	}
+	name := strings.TrimPrefix(ref, "repo:")
+	slug, subs := repoSchemeSubfolders(name)
+	if len(subs) == 1 {
+		return "repo:" + name
+	}
+	dir := paths.GetTintedThemingSchemesDir()
+	for _, sub := range subs {
+		if _, err := os.Stat(filepath.Join(dir, sub, slug+".yaml")); err == nil {
+			return "repo:" + sub + "-" + slug
+		}
+	}
+	return ref
 }
 
 // tintSchemeURL returns the GitHub blob URL of the scheme file sub/slug.yaml.

@@ -280,7 +280,7 @@ tab_layout           = "sidebyside" # "maximized", "sidebyside", or "stacked" --
 [appearance.web.ansi_palette.menu]
 tint_enabled = true
 override_enabled = true
-tint = "embedded:ansi"
+tint = "embedded:base24-ansi"
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green
@@ -309,7 +309,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [appearance.web.ansi_palette.programbox]
 tint_enabled = true
 override_enabled = true
-tint = "embedded:ansi"
+tint = "embedded:base24-ansi"
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green
@@ -338,7 +338,7 @@ base11 = "" # (no ANSI slot; base24 darkest background)
 [appearance.web.ansi_palette.cli]
 tint_enabled = true
 override_enabled = true
-tint = "embedded:ansi"
+tint = "embedded:base24-ansi"
 base00 = "" # black
 base08 = "" # red
 base0b = "" # green

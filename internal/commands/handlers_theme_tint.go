@@ -290,7 +290,7 @@ func noticeSkippedCLI(ctx context.Context, skipped []string) {
 }
 
 // applyTintRef validates data as a base16 scheme, then points each of
-// elements' tint (e.g. "embedded:ansi", "repo:dracula",
+// elements' tint (e.g. "embedded:base24-ansi", "repo:base24-dracula",
 // "file:/path/to/scheme.yaml") at ref, for each of connTypes. Also sets
 // TintEnabled, so setting a scheme here always actually renders it --
 // otherwise a "programbox"/"cli" element whose TintEnabled happened to be
@@ -365,11 +365,11 @@ func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc stri
 		return data, "'" + path + "'", err
 	case strings.HasPrefix(ref, "user:"):
 		name := strings.TrimPrefix(ref, "user:")
-		data, err = os.ReadFile(filepath.Join(paths.GetTintsDir(), name+".yaml"))
+		data, err = readSchemeFile(readUserTint, name)
 		return data, "'" + name + "' (user)", err
 	case strings.HasPrefix(ref, "embedded:"):
 		name := strings.TrimPrefix(ref, "embedded:")
-		data, err = assets.GetTintTheme(name)
+		data, err = readSchemeFile(assets.GetTintTheme, name)
 		if err != nil {
 			names, _ := assets.ListTintThemes()
 			err = fmt.Errorf("no bundled scheme named %q (available: %s)", name, strings.Join(names, ", "))
@@ -383,6 +383,26 @@ func ResolveTintRefData(ctx context.Context, ref string) (data []byte, desc stri
 		data, err = ResolveRepoTintData(ctx, ref)
 		return data, "'" + ref + "'", err
 	}
+}
+
+// readUserTint reads the user tints folder's scheme file for slug.
+func readUserTint(slug string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(paths.GetTintsDir(), slug+".yaml"))
+}
+
+// readSchemeFile reads a user or bundled scheme with read: the file named
+// name, else, when name carries a system ("base24-ansi"), the file named
+// for the slug after it, since those files are named by slug alone.
+func readSchemeFile(read func(string) ([]byte, error), name string) ([]byte, error) {
+	data, err := read(name)
+	if err != nil {
+		if slug, subs := repoSchemeSubfolders(name); len(subs) == 1 {
+			if d, e := read(slug); e == nil {
+				return d, nil
+			}
+		}
+	}
+	return data, err
 }
 
 // tintBareNameSearchOrder is the source prefixes a bare, unprefixed --tint
@@ -402,7 +422,8 @@ var tintBareNameSearchOrder = []string{"user:", "embedded:", "repo:"}
 // against each of tintBareNameSearchOrder in turn, returning the first
 // that resolves -- which prefix it's found under becomes ref's canonical
 // prefix, so what's persisted to ansi_palette.<connType>.tint is never
-// ambiguous even if a later search finds it under a different source.
+// ambiguous even if a later search finds it under a different source. For
+// the same reason, ref names its scheme's system (see CanonicalTintRef).
 func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, desc string, err error) {
 	if path, ok := strings.CutPrefix(arg, "file:"); ok {
 		if abs, absErr := filepath.Abs(path); absErr == nil {
@@ -415,7 +436,7 @@ func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, d
 	for _, p := range tintBareNameSearchOrder {
 		if strings.HasPrefix(arg, p) {
 			data, desc, err = ResolveTintRefData(ctx, arg)
-			return arg, data, desc, err
+			return CanonicalTintRef(arg), data, desc, err
 		}
 	}
 
@@ -423,7 +444,7 @@ func ResolveTintArg(ctx context.Context, arg string) (ref string, data []byte, d
 	for _, p := range tintBareNameSearchOrder {
 		d, ds, e := ResolveTintRefData(ctx, p+arg)
 		if e == nil {
-			return p + arg, d, ds, nil
+			return CanonicalTintRef(p + arg), d, ds, nil
 		}
 		errs = append(errs, e.Error())
 	}

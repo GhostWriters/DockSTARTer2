@@ -1,6 +1,9 @@
 package commands
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestTintSearchMatcher(t *testing.T) {
 	dracula := TintEntry{Slug: "dracula", Name: "Dracula", Variant: "dark", Author: "clach04", HasBase16: true, HasBase24: true}
@@ -52,5 +55,57 @@ func TestTintEntrySourceURL(t *testing.T) {
 		if got := c.e.SourceURL(); got != c.want {
 			t.Errorf("%s:%s SourceURL() = %q, want %q", c.e.Source, c.e.Slug, got, c.want)
 		}
+	}
+}
+
+func TestTintEntryRefFor(t *testing.T) {
+	both := TintEntry{Source: "repo", Slug: "dracula", HasBase16: true, HasBase24: true}
+	only16 := TintEntry{Source: "repo", Slug: "old", HasBase16: true}
+	user := TintEntry{Source: "user", Slug: "mine", HasBase16: true}
+	tests := []struct {
+		e      TintEntry
+		system string
+		want   string
+	}{
+		{both, "", "repo:base24-dracula"},
+		{both, "base16", "repo:base16-dracula"},
+		{both, "base24", "repo:base24-dracula"},
+		{only16, "", "repo:base16-old"},
+		{only16, "base24", "repo:base16-old"},
+		{user, "base16", "user:base16-mine"},
+	}
+	for _, tt := range tests {
+		if got := tt.e.RefFor(tt.system); got != tt.want {
+			t.Errorf("%s RefFor(%q) = %q; want %q", tt.e.Slug, tt.system, got, tt.want)
+		}
+	}
+	for ref, want := range map[string]bool{
+		"repo:base24-dracula": true,
+		"repo:base16-dracula": true,
+		"repo:dracula":        false,
+		"user:dracula":        false,
+	} {
+		if got := both.Selects(ref); got != want {
+			t.Errorf("Selects(%q) = %v; want %v", ref, got, want)
+		}
+	}
+	if only16.Selects("repo:base24-old") {
+		t.Error("Selects(repo:base24-old) for a base16-only scheme = true")
+	}
+}
+
+func TestCanonicalTintRefEmbedded(t *testing.T) {
+	for ref, want := range map[string]string{
+		"embedded:ansi":         "embedded:base24-ansi",
+		"embedded:base24-ansi":  "embedded:base24-ansi",
+		"embedded:nonexistent":  "embedded:nonexistent",
+		"file:/some/scheme.yml": "file:/some/scheme.yml",
+	} {
+		if got := CanonicalTintRef(ref); got != want {
+			t.Errorf("CanonicalTintRef(%q) = %q; want %q", ref, got, want)
+		}
+	}
+	if _, _, err := ResolveTintRefData(context.Background(), "embedded:base24-ansi"); err != nil {
+		t.Errorf("ResolveTintRefData(embedded:base24-ansi): %v", err)
 	}
 }

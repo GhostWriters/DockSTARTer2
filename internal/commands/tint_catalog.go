@@ -19,20 +19,46 @@ type TintEntry struct {
 	Kind string
 }
 
-// Ref returns the config.AnsiElementColors.Tint reference that selects e.
-func (e TintEntry) Ref() string { return e.Source + ":" + e.Slug }
+// Ref returns the config.AnsiElementColors.Tint reference that selects e:
+// its base24 file when it has one (see RefFor).
+func (e TintEntry) Ref() string { return e.RefFor("") }
 
-// SourceURL returns the upstream GitHub URL of a repo scheme's file (its
-// base24 file when it has one, as ParseBase16Scheme prefers), or "" for any
-// other source.
-func (e TintEntry) SourceURL() string {
+// RefFor returns the reference that selects e's file for system ("base16"
+// or "base24"), or Ref's choice when system is "" or e has no file for it,
+// naming the system the way tinty does, e.g. "repo:base24-dracula".
+func (e TintEntry) RefFor(system string) string {
+	return e.Source + ":" + e.system(system) + "-" + e.Slug
+}
+
+// Selects reports whether ref selects one of e's files, whichever system.
+func (e TintEntry) Selects(ref string) bool {
+	return e.HasBase24 && ref == e.Source+":base24-"+e.Slug || e.HasBase16 && ref == e.Source+":base16-"+e.Slug
+}
+
+// system returns the system of the file RefFor(system) selects.
+func (e TintEntry) system(system string) string {
+	switch {
+	case system == "base16" && e.HasBase16:
+		return "base16"
+	case system == "base24" && e.HasBase24:
+		return "base24"
+	case e.HasBase24:
+		return "base24"
+	}
+	return "base16"
+}
+
+// SourceURL returns the upstream GitHub URL of the repo scheme file Ref
+// selects, or "" for any other source.
+func (e TintEntry) SourceURL() string { return e.SourceURLFor("") }
+
+// SourceURLFor returns the upstream GitHub URL of the repo scheme file
+// RefFor(system) selects, or "" for any other source.
+func (e TintEntry) SourceURLFor(system string) string {
 	if e.Source != "repo" {
 		return ""
 	}
-	if e.HasBase24 {
-		return tintSchemeURL("base24", e.Slug)
-	}
-	return tintSchemeURL("base16", e.Slug)
+	return tintSchemeURL(e.system(system), e.Slug)
 }
 
 // TintRepoCloned reports whether the tinted-theming schemes repo has
