@@ -137,7 +137,7 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 // HandleAppTemplateNew scaffolds a brand-new user app template by copying
 // the .TEMPLATE reference folder into the user apps folder under a new
 // name. File *contents* use bracket-wrapped tokens -- "<APPNAME>" ->
-// uppercase, "<AppName>" -> capitalized (user's own casing, see below),
+// uppercase, "<AppName>" -> the name as typed (see below),
 // "<appname>" -> lowercase -- matching the existing
 // <__instance>/<__INSTANCE>/<__Instance> convention, which avoids
 // mis-renaming any unrelated occurrence of the substring "appname"
@@ -159,16 +159,9 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 		return fmt.Errorf("invalid app name: %s", lower)
 	}
 	upper := strings.ToUpper(lower)
-	// The nicename/<AppName> token uses the user's own casing verbatim
-	// (e.g. "MyApp" typed on the command line stays "MyApp" in labels.yml's
-	// nicename and the README/meta helptext), falling back to a single
-	// capitalized letter only when the user typed it all lowercase --
-	// otherwise every scaffolded app would read "Myapp" regardless of how
-	// they actually wanted it displayed.
-	capitalized := group.Args[0]
-	if capitalized == lower {
-		capitalized = appenv.CapitalizeFirstLetter(lower)
-	}
+	// The nicename/<AppName> token uses the casing typed on the command line
+	// verbatim ("MyApp" stays "MyApp", "nzbfast" stays "nzbfast").
+	niceName := group.Args[0]
 
 	// Prefer the already-synced local copy (kept current by
 	// appenv.SyncUserAppTemplateReference); fall back to reading straight
@@ -204,13 +197,13 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 
 	renameContent := func(s string) string {
 		s = strings.ReplaceAll(s, "<APPNAME>", upper)
-		s = strings.ReplaceAll(s, "<AppName>", capitalized)
+		s = strings.ReplaceAll(s, "<AppName>", niceName)
 		s = strings.ReplaceAll(s, "<appname>", lower)
 		return s
 	}
 	renameFilename := func(s string) string {
 		s = strings.ReplaceAll(s, "APPNAME", upper)
-		s = strings.ReplaceAll(s, "AppName", capitalized)
+		s = strings.ReplaceAll(s, "AppName", niceName)
 		s = strings.ReplaceAll(s, "appname", lower)
 		return s
 	}
@@ -243,9 +236,9 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	logger.Notice(ctx, "New app template '%s' created in '"+console.FormatFolderPath(destDir)+"' (%d %s).", appenv.StyledAppName(ctx, lower), copied, fileWord(copied))
-	logger.Notice(ctx, "Fill in the compose snippet and defaults, then enable '%s' to test it.",
-		console.FormatLink(appenv.AppStyleTag(lower), upper, appenv.AppURL(lower)))
+	// Before the notices, so they name the app by its new nicename.
 	appenv.InvalidateAppMetaCache()
+	logger.Notice(ctx, "New app template '%s' created in '"+console.FormatFolderPath(destDir)+"' (%d %s).", appenv.StyledAppName(ctx, lower), copied, fileWord(copied))
+	logger.Notice(ctx, "Fill in the compose snippet and defaults, then enable '%s' to test it.", appenv.StyledAppName(ctx, lower))
 	return nil
 }
