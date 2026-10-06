@@ -9,7 +9,7 @@ import (
 
 // GetAppMarkdown retrieves the markdown documentation for a given application.
 // appName can be a base name or an instance name (e.g., "RADARR" or "RADARR__4K").
-// Returns the documentation content as a string.
+// Returns the documentation content as a string, without its front matter.
 func GetAppMarkdown(ctx context.Context, appName string) (string, error) {
 	if appName == "" {
 		return "", fmt.Errorf("application name is empty")
@@ -36,5 +36,27 @@ func GetAppMarkdown(ctx context.Context, appName string) (string, error) {
 		return "", fmt.Errorf("failed to read documentation file for app %s: %w", appName, err)
 	}
 
-	return string(content), nil
+	return stripFrontMatter(string(content)), nil
+}
+
+// stripFrontMatter removes a YAML front matter block (a "---" line at the
+// very start, through the next "---" or "..." line) and the blank lines
+// after it, which glamour would draw as a rule and a heading. An unclosed
+// block is left as is.
+func stripFrontMatter(doc string) string {
+	lines := strings.SplitAfter(doc, "\n")
+	if len(lines) == 0 || strings.TrimRight(lines[0], " \t\r\n") != "---" {
+		return doc
+	}
+	for i := 1; i < len(lines); i++ {
+		switch strings.TrimRight(lines[i], " \t\r\n") {
+		case "---", "...":
+			rest := lines[i+1:]
+			for len(rest) > 0 && strings.TrimSpace(rest[0]) == "" {
+				rest = rest[1:]
+			}
+			return strings.Join(rest, "")
+		}
+	}
+	return doc
 }
