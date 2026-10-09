@@ -50,6 +50,11 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 	sipCfg.Host = "0.0.0.0"
 	sipCfg.Port = strconv.Itoa(cfg.Web.Port)
 	sipCfg.Appearance.Title = webPageTitle()
+	for _, site := range cfg.Web.FrameAncestors {
+		if err := config.ValidFrameAncestor(site); err != nil {
+			return fmt.Errorf("server.web.frame_ancestors in dockstarter2.toml: %w", err)
+		}
+	}
 	sipCfg.FrameAncestors = cfg.Web.FrameAncestors
 
 	switch cfg.Web.TLS {

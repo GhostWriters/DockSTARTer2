@@ -287,7 +287,7 @@ func HandleConfigWebAncestors(ctx context.Context, group *CommandGroup) error {
 	clear := len(group.Args) == 1 && strings.EqualFold(group.Args[0], "none")
 	if !clear {
 		for _, site := range group.Args {
-			if err := validFrameAncestor(site); err != nil {
+			if err := config.ValidFrameAncestor(site); err != nil {
 				logger.Error(ctx, "%v", err)
 				return err
 			}
@@ -305,14 +305,5 @@ func HandleConfigWebAncestors(ctx context.Context, group *CommandGroup) error {
 	}
 	logger.Notice(ctx, "Web frame ancestors set to: {{|Var|}}%s{{[-]}}", shown)
 	logger.Notice(ctx, "Run '{{|UserCommand|}}%s --server restart{{[-]}}' to apply it to a running web server.", version.CommandName)
-	return nil
-}
-
-// validFrameAncestor rejects an entry sip would refuse at startup: empty,
-// or more than one CSP source.
-func validFrameAncestor(site string) error {
-	if strings.TrimSpace(site) == "" || strings.ContainsAny(site, " \t;,\r\n") {
-		return fmt.Errorf("'%s' is not one site; give one per argument, such as https://organizr.example.com", site)
-	}
 	return nil
 }

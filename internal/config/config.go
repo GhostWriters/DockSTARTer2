@@ -147,6 +147,15 @@ type WebConfig struct {
 	FrameAncestors []string `toml:"frame_ancestors"`
 }
 
+// ValidFrameAncestor rejects a FrameAncestors entry sip would refuse at
+// startup: empty, or more than one CSP source.
+func ValidFrameAncestor(site string) error {
+	if strings.TrimSpace(site) == "" || strings.ContainsAny(site, " \t;,\r\n") {
+		return fmt.Errorf("'%s' is not one site; give one per entry, such as https://organizr.example.com", site)
+	}
+	return nil
+}
+
 // AnsiElementColors holds one UI element's resolved ANSI palette state --
 // the 16 standard ANSI slots plus base16/base24's 8 extra slots. Each
 // field accepts anything semstyle.ToColor understands: a hex value
