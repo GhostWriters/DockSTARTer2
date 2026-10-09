@@ -226,6 +226,11 @@ var Registry = map[string]Def{
 	"--theme-ansi-override":       {Title: "Enable ANSI Color Overrides", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--theme-no-ansi-override":    {Title: "Disable ANSI Color Overrides", SessionLocked: false, ConsoleSafe: true, ConfigChanging: true},
 	"--config-panel":              {Title: "Set Panel Mode", ConfigChanging: true, ConsoleBlocked: true},
+
+	// Blocked from the console: a web session could otherwise let another
+	// site embed the terminal.
+	"--config-web-ancestors":       {Title: "Set Web Frame Ancestors", ConfigChanging: true, ConsoleBlocked: true},
+	"--config-web-frame-ancestors": {Title: "Set Web Frame Ancestors", ConfigChanging: true, ConsoleBlocked: true},
 }
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.

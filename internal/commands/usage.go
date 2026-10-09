@@ -255,7 +255,8 @@ func GetUsage(target string, noHeading bool) string {
 		)
 	}
 
-	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder", "--config-panel") {
+	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder", "--config-panel",
+		"--config-web-ancestors", "--config-web-frame-ancestors") {
 		printStr(
 			"{{|UsageCommand|}}--config-show{{[-]}}",
 			"{{|UsageCommand|}}--show-config{{[-]}}",
@@ -266,6 +267,11 @@ func GetUsage(target string, noHeading bool) string {
 			"	Sets the folder where the docker-compose.yml file is stored.",
 			"{{|UsageCommand|}}--config-panel{{[-]}} {{|UsageOption|}}<log|console|none>{{[-]}} [{{|UsageOption|}}<local|ssh|web|all|a,b,c>{{[-]}}]",
 			"	Sets which panel shows below the menus (see {{|UsageCommand|}}-T{{[-]}} for connection types).",
+			"{{|UsageCommand|}}--config-web-ancestors{{[-]}} [{{|UsageVar|}}<site>{{[-]}} ...|{{|UsageOption|}}none{{[-]}}]",
+			"{{|UsageCommand|}}--config-web-frame-ancestors{{[-]}} [{{|UsageVar|}}<site>{{[-]}} ...|{{|UsageOption|}}none{{[-]}}]",
+			"	Sets the sites allowed to embed the web server in a frame (CSP frame-ancestors),",
+			"	such as a dashboard at {{|UsageVar|}}https://organizr.example.com{{[-]}}. {{|UsageOption|}}none{{[-]}} clears them;",
+			"	no argument shows them. Takes effect when the server restarts.",
 		)
 	}
 	if match("--disconnect", "--server") {

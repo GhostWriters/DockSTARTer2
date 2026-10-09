@@ -140,6 +140,20 @@ type WebConfig struct {
 	TLS     string `toml:"tls"`
 	TLSCert string `toml:"tls_cert"` // Path to a certificate file, when tls = "cert"
 	TLSKey  string `toml:"tls_key"`  // Path to the certificate's private key, when tls = "cert"
+
+	// FrameAncestors are the sites, besides the web server's own, allowed to
+	// show it in a frame (e.g. a dashboard embedding it), each a CSP
+	// frame-ancestors source such as "https://organizr.example.com".
+	FrameAncestors []string `toml:"frame_ancestors"`
+}
+
+// ValidFrameAncestor rejects a FrameAncestors entry sip would refuse at
+// startup: empty, or more than one CSP source.
+func ValidFrameAncestor(site string) error {
+	if strings.TrimSpace(site) == "" || strings.ContainsAny(site, " \t;,\r\n") {
+		return fmt.Errorf("'%s' is not one site; give one per entry, such as https://organizr.example.com", site)
+	}
+	return nil
 }
 
 // AnsiElementColors holds one UI element's resolved ANSI palette state --

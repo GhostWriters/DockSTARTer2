@@ -377,10 +377,11 @@ compose_folder = "${XDG_CONFIG_HOME}/compose"
 port = 40022                       # e.g. 22
 
 [server.web]
-port     = 40080                   # e.g. 80
-tls      = "self-signed"           # "self-signed", "cert", or "none" (plain HTTP)
-tls_cert = ""                      # path to a certificate file, when tls = "cert"
-tls_key  = ""                      # path to the certificate's private key, when tls = "cert"
+port            = 40080            # e.g. 80
+tls             = "self-signed"    # "self-signed", "cert", or "none" (plain HTTP)
+tls_cert        = ""               # path to a certificate file, when tls = "cert"
+tls_key         = ""               # path to the certificate's private key, when tls = "cert"
+frame_ancestors = []               # sites allowed to embed the web terminal, e.g. ["https://organizr.example.com"]
 
 [server.auth]
 mode          = "none"             # "none", "password", or "pubkey"
