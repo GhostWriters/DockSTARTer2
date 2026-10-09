@@ -284,7 +284,8 @@ func HandleConfigWebAncestors(ctx context.Context, group *CommandGroup) error {
 	}
 
 	sites := []string{}
-	if !(len(group.Args) == 1 && strings.EqualFold(group.Args[0], "none")) {
+	clear := len(group.Args) == 1 && strings.EqualFold(group.Args[0], "none")
+	if !clear {
 		for _, site := range group.Args {
 			if err := validFrameAncestor(site); err != nil {
 				logger.Error(ctx, "%v", err)
