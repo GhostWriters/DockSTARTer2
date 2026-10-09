@@ -267,3 +267,51 @@ func HandleConfigPanel(ctx context.Context, group *CommandGroup) error {
 	logger.Notice(ctx, "Panel mode for %s set to: {{|Var|}}%s{{[-]}}", config.ConnTypeLabels(connTypes), mode)
 	return nil
 }
+
+// HandleConfigWebAncestors implements --config-web-ancestors (alias
+// --config-web-frame-ancestors): with no args it shows the sites allowed to
+// embed the web server, "none" clears them, and otherwise the args replace
+// them, one CSP frame-ancestors source each.
+func HandleConfigWebAncestors(ctx context.Context, group *CommandGroup) error {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		if len(conf.Server.Web.FrameAncestors) == 0 {
+			logger.Notice(ctx, "Web frame ancestors: {{|Var|}}none{{[-]}} (only the web server's own site may embed it)")
+			return nil
+		}
+		logger.Notice(ctx, "Web frame ancestors: {{|Var|}}%s{{[-]}}", strings.Join(conf.Server.Web.FrameAncestors, " "))
+		return nil
+	}
+
+	sites := []string{}
+	if !(len(group.Args) == 1 && strings.EqualFold(group.Args[0], "none")) {
+		for _, site := range group.Args {
+			if err := validFrameAncestor(site); err != nil {
+				logger.Error(ctx, "%v", err)
+				return err
+			}
+			sites = append(sites, site)
+		}
+	}
+	conf.Server.Web.FrameAncestors = sites
+	if err := config.SaveAppConfig(conf); err != nil {
+		return err
+	}
+
+	shown := "none"
+	if len(sites) > 0 {
+		shown = strings.Join(sites, " ")
+	}
+	logger.Notice(ctx, "Web frame ancestors set to: {{|Var|}}%s{{[-]}}", shown)
+	logger.Notice(ctx, "Run '{{|UserCommand|}}%s --server restart{{[-]}}' to apply it to a running web server.", version.CommandName)
+	return nil
+}
+
+// validFrameAncestor rejects an entry sip would refuse at startup: empty,
+// or more than one CSP source.
+func validFrameAncestor(site string) error {
+	if strings.TrimSpace(site) == "" || strings.ContainsAny(site, " \t;,\r\n") {
+		return fmt.Errorf("'%s' is not one site; give one per argument, such as https://organizr.example.com", site)
+	}
+	return nil
+}

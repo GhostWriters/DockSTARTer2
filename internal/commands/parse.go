@@ -225,7 +225,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 			consumesUntilDash = true
 
 		case "--env-set", "--env-set-lower", "--env-set-literal", "--env-set-lower-literal",
-			"-r", "--remove":
+			"-r", "--remove",
+			"--config-web-ancestors", "--config-web-frame-ancestors":
 			consumesUntilDash = true
 
 		case "--start", "--stop", "--restart":

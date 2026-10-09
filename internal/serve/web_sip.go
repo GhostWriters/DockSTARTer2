@@ -50,6 +50,7 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 	sipCfg.Host = "0.0.0.0"
 	sipCfg.Port = strconv.Itoa(cfg.Web.Port)
 	sipCfg.Appearance.Title = webPageTitle()
+	sipCfg.FrameAncestors = cfg.Web.FrameAncestors
 
 	switch cfg.Web.TLS {
 	case "cert":

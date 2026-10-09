@@ -99,6 +99,9 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.Bool("config-show", false, "Show configuration")
 	fs.String("config-folder", "", "Set config folder path")
 	fs.String("config-compose-folder", "", "Set compose folder path")
+	fs.String("config-panel", "", "Set panel mode")
+	fs.String("config-web-ancestors", "", "Set sites allowed to embed the web server")
+	fs.String("config-web-frame-ancestors", "", "Set sites allowed to embed the web server (alias)")
 	fs.Bool("show-config", false, "Show configuration (alias)")
 
 	// Theme
