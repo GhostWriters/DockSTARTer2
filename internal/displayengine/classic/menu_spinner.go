@@ -73,17 +73,43 @@ func (m *MenuModel) SetLoadingText(text string) tea.Cmd {
 	return nil
 }
 
-// AdvanceSpinners advances the button spinner and the list-item/loading
-// spinner by one frame each, if their intervals have elapsed. Returns true
-// if anything changed. Called by the global tick.
+// AdvanceSpinners advances the button spinner, the list-item/loading
+// spinner, and those of every menu in its content sections, by one frame
+// each if their intervals have elapsed. Returns true if anything changed.
+// Called by the global tick.
 func (m *MenuModel) AdvanceSpinners(now time.Time) bool {
-	btnChanged := m.btnRow.AdvanceSpinner(now)
-	if btnChanged {
-		m.InvalidateCache()
-	}
+	changed := m.btnRow.AdvanceSpinner(now)
 	if m.titleSpinner.AdvanceSpinner(now) {
-		m.InvalidateCache()
-		return true
+		changed = true
 	}
-	return btnChanged
+	for _, sec := range m.contentSections {
+		if advanceContentSpinners(sec, now) {
+			changed = true
+		}
+	}
+	if changed {
+		m.InvalidateCache()
+	}
+	return changed
+}
+
+// advanceContentSpinners advances c's spinners, looking through wrappers
+// and containers for the menus inside. A spinner advances at most once per
+// interval, so one reached twice in a tick still moves one frame.
+func advanceContentSpinners(c Content, now time.Time) bool {
+	switch v := c.(type) {
+	case interface{ AdvanceSpinners(time.Time) bool }:
+		return v.AdvanceSpinners(now)
+	case ContentWrapper:
+		return advanceContentSpinners(v.Unwrap(), now)
+	case interface{ Items() []Content }:
+		changed := false
+		for _, item := range v.Items() {
+			if advanceContentSpinners(item, now) {
+				changed = true
+			}
+		}
+		return changed
+	}
+	return false
 }
