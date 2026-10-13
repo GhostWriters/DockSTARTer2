@@ -441,32 +441,30 @@ func (m *AppModel) hasInnerTabs() bool {
 	return ok && t.HasInnerTabs()
 }
 
-// isTextInputActive reports whether a focused text cursor is currently
-// showing anywhere -- the dialog, the active screen (e.g. the env editor),
-// or the console panel's own input, checked in the same priority order
-// View() uses to place the hardware cursor (see model_view.go). Reuses
-// InputCursorProvider rather than a separate "is this a text widget"
-// check, since GetInputCursor's show return value already means exactly
-// that: a text field is focused and accepting keystrokes right now.
+// isTextInputActive reports whether a text field has focus anywhere -- the
+// dialog, the active screen (e.g. the env editor), or the console panel's
+// own input, checked in the same priority order View() uses to place the
+// hardware cursor (see model_view.go).
 func (m *AppModel) isTextInputActive() bool {
-	if m.dialog != nil {
-		if cp, ok := m.dialog.(InputCursorProvider); ok {
-			if _, _, _, show := cp.GetInputCursor(); show {
-				return true
-			}
-		}
+	if m.dialog != nil && textInputFocused(m.dialog) {
+		return true
 	}
-	if m.activeScreen != nil {
-		if cp, ok := m.activeScreen.(InputCursorProvider); ok {
-			if _, _, _, show := cp.GetInputCursor(); show {
-				return true
-			}
-		}
+	if m.activeScreen != nil && textInputFocused(m.activeScreen) {
+		return true
 	}
-	if cp, ok := interface{}(m.panel).(InputCursorProvider); ok {
-		if _, _, _, show := cp.GetInputCursor(); show {
-			return true
-		}
+	return textInputFocused(m.panel)
+}
+
+// textInputFocused reports whether model has a focused text field: its
+// TextInputFocuser answer when it draws its own cursor, otherwise whether it
+// shows a hardware cursor.
+func textInputFocused(model any) bool {
+	if f, ok := model.(TextInputFocuser); ok {
+		return f.TextInputFocused()
+	}
+	if cp, ok := model.(InputCursorProvider); ok {
+		_, _, _, show := cp.GetInputCursor()
+		return show
 	}
 	return false
 }

@@ -33,3 +33,32 @@ func TestKeyAliasesMatchTheirShortcuts(t *testing.T) {
 		t.Errorf("a typed '.' is %q, not \".\"", typed.String())
 	}
 }
+
+// drawnCursorInput is a focused text field that draws its own cursor.
+type drawnCursorInput struct{}
+
+func (drawnCursorInput) TextInputFocused() bool { return true }
+func (drawnCursorInput) GetInputCursor() (int, int, tea.CursorShape, bool) {
+	return 0, 0, tea.CursorBar, false
+}
+
+// hardwareCursorInput is a focused text field that shows the hardware cursor.
+type hardwareCursorInput struct{}
+
+func (hardwareCursorInput) GetInputCursor() (int, int, tea.CursorShape, bool) {
+	return 0, 0, tea.CursorBar, true
+}
+
+// TestTextInputFocused checks a field drawing its own cursor still counts as
+// focused, so plain alias keys type into it.
+func TestTextInputFocused(t *testing.T) {
+	if !textInputFocused(drawnCursorInput{}) {
+		t.Error("a field drawing its own cursor isn't focused")
+	}
+	if !textInputFocused(hardwareCursorInput{}) {
+		t.Error("a field showing the hardware cursor isn't focused")
+	}
+	if textInputFocused(struct{}{}) {
+		t.Error("a model with no text field is focused")
+	}
+}
