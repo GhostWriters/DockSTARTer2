@@ -1095,17 +1095,24 @@ func (m *TabbedVarsEditorModel) HasDialog() bool {
 	return false
 }
 
-// GetInputCursor implements tui.InputCursorProvider.
-// It returns the hardware cursor position relative to the screen's top-left corner,
-// allowing AppModel.View() to position the terminal cursor over the active editor.
-func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+// TextInputFocused implements tui.TextInputFocuser: the editor draws its own
+// cursor, so GetInputCursor shows none.
+func (m *TabbedVarsEditorModel) TextInputFocused() bool {
 	if m.focus != envFocusEditor || m.editorIdle || len(m.tabs) == 0 {
-		return 0, 0, tea.CursorBar, false
+		return false
 	}
 	// A Ctrl+Left/Right-selected-but-still-closed tab (tiled mode only --
 	// Maximized always shows whichever tab is active) has no rendered pane
-	// to point a cursor at until Space opens it.
-	if m.splitMode && !m.tabs[m.activeTab].open {
+	// to edit until Space opens it.
+	return !m.splitMode || m.tabs[m.activeTab].open
+}
+
+// GetInputCursor implements tui.InputCursorProvider: the hardware cursor
+// position relative to the screen's top-left corner, for AppModel.View().
+// It shows none while the editor draws its own cursor (SetVirtualCursor in
+// NewTabbedVarsEditorScreen).
+func (m *TabbedVarsEditorModel) GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool) {
+	if !m.TextInputFocused() {
 		return 0, 0, tea.CursorBar, false
 	}
 	editor := m.tabs[m.activeTab].editor

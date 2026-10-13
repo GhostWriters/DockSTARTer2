@@ -48,6 +48,12 @@ type InputCursorProvider interface {
 	GetInputCursor() (relX, relY int, shape tea.CursorShape, ok bool)
 }
 
+// TextInputFocuser reports whether a text field has focus, for a model that
+// draws its own cursor and so never shows one through InputCursorProvider.
+type TextInputFocuser interface {
+	TextInputFocused() bool
+}
+
 // View implements tea.Model. Checks IsTUIDying (which can block this
 // goroutine forever, see below) before wrapping the actual render in
 // ActivateSessionRenderContext -- must never take that lock and then block
