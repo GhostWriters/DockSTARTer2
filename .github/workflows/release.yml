@@ -176,7 +176,7 @@ jobs:
             PATTERN="^v2\.${TODAY_INT}\.[0-9]+${SUFFIX}\$"
           fi
           LAST_N=$( (git tag -l "v2.$TODAY_INT.*" | grep -E "$PATTERN" || true) | sed -E "s/^v2\.$TODAY_INT\.([0-9]+).*/\1/" | sort -n | tail -n 1)
-          NEW_N=$(( ${LAST_N:-0} + 1 ))
+          NEW_N=$(( ${LAST_N:--1} + 1 ))
           NEW_TAG="v2.$TODAY_INT.$NEW_N$SUFFIX"
 
           echo "New tag: $NEW_TAG"
