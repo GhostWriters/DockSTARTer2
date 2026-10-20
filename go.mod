@@ -21,7 +21,7 @@ require (
 	github.com/charmbracelet/x/input v0.3.7
 	github.com/compose-spec/compose-go/v2 v2.16.1
 	github.com/containerd/errdefs v1.0.0
-	github.com/creativeprojects/go-selfupdate v1.6.0
+	github.com/creativeprojects/go-selfupdate v1.7.0
 	github.com/docker/cli v29.9.1+incompatible
 	github.com/docker/compose/v5 v5.6.0
 	github.com/docker/docker v28.5.2+incompatible
@@ -174,7 +174,7 @@ require (
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
 	github.com/tonistiigi/vt100 v0.0.0-20240514184818-90bafcd6abab // indirect
-	github.com/ulikunitz/xz v0.5.16 // indirect
+	github.com/ulikunitz/xz v0.5.17 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xhit/go-str2duration/v2 v2.2.0 // indirect
 	github.com/xo/terminfo v1.2.0 // indirect
@@ -208,7 +208,6 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	tags.cncf.io/container-device-interface v1.1.1 // indirect
 )
