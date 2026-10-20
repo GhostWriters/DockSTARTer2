@@ -382,6 +382,7 @@ tls             = "self-signed"    # "self-signed", "cert", or "none" (plain HTT
 tls_cert        = ""               # path to a certificate file, when tls = "cert"
 tls_key         = ""               # path to the certificate's private key, when tls = "cert"
 frame_ancestors = []               # sites allowed to embed the web terminal, e.g. ["https://organizr.example.com"]
+allowed_hosts   = ["*"]            # host names the web terminal answers to with tls = "none" and no password; "*" is any, e.g. ["ds2.example.com"]
 
 [server.auth]
 mode          = "none"             # "none", "password", or "pubkey"

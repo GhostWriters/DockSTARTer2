@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
@@ -306,4 +307,48 @@ func HandleConfigWebAncestors(ctx context.Context, group *CommandGroup) error {
 	logger.Notice(ctx, "Web frame ancestors set to: {{|Var|}}%s{{[-]}}", shown)
 	logger.Notice(ctx, "Run '{{|UserCommand|}}%s --server restart{{[-]}}' to apply it to a running web server.", version.CommandName)
 	return nil
+}
+
+// HandleConfigWebHosts implements --config-web-hosts (alias
+// --config-web-allowed-hosts): with no args it shows the host names the web
+// server answers to with plain HTTP and no password, "none" clears them (IP
+// addresses and the hostname only), and otherwise the args replace them, one
+// host name each ("*" is any name).
+func HandleConfigWebHosts(ctx context.Context, group *CommandGroup) error {
+	conf := config.LoadAppConfig()
+	if len(group.Args) == 0 {
+		logger.Notice(ctx, "Web allowed hosts: {{|Var|}}%s{{[-]}}", describeWebHosts(conf.Server.Web.AllowedHosts))
+		return nil
+	}
+
+	hosts := []string{}
+	clear := len(group.Args) == 1 && strings.EqualFold(group.Args[0], "none")
+	if !clear {
+		for _, host := range group.Args {
+			if err := config.ValidAllowedHost(host); err != nil {
+				logger.Error(ctx, "%v", err)
+				return err
+			}
+			hosts = append(hosts, host)
+		}
+	}
+	conf.Server.Web.AllowedHosts = hosts
+	if err := config.SaveAppConfig(conf); err != nil {
+		return err
+	}
+
+	logger.Notice(ctx, "Web allowed hosts set to: {{|Var|}}%s{{[-]}}", describeWebHosts(hosts))
+	logger.Notice(ctx, "Run '{{|UserCommand|}}%s --server restart{{[-]}}' to apply it to a running web server.", version.CommandName)
+	return nil
+}
+
+// describeWebHosts shows server.web.allowed_hosts for --config-web-hosts.
+func describeWebHosts(hosts []string) string {
+	switch {
+	case slices.Contains(hosts, "*"):
+		return "* (any host name)"
+	case len(hosts) == 0:
+		return "none (IP addresses and this machine's hostname only)"
+	}
+	return strings.Join(hosts, " ")
 }

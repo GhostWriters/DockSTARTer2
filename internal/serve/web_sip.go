@@ -3,9 +3,13 @@ package serve
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -56,6 +60,14 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 		}
 	}
 	sipCfg.FrameAncestors = cfg.Web.FrameAncestors
+	for _, host := range cfg.Web.AllowedHosts {
+		if err := config.ValidAllowedHost(host); err != nil {
+			return fmt.Errorf("server.web.allowed_hosts in dockstarter2.toml: %w", err)
+		}
+	}
+	// DS2 checks the Host header itself (webHostCheckMiddleware), so a
+	// refusal reaches DS2's log; sip's own check logs only to stderr.
+	sipCfg.AllowedHosts = []string{"*"}
 
 	switch cfg.Web.TLS {
 	case "cert":
@@ -79,6 +91,9 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 		return fmt.Errorf("unknown server.web.tls %q (valid: self-signed, cert, none)", cfg.Web.TLS)
 	}
 
+	if hosts, ok := webAllowedHosts(cfg); ok {
+		sipCfg.ConnectMiddleware = append(sipCfg.ConnectMiddleware, webHostCheckMiddleware(ctx, hosts, cfg.Web.AllowedHosts))
+	}
 	sipCfg.ConnectMiddleware = append(sipCfg.ConnectMiddleware, captureUserAgentMiddleware)
 	if cfg.Auth.Mode == "password" {
 		if cfg.Auth.Password == "" {
@@ -90,6 +105,73 @@ func StartSipWebServer(ctx context.Context, cfg config.ServerConfig, startMenu s
 	srv := sip.NewServer(sipCfg)
 	logger.Notice(ctx, "Web server started on port %d", cfg.Web.Port)
 	return srv.ServeWithProgram(ctx, newSipProgramHandler(ctx, startMenu))
+}
+
+// webAllowedHosts returns the host names a session's Host header may carry,
+// and false when no Host check applies. The check guards against DNS
+// rebinding, so it applies only with no TLS and no password: with TLS the
+// browser rejects the certificate, which doesn't cover a rebinding page's
+// name, and such a page can't supply the password. "*" in
+// server.web.allowed_hosts turns it off. Otherwise it is
+// server.web.allowed_hosts plus the machine's hostname.
+func webAllowedHosts(cfg config.ServerConfig) ([]string, bool) {
+	if cfg.Web.TLS != "none" || cfg.Auth.Mode == "password" || slices.Contains(cfg.Web.AllowedHosts, "*") {
+		return nil, false
+	}
+	hosts := append([]string{}, cfg.Web.AllowedHosts...)
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		hosts = append(hosts, hostname)
+	}
+	return hosts, true
+}
+
+// webHostCheckMiddleware refuses a session whose Host header isn't an IP
+// address, localhost, a name under .localhost, or one of hosts. A
+// rebinding page always sends its own DNS name, so IP addresses are safe.
+// Each refusal is logged with the command that allows the name alongside
+// the configured ones, since the browser can't show why the terminal didn't
+// connect.
+func webHostCheckMiddleware(ctx context.Context, hosts, configured []string) sip.ConnectMiddleware {
+	return func(next sip.ConnectHandler) sip.ConnectHandler {
+		return func(r *http.Request) error {
+			host := normalizeHost(r.Host)
+			if !webHostAllowed(host, hosts) {
+				allow := strings.Join(append(slices.Clone(configured), host), " ")
+				logger.Warn(ctx, "Refused a web session for host name '{{|Var|}}%s{{[-]}}' from %s. Allow it with '{{|UserCommand|}}%s --config-web-hosts %s{{[-]}}'.",
+					host, r.RemoteAddr, version.CommandName, allow)
+				return &sip.ConnectError{
+					Status: http.StatusForbidden,
+					Body:   "This server does not answer to this host name.",
+				}
+			}
+			return next(r)
+		}
+	}
+}
+
+// webHostAllowed reports whether a normalized host name may reach the web
+// server: an IP address, localhost or a name under .localhost (browsers
+// resolve those to loopback themselves), or one of hosts.
+func webHostAllowed(host string, hosts []string) bool {
+	if host == "" {
+		return false
+	}
+	if _, err := netip.ParseAddr(host); err == nil {
+		return true
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	return slices.ContainsFunc(hosts, func(h string) bool { return normalizeHost(h) == host })
+}
+
+// normalizeHost drops the port, IPv6 brackets and a trailing dot from a host
+// name, and lowers its case.
+func normalizeHost(h string) string {
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		h = host
+	}
+	return strings.ToLower(strings.TrimSuffix(strings.Trim(h, "[]"), "."))
 }
 
 // webPageTitle is the browser tab title: the OS hostname distinguishes

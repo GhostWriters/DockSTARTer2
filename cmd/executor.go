@@ -70,7 +70,8 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		switch g.Command {
 		case "-h", "--help", "-V", "--version", "--sysinfo", "--config-show", "--show-config",
 			"--config-folder", "--config-compose-folder", "--config-panel",
-			"--config-web-ancestors", "--config-web-frame-ancestors", "-T", "--theme", "--theme-list",
+			"--config-web-ancestors", "--config-web-frame-ancestors",
+			"--config-web-hosts", "--config-web-allowed-hosts", "-T", "--theme", "--theme-list",
 			"--theme-lines", "--theme-no-lines", "--theme-line", "--theme-no-line",
 			"--theme-borders", "--theme-no-borders", "--theme-border", "--theme-no-border",
 			"--theme-large-buttons", "--theme-no-large-buttons",
@@ -409,6 +410,9 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--config-web-ancestors", "--config-web-frame-ancestors":
 				ranCommand = true
 				return commands.HandleConfigWebAncestors(subCtx, &group)
+			case "--config-web-hosts", "--config-web-allowed-hosts":
+				ranCommand = true
+				return commands.HandleConfigWebHosts(subCtx, &group)
 			case "--disconnect":
 				ranCommand = true
 				target := ""

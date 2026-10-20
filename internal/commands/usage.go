@@ -256,7 +256,7 @@ func GetUsage(target string, noHeading bool) string {
 	}
 
 	if match("--config-show", "--show-config", "--config-folder", "--config-compose-folder", "--config-panel",
-		"--config-web-ancestors", "--config-web-frame-ancestors") {
+		"--config-web-ancestors", "--config-web-frame-ancestors", "--config-web-hosts", "--config-web-allowed-hosts") {
 		printStr(
 			"{{|UsageCommand|}}--config-show{{[-]}}",
 			"{{|UsageCommand|}}--show-config{{[-]}}",
@@ -272,6 +272,12 @@ func GetUsage(target string, noHeading bool) string {
 			"	Sets the sites allowed to embed the web server in a frame (CSP frame-ancestors),",
 			"	such as a dashboard at {{|UsageVar|}}https://organizr.example.com{{[-]}}. {{|UsageOption|}}none{{[-]}} clears them;",
 			"	no argument shows them. Takes effect when the server restarts.",
+			"{{|UsageCommand|}}--config-web-hosts{{[-]}} [{{|UsageVar|}}<host>{{[-]}} ...|{{|UsageOption|}}none{{[-]}}]",
+			"{{|UsageCommand|}}--config-web-allowed-hosts{{[-]}} [{{|UsageVar|}}<host>{{[-]}} ...|{{|UsageOption|}}none{{[-]}}]",
+			"	Sets the host names browsers may use to reach the web server with plain HTTP and no",
+			"	password, such as a reverse proxy's {{|UsageVar|}}ds2.example.com{{[-]}}. Other names are refused, except IP",
+			"	addresses and this machine's hostname. {{|UsageVar|}}*{{[-]}} (the default) allows any name; {{|UsageOption|}}none{{[-]}} allows",
+			"	only those; no argument shows them. Takes effect when the server restarts.",
 		)
 	}
 	if match("--disconnect", "--server") {
