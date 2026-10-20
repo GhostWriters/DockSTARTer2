@@ -835,15 +835,22 @@ func LoadAppConfig() AppConfig {
 
 		var baseline AppConfig
 		_ = toml.Unmarshal(defaultConfigBytes(), &baseline)
-		if reflect.DeepEqual(migrated, baseline) {
-			// Unchanged from pristine defaults -- keep the file's comments.
-			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
-		} else if merged, err := toml.Marshal(migrated); err == nil {
-			_ = os.WriteFile(cfgPath, merged, 0600)
-			logNotice(context.Background(), "Writing migrated configuration to '"+console.FormatFilePath(cfgPath)+"'.")
-		} else {
-			_ = os.WriteFile(cfgPath, defaultConfigBytes(), 0600)
-			logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+		// Unchanged from pristine defaults -- keep the file's comments.
+		initial := defaultConfigBytes()
+		if !reflect.DeepEqual(migrated, baseline) {
+			if merged, err := toml.Marshal(migrated); err == nil {
+				initial = merged
+				logNotice(context.Background(), "Writing migrated configuration to '"+console.FormatFilePath(cfgPath)+"'.")
+			} else {
+				logNotice(context.Background(), "Copying '"+console.FormatFileName("embedded defaults", "")+"' to '"+console.FormatFilePath(cfgPath)+"'.")
+			}
+		}
+		if err := writeFileAtomic(cfgPath, initial); err != nil {
+			// Loading again would find no file and try again, without end.
+			logger.Warn(context.Background(), "Could not write '"+console.FormatFilePath(cfgPath)+"': %v. Using this configuration without saving it.", err)
+			_, _ = UnmarshalRobust(initial, &conf)
+			finishLoadedConfig(&conf)
+			return conf
 		}
 
 		conf = LoadAppConfig()
@@ -877,12 +884,7 @@ func LoadAppConfig() AppConfig {
 					_ = SaveAppConfig(conf)
 				}
 			}
-			sanitizeConfig(context.Background(), &conf)
-			conf.RawPaths = conf.Paths
-			conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
-			conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
-			conf.ConfigDir = conf.Paths.ConfigFolder
-			conf.ComposeDir = conf.Paths.ComposeFolder
+			finishLoadedConfig(&conf)
 			return conf
 		}
 	}
@@ -890,15 +892,21 @@ func LoadAppConfig() AppConfig {
 	// Existing config file could not be parsed even robustly (corrupt file).
 	// Fall back to the embedded defaults, preserving comments, without going
 	// through the migration/theme-overlay flow (there's nothing to migrate).
-	_ = os.WriteFile(path, defaultConfigBytes(), 0600)
+	_ = writeFileAtomic(path, defaultConfigBytes())
 	logNotice(context.Background(), "Config file at '"+console.FormatFilePath(path)+"' could not be parsed; reset to embedded defaults.")
-	sanitizeConfig(context.Background(), &conf)
+	finishLoadedConfig(&conf)
+	return conf
+}
+
+// finishLoadedConfig sanitizes a just-loaded config and expands its paths,
+// keeping the unexpanded ones in RawPaths for SaveAppConfig.
+func finishLoadedConfig(conf *AppConfig) {
+	sanitizeConfig(context.Background(), conf)
 	conf.RawPaths = conf.Paths
 	conf.Paths.ConfigFolder = filepath.Clean(ExpandVariables(conf.Paths.ConfigFolder))
 	conf.Paths.ComposeFolder = filepath.Clean(ExpandVariables(conf.Paths.ComposeFolder))
 	conf.ConfigDir = conf.Paths.ConfigFolder
 	conf.ComposeDir = conf.Paths.ComposeFolder
-	return conf
 }
 
 // TryLoadAppConfig loads and validates the config file strictly, returning an
@@ -928,10 +936,10 @@ func TryLoadAppConfig() (AppConfig, error) {
 	return conf, nil
 }
 
-// SaveAppConfig writes the configuration to dockstarter2.toml.
-// SaveAppConfig writes the configuration to the application configuration file.
-// Paths are stored in their unexpanded form (e.g. ${XDG_CONFIG_HOME}) so that
-// the file remains portable and variables are resolved fresh on each read.
+// SaveAppConfig writes the configuration to dockstarter2.toml, atomically
+// (see writeFileAtomic). Paths are stored in their unexpanded form (e.g.
+// ${XDG_CONFIG_HOME}) so that the file remains portable and variables are
+// resolved fresh on each read.
 func SaveAppConfig(conf AppConfig) error {
 	path := paths.GetConfigFilePath()
 
@@ -977,7 +985,7 @@ func SaveAppConfig(conf AppConfig) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return writeFileAtomic(path, data)
 }
 
 // updateAppConfigMu serializes UpdateAppConfig's load-mutate-save sequence
