@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,6 +81,51 @@ func TestWriteFileAtomicKeepsSymlink(t *testing.T) {
 		t.Errorf("target: got %q, want new", got)
 	}
 	noTempFiles(t, dir, "real.toml", "dockstarter2.toml")
+}
+
+// TestWriteFileAtomicDanglingSymlink checks a link to a file that doesn't
+// exist yet creates that file and stays a link.
+func TestWriteFileAtomicDanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "real"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "dockstarter2.toml")
+	if err := os.Symlink(filepath.Join("real", "dockstarter2.toml"), link); err != nil {
+		t.Skipf("can't create a symlink here: %v", err)
+	}
+
+	if err := writeFileAtomic(link, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the link was replaced by a file")
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "real", "dockstarter2.toml")); string(got) != "new" {
+		t.Errorf("target: got %q, want new", got)
+	}
+	noTempFiles(t, filepath.Join(dir, "real"), "dockstarter2.toml")
+}
+
+// TestWriteFileAtomicReadOnly checks a read-only file is refused and kept.
+func TestWriteFileAtomicReadOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dockstarter2.toml")
+	if err := os.WriteFile(path, []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0600) })
+
+	if err := writeFileAtomic(path, []byte("new")); !errors.Is(err, os.ErrPermission) {
+		t.Errorf("got %v, want a permission error", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "old" {
+		t.Errorf("got %q, want old kept", got)
+	}
+	noTempFiles(t, dir, "dockstarter2.toml")
 }
 
 // TestWriteFileAtomicConcurrent checks writers saving at once each leave the

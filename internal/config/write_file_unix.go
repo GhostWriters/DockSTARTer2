@@ -7,12 +7,12 @@ import (
 	"syscall"
 )
 
-// matchOwner gives path the owner and group of existing, so a save made with
+// matchOwner gives f the owner and group of existing, so a save made with
 // sudo leaves a user's config owned by that user. Failure is ignored: without
 // root, a save of a file someone else owns leaves the new file the caller's.
-func matchOwner(path string, existing os.FileInfo) {
+func matchOwner(f *os.File, existing os.FileInfo) {
 	if st, ok := existing.Sys().(*syscall.Stat_t); ok {
-		_ = os.Lchown(path, int(st.Uid), int(st.Gid))
+		_ = f.Chown(int(st.Uid), int(st.Gid))
 	}
 }
 
