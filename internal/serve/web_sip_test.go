@@ -4,6 +4,7 @@ import (
 	"os"
 	"slices"
 	"testing"
+	"time"
 
 	"DockSTARTer2/internal/config"
 )
@@ -20,11 +21,12 @@ func TestWebAllowedHosts(t *testing.T) {
 	if !ok {
 		t.Fatal("plain HTTP, no password: no check")
 	}
-	if !slices.Contains(hosts, "ds2.example.com") {
-		t.Errorf("%v is missing ds2.example.com", hosts)
+	want := []string{"ds2.example.com"}
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		want = append(want, hostname)
 	}
-	if hostname, err := os.Hostname(); err == nil && !slices.Contains(hosts, hostname) {
-		t.Errorf("%v is missing the hostname %q", hosts, hostname)
+	if !slices.Equal(hosts, want) {
+		t.Errorf("got %v, want %v", hosts, want)
 	}
 
 	for name, change := range map[string]func(*config.ServerConfig){
@@ -56,14 +58,40 @@ func TestWebHostAllowed(t *testing.T) {
 }
 
 func TestValidAllowedHost(t *testing.T) {
-	for _, host := range []string{"ds2.example.com", "dstest", "*", "192.168.1.5"} {
+	for _, host := range []string{"ds2.example.com", "dstest", "*", "192.168.1.5", "my_host.lan", "dstest.lan."} {
 		if err := config.ValidAllowedHost(host); err != nil {
 			t.Errorf("%q: %v", host, err)
 		}
 	}
-	for _, host := range []string{"", " ", "a.com b.com", "a.com,b.com", "https://ds2.example.com"} {
+	for _, host := range []string{"", " ", "a.com b.com", "a.com,b.com", "https://ds2.example.com",
+		"https:foo", "user@host", "host?x", "host:40080", "-host", "host-", "a..b", ".host", "*.example.com"} {
 		if config.ValidAllowedHost(host) == nil {
 			t.Errorf("%q was accepted", host)
+		}
+	}
+}
+
+// TestLogLimiter checks the first event logs at once, later ones at most
+// once per interval, with the count of those skipped in between.
+func TestLogLimiter(t *testing.T) {
+	var l logLimiter
+	start := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	steps := []struct {
+		at      time.Duration
+		logIt   bool
+		skipped int
+	}{
+		{0, true, 0},
+		{10 * time.Second, false, 0},
+		{20 * time.Second, false, 0},
+		{time.Minute, true, 2},
+		{time.Minute + time.Second, false, 0},
+		{3 * time.Minute, true, 1},
+	}
+	for _, s := range steps {
+		logIt, skipped := l.allow(start.Add(s.at), time.Minute)
+		if logIt != s.logIt || skipped != s.skipped {
+			t.Errorf("at %v: got (%v, %d), want (%v, %d)", s.at, logIt, skipped, s.logIt, s.skipped)
 		}
 	}
 }

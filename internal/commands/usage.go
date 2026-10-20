@@ -276,8 +276,9 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}--config-web-allowed-hosts{{[-]}} [{{|UsageVar|}}<host>{{[-]}} ...|{{|UsageOption|}}none{{[-]}}]",
 			"	Sets the host names browsers may use to reach the web server with plain HTTP and no",
 			"	password, such as a reverse proxy's {{|UsageVar|}}ds2.example.com{{[-]}}. Other names are refused, except IP",
-			"	addresses and this machine's hostname. {{|UsageVar|}}*{{[-]}} (the default) allows any name; {{|UsageOption|}}none{{[-]}} allows",
-			"	only those; no argument shows them. Takes effect when the server restarts.",
+			"	addresses, {{|UsageVar|}}localhost{{[-]}}, names under {{|UsageVar|}}.localhost{{[-]}} and this machine's hostname. {{|UsageVar|}}*{{[-]}} (the",
+			"	default) allows any name; {{|UsageOption|}}none{{[-]}} allows only those; no argument shows them. Takes effect",
+			"	when the server restarts.",
 		)
 	}
 	if match("--disconnect", "--server") {

@@ -312,8 +312,8 @@ func HandleConfigWebAncestors(ctx context.Context, group *CommandGroup) error {
 // HandleConfigWebHosts implements --config-web-hosts (alias
 // --config-web-allowed-hosts): with no args it shows the host names the web
 // server answers to with plain HTTP and no password, "none" clears them (IP
-// addresses and the hostname only), and otherwise the args replace them, one
-// host name each ("*" is any name).
+// addresses, localhost and the hostname only), and otherwise the args replace
+// them, one host name each ("*" is any name).
 func HandleConfigWebHosts(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	if len(group.Args) == 0 {
@@ -348,7 +348,7 @@ func describeWebHosts(hosts []string) string {
 	case slices.Contains(hosts, "*"):
 		return "* (any host name)"
 	case len(hosts) == 0:
-		return "none (IP addresses and this machine's hostname only)"
+		return "none (IP addresses, localhost and this machine's hostname only)"
 	}
 	return strings.Join(hosts, " ")
 }
