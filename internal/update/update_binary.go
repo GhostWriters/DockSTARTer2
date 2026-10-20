@@ -340,11 +340,15 @@ func ReExec(ctx context.Context, exePath string, args []string) error {
 // checking for space to stage it.
 const updateSpaceMargin = 16 << 20
 
+// archiveBinaryName is the binary's name inside a release archive
+// (.goreleaser.yaml's builds.binary), whatever the running one is called.
+const archiveBinaryName = "ds2"
+
 // installUpdate downloads the binary from the given URL and replaces the
-// running one with it. The new binary is written in full beside the old one,
-// on the same filesystem, then renamed over it in one step, so an update
-// that fails partway -- no space left, a dropped download -- leaves the
-// working binary as it was.
+// running one with it, whatever its name. The new binary is written in full
+// beside the old one, on the same filesystem, then renamed over it in one
+// step, so an update that fails partway -- no space left, a dropped download
+// -- leaves the working binary as it was.
 func installUpdate(ctx context.Context, assetURL string) error {
 	exe, err := os.Executable()
 	if err != nil {
@@ -376,7 +380,7 @@ func installUpdate(ctx context.Context, assetURL string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read tar header: %w", err)
 		}
-		if filepath.Base(header.Name) == exeName {
+		if filepath.Base(header.Name) == archiveBinaryName {
 			size = header.Size
 			break
 		}
