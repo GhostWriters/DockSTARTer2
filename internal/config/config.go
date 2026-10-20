@@ -150,16 +150,22 @@ type WebConfig struct {
 	// browsers may use to reach the web server (e.g. a reverse proxy's
 	// "ds2.example.com"). With tls = "none" and no password, a session whose
 	// Host header names anything else is refused, guarding against DNS
-	// rebinding; IP addresses always pass. "*" (the default) allows any name.
+	// rebinding; IP addresses, localhost and names under .localhost always
+	// pass. "*" (the default) allows any name.
 	AllowedHosts []string `toml:"allowed_hosts"`
 }
 
+// allowedHostPattern is one host name as a browser's Host header carries
+// it: dot-separated labels of letters, digits, '-' and '_', each starting
+// and ending with a letter, digit or '_', and an optional trailing dot.
+var allowedHostPattern = regexp.MustCompile(`^[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.?$`)
+
 // ValidAllowedHost rejects an AllowedHosts entry that can't match a
-// browser's Host header: empty, more than one name, or a URL rather than a
-// host name.
+// browser's Host header: anything but "*" or one host name, such as a URL,
+// a port, or several names. IP addresses need no entry; they always pass.
 func ValidAllowedHost(host string) error {
-	if strings.TrimSpace(host) == "" || strings.ContainsAny(host, " \t;,/\r\n") {
-		return fmt.Errorf("'%s' is not one host name; give one per entry, such as ds2.example.com", host)
+	if host != "*" && !allowedHostPattern.MatchString(host) {
+		return fmt.Errorf("'%s' is not one host name; give one per entry, such as ds2.example.com, without a scheme or port", host)
 	}
 	return nil
 }

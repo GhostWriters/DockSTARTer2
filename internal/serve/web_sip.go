@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"DockSTARTer2/internal/config"
@@ -125,20 +126,32 @@ func webAllowedHosts(cfg config.ServerConfig) ([]string, bool) {
 	return hosts, true
 }
 
+// webHostRefusalLogInterval is the least time between logged Host refusals,
+// so a client sending refused names can't grow the log without bound.
+const webHostRefusalLogInterval = time.Minute
+
 // webHostCheckMiddleware refuses a session whose Host header isn't an IP
 // address, localhost, a name under .localhost, or one of hosts. A
 // rebinding page always sends its own DNS name, so IP addresses are safe.
-// Each refusal is logged with the command that allows the name alongside
-// the configured ones, since the browser can't show why the terminal didn't
-// connect.
+// Refusals are logged with the command that allows the name alongside the
+// configured ones, since the browser can't show why the terminal didn't
+// connect: the first at once, then at most one per
+// webHostRefusalLogInterval, counting those in between.
 func webHostCheckMiddleware(ctx context.Context, hosts, configured []string) sip.ConnectMiddleware {
+	var limit logLimiter
 	return func(next sip.ConnectHandler) sip.ConnectHandler {
 		return func(r *http.Request) error {
 			host := normalizeHost(r.Host)
 			if !webHostAllowed(host, hosts) {
-				allow := strings.Join(append(slices.Clone(configured), host), " ")
-				logger.Warn(ctx, "Refused a web session for host name '{{|Var|}}%s{{[-]}}' from %s. Allow it with '{{|UserCommand|}}%s --config-web-hosts %s{{[-]}}'.",
-					host, r.RemoteAddr, version.CommandName, allow)
+				if logIt, skipped := limit.allow(time.Now(), webHostRefusalLogInterval); logIt {
+					more := ""
+					if skipped > 0 {
+						more = fmt.Sprintf(" (%d more refused since the last report)", skipped)
+					}
+					allow := strings.Join(append(slices.Clone(configured), host), " ")
+					logger.Warn(ctx, "Refused a web session for host name '{{|Var|}}%s{{[-]}}' from %s%s. Allow it with '{{|UserCommand|}}%s --config-web-hosts %s{{[-]}}'.",
+						host, r.RemoteAddr, more, version.CommandName, allow)
+				}
 				return &sip.ConnectError{
 					Status: http.StatusForbidden,
 					Body:   "This server does not answer to this host name.",
@@ -147,6 +160,27 @@ func webHostCheckMiddleware(ctx context.Context, hosts, configured []string) sip
 			return next(r)
 		}
 	}
+}
+
+// logLimiter spaces out repeated log lines. The zero value is ready to use.
+type logLimiter struct {
+	mu       sync.Mutex
+	last     time.Time
+	unlogged int
+}
+
+// allow reports whether an event at now should be logged, at most once per
+// interval, and how many events went unlogged since the last one that was.
+func (l *logLimiter) allow(now time.Time, interval time.Duration) (bool, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.last.IsZero() && now.Sub(l.last) < interval {
+		l.unlogged++
+		return false, 0
+	}
+	skipped := l.unlogged
+	l.last, l.unlogged = now, 0
+	return true, skipped
 }
 
 // webHostAllowed reports whether a normalized host name may reach the web
