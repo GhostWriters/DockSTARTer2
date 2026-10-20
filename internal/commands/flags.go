@@ -102,6 +102,8 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.String("config-panel", "", "Set panel mode")
 	fs.String("config-web-ancestors", "", "Set sites allowed to embed the web server")
 	fs.String("config-web-frame-ancestors", "", "Set sites allowed to embed the web server (alias)")
+	fs.String("config-web-hosts", "", "Set extra host names the web server answers to")
+	fs.String("config-web-allowed-hosts", "", "Set extra host names the web server answers to (alias)")
 	fs.Bool("show-config", false, "Show configuration (alias)")
 
 	// Theme

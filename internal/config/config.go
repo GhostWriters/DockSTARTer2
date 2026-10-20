@@ -145,6 +145,23 @@ type WebConfig struct {
 	// show it in a frame (e.g. a dashboard embedding it), each a CSP
 	// frame-ancestors source such as "https://organizr.example.com".
 	FrameAncestors []string `toml:"frame_ancestors"`
+
+	// AllowedHosts are host names, besides the machine's own hostname, that
+	// browsers may use to reach the web server (e.g. a reverse proxy's
+	// "ds2.example.com"). With tls = "none" and no password, a session whose
+	// Host header names anything else is refused, guarding against DNS
+	// rebinding; IP addresses always pass. "*" (the default) allows any name.
+	AllowedHosts []string `toml:"allowed_hosts"`
+}
+
+// ValidAllowedHost rejects an AllowedHosts entry that can't match a
+// browser's Host header: empty, more than one name, or a URL rather than a
+// host name.
+func ValidAllowedHost(host string) error {
+	if strings.TrimSpace(host) == "" || strings.ContainsAny(host, " \t;,/\r\n") {
+		return fmt.Errorf("'%s' is not one host name; give one per entry, such as ds2.example.com", host)
+	}
+	return nil
 }
 
 // ValidFrameAncestor rejects a FrameAncestors entry sip would refuse at

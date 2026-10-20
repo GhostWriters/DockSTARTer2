@@ -231,6 +231,11 @@ var Registry = map[string]Def{
 	// site embed the terminal.
 	"--config-web-ancestors":       {Title: "Set Web Frame Ancestors", ConfigChanging: true, ConsoleBlocked: true},
 	"--config-web-frame-ancestors": {Title: "Set Web Frame Ancestors", ConfigChanging: true, ConsoleBlocked: true},
+
+	// Blocked from the console: a web session could otherwise open the web
+	// server to other host names.
+	"--config-web-hosts":         {Title: "Set Web Allowed Hosts", ConfigChanging: true, ConsoleBlocked: true},
+	"--config-web-allowed-hosts": {Title: "Set Web Allowed Hosts", ConfigChanging: true, ConsoleBlocked: true},
 }
 
 // IsConsoleSafe reports whether a command flag is safe to run from the console panel.
