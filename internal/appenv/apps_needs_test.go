@@ -3,6 +3,7 @@ package appenv
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -61,5 +62,64 @@ func TestAppTemplateChangedSince(t *testing.T) {
 		if got := AppTemplateChangedSince(tc.app, synced); got != tc.want {
 			t.Errorf("%s: got %v, want %v", tc.app, got, tc.want)
 		}
+	}
+}
+
+// TestTemplateSourceChanged checks adding and removing a user override counts
+// as a change even when the newly used files are older than the last sync.
+func TestTemplateSourceChanged(t *testing.T) {
+	origConfig, origTemplates := paths.ConfigHomeOverride, paths.TemplatesDirOverride
+	paths.ConfigHomeOverride = t.TempDir()
+	paths.TemplatesDirOverride = t.TempDir()
+	defer func() { paths.ConfigHomeOverride, paths.TemplatesDirOverride = origConfig, origTemplates }()
+
+	old := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	markers := t.TempDir()
+	repoDir := filepath.Join(paths.GetTemplatesDir(), constants.TemplatesDirName, "someapp")
+	userDir := filepath.Join(paths.GetUserAppsDir(), "someapp")
+	writeTemplate(t, repoDir, "someapp", old)
+
+	if !TemplateSourceChanged(markers, "someapp") {
+		t.Error("no record yet: want changed")
+	}
+	RecordTemplateSource(markers, "someapp")
+	if TemplateSourceChanged(markers, "someapp") {
+		t.Error("just recorded: want unchanged")
+	}
+
+	writeTemplate(t, userDir, "someapp", old)
+	if !TemplateSourceChanged(markers, "someapp") {
+		t.Error("override added: want changed")
+	}
+	RecordTemplateSource(markers, "someapp")
+
+	if err := os.RemoveAll(userDir); err != nil {
+		t.Fatal(err)
+	}
+	if !TemplateSourceChanged(markers, "someapp") {
+		t.Error("override removed: want changed")
+	}
+}
+
+// TestIsAnyFileNewerUnreadable checks a missing root has nothing newer, and
+// a folder that can't be read counts as newer.
+func TestIsAnyFileNewerUnreadable(t *testing.T) {
+	since := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	if IsAnyFileNewer(filepath.Join(t.TempDir(), "missing"), since) {
+		t.Error("missing root: want not newer")
+	}
+
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("can't make a folder unreadable here")
+	}
+	root := t.TempDir()
+	locked := filepath.Join(root, "locked")
+	writeTemplate(t, locked, "app", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0755) })
+	if !IsAnyFileNewer(root, since) {
+		t.Error("unreadable folder: want newer")
 	}
 }

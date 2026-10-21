@@ -61,7 +61,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 				}
 			}
 
-			if AppTemplateChangedSince(baseAppName, sentinelTime) {
+			if TemplateSourceChanged(timestampsFolder, appName) || AppTemplateChangedSince(baseAppName, sentinelTime) {
 				return true
 			}
 		}
@@ -104,7 +104,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 			return true
 		}
 
-		if AppTemplateChangedSince(baseAppName, newestSentinelTime) {
+		if TemplateSourceChanged(timestampsFolder, appUpper) || AppTemplateChangedSince(baseAppName, newestSentinelTime) {
 			return true
 		}
 	}
@@ -146,11 +146,13 @@ func UnsetNeedsCreateApp(ctx context.Context, appNameRaw string, conf config.App
 	appUpper := strings.ToUpper(appNameRaw)
 	appLower := strings.ToLower(appNameRaw)
 
-	// 1. Create individual LastSynced marker
+	// 1. Create individual LastSynced marker, and record which template
+	// folder the app was synced from.
 	f, _ := os.Create(filepath.Join(timestampsFolder, "LastSynced_"+appUpper))
 	if f != nil {
 		f.Close()
 	}
+	RecordTemplateSource(timestampsFolder, appUpper)
 
 	// 2. Record state for every one of the app's .env.app.* files -- the
 	// plain file, plus (for a multi-service app) any per-service or

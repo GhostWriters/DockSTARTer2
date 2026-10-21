@@ -135,12 +135,13 @@ func setCachedAppTimestamps(appKey, varFileName string, templateUpdated, varsUpd
 // It places it in a subdirectory named after the application (e.g., ~/.config/dockstarter2/dockstarter2.toml).
 func GetConfigFilePath() string {
 	appName := strings.ToLower(version.ApplicationName)
+	// Checked first so a test's override holds on macOS too.
+	if ConfigHomeOverride != "" {
+		return filepath.Join(ConfigHomeOverride, appName, constants.AppConfigFileName)
+	}
 	if runtime.GOOS == "darwin" {
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, ".config", appName, constants.AppConfigFileName)
-	}
-	if ConfigHomeOverride != "" {
-		return filepath.Join(ConfigHomeOverride, appName, constants.AppConfigFileName)
 	}
 	return filepath.Join(xdg.ConfigHome, appName, constants.AppConfigFileName)
 }

@@ -169,16 +169,39 @@ func AppTemplateChangedSince(appName string, t time.Time) bool {
 	return IsAnyFileNewer(TemplateFolder(appName), t)
 }
 
-// IsAnyFileNewer checks if any file in the given root (recursively) is newer than the reference time.
+// templateSourcePrefix names the marker RecordTemplateSource writes per app.
+const templateSourcePrefix = "TemplateSource_"
+
+// TemplateSourceChanged reports whether appName's template folder
+// (TemplateFolder) differs from the one RecordTemplateSource last saved in
+// markerDir. Adding, removing or switching a user override changes which
+// folder is used without making its files any newer than the last sync, so
+// AppTemplateChangedSince alone can't see it. A missing record counts as a
+// change.
+func TemplateSourceChanged(markerDir, appName string) bool {
+	saved, err := os.ReadFile(filepath.Join(markerDir, templateSourcePrefix+strings.ToUpper(appName)))
+	return err != nil || string(saved) != TemplateFolder(appName)
+}
+
+// RecordTemplateSource saves appName's current template folder in markerDir,
+// for TemplateSourceChanged.
+func RecordTemplateSource(markerDir, appName string) {
+	_ = os.WriteFile(filepath.Join(markerDir, templateSourcePrefix+strings.ToUpper(appName)), []byte(TemplateFolder(appName)), 0644)
+}
+
+// IsAnyFileNewer reports whether any file under root (recursively) is newer
+// than referenceTime. A missing root has nothing newer; anything under it
+// that can't be read counts as newer, so a template DS2 can't fully inspect
+// is treated as changed rather than silently skipped.
 func IsAnyFileNewer(root string, referenceTime time.Time) bool {
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return false
+	}
 	newer := false
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() && info.ModTime().After(referenceTime) {
+		if err != nil || (!info.IsDir() && info.ModTime().After(referenceTime)) {
 			newer = true
-			return filepath.SkipDir // Found one, can stop
+			return filepath.SkipAll
 		}
 		return nil
 	})
