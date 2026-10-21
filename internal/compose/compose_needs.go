@@ -35,11 +35,11 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 
 	// Check enabled apps .env files and their source templates
 	enabledApps, _ := appenv.ListEnabledApps(conf)
-	templatesDir := paths.GetTemplatesDir()
 
 	// Use docker-compose.yml marker as reference time for template changes
 	var referenceTime time.Time
-	dcMarker := filepath.Join(paths.GetTimestampsDir(), "yml_merge", constants.ComposeFileName)
+	ymlMarkers := filepath.Join(paths.GetTimestampsDir(), "yml_merge")
+	dcMarker := filepath.Join(ymlMarkers, constants.ComposeFileName)
 	if info, err := os.Stat(dcMarker); err == nil {
 		referenceTime = info.ModTime()
 	}
@@ -50,13 +50,11 @@ func NeedsYMLMerge(ctx context.Context, force bool) bool {
 			return true
 		}
 
-		// Check app-specific template directory
-		if !referenceTime.IsZero() {
-			baseAppName := strings.ToLower(appenv.AppNameToBaseAppName(appName))
-			appTemplateDir := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppName)
-			if appenv.IsAnyFileNewer(appTemplateDir, referenceTime) {
-				return true
-			}
+		if appenv.TemplateSourceChanged(ymlMarkers, appName) {
+			return true
+		}
+		if !referenceTime.IsZero() && appenv.AppTemplateChangedSince(appName, referenceTime) {
+			return true
 		}
 	}
 
@@ -83,6 +81,7 @@ func UnsetNeedsYMLMerge(ctx context.Context) {
 	for _, appName := range enabledApps {
 		appEnvFile := filepath.Join(conf.ComposeDir, fmt.Sprintf("%s%s", constants.AppEnvFileNamePrefix, strings.ToLower(appName)))
 		updateTimestamp(appEnvFile)
+		appenv.RecordTemplateSource(timestampsFolder, appName)
 	}
 
 }
