@@ -49,7 +49,6 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 		sentinelTime := sentinelInfo.ModTime()
 
 		// Check if any added app's template or env file has changed
-		templatesDir := paths.GetTemplatesDir()
 		for _, appName := range allAdded {
 			// Check every one of the app's .env.app.* files -- the plain
 			// file, plus (for a multi-service app) any per-service or
@@ -62,9 +61,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 				}
 			}
 
-			// Check app-specific template directory
-			appTemplateDir := filepath.Join(templatesDir, constants.TemplatesDirName, baseAppName)
-			if IsAnyFileNewer(appTemplateDir, sentinelTime) {
+			if AppTemplateChangedSince(baseAppName, sentinelTime) {
 				return true
 			}
 		}
@@ -107,9 +104,7 @@ func NeedsCreateAll(ctx context.Context, force bool, added []string, conf config
 			return true
 		}
 
-		// Scan app-specific template folder
-		appTemplateDir := filepath.Join(paths.GetTemplatesDir(), constants.TemplatesDirName, baseAppName)
-		if IsAnyFileNewer(appTemplateDir, newestSentinelTime) {
+		if AppTemplateChangedSince(baseAppName, newestSentinelTime) {
 			return true
 		}
 	}

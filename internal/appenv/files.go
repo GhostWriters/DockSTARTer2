@@ -161,6 +161,14 @@ func CompareFiles(file1, file2 string) bool {
 	return bytes.Equal(f1, f2)
 }
 
+// AppTemplateChangedSince reports whether any file in appName's template
+// folder changed after t. The folder is resolved like every other template
+// lookup (TemplateFolder), so a user app template, or a user override of a
+// repo app, is the one checked.
+func AppTemplateChangedSince(appName string, t time.Time) bool {
+	return IsAnyFileNewer(TemplateFolder(appName), t)
+}
+
 // IsAnyFileNewer checks if any file in the given root (recursively) is newer than the reference time.
 func IsAnyFileNewer(root string, referenceTime time.Time) bool {
 	newer := false
