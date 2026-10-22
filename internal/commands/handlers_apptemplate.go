@@ -84,13 +84,13 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 		// a file that existed in an old extraction but no longer exists in
 		// the current source doesn't linger behind.
 		if err := os.RemoveAll(destDir); err != nil {
-			logger.Error(ctx, "Failed to remove existing '"+console.FormatFolderPath(destDir)+"': %v", err)
+			logger.Error(ctx, "Failed to remove existing '%s': %v", console.FormatFolderPath(destDir), err)
 			return err
 		}
 	}
 
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
+		logger.Error(ctx, "Failed to create directory '%s': %v", console.FormatFolderPath(destDir), err)
 		return err
 	}
 
@@ -122,7 +122,7 @@ func HandleAppTemplateExtract(ctx context.Context, group *CommandGroup) error {
 		return err
 	}
 
-	logger.Notice(ctx, "App template '%s' extracted to '"+console.FormatFolderPath(destDir)+"' (%d %s).", appenv.StyledAppName(ctx, appName), copied, fileWord(copied))
+	logger.Notice(ctx, "App template '%s' extracted to '%s' (%d %s).", appenv.StyledAppName(ctx, appName), console.FormatFolderPath(destDir), copied, fileWord(copied))
 	if appName == ".template" {
 		logger.Notice(ctx, "This is a reference starter template, not one meant to be used as-is. Rename it and edit the copy.")
 	} else {
@@ -191,7 +191,7 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 		return fmt.Errorf("destination already exists: %s", destDir)
 	}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
-		logger.Error(ctx, "Failed to create directory '"+console.FormatFolderPath(destDir)+"': %v", err)
+		logger.Error(ctx, "Failed to create directory '%s': %v", console.FormatFolderPath(destDir), err)
 		return err
 	}
 
@@ -238,7 +238,7 @@ func HandleAppTemplateNew(ctx context.Context, group *CommandGroup) error {
 
 	// Before the notices, so they name the app by its new nicename.
 	appenv.InvalidateAppMetaCache()
-	logger.Notice(ctx, "New app template '%s' created in '"+console.FormatFolderPath(destDir)+"' (%d %s).", appenv.StyledAppName(ctx, lower), copied, fileWord(copied))
+	logger.Notice(ctx, "New app template '%s' created in '%s' (%d %s).", appenv.StyledAppName(ctx, lower), console.FormatFolderPath(destDir), copied, fileWord(copied))
 	logger.Notice(ctx, "Fill in the compose snippet and defaults, then enable '%s' to test it.", appenv.StyledAppName(ctx, lower))
 	return nil
 }

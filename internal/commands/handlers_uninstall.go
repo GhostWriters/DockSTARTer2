@@ -68,12 +68,12 @@ func HandleUninstall(ctx context.Context, state *CmdState) error {
 
 	cacheDir := paths.GetCacheDir()
 	if info, err := os.Stat(cacheDir); err == nil && info.IsDir() {
-		logger.Notice(ctx, "Removing {{|ApplicationName|}}%s{{[-]}} cache folder '"+console.FormatFolderPath(cacheDir)+"'.", version.ApplicationName)
+		logger.Notice(ctx, "Removing {{|ApplicationName|}}%s{{[-]}} cache folder '%s'.", version.ApplicationName, console.FormatFolderPath(cacheDir))
 		removePath(ctx, cacheDir)
 	}
 
 	stateDir := paths.GetStateDir()
-	logger.Notice(ctx, "Removing {{|ApplicationName|}}%s{{[-]}} state folder '"+console.FormatFolderPath(stateDir)+"'.", version.ApplicationName)
+	logger.Notice(ctx, "Removing {{|ApplicationName|}}%s{{[-]}} state folder '%s'.", version.ApplicationName, console.FormatFolderPath(stateDir))
 	removePath(ctx, stateDir)
 
 	if !ds1Installed {
@@ -83,7 +83,7 @@ func HandleUninstall(ctx context.Context, state *CmdState) error {
 	}
 
 	if exePath, err := os.Executable(); err == nil {
-		logger.Notice(ctx, "Removing {{|ApplicationName|}}%s{{[-]}} executable file: '"+console.FormatFilePath(exePath)+"'.", version.ApplicationName)
+		logger.Notice(ctx, "Removing {{|ApplicationName|}}%s{{[-]}} executable file: '%s'.", version.ApplicationName, console.FormatFilePath(exePath))
 		removePath(ctx, exePath)
 	}
 
@@ -101,10 +101,10 @@ func removePath(ctx context.Context, path string) {
 	}
 	cmd, err := dsexec.SudoCommand(ctx, "rm", "-rf", path)
 	if err != nil {
-		logger.Warn(ctx, "Failed to remove '"+console.FormatFolderPath(path)+"': %v", err)
+		logger.Warn(ctx, "Failed to remove '%s': %v", console.FormatFolderPath(path), err)
 		return
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
-		logger.Warn(ctx, "Failed to remove '"+console.FormatFolderPath(path)+"': %s: %v", string(out), err)
+		logger.Warn(ctx, "Failed to remove '%s': %s: %v", console.FormatFolderPath(path), string(out), err)
 	}
 }

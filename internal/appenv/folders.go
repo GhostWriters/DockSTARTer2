@@ -92,9 +92,9 @@ func CreateAppFolders(ctx context.Context, appNameRaw string, conf config.AppCon
 			logger.Notice(ctx, "Creating folder '"+console.FormatFolderPath(folder)+"'")
 			if err := os.MkdirAll(folder, 0755); err != nil {
 				logger.Warn(ctx, []string{
-					"Could not create folder '" + console.FormatFolderPath(folder) + "'",
+					"Could not create folder '%s'",
 					"Failing command: {{|FailingCommand|}}mkdir -p \"%s\"{{[-]}}",
-				}, folder)
+				}, console.FormatFolderPath(folder), folder)
 			}
 			system.SetPermissions(ctx, folder)
 		}
