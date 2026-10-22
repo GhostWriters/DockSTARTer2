@@ -150,7 +150,8 @@ func HandleEnvAppVars(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
-		logger.Fatal(ctx, "Command --env-appvars requires one or more application names.")
+		// The command-line check rejects this first; reaching it is a bug.
+		logger.FatalWithStack(ctx, "Command --env-appvars got no application names past the command-line check.")
 		return fmt.Errorf("no application name provided")
 	}
 
@@ -171,7 +172,8 @@ func HandleEnvAppVarsLines(ctx context.Context, group *CommandGroup) error {
 	conf := config.LoadAppConfig()
 	args := group.Args
 	if len(args) == 0 {
-		logger.Fatal(ctx, "Command --env-appvars-lines requires one or more application names.")
+		// The command-line check rejects this first; reaching it is a bug.
+		logger.FatalWithStack(ctx, "Command --env-appvars-lines got no application names past the command-line check.")
 		return fmt.Errorf("no application name provided")
 	}
 

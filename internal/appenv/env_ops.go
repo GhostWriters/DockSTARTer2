@@ -64,7 +64,10 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 		}
 
 		if err := os.WriteFile(mainEnvPath, defaultContent, 0644); err != nil {
-			logger.Fatal(ctx, "Failed to create default env file: %v", err)
+			logger.FatalWithStack(ctx, []string{
+				"Failed to create '" + console.FormatFilePath(mainEnvPath) + "'.",
+				"Error: %v",
+			}, err)
 		}
 		system.SetPermissions(ctx, mainEnvPath)
 	}
