@@ -65,9 +65,9 @@ func EnvCreate(ctx context.Context, conf config.AppConfig) error {
 
 		if err := os.WriteFile(mainEnvPath, defaultContent, 0644); err != nil {
 			logger.FatalWithStack(ctx, []string{
-				"Failed to create '" + console.FormatFilePath(mainEnvPath) + "'.",
+				"Failed to create '%s'.",
 				"Error: %v",
-			}, err)
+			}, console.FormatFilePath(mainEnvPath), err)
 		}
 		system.SetPermissions(ctx, mainEnvPath)
 	}
@@ -372,7 +372,7 @@ func CleanupOrphanedEnvFiles(ctx context.Context, conf config.AppConfig) error {
 				system.SetPermissions(ctx, targetFile)
 				logger.Notice(ctx, "Deleting '"+console.FormatFilePath(targetFile)+"'.")
 				if err := os.Remove(targetFile); err != nil {
-					logger.Warn(ctx, "Failed to remove '"+console.FormatFilePath(targetFile)+"': %v", err)
+					logger.Warn(ctx, "Failed to remove '%s': %v", console.FormatFilePath(targetFile), err)
 				}
 			}
 		}

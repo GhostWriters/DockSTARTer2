@@ -118,7 +118,7 @@ func SetPermissions(ctx context.Context, path string) {
 	}
 
 	if needsChown {
-		logger.Info(ctx, "Taking ownership of '"+console.FormatFolderPath(path)+"' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", puid, pgid)
+		logger.Info(ctx, "Taking ownership of '%s' for user '{{|User|}}%d{{[-]}}' and group '{{|User|}}%d{{[-]}}'", console.FormatFolderPath(path), puid, pgid)
 	}
 	if needsChmod {
 		logger.Info(ctx, "Setting file and folder permissions in '"+console.FormatFolderPath(path)+"'")
@@ -126,9 +126,9 @@ func SetPermissions(ctx context.Context, path string) {
 
 	if err := applyPermissionFix(ctx, path, puid, pgid, needsChown, needsChmod, true); err != nil {
 		logger.FatalWithStack(ctx, []string{
-			"Failed to set ownership/permissions of folder '" + console.FormatFolderPath(path) + "'.",
+			"Failed to set ownership/permissions of folder '%s'.",
 			"Error: %v",
-		}, err)
+		}, console.FormatFolderPath(path), err)
 	}
 }
 
@@ -169,9 +169,9 @@ func TakeOwnership(ctx context.Context, path string) {
 
 	if err := applyPermissionFix(ctx, path, puid, pgid, needsChown, needsChmod, false); err != nil {
 		logger.FatalWithStack(ctx, []string{
-			"Failed to set ownership/permissions of folder '" + console.FormatFolderPath(path) + "'.",
+			"Failed to set ownership/permissions of folder '%s'.",
 			"Error: %v",
-		}, err)
+		}, console.FormatFolderPath(path), err)
 	}
 }
 
@@ -196,7 +196,7 @@ func HardenOwnPath(ctx context.Context, path string, mode os.FileMode) {
 		return
 	}
 	if err := os.Chmod(path, mode); err != nil {
-		logger.Warn(ctx, "Could not restrict permissions of '"+console.FormatFolderPath(path)+"': %v", err)
+		logger.Warn(ctx, "Could not restrict permissions of '%s': %v", console.FormatFolderPath(path), err)
 	}
 }
 

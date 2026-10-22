@@ -847,7 +847,7 @@ func LoadAppConfig() AppConfig {
 		}
 		if err := writeFileAtomic(cfgPath, initial); err != nil {
 			// Loading again would find no file and try again, without end.
-			logger.Warn(context.Background(), "Could not write '"+console.FormatFilePath(cfgPath)+"': %v. Using this configuration without saving it.", err)
+			logger.Warn(context.Background(), "Could not write '%s': %v. Using this configuration without saving it.", console.FormatFilePath(cfgPath), err)
 			_, _ = UnmarshalRobust(initial, &conf)
 			finishLoadedConfig(&conf)
 			return conf

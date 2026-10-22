@@ -382,13 +382,13 @@ func ValidateComposeOverride(ctx context.Context, conf config.AppConfig) {
 
 	content, err := os.ReadFile(overrideFile)
 	if err != nil {
-		logger.Warn(ctx, "Failed to read '"+console.FormatFilePath(overrideFile)+"': %v", err)
+		logger.Warn(ctx, "Failed to read '%s': %v", console.FormatFilePath(overrideFile), err)
 		return
 	}
 
 	var dst map[string]any
 	if err := yaml.Unmarshal(content, &dst); err != nil {
-		logger.Warn(ctx, "Failed to validate '"+console.FormatFilePath(overrideFile)+"': %v", err)
+		logger.Warn(ctx, "Failed to validate '%s': %v", console.FormatFilePath(overrideFile), err)
 		logger.Warn(ctx, "Please fix the syntax in your override file.")
 	}
 }
@@ -420,6 +420,6 @@ func ValidateComposeOverrideStrict(ctx context.Context, conf config.AppConfig) {
 	})
 
 	if err != nil {
-		logger.Warn(ctx, "Strict validation failed for '"+console.FormatFilePath(overrideFile)+"': %v", err)
+		logger.Warn(ctx, "Strict validation failed for '%s': %v", console.FormatFilePath(overrideFile), err)
 	}
 }
