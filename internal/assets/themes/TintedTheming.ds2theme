@@ -62,7 +62,7 @@ focus_border    = "base05" # "Focus elements" borders: the focus indicators
 
 ## Header bar
   StatusFields          = "{{|Screen|}}"                       # = "{{[-]}}"
-  StatusName            = "{{[$accent:$primary:B]}}"           # = "{{|StatusFields|}}"
+  StatusName            = "{{[$accent::B]}}"                   # = "{{|StatusFields|}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"
