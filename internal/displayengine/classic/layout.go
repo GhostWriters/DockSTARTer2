@@ -368,9 +368,10 @@ func (l Layout) CheckboxWidth() int {
 	return 3
 }
 
-// SubItemOffset returns the horizontal indentation for nested/sub-items (typically 10).
+// SubItemOffset returns the horizontal indentation for nested/sub-items, which
+// puts the instance list's left border under its app's expand arrow.
 func (l Layout) SubItemOffset() int {
-	return 10
+	return l.StatusGutterWidth() + 3 + aeColumnGap + 3 + aeEnableTrail + 1
 }
 
 // StatusGutterWidth returns the standard width of the status gutter (typically 2).

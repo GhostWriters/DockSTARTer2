@@ -597,6 +597,24 @@ const (
 	ColName
 )
 
+// App Select column headers, with a focus indicator on each side, each
+// centered over its 3-wide checkbox. ColAddLabel must be 3 wide; a wider
+// ColEnableLabel widens the space around its checkbox.
+const (
+	ColAddLabel    = "Add"
+	ColEnableLabel = "Enable"
+	// aeColumnGap is the space between the Add and Enable checkboxes: Add's
+	// closing indicator, a border dash, Enable's opening indicator, and the
+	// part of ColEnableLabel left of its checkbox.
+	aeColumnGap = 3 + (len(ColEnableLabel)-3)/2
+	// aeEnableTrail is the part of ColEnableLabel right of its checkbox,
+	// kept clear so the expand column and instance names start after it.
+	aeEnableTrail = len(ColEnableLabel) - 3 - (len(ColEnableLabel)-3)/2
+	// aeRowPrefixWidth is an App Select row's width before the app name:
+	// cbAdd(3) + gap + cbEnabled(3) + trail + cbExpand(3) + sp(1).
+	aeRowPrefixWidth = 3 + aeColumnGap + 3 + aeEnableTrail + 3 + 1
+)
+
 // SetContextMenuFunc sets the callback that provides custom context menu items for this menu
 func (m *MenuModel) SetContextMenuFunc(f func(idx int) []ContextMenuItem) {
 	m.contextMenuFunc = f

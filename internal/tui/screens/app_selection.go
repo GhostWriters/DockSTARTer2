@@ -16,15 +16,39 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-func getAppSelectionLegend() string {
-	ctx := displayengine.GetActiveContext()
+// columnLabel renders a column label as the focused column header shows it.
+func columnLabel(label string) string {
 	l, r := ">", "<"
-	cbChecked, cbUnchecked := "[{{|TagFocused|}}x{{[-]}}]", "[{{|TagFocused|}} {{[-]}}]"
-	if ctx.LineCharacters {
+	if displayengine.GetActiveContext().LineCharacters {
 		l, r = "▸", "◂"
-		cbChecked = "{{|TagFocused|}}" + glyphs.CheckOn + "{{[-]}}"
-		cbUnchecked = "{{|TagFocused|}}" + glyphs.CheckOff + "{{[-]}}"
 	}
+	return "{{|TitleFocusIndicator|}}" + l + "{{[-]}}{{|TitleCheckboxFocused|}}" + label + "{{[-]}}{{|TitleFocusIndicator|}}" + r + "{{[-]}}"
+}
+
+// legendCheckbox renders a checkbox glyph with the theme tags a focused
+// Add/Enable checkbox uses; the unfocused tags may be empty.
+func legendCheckbox(on bool) string {
+	state := "Off"
+	glyph := glyphs.CheckOffAscii
+	if on {
+		state = "On"
+		glyph = glyphs.CheckOnAscii
+	}
+	if displayengine.GetActiveContext().LineCharacters {
+		glyph = glyphs.CheckOff
+		if on {
+			glyph = glyphs.CheckOn
+		}
+	}
+	runes := []rune(glyph)
+	bracket := "{{|CheckboxBrackets" + state + "Focused|}}"
+	return bracket + string(runes[0]) + "{{[-]}}" +
+		"{{|Checkbox" + state + "Focused|}}" + string(runes[1:len(runes)-1]) + "{{[-]}}" +
+		bracket + string(runes[len(runes)-1]) + "{{[-]}}"
+}
+
+func getAppSelectionLegend() string {
+	cbChecked, cbUnchecked := legendCheckbox(true), legendCheckbox(false)
 
 	// Line 1: Gutter markers
 	parts := []string{
@@ -39,8 +63,8 @@ func getAppSelectionLegend() string {
 
 	// Line 2: Focus markers and Checkbox Simulation
 	parts2 := []string{
-		"| {{|TitleFocusIndicator|}}" + l + "{{[-]}}{{|TitleCheckboxFocused|}}A{{[-]}}{{|TitleFocusIndicator|}}" + r + "{{[-]}} Add App",
-		"{{|TitleFocusIndicator|}}" + l + "{{[-]}}{{|TitleCheckboxFocused|}}E{{[-]}}{{|TitleFocusIndicator|}}" + r + "{{[-]}} Enable App",
+		"| " + columnLabel(displayengine.ColAddLabel) + " Add/Remove",
+		columnLabel(displayengine.ColEnableLabel) + " Enable/Disable",
 		cbChecked + " Checked",
 		cbUnchecked + " Unchecked |",
 	}

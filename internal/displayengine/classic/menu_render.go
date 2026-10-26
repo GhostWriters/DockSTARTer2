@@ -254,7 +254,7 @@ func (m *MenuModel) renderView() string {
 		if m.Scroll.Info.Needed {
 			pct = m.listScrollPercent()
 		}
-		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 2, showAEFocus, m.activeColumn, pct, ctx)
+		borderedList = borderedList + "\n" + BuildAEBottomBorder(totalWidth, 1, showAEFocus, m.activeColumn, pct, ctx)
 	} else if m.Scroll.Info.Needed {
 		borderedList = borderedList + "\n" + BuildScrollPercentBottomBorder(totalWidth, m.listScrollPercent(), m.focused, ctx)
 	} else {
@@ -264,7 +264,7 @@ func (m *MenuModel) renderView() string {
 	// 4. Add AE top border
 	if m.groupedMode {
 		if nl := strings.Index(borderedList, "\n"); nl >= 0 {
-			borderedList = BuildAETopBorder(totalWidth, 2, showAEFocus, m.activeColumn, ctx) + borderedList[nl:]
+			borderedList = BuildAETopBorder(totalWidth, 1, showAEFocus, m.activeColumn, ctx) + borderedList[nl:]
 		}
 	}
 
