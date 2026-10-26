@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"charm.land/lipgloss/v2"
+	"github.com/GhostWriters/semstyle"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -21,10 +22,12 @@ var xtermColors = [16][3]uint8{
 
 // RGB returns c's red, green, and blue, 0-1, the 16 basic ANSI colors as
 // xterm draws them; ok is false when c is no color (the terminal's default).
+// A tint placeholder counts as the color it currently resolves to.
 func RGB(c color.Color) (r, g, b float64, ok bool) {
 	if c == nil {
 		return 0, 0, 0, false
 	}
+	c = semstyle.ResolveColor(c)
 	if _, none := c.(lipgloss.NoColor); none {
 		return 0, 0, 0, false
 	}

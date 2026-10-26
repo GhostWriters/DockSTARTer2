@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +22,8 @@ import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
+
+	"github.com/GhostWriters/semstyle"
 )
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.
@@ -234,6 +237,9 @@ func NewDisplayOptionsScreen(isRoot bool, connType string) *DisplayOptionsScreen
 	s.themeDefaults[current], _ = theme.Load(current, "Preview")
 	s.loadTintCatalog()
 	s.previewTintKey = fmt.Sprintf("ds2-preview-tint-%p", s)
+	// Each screen has its own preview keys; once it's gone nothing renders
+	// with them, so free their tint placeholder IDs for other keys.
+	runtime.AddCleanup(s, releasePreviewTintKeys, s.previewTintKey)
 
 	s.initMenus()
 	s.focused = true // Default to focused initially
@@ -599,6 +605,15 @@ func (s *DisplayOptionsScreen) initMenus() {
 	s.outerMenu = outerMenu
 	s.refreshPreviewTint()
 	s.refreshChangeMarkers()
+}
+
+// releasePreviewTintKeys releases every tint key a screen with preview key
+// base registers: one per element (see previewElementKey) and the scheme
+// key (see schemeTintKey).
+func releasePreviewTintKeys(base string) {
+	for _, key := range []string{base, base + "-programbox", base + "-cli", base + "-scheme"} {
+		semstyle.ReleaseTintKey(key)
+	}
 }
 
 // previewElementKey returns the tint key the preview holds element's staged
