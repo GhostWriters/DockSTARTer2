@@ -8,12 +8,31 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// aeLabelsWidth is the width of both column labels and the dash between them.
+const aeLabelsWidth = (len(ColAddLabel) + 2) + 1 + (len(ColEnableLabel) + 2)
+
+// aeColumnLabel renders a column header label, with focus indicators when its
+// column has focus.
+func aeColumnLabel(label string, targetCol, activeCol CheckboxColumn, focused bool, ctx StyleContext, borderStyle lipgloss.Style) string {
+	var content string
+	if focused && activeCol == targetCol {
+		l, r := ">", "<"
+		if ctx.LineCharacters {
+			l, r = "▸", "◂"
+		}
+		content = "{{|TitleFocusIndicator|}}" + l + "{{[-]}}{{|TitleCheckboxFocused|}}" + label + "{{[-]}}{{|TitleFocusIndicator|}}" + r + "{{[-]}}"
+	} else {
+		content = " {{|TitleCheckbox|}}" + label + "{{[-]}} "
+	}
+	return RenderThemeText(content, borderStyle)
+}
+
 // BuildAETopBorder constructs the top border for the app-selection inner list box.
-// Labels " A " and " E " use MarkerAdded style (green) and are left-positioned to align
-// above the Add and Enabled checkboxes in the row.
+// Each label is centered over its checkbox. prefixDashes is the number of
+// dashes between the left corner and the first label.
 //
-// Row layout:    │ g0 g1 [cb_add 3ch] [1sp] [cb_enabled 3ch] [1sp] AppName
-// Border layout: ╭ ─── ├ A ┤├ E ┤ ─────────────────────────────────── ╮
+// Row layout:    │ g0 g1 [cb_add 3ch] [aeColumnGap] [cb_enabled 3ch] [aeEnableTrail] [expand 3ch] [1sp] AppName
+// Border layout (Add focused): ╭─▸Add◂─ Enable ────────────────────────╮
 func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, activeCol CheckboxColumn, ctx StyleContext) string {
 	var border lipgloss.Border
 	if ctx.LineCharacters {
@@ -31,31 +50,14 @@ func BuildAETopBorder(totalWidth int, prefixDashes int, focused bool, activeCol 
 	}
 	borderStyle := ctx.BorderFlags.Apply(lipgloss.NewStyle()).Foreground(ctx.BorderColor).Background(ctx.Dialog.GetBackground())
 
-	// Build 3-character labeled blocks (e.g. "▸A◂" or " A ")
-	buildLabel := func(char string, targetCol CheckboxColumn) string {
-		var content string
-		if focused && activeCol == targetCol {
-			if ctx.LineCharacters {
-				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
-			} else {
-				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
-			}
-		} else {
-			// Marker style (e.g. green) but without focus arrows/background
-			content = " {{|TitleCheckbox|}}" + char + "{{[-]}} "
-		}
-		return RenderThemeText(content, borderStyle)
-	}
+	aLabel := aeColumnLabel(ColAddLabel, ColAdd, activeCol, focused, ctx, borderStyle)
+	eLabel := aeColumnLabel(ColEnableLabel, ColEnable, activeCol, focused, ctx, borderStyle)
 
-	aLabel := buildLabel("A", ColAdd)
-	eLabel := buildLabel("E", ColEnable)
-
-	// Total fixed = corner(1) + dashes + labelA(3) + dash(1) + labelE(3) + corner(1) = 9 + dashes
-	innerWidth := totalWidth - (9 + prefixDashes)
+	// Total fixed = corner(1) + dashes + labels + corner(1)
+	innerWidth := totalWidth - (2 + prefixDashes + aeLabelsWidth)
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	// Layout follows '── A ─ E ──' with ONE dash divider.
 	// We use light color for everything except the top-right corner to maintain 3D look.
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		borderStyle.Render(border.TopLeft+strutil.Repeat(border.Top, prefixDashes)),
@@ -84,21 +86,6 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, activeC
 	// Bottom border consistently uses the "dark" color for 3D depth effect.
 	borderStyle := ctx.Border2Flags.Apply(lipgloss.NewStyle()).Foreground(ctx.Border2Color).Background(ctx.Dialog.GetBackground())
 
-	// Build 3-character labeled blocks (e.g. "▸A◂" or " A ") — same logic as top border
-	buildLabel := func(char string, targetCol CheckboxColumn) string {
-		var content string
-		if focused && activeCol == targetCol {
-			if ctx.LineCharacters {
-				content = "{{|TitleFocusIndicator|}}▸{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}◂{{[-]}}"
-			} else {
-				content = "{{|TitleFocusIndicator|}}>{{[-]}}{{|TitleCheckboxFocused|}}" + char + "{{[-]}}{{|TitleFocusIndicator|}}<{{[-]}}"
-			}
-		} else {
-			content = " {{|TitleCheckbox|}}" + char + "{{[-]}} "
-		}
-		return RenderThemeText(content, borderStyle)
-	}
-
 	var leftT, rightT string
 	if ctx.LineCharacters {
 		if focused {
@@ -118,16 +105,16 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, activeC
 		}
 	}
 
-	aLabel := buildLabel("A", ColAdd)
-	eLabel := buildLabel("E", ColEnable)
+	aLabel := aeColumnLabel(ColAddLabel, ColAdd, activeCol, focused, ctx, borderStyle)
+	eLabel := aeColumnLabel(ColEnableLabel, ColEnable, activeCol, focused, ctx, borderStyle)
 
 	// prefixDashes is the number of dashes between the left corner and the first label.
 	prefix := borderStyle.Render(border.BottomLeft + strutil.Repeat(border.Bottom, prefixDashes))
 	middle := borderStyle.Render(border.Bottom)
 
-	// Total fixed (no right label) = corner(1) + dashes + labelA(3) + dash(1) + labelE(3) + corner(1) = 9 + dashes
+	// Total fixed (no right label) = corner(1) + dashes + labels + corner(1)
 	if scrollPct < 0 {
-		tailWidth := totalWidth - (9 + prefixDashes)
+		tailWidth := totalWidth - (2 + prefixDashes + aeLabelsWidth)
 		if tailWidth < 0 {
 			tailWidth = 0
 		}
@@ -140,8 +127,8 @@ func BuildAEBottomBorder(totalWidth int, prefixDashes int, focused bool, activeC
 	pctW := lipgloss.Width(pctLabel)
 	// right segment width: connector(1) + pct + connector(1) + dash(1) + corner(1)
 	rightSegW := 1 + pctW + 1 + 1 + 1
-	// left fixed: corner(1) + dashes + labelA(3) + dash(1) + labelE(3) = 8 + dashes
-	leftFixedW := 8 + prefixDashes
+	// left fixed: corner(1) + dashes + labels
+	leftFixedW := 1 + prefixDashes + aeLabelsWidth
 	tailW := totalWidth - leftFixedW - rightSegW
 	if tailW < 0 {
 		tailW = 0

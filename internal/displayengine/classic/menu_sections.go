@@ -606,7 +606,7 @@ func (m *MenuModel) SectionNaturalWidth(maxWidth int) int {
 	// inverted to solve for the sectionWidth that fits maxDescLen unwrapped.
 	menuPrefixWidth := 0
 	if m.id == "app-select" {
-		menuPrefixWidth = 11 // cbAdd(3) + sp(1) + cbEnabled(3) + cbExpand(3) + sp(1), matching menu_render_list.go
+		menuPrefixWidth = aeRowPrefixWidth
 	} else {
 		for _, it := range m.items {
 			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {

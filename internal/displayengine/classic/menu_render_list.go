@@ -121,7 +121,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 	// CheckboxOffFocused, not the removed generic CheckboxFocused tag: used
 	// for decorative focus markers with no real on/off state of their own
 	// (the expand arrow, the inert "-" shown on an expanded group header's
-	// A/E columns), not an actual checked/unchecked glyph.
+	// Add/Enable columns), not an actual checked/unchecked glyph.
 	checkboxStyleSel := theme.ThemeSemanticStyle("{{|CheckboxOffFocused|}}")
 	neutralStyle := lipgloss.NewStyle().Background(dialogBG)
 
@@ -308,7 +308,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 			expandFocused := isSelected && m.activeColumn == ColExpand
 
 			if item.IsGroupHeader {
-				// Expanded: the header's own A/E columns are inert (toggling
+				// Expanded: the header's own Add/Enable columns are inert (toggling
 				// them here does nothing -- the real, actionable checkboxes
 				// are the sub-item rows below), so showing a bracketed
 				// checkbox would be misleading. An unstyled "-" makes that
@@ -487,7 +487,7 @@ func (m *MenuModel) renderVariableHeightList() string {
 
 		menuPrefixWidth := 0
 		if isAppSelect {
-			menuPrefixWidth = 11 // cbAdd(3) + sp(1) + cbEnabled(3) + cbExpand(3) + sp(1)
+			menuPrefixWidth = aeRowPrefixWidth
 		} else if hasAnyCheckboxes {
 			menuPrefixWidth = layout.CheckboxWidth()
 		}
@@ -566,13 +566,14 @@ func (m *MenuModel) renderVariableHeightList() string {
 		prefixWidth := 0
 		if item.IsCheckbox || item.IsRadioButton || item.IsGroupHeader {
 			if isAppSelect && (item.IsCheckbox || item.IsGroupHeader) {
-				// Slot1(3) + Space(1) + Slot2(3) + Slot3(3) + Space(1) = 11 characters.
+				// Slot1(3) + Gap + Slot2(3) + Trail + Slot3(3) + Space(1) = aeRowPrefixWidth.
+				// The gap and trail let each column header center over its checkbox.
 				// No separator between Slot2 and Slot3 -- the Expand slot's own
 				// leading character (a blank when unfocused, "[" when focused)
 				// already acts as that gap, matching the single space everywhere
 				// else instead of doubling up.
 				// This MUST match menuPrefixWidth above to align with standard app-select rows.
-				prefixPadding = cbAdd3 + neutralStyle.Render(" ") + cbEnabled3 + cbExpand3 + nameSep
+				prefixPadding = cbAdd3 + neutralStyle.Render(strutil.Repeat(" ", aeColumnGap)) + cbEnabled3 + neutralStyle.Render(strutil.Repeat(" ", aeEnableTrail)) + cbExpand3 + nameSep
 			} else {
 				// Standard menus or Radio buttons: indicator followed by one space
 				// (the leading changed marker when the item is changed).
@@ -730,12 +731,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 						})
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-enable",
-							X:      baseShift + layout.SingleBorder()*6,
+							X:      baseShift + layout.SingleBorder()*2 + layout.CheckboxWidth() + aeColumnGap,
 							Y:      aggY,
 							Width:  layout.CheckboxWidth(),
 							Height: h,
 						})
-						tagX := baseShift + layout.SingleBorder()*9
+						tagX := baseShift + layout.SingleBorder()*2 + layout.CheckboxWidth()*2 + aeColumnGap + aeEnableTrail
 						// Simple rows and group headers have a dedicated 3-char-wide arrow
 						// column at tagX. Clicks past it (the app name / description) fall
 						// through to "-border" so the name's own hyperlink hit region
@@ -880,12 +881,12 @@ func (m *MenuModel) renderVariableHeightList() string {
 						})
 						newHitRegions = append(newHitRegions, HitRegion{
 							ID:     itemID + "-enable",
-							X:      baseShift + layout.SingleBorder()*6,
+							X:      baseShift + layout.SingleBorder()*2 + layout.CheckboxWidth() + aeColumnGap,
 							Y:      y,
 							Width:  layout.CheckboxWidth(),
 							Height: itemH,
 						})
-						tagX := baseShift + layout.SingleBorder()*9
+						tagX := baseShift + layout.SingleBorder()*2 + layout.CheckboxWidth()*2 + aeColumnGap + aeEnableTrail
 						// See the corresponding comment in the non-scrolled render path above:
 						// widen the arrow's hit region by 1 char on each side for easier clicking.
 						expandX, expandWidth := tagX-1, 3
@@ -995,12 +996,14 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		}
 	}
 
-	// Instance Grid: Indent 10, Dash 1, Left Pad 1, Right Pad 1.
-	// Prefix = 1(sp_l) + 3(cbA) + 1(sp) + 3(cbE) + 1(sp) = 10 -- that single
+	// Instance Grid: Indent SubItemOffset, Left Pad 1, Right Pad 1. The left pad sits
+	// under the Add label's opening focus indicator.
+	// Prefix = 1(sp_l) + 3(cbA) + gap + 3(cbE) + trail + 1(sp) -- that single
 	// separator space becomes "[" while editing (see nameSep below), same as
 	// the top-level Name column, rather than reserving a permanent extra one.
-	// Total width: 1(│l) + 10(prefix) + maxTag + 1(sp_r) + 1(│r) = 13 + maxTag.
-	subListWidth := 12 + subGroupTagMaxW
+	// Total width: 1(│l) + prefix + maxTag + 1(sp_r) + 1(│r).
+	// It is at least wide enough for the border's corners and column labels.
+	subListWidth := max(1+(1+3+aeColumnGap+3+aeEnableTrail+1)+subGroupTagMaxW+1+1, 2+aeLabelsWidth)
 	if subListWidth > maxWidth {
 		subListWidth = maxWidth
 	}
@@ -1008,7 +1011,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	subFocused := m.IsListActive() && hasCursor
 
 	// While renaming/adding an instance, keyboard input goes to the text
-	// field, not the Add/Enable columns -- don't let the "A E" border labels
+	// field, not the Add/Enable columns -- don't let the column border labels
 	// keep claiming one of them has focus.
 	anyEditing := false
 	for _, it := range items {
@@ -1023,9 +1026,9 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 	var resH []int
 	var resM []int
 
-	// 1. Build Top Border with 1 dash.
-	topBorder := BuildAETopBorder(subListWidth, 1, aeBorderFocused, m.activeColumn, ctx)
-	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+topBorder)
+	// 1. Build Top Border with no dash before the Add label.
+	topBorder := BuildAETopBorder(subListWidth, 0, aeBorderFocused, m.activeColumn, ctx)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", GetLayout().SubItemOffset()))+topBorder)
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
@@ -1182,9 +1185,9 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			}
 		}
 
-		// Sub-menus require a 10-character indent to align with the top/bottom borders.
-		// Indent consists of: g0(1) + g1(1) + 8 spaces.
-		indent := neutralStyle.Render(strutil.Repeat(" ", 8))
+		// Sub-menus require a SubItemOffset indent to align with the top/bottom borders.
+		// Indent consists of: g0(1) + g1(1) + spaces.
+		indent := neutralStyle.Render(strutil.Repeat(" ", GetLayout().SubItemOffset()-2))
 
 		// The rowContent starts with the left border, followed by a mandatory internal space.
 		// The single separator before the tag becomes the open bracket while
@@ -1208,7 +1211,7 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 			}
 			leadSpace = RenderThemeText("{{|MarkerAdded|}}"+arrow+"{{[-]}}", neutralStyle)
 		}
-		rowContent := vStyleLight.Render(vBorderChar) + leadSpace + checkboxA3 + neutralStyle.Render(" ") + checkboxE3 + nameSep + tagStr
+		rowContent := vStyleLight.Render(vBorderChar) + leadSpace + checkboxA3 + neutralStyle.Render(strutil.Repeat(" ", aeColumnGap)) + checkboxE3 + neutralStyle.Render(strutil.Repeat(" ", aeEnableTrail)) + nameSep + tagStr
 		rowWidth := subListWidth - 1
 		pContent := rowContent + neutralStyle.Render(strutil.Repeat(" ", max(0, rowWidth-lipgloss.Width(GetPlainText(rowContent)))))
 
@@ -1223,9 +1226,9 @@ func (m *MenuModel) renderSubListSequence(items []MenuItem, startVisibleIndex in
 		resM = append(resM, visibleIdx)
 	}
 
-	// 3. Build Bottom Border with 1 dash.
-	bottomBorder := BuildAEBottomBorder(subListWidth, 1, aeBorderFocused, m.activeColumn, -1, ctx)
-	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", 10))+bottomBorder+semstyle.CodeReset)
+	// 3. Build Bottom Border with no dash before the Add label.
+	bottomBorder := BuildAEBottomBorder(subListWidth, 0, aeBorderFocused, m.activeColumn, -1, ctx)
+	resLines = append(resLines, neutralStyle.Render(strutil.Repeat(" ", GetLayout().SubItemOffset()))+bottomBorder+semstyle.CodeReset)
 	resH = append(resH, 1)
 	resM = append(resM, startVisibleIndex|vIdxBorderFlag) // Flag as border
 
