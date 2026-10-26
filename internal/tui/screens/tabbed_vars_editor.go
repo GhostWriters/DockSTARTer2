@@ -412,14 +412,52 @@ func NewEnvEditorGlobal(onClose tea.Cmd, showBack bool, connType string) *Tabbed
 	}, showBack, connType)
 }
 
+// applyEditorTheme sets editor's line-drawing settings and every style it
+// draws with from the active theme, so none falls back to the editor's own
+// plain-color defaults.
+func applyEditorTheme(editor *enveditor.Model) {
+	ctx := displayengine.GetActiveContext()
+	editor.SetLineCharacters(ctx.LineCharacters)
+	editor.LineNumberBrackets = ctx.LineNumberBrackets
+	editor.LineNumberBracketOpen, editor.LineNumberBracketClose = displayengine.TagBracketGlyphs()
+
+	text := displayengine.GetStyles().ItemNormal
+	styles := editor.Styles()
+	for _, s := range []*enveditor.StyleState{&styles.Focused, &styles.Blurred} {
+		s.Text = text
+		s.CursorLine = text
+		s.Prompt = text
+		s.Placeholder = displayengine.SemanticRawStyle("LineComment")
+		s.EndOfBuffer = displayengine.SemanticRawStyle("LineNumber")
+		s.LineNumber = displayengine.SemanticRawStyle("LineNumber")
+		s.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
+		s.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
+		s.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
+		s.LineNumberBrackets = displayengine.SemanticRawStyle("LineNumberBrackets")
+		s.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
+		s.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
+		s.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")
+		s.CommentText = displayengine.SemanticRawStyle("LineComment")
+		s.ModifiedText = displayengine.SemanticRawStyle("ModifiedText")
+		s.ReadOnlyText = displayengine.SemanticRawStyle("EnvReadOnly")
+		s.PendingDeleteText = displayengine.SemanticRawStyle("EnvPendingDelete")
+		s.GutterAdded = displayengine.SemanticRawStyle("MarkerAdded")
+		s.GutterDeleted = displayengine.SemanticRawStyle("MarkerDeleted")
+		s.GutterModified = displayengine.SemanticRawStyle("MarkerModified")
+		s.GutterInvalid = displayengine.SemanticRawStyle("MarkerInvalid")
+	}
+	styles.Cursor.Color = displayengine.TextCursorColor()
+	styles.Cursor.Style = displayengine.TextCursorStyle()
+	styles.Cursor.FlashStyle = displayengine.TextCursorFlashStyle()
+	editor.SetStyles(styles)
+}
+
 func NewTabbedVarsEditorScreen(onClose tea.Cmd, title string, specs []EnvTabSpec, showBack bool, connType string) *TabbedVarsEditorModel {
 	var tabs []envTab
 	for _, spec := range specs {
 		editor := enveditor.New()
 		editor.ShowLineNumbers = true
-		editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
-		editor.LineNumberBrackets = displayengine.GetActiveContext().LineNumberBrackets
-		editor.LineNumberBracketOpen, editor.LineNumberBracketClose = displayengine.TagBracketGlyphs()
+		applyEditorTheme(&editor)
 		// The native/hardware cursor's color comes from the terminal
 		// emulator's own theme, not DS2's -- on some terminals (e.g.
 		// WezTerm) that can end up invisible against a given DS2 theme. The
