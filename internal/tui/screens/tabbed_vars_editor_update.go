@@ -33,6 +33,12 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lockedByOthers = msg.LockedByOthers
 		return m, nil
 
+	case displayengine.ConfigChangedMsg:
+		for i := range m.tabs {
+			applyEditorTheme(&m.tabs[i].editor)
+		}
+		return m, nil
+
 	case displayengine.LayerHitMsg:
 		// Keyboard resize mode owns input exclusively until Esc/EnvResizeSplit
 		// exits it -- a stray click on either editor pane switching focus/
@@ -980,49 +986,7 @@ func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabs[i].editor.ScrollbarFunc = func(content string, total, visible, offset int, lineChars bool) string {
 				return displayengine.ApplyScrollbarColumn(content, total, visible, offset, lineChars, displayengine.GetActiveContext())
 			}
-			m.tabs[i].editor.SetLineCharacters(displayengine.GetActiveContext().LineCharacters)
-			m.tabs[i].editor.LineNumberBrackets = displayengine.GetActiveContext().LineNumberBrackets
-			m.tabs[i].editor.LineNumberBracketOpen, m.tabs[i].editor.LineNumberBracketClose = displayengine.TagBracketGlyphs()
-
-			// Apply theme-aware env-specific styles
-			editorStyles := m.tabs[i].editor.Styles()
-			editorStyles.Focused.LineNumber = displayengine.SemanticRawStyle("LineNumber")
-			editorStyles.Focused.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
-			editorStyles.Focused.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
-			editorStyles.Focused.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
-			editorStyles.Focused.LineNumberBrackets = displayengine.SemanticRawStyle("LineNumberBrackets")
-			editorStyles.Focused.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
-			editorStyles.Focused.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
-			editorStyles.Focused.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Focused.CommentText = displayengine.SemanticRawStyle("LineComment")
-			editorStyles.Focused.ModifiedText = displayengine.SemanticRawStyle("ModifiedText")
-			editorStyles.Focused.ReadOnlyText = displayengine.SemanticRawStyle("EnvReadOnly")
-			editorStyles.Focused.PendingDeleteText = displayengine.SemanticRawStyle("EnvPendingDelete")
-			editorStyles.Focused.GutterAdded = displayengine.SemanticRawStyle("MarkerAdded")
-			editorStyles.Focused.GutterDeleted = displayengine.SemanticRawStyle("MarkerDeleted")
-			editorStyles.Focused.GutterModified = displayengine.SemanticRawStyle("MarkerModified")
-			editorStyles.Focused.GutterInvalid = displayengine.SemanticRawStyle("MarkerInvalid")
-			editorStyles.Cursor.Color = displayengine.TextCursorColor()
-			editorStyles.Cursor.Style = displayengine.TextCursorStyle()
-			editorStyles.Cursor.FlashStyle = displayengine.TextCursorFlashStyle()
-
-			editorStyles.Blurred.LineNumber = displayengine.SemanticRawStyle("LineNumber")
-			editorStyles.Blurred.LineNumberFocused = displayengine.SemanticRawStyle("LineNumberFocused")
-			editorStyles.Blurred.LineNumberModified = displayengine.SemanticRawStyle("LineNumberModified")
-			editorStyles.Blurred.LineNumberModifiedFocused = displayengine.SemanticRawStyle("LineNumberModifiedFocused")
-			editorStyles.Blurred.LineNumberBrackets = displayengine.SemanticRawStyle("LineNumberBrackets")
-			editorStyles.Blurred.InvalidText = displayengine.SemanticRawStyle("EnvInvalid")
-			editorStyles.Blurred.DuplicateText = displayengine.SemanticRawStyle("EnvDuplicate")
-			editorStyles.Blurred.BuiltinText = displayengine.SemanticRawStyle("EnvBuiltin")
-			editorStyles.Blurred.CommentText = displayengine.SemanticRawStyle("LineComment")
-			editorStyles.Blurred.ModifiedText = displayengine.SemanticRawStyle("ModifiedText")
-			editorStyles.Blurred.ReadOnlyText = displayengine.SemanticRawStyle("EnvReadOnly")
-			editorStyles.Blurred.PendingDeleteText = displayengine.SemanticRawStyle("EnvPendingDelete")
-			editorStyles.Blurred.GutterAdded = displayengine.SemanticRawStyle("MarkerAdded")
-			editorStyles.Blurred.GutterDeleted = displayengine.SemanticRawStyle("MarkerDeleted")
-			editorStyles.Blurred.GutterModified = displayengine.SemanticRawStyle("MarkerModified")
-			editorStyles.Blurred.GutterInvalid = displayengine.SemanticRawStyle("MarkerInvalid")
-			m.tabs[i].editor.SetStyles(editorStyles)
+			applyEditorTheme(&m.tabs[i].editor)
 			// Update tab metadata used by saveEnv and heading display
 			m.tabs[i].initialVars = data.InitialVars
 			m.tabs[i].defaultFilePath = data.DefaultFilePath
