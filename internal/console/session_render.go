@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"image/color"
 	"sync"
 
 	"github.com/GhostWriters/semstyle"
@@ -139,6 +140,19 @@ func ActivateSessionRenderContext(connType string, profile colorprofile.Profile,
 // each tint's current colors.
 func ResolveSessionTints(frame, connType string) string {
 	return semstyle.ResolveTints(frame, TintKeyForConnType(connType))
+}
+
+// ResolveSessionColor is ResolveSessionTints for a single color outside the
+// frame's text, such as the hardware cursor's.
+func ResolveSessionColor(c color.Color, connType string) color.Color {
+	return semstyle.ResolveColorWithDefault(c, TintKeyForConnType(connType))
+}
+
+// ResolveTerminalTints fills in the tint placeholders in text written
+// straight to this process's own terminal, with the local CLI tint for any
+// placeholder rendered without a key.
+func ResolveTerminalTints(s string) string {
+	return semstyle.ResolveTints(s, TintKeyForConnTypeElement("local", "cli"))
 }
 
 // sessionRenderKey is the context key for WithSessionRenderContext.

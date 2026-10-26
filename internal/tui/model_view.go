@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"sort"
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -16,8 +17,15 @@ import (
 // shadowBoxCache caches the most recently computed shadow box.
 // The shadow depends only on the content dimensions, context settings and the
 // active theme/tint scope — not the content itself — so we key on
-// (width, height, shadowLevel, lineChars, scope).
-var shadowBoxCache struct {
+// (width, height, shadowLevel, lineChars, scope). shadowBoxMu guards it:
+// sessions render it, and tint or theme changes clear it, from different
+// goroutines.
+var (
+	shadowBoxMu    sync.Mutex
+	shadowBoxCache shadowBoxEntry
+)
+
+type shadowBoxEntry struct {
 	width, height, level int
 	lineChars            bool
 	scope                string
@@ -27,12 +35,9 @@ var shadowBoxCache struct {
 // invalidateShadowCache clears the shadow box cache so it is recomputed on
 // the next render. Call this whenever theme or shadow settings change.
 func invalidateShadowCache() {
-	shadowBoxCache = struct {
-		width, height, level int
-		lineChars            bool
-		scope                string
-		result               string
-	}{}
+	shadowBoxMu.Lock()
+	defer shadowBoxMu.Unlock()
+	shadowBoxCache = shadowBoxEntry{}
 }
 
 // ViewStringer is an interface for models that provide string content for compositing
@@ -70,6 +75,9 @@ func (m *AppModel) View() (v tea.View) {
 		v = m.viewWithTint()
 	})
 	v.Content = console.ResolveSessionTints(v.Content, m.connType)
+	if v.Cursor != nil {
+		v.Cursor.Color = console.ResolveSessionColor(v.Cursor.Color, m.connType)
+	}
 	return v
 }
 
@@ -475,19 +483,20 @@ func compositorAddShadow(comp *lipgloss.Compositor, l *lipgloss.Layer, baseZ int
 	}
 	ctx := displayengine.GetActiveContext()
 	scope := displayengine.StylesScopeKey()
+	want := shadowBoxEntry{width: w, height: h, level: ctx.ShadowLevel, lineChars: ctx.LineCharacters, scope: scope}
+	shadowBoxMu.Lock()
+	cached := shadowBoxCache
+	shadowBoxMu.Unlock()
 	var shadowBox string
-	if shadowBoxCache.width == w && shadowBoxCache.height == h &&
-		shadowBoxCache.level == ctx.ShadowLevel && shadowBoxCache.lineChars == ctx.LineCharacters &&
-		shadowBoxCache.scope == scope {
-		shadowBox = shadowBoxCache.result
+	if cached.width == want.width && cached.height == want.height &&
+		cached.level == want.level && cached.lineChars == want.lineChars && cached.scope == want.scope {
+		shadowBox = cached.result
 	} else {
 		shadowBox = displayengine.GetShadowBoxCtx(content, ctx)
-		shadowBoxCache.width = w
-		shadowBoxCache.height = h
-		shadowBoxCache.level = ctx.ShadowLevel
-		shadowBoxCache.lineChars = ctx.LineCharacters
-		shadowBoxCache.scope = scope
-		shadowBoxCache.result = shadowBox
+		want.result = shadowBox
+		shadowBoxMu.Lock()
+		shadowBoxCache = want
+		shadowBoxMu.Unlock()
 	}
 	if shadowBox != "" {
 		comp.AddLayers(lipgloss.NewLayer(shadowBox).
