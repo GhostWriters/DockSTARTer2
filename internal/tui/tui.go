@@ -380,6 +380,10 @@ func SetProgramBoxHeader(subtitle, command string) {
 func init() {
 	console.ReplaceOutputLinesFn = ReplaceOutputLines
 	console.OutputContentWidthFn = displayengine.OutputContentWidth
+	console.DeferTintsChangedHook = func() {
+		displayengine.InvalidateStyles()
+		invalidateShadowCache()
+	}
 }
 
 // parseClientInfo extracts IP and connection type from environment strings.

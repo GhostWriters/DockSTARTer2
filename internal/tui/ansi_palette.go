@@ -206,14 +206,14 @@ func colorsToPalette(colors config.AnsiElementColors) (palette semstyle.Palette,
 			continue
 		}
 		empty = false
-		r, g, b, _ := semstyle.ToColor(v).RGBA()
+		r, g, b, _ := semstyle.ResolveColor(semstyle.ToColor(v)).RGBA()
 		hex[i] = fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 	}
 	extraHex := func(v string) string {
 		if v == "" {
 			return ""
 		}
-		r, g, b, _ := semstyle.ToColor(v).RGBA()
+		r, g, b, _ := semstyle.ResolveColor(semstyle.ToColor(v)).RGBA()
 		return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 	}
 	return semstyle.Palette{

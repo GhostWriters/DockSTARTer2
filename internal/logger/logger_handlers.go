@@ -136,7 +136,9 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Process based on mode
 	switch h.mode {
 	case "ansi":
-		msg = semstyle.ToANSI(msg)
+		// A message that reaches the terminal while the TUI runs (a fatal
+		// error) has its tint placeholders filled in with the CLI's tint.
+		msg = semstyle.ResolveTints(semstyle.ToANSI(msg), console.TintKeyForConnTypeElement("local", "cli"))
 	case "strip":
 		msg = semstyle.ToPlain(msg)
 	}

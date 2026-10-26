@@ -69,6 +69,7 @@ func (m *AppModel) View() (v tea.View) {
 	ActivateSessionRenderContext(m.connType, m.colorProfile, func() {
 		v = m.viewWithTint()
 	})
+	v.Content = console.ResolveSessionTints(v.Content, m.connType)
 	return v
 }
 
