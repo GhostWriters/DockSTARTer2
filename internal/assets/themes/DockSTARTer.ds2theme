@@ -34,8 +34,8 @@ accent    = "cyan"
 # ProgramBox = "{{[~]}}"
 
 ## Header bar
-  StatusFields          = "{{[blue:white:-BR]}}"         # = "{{[-]}}"
-# StatusName            = "{{|StatusFields|}}"
+  StatusFields          = "{{[white:blue:-B]}}"          # = "{{[-]}}"
+  StatusName            = "{{[white:black:-B]}}"         # = "{{|StatusFields|}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"

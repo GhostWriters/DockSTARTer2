@@ -31,7 +31,7 @@ accent = "red"
 
 ## Header bar
   StatusFields          = "{{|Screen|}}"                 # = "{{[-]}}"
-  StatusName            = "{{|StatusFields:::B|}}"       # = "{{|StatusFields|}}"
+  StatusName            = "{{[cyan:black:-B]}}"          # = "{{|StatusFields|}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"
