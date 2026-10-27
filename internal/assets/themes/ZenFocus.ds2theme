@@ -34,7 +34,7 @@ accent    = "$highlight"
 
 ## Header bar
   StatusFields          = "{{[$secondary:$primary:-]}}"    # = "{{[-]}}"
-# StatusName            = "{{|StatusFields|}}"
+  StatusName            = "{{|StatusBar:::-B|}}"           # = "{{|StatusFields|}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"

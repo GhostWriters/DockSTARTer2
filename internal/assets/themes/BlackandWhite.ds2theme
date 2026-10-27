@@ -31,8 +31,8 @@ direct_suffix   = "]}}"
 # ProgramBox = "{{[~]}}"
 
 ## Header bar
-  StatusFields          = "{{|Screen|}}"                 # = "{{[-]}}"
-  StatusName            = "{{|StatusFields:::B|}}"       # = "{{|StatusFields|}}"
+  StatusFields          = "{{[$secondary:$primary:-]}}"  # = "{{[-]}}"
+  StatusName            = "{{|StatusBar:::-B|}}"         # = "{{|StatusFields|}}"
 # StatusVersion         = "{{|StatusFields|}}"
 # StatusVersionBrackets = "{{|StatusFields|}}"
 # StatusVersionSpace    = "{{[-]}}"
