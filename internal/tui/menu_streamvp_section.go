@@ -52,14 +52,22 @@ func newStreamOutputSection(id string, box *ProgramBoxModel) *displayengine.Menu
 	m.ContentRenderer = func(contentWidth int) string {
 		ctx := displayengine.GetActiveContext()
 		// The content area uses the output tint; the border and scrollbar
-		// keep the session's own.
+		// keep the session's own. With no scrollbar shown, its empty column
+		// takes the output's background so the content stays flush with
+		// the border.
 		output := displayengine.OutputConsoleStyle()
-		box.sv.SetStyle(lipgloss.NewStyle().
+		outputBG := lipgloss.NewStyle().
 			Background(output.GetBackground()).
-			Foreground(output.GetForeground()))
+			Foreground(output.GetForeground())
+		box.sv.SetStyle(outputBG)
 
+		scrollCtx := ctx
+		sbInfo := displayengine.ComputeScrollbarInfo(box.sv.TotalLineCount(), box.sv.Height(), box.sv.YOffset(), box.sv.Height())
+		if !sbInfo.Needed || !displayengine.IsScrollbarEnabled() {
+			scrollCtx.ContentBackground = outputBG
+		}
 		viewportContent := displayengine.MaintainBackground(box.sv.View(), output)
-		viewportContent = displayengine.ApplyScrollbar(&box.Scroll, viewportContent, box.sv.TotalLineCount(), box.sv.Height(), box.sv.YOffset(), ctx.LineCharacters, ctx)
+		viewportContent = displayengine.ApplyScrollbar(&box.Scroll, viewportContent, box.sv.TotalLineCount(), box.sv.Height(), box.sv.YOffset(), ctx.LineCharacters, scrollCtx)
 
 		viewportStyle := output.Padding(0, 0)
 		viewportStyle = displayengine.ApplyInnerBorderCtx(viewportStyle, box.focused, ctx)
