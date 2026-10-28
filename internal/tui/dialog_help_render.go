@@ -289,7 +289,7 @@ func (m *HelpDialogModel) ViewString() string {
 			pageTextBox = displayengine.RenderBorderedBoxCtx(
 				m.contextInfo.PageTitle,
 				strings.Join(pageTextLines, "\n"),
-				maxLineWidth,
+				targetWidth,
 				len(pageTextLines)+2,
 				false, // focused: false
 				true,  // showIndicators: true
