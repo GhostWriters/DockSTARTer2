@@ -435,8 +435,8 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		}
 	}
 
-	// Outside "start", Starting/Started only follow a fresh Created, so the row ends on
-	// Started; a Recreated or Running row keeps that more telling state.
+	// Outside "start", Starting/Started apply only to a row that was just Created, so it
+	// ends on Started; Recreated and Running rows keep their status.
 	if p.command != "start" && (e.Text == api.StatusStarted || e.Text == api.StatusStarting) {
 		if t := p.tasks[id]; t == nil || (t.text != api.StatusCreated && t.text != api.StatusStarting) {
 			return

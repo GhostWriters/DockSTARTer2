@@ -129,7 +129,8 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 		} else if p.isTeardownCommand() {
 			anyStarted = true
 		} else if p.finished && imageForID == nil && contains(p.imageOrder, id) {
-			// An image with no events once the SDK returns was never pulled: it renders as Cached.
+			// An image with no events by the time the SDK returns needed no pull; its row
+			// shows Cached, so it counts as done.
 			anyStarted = true
 		} else {
 			allDone = false
