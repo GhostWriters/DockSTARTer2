@@ -106,6 +106,7 @@ type consoleEventProcessor struct {
 	doneCh chan struct{}
 
 	operation string
+	finished  bool     // the SDK call has returned (set in Done)
 	ids       []string // insertion-ordered task IDs
 	tasks     map[string]*consoleTask
 
@@ -321,6 +322,7 @@ func (p *consoleEventProcessor) Done(_ string, _ bool) {
 	// Synthesize final status for any service still in an active state.
 	// Some SDK operations (e.g. restart) never emit a per-service Done event.
 	p.mtx.Lock()
+	p.finished = true
 	p.finalizeActiveTasks()
 	p.mtx.Unlock()
 
@@ -392,12 +394,6 @@ func (p *consoleEventProcessor) On(events ...api.Resource) {
 		if e.ID == api.ResourceCompose {
 			continue
 		}
-		// Skip Starting/Started events for non-start commands, matching SDK TTY behaviour.
-		// The last visible state before these (typically Running/Created) is more familiar
-		// to users accustomed to "docker compose" output.
-		if p.command != "start" && (e.Text == api.StatusStarted || e.Text == api.StatusStarting) {
-			continue
-		}
 		p.upsert(e)
 	}
 }
@@ -436,6 +432,14 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 			if _, ok := p.containerToService[trimmed]; ok || p.isKnownServiceName(trimmed) {
 				id = trimmed
 			}
+		}
+	}
+
+	// Outside "start", Starting/Started apply only to a row that was just Created, so it
+	// ends on Started; Recreated and Running rows keep their status.
+	if p.command != "start" && (e.Text == api.StatusStarted || e.Text == api.StatusStarting) {
+		if t := p.tasks[id]; t == nil || (t.text != api.StatusCreated && t.text != api.StatusStarting) {
+			return
 		}
 	}
 

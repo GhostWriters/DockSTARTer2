@@ -97,7 +97,8 @@ func isServiceStatus(text string) bool {
 		api.StatusRunning, api.StatusWaiting,
 		api.StatusHealthy, api.StatusExited,
 		api.StatusKilling, api.StatusKilled,
-		api.StatusError:
+		api.StatusError,
+		"Recreate", "Recreated": // the SDK has no constants for these
 		return true
 	}
 	return false
