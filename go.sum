@@ -6,6 +6,8 @@ charm.land/glamour/v2 v2.0.2-0.20261015065741-010543cac1a0 h1:pnfN6r+BBGd0G4aRPG
 charm.land/glamour/v2 v2.0.2-0.20261015065741-010543cac1a0/go.mod h1:wqGcmrnBmbunm0/LszemUKpYwWxvPPBkEno7KusMy6s=
 charm.land/lipgloss/v2 v2.0.6 h1:EaGKeuA8FvF+v2BT5VmZd2LoYLaMZJXA5n34th8nCIQ=
 charm.land/lipgloss/v2 v2.0.6/go.mod h1:ipDDJNSGa1hlwDtSfW1s2/xR8Vdhbut4PXh2zEKZd0Q=
+charm.land/lipgloss/v2 v2.1.0 h1:RLCNLhSQST+NPOmvUSbRWZ3UFOXsf3ZXFmJ5E/2tHEU=
+charm.land/lipgloss/v2 v2.1.0/go.mod h1:wwfOgrNqUA9yjL8nmG6BIO0qQnmkEgJ8ISptbme83gI=
 charm.land/log/v2 v2.0.1 h1:uMk+t1hM/fomIqt7vn/Ub0AKo7IHvnDu6NK17nbOVx0=
 charm.land/log/v2 v2.0.1/go.mod h1:VXZNB8zoPPEIcvd7bRi2fpQpGCWweCSfWOwczA9dibs=
 charm.land/ssh v0.4.3 h1:hr5cYmlUYsP+KxyG/ug7ZMzKKN9f6VOD9yPpcGqdzzM=
