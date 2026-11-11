@@ -21,7 +21,7 @@ require (
 	github.com/charmbracelet/x/input v0.3.7
 	github.com/compose-spec/compose-go/v2 v2.16.2
 	github.com/containerd/errdefs v1.0.0
-	github.com/creativeprojects/go-selfupdate v1.7.0
+	github.com/creativeprojects/go-selfupdate v1.7.1
 	github.com/docker/cli v29.9.3+incompatible
 	github.com/docker/compose/v5 v5.7.0
 	github.com/docker/docker v28.5.2+incompatible
@@ -114,6 +114,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-github/v86 v86.0.0 // indirect
+	github.com/google/go-github/v93 v93.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
