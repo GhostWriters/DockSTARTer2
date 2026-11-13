@@ -195,23 +195,13 @@ type consoleEventProcessor struct {
 	diffIDGroupNum    map[string]int      // sha256 → sharing group number (assigned in first-seen order)
 	localDiffIDs      map[string]bool     // sha256 DiffIDs of every image on disk before the pull
 
-	// Pull-event → DiffID positional mapping.
-	// Docker sends MANY events per layer (Pulling fs layer → Downloading → Download
-	// complete → Extracting → Pull complete), all sharing the same pull-event ID. Layers
-	// first appear in RootFS.DiffIDs order, so we assign each NEW pull-event ID to the next
-	// DiffID slot and remember that assignment for all subsequent events of that same ID.
-	// imagePullIdx[imgRef] = index of next unassigned DiffID slot for that image.
-	// pullIDToDiffID[imgRef+":"+pullEventID] = assigned sha256 DiffID (stable across events).
-	imagePullIdx   map[string]int    // imgRef → next DiffID slot index
-	pullIDToDiffID map[string]string // imgRef+":"+pullEventID → sha256 DiffID
-
-	// Cold-pull layer identity (when pre-flight had no DiffIDs, e.g. after a prune).
-	// Layer tasks are keyed by the pull-event rawID during the pull. rawIDs are NOT stable
-	// across images for the same layer, so we can't detect cross-image sharing from them.
-	// Instead we record each image's rawID arrival order, then AFTER the image finishes
-	// pulling we inspect it (now on disk) to get its RootFS DiffIDs and positionally remap
-	// each rawID task to its sha256 DiffID — unifying identity with warm images so shared
-	// layers collapse onto one sha task and badges/counts work across warm+cold images.
+	// Downloaded layer identity. Layer tasks are keyed by the pull-event rawID during the
+	// pull: the download belongs to the image being pulled, whose layers may differ from
+	// the copy on disk (an update), so it can't be placed on the pre-flight DiffIDs. rawIDs
+	// are NOT stable across images for the same layer, so we record each image's rawID
+	// arrival order, then AFTER the image finishes pulling we inspect it (now on disk) to
+	// get its RootFS DiffIDs and positionally remap each rawID task to its sha256 DiffID —
+	// unifying identity so shared layers collapse onto one sha task and badges/counts work.
 	imagePullOrder map[string][]string // imgRef → rawIDs in first-seen pull order
 	rawIDSeen      map[string]bool     // imgRef+":"+rawID → already recorded in order
 
@@ -252,8 +242,6 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		imageLayerDiffIDs: make(map[string][]string),
 		diffIDImageCount:  make(map[string]int),
 		diffIDGroupNum:    make(map[string]int),
-		imagePullIdx:      make(map[string]int),
-		pullIDToDiffID:    make(map[string]string),
 		inspectedImages:   make(map[string]bool),
 		imagePullOrder:    make(map[string][]string),
 		rawIDSeen:         make(map[string]bool),
@@ -501,36 +489,13 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		}
 	}
 
-	// Positional mapping: remap pull-event layer IDs to sha256 DiffID task keys.
-	// A single layer produces many events sharing one pull-event ID. Assign each NEW
-	// pull-event ID to the next DiffID slot (layers first appear in RootFS order) and
-	// reuse that assignment for all later events of the same ID, so a layer's whole
-	// progression lands on one DiffID row instead of being smeared across several.
-	// Shared layers (same id across images) intentionally map to ONE task and show under
-	// each image — see the regression guard below for late re-pull events from a 2nd image.
+	// A layer event is a download for the image being pulled. Record its rawID's first-seen
+	// position for this image so the post-pull inspect can remap it to its sha256 DiffID.
 	if parentID != "" {
-		diffIDs := p.imageLayerDiffIDs[parentID]
-		if len(diffIDs) > 0 {
-			mapKey := parentID + ":" + id
-			if sha, ok := p.pullIDToDiffID[mapKey]; ok {
-				id = sha // already assigned this pull-event ID
-			} else {
-				idx := p.imagePullIdx[parentID]
-				if idx < len(diffIDs) {
-					sha := diffIDs[idx]
-					p.imagePullIdx[parentID] = idx + 1
-					p.pullIDToDiffID[mapKey] = sha
-					id = sha
-				}
-			}
-		} else {
-			// Cold-pull path: no pre-flight DiffIDs. Record this rawID's first-seen position
-			// for this image so post-pull inspect can remap it to its sha256 DiffID. id is rawID.
-			seenKey := parentID + ":" + id
-			if !p.rawIDSeen[seenKey] {
-				p.rawIDSeen[seenKey] = true
-				p.imagePullOrder[parentID] = append(p.imagePullOrder[parentID], id)
-			}
+		seenKey := parentID + ":" + id
+		if !p.rawIDSeen[seenKey] {
+			p.rawIDSeen[seenKey] = true
+			p.imagePullOrder[parentID] = append(p.imagePullOrder[parentID], id)
 		}
 	}
 
@@ -595,7 +560,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		t.endTime = time.Now()
 	}
 
-	// Post-pull inspect for images where pre-flight had no local data.
+	// Post-pull inspect, to place the image's downloads on its real layers.
 	if t.completed() && contains(p.imageIDs, id) && p.dockerClient != nil && !p.inspectedImages[id] {
 		p.inspectedImages[id] = true
 		p.inspectWG.Add(1)
@@ -795,7 +760,7 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 			}
 		}
 	}
-	if len(p.imageLayerDiffIDs) < len(p.imageOrder) {
+	if len(p.imageLayerDiffIDs) < len(p.imageOrder) || p.command == "pull" || p.command == "update" {
 		p.localDiffIDs = p.diskLayers(ctx)
 	}
 }
@@ -843,24 +808,26 @@ func (p *consoleEventProcessor) diskLayers(ctx context.Context) map[string]bool 
 	return layers
 }
 
-// applyInspectResult runs after a cold-pull image finishes pulling (it's now on disk).
-// It positionally remaps that image's rawID-keyed layer tasks to their sha256 DiffIDs,
-// unifying identity with warm images so shared layers collapse onto one sha task. This is
-// how dup badges/counts work across mixed warm+cold images: rawIDs differ per image for
-// the same layer, but DiffIDs match. Existing progress is preserved (merged into the sha
-// task, or the rawID task is rekeyed in place).
+// applyInspectResult runs after an image finishes pulling (it's now on disk). It replaces
+// the image's layer list with the pulled image's and positionally remaps its rawID-keyed
+// download tasks to their sha256 DiffIDs, unifying identity so shared layers collapse onto
+// one sha task. This is how dup badges/counts work across images: rawIDs differ per image
+// for the same layer, but DiffIDs match. An image already on disk that downloaded nothing
+// keeps its pre-flight layers.
 func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []string) {
-	if len(layers) == 0 || len(p.imageLayerDiffIDs[imgRef]) > 0 {
-		return // warm image (already had DiffIDs) or nothing to do
-	}
 	order := p.imagePullOrder[imgRef]
+	if len(layers) == 0 || (len(p.imageLayerDiffIDs[imgRef]) > 0 && len(order) == 0) {
+		return // nothing downloaded for an image already on disk, or nothing to do
+	}
 	p.imageLayerDiffIDs[imgRef] = layers
+	// Downloads not placed on a layer below are dropped with the list.
+	defer delete(p.imagePullOrder, imgRef)
 
 	// Alignment: the SDK drops "Already exists" events for cached layers, so `order` (the
 	// rawIDs we actually saw download) only contains this image's NON-cached layers, while
 	// `layers` is the full RootFS DiffID list. A cached layer either already has a sha task
-	// (owned by a warm image that shares it) or was on disk before the pull (localDiffIDs).
-	// The downloaded rawIDs map, in order, to the remaining DiffIDs.
+	// (from pre-flight, this image's or another's) or was on disk before the pull
+	// (localDiffIDs). The downloaded rawIDs map, in order, to the remaining DiffIDs.
 	var downloadSlots []string // DiffIDs (sha) neither owned nor on disk — these were downloaded
 	for _, sha := range layers {
 		if _, ok := p.tasks[sha]; !ok && !p.localDiffIDs[sha] {
