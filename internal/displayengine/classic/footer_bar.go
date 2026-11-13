@@ -1,11 +1,12 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
 	"fmt"
 	"strconv"
 
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // FooterBar is controls at the right of a submenu's bottom border, below

@@ -1,11 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/system"
 	"context"
 	"fmt"
 	"os"
@@ -13,6 +8,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 )
 
 // ResolveDockerVolumeConfig reads DOCKER_CONFIG_FOLDER and DOCKER_VOLUME_CONFIG

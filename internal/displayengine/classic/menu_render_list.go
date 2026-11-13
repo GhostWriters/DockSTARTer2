@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
+	"charm.land/lipgloss/v2"
 	semstyle "github.com/GhostWriters/semstyle/lg"
 
-	"charm.land/lipgloss/v2"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 )
 
 const vIdxBorderFlag = 0x40000000

@@ -9,14 +9,14 @@ import (
 	"sync"
 	"time"
 
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/dockerlayout"
-	"DockSTARTer2/internal/strutil"
 	"github.com/GhostWriters/semstyle"
-
 	"github.com/buger/goterm"
 	"github.com/docker/compose/v5/pkg/api"
 	dockerclient "github.com/moby/moby/client"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockerlayout"
+	"DockSTARTer2/internal/strutil"
 )
 
 // imageInspector is the subset of the Docker client API used for layer inspection.
@@ -53,9 +53,9 @@ const (
 
 	// Compose-specific constants.
 	layerStatusW      = dockerlayout.LayerStatusW // max width of any abbreviated layer status ("Downloading")
-	sizeColW          = 8  // width of one fixedSize() value
-	sizeSepW          = 1  // width of "/" between current/total sizes
-	timerReserveW     = 10 // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
+	sizeColW          = 8                         // width of one fixedSize() value
+	sizeSepW          = 1                         // width of "/" between current/total sizes
+	timerReserveW     = 10                        // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
 	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
 	layerSizesColBase = layerPrefixW + iconW + spaceW
 	// summaryHeaderIndentW shifts content lines right to nest under the summary header.
@@ -155,19 +155,19 @@ type consoleEventProcessor struct {
 	unknownContainers map[string]string
 	unknownCount      int
 
-	startTime     time.Time       // set when the processor is created, just before the compose call; used for overall elapsed timer in summary
-	numLines      int             // lines written in last render
+	startTime     time.Time // set when the processor is created, just before the compose call; used for overall elapsed timer in summary
+	numLines      int       // lines written in last render
 	started       bool
 	spinnerFrame  int
-	maxLineWidth  int             // widest visible line seen so far; grows but never shrinks
-	maxTimerWidth int             // widest timer string seen so far; grows but never shrinks
-	noViewport    bool            // when true, skip GlobalViewport activation (e.g. running inside program box)
-	updateFn      func([]string)  // called each render tick in noViewport mode instead of writing to out
-	lastSentLines []string        // last lines sent via updateFn; skip if unchanged
-	asciiMode     bool            // when true, use ASCII spinners, icons, and progress bar chars
-	verbose       bool            // when true, show individual layer rows under each image
-	staticOut     bool            // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
-	forceSummary  bool            // when true, prependSummary includes the header even if GlobalViewport still reports active -- set around the final pre-Deactivate render, whose whole point is baking the summary into the scrollback dump
+	maxLineWidth  int            // widest visible line seen so far; grows but never shrinks
+	maxTimerWidth int            // widest timer string seen so far; grows but never shrinks
+	noViewport    bool           // when true, skip GlobalViewport activation (e.g. running inside program box)
+	updateFn      func([]string) // called each render tick in noViewport mode instead of writing to out
+	lastSentLines []string       // last lines sent via updateFn; skip if unchanged
+	asciiMode     bool           // when true, use ASCII spinners, icons, and progress bar chars
+	verbose       bool           // when true, show individual layer rows under each image
+	staticOut     bool           // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
+	forceSummary  bool           // when true, prependSummary includes the header even if GlobalViewport still reports active -- set around the final pre-Deactivate render, whose whole point is baking the summary into the scrollback dump
 
 	dockerClient imageInspector // Docker client for pre-flight and post-pull ImageInspect
 
@@ -198,7 +198,7 @@ type consoleEventProcessor struct {
 	// each rawID task to its sha256 DiffID — unifying identity with warm images so shared
 	// layers collapse onto one sha task and badges/counts work across warm+cold images.
 	imagePullOrder map[string][]string // imgRef → rawIDs in first-seen pull order
-	rawIDSeen      map[string]bool      // imgRef+":"+rawID → already recorded in order
+	rawIDSeen      map[string]bool     // imgRef+":"+rawID → already recorded in order
 
 	// Post-pull inspect (for images not already local at start, or to confirm).
 	inspectWG       sync.WaitGroup
@@ -227,12 +227,12 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		// direct-terminal-write path below while the TUI's alt-screen owns the
 		// real cursor, leaving a stray animating glyph stuck at a fixed
 		// terminal position that survives redraws.
-		noViewport:         updateFn != nil || console.IsTUIEnabled(),
-		updateFn:           updateFn,
-		asciiMode:          asciiMode,
-		verbose:            verbose,
-		staticOut:          staticOut,
-		startTime:          time.Now(),
+		noViewport:        updateFn != nil || console.IsTUIEnabled(),
+		updateFn:          updateFn,
+		asciiMode:         asciiMode,
+		verbose:           verbose,
+		staticOut:         staticOut,
+		startTime:         time.Now(),
 		dockerClient:      dockerClient,
 		imageLayerDiffIDs: make(map[string][]string),
 		diffIDImageCount:  make(map[string]int),

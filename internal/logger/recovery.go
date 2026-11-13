@@ -1,10 +1,11 @@
 package logger
 
 import (
-	"DockSTARTer2/internal/console"
 	"context"
 
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/console"
 )
 
 // Recover traps panics and displays them using FatalWithStack.

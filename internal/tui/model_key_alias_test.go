@@ -3,10 +3,10 @@ package tui
 import (
 	"testing"
 
-	"DockSTARTer2/internal/displayengine"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // TestKeyAliasesMatchTheirShortcuts checks each plain-key alias becomes the

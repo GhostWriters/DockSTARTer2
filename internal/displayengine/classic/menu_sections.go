@@ -3,11 +3,11 @@ package classic
 import (
 	"unicode"
 
-	"DockSTARTer2/internal/tui/components/sinput"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/tui/components/sinput"
 )
 
 // ComfortableMinHeight is implemented by an expandable content section that

@@ -1,10 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/envutil"
-	"DockSTARTer2/internal/paths"
 	"bufio"
 	"context"
 	"fmt"
@@ -16,6 +12,11 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v4"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/envutil"
+	"DockSTARTer2/internal/paths"
 )
 
 // AppVarFileNames returns the base filenames (not full paths, e.g.

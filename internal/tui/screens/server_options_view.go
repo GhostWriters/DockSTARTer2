@@ -1,10 +1,10 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/displayengine"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 func (s *ServerOptionsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

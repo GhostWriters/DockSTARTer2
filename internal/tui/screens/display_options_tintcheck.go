@@ -3,12 +3,12 @@ package screens
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // tintedThemeName is the bundled theme drawn in tint colors, offered when a

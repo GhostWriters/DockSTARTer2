@@ -1,11 +1,12 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // interactionWindow is how recently a wheel event must have landed on a

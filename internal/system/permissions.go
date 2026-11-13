@@ -1,9 +1,6 @@
 package system
 
 import (
-	dsexec "DockSTARTer2/internal/exec"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
 	"bytes"
 	"context"
 	"fmt"
@@ -12,6 +9,10 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"DockSTARTer2/internal/console"
+	dsexec "DockSTARTer2/internal/exec"
+	"DockSTARTer2/internal/logger"
 )
 
 // applyPermissionFix runs the ownership/permission fix natively in-process

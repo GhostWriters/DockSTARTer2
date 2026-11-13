@@ -3,10 +3,10 @@ package classic
 import (
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
-
-	"charm.land/lipgloss/v2"
 )
 
 // GetBlockBorders returns a BorderPair with solid block borders for both states
@@ -161,9 +161,9 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 			indL = ">"
 			indR = "<"
 		}
-		result.WriteString(borderStyle.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + indL, "")))
+		result.WriteString(borderStyle.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+indL, "")))
 		result.WriteString(renderedTitle)
-		result.WriteString(borderStyle.Render(theme.ToANSI("{{|TitleFocusIndicator|}}" + indR, "")))
+		result.WriteString(borderStyle.Render(theme.ToANSI("{{|TitleFocusIndicator|}}"+indR, "")))
 	} else if spinInd != "" {
 		indStyle := "{{|TitleUnfocusedIndicator|}}"
 		if isChanged {
@@ -196,4 +196,3 @@ func RenderTopBorderBoxCtx(title, rightTitle, rightSuffix, content string, conte
 
 	return result.String()
 }
-

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"DockSTARTer2/internal/strutil"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // DragDoneMsg signals that a drag-induced render has completed, allowing

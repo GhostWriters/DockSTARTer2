@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // configAppsMenuModel wraps the outer container MenuModel (title, buttons)

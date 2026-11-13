@@ -6,13 +6,13 @@ import (
 	"slices"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
-
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
 )
 
 // specifiedThemeDefaultFields returns the set of config.Appearance struct

@@ -3,9 +3,9 @@ package compose
 import (
 	"time"
 
-	"DockSTARTer2/internal/strutil"
-
 	"github.com/docker/compose/v5/pkg/api"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 const elapsedShortFmt = "5.0s" // "9.1s" / "42.7s"

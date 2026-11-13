@@ -1,9 +1,9 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/theme"
-
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/theme"
 )
 
 // HelplineModel represents the help line at the bottom of the TUI

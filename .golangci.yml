@@ -21,6 +21,15 @@ linters:
       - builtin$
       - examples$
 formatters:
+  enable:
+    - gofmt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
   exclusions:
     generated: lax
     paths:

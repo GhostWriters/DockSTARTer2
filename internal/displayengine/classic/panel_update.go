@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/version"
-
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
 )
 
 // preloadPanelLog reads the last 200 lines of the log file.
@@ -548,7 +548,6 @@ func (m *PanelModel) runSudoShellCommand(cmdStr, rawCmd string) tea.Cmd {
 		return ConsoleScannerReadyMsg{Scanner: sc, Cancel: cancel}
 	}
 }
-
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 

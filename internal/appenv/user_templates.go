@@ -1,11 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/system"
 	"bytes"
 	"context"
 	"io/fs"
@@ -13,6 +8,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 )
 
 // walkUserAppFolders calls fn(baseAppNameUpper, folderPath) for every leaf

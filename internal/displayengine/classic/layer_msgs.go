@@ -1,9 +1,9 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/config"
-
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/config"
 )
 
 // ToggleFocusedMsg requests toggling/activating the currently focused item.

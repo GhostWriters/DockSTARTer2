@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/fsnotify/fsnotify"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-
-	tea "charm.land/bubbletea/v2"
-	"github.com/fsnotify/fsnotify"
 )
 
 // startConfigWatcher watches the config file for external changes (e.g. from

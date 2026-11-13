@@ -5,15 +5,15 @@ import (
 	"image/color"
 	"time"
 
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/logger"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/logger"
 )
 
 // ScreenType identifies different screens in the TUI

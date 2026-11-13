@@ -13,8 +13,9 @@ import (
 	"strings"
 	"text/template"
 
-	dsexec "DockSTARTer2/internal/exec"
 	"github.com/adrg/xdg"
+
+	dsexec "DockSTARTer2/internal/exec"
 )
 
 const launchDaemonLabel = "com.dockstarter2.server"

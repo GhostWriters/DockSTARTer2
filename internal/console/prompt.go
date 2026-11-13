@@ -1,13 +1,13 @@
 package console
 
 import (
-	"github.com/GhostWriters/semstyle"
 	"bufio"
 	"context"
 	"errors"
 	"os"
 	"strings"
 
+	"github.com/GhostWriters/semstyle"
 	"golang.org/x/term"
 )
 

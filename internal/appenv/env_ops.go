@@ -1,13 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/system"
-	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
 	"os"
@@ -16,6 +9,14 @@ import (
 	"strings"
 
 	"github.com/adrg/xdg"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
+	"DockSTARTer2/internal/version"
 )
 
 // EnvCreate initializes the DockSTARTer environment file, mirroring

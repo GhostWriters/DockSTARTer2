@@ -1,12 +1,12 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/tui/components/sinput"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
 
-	tea "charm.land/bubbletea/v2"
+	"DockSTARTer2/internal/tui/components/sinput"
 )
 
 // ShowInputContextMenu builds a right-click context menu for a sinput field and

@@ -1,11 +1,11 @@
 package screens
 
 import (
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 func (s *DisplayOptionsScreen) ViewString() (result string) {

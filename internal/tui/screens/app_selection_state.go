@@ -1,17 +1,18 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui"
 	"context"
 	"io"
 	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui"
 )
 
 type changeSet struct {

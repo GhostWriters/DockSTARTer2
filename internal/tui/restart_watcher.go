@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 const restartWatchInterval = 3 * time.Second

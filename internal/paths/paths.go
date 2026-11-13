@@ -1,20 +1,12 @@
 package paths
 
 import (
-	// The blank boot import is deliberate and load-bearing: boot's init()
-	// drops sudo privileges (and corrects HOME/XDG) BEFORE this package --
-	// and therefore before every filesystem-touching package that imports
-	// it -- can compute a path or write anything from root's environment.
-	_ "DockSTARTer2/internal/boot"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/version"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-
 	"sync"
 	"time"
 
@@ -22,6 +14,14 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	// The blank boot import is deliberate and load-bearing: boot's init()
+	// drops sudo privileges (and corrects HOME/XDG) BEFORE this package --
+	// and therefore before every filesystem-touching package that imports
+	// it -- can compute a path or write anything from root's environment.
+	_ "DockSTARTer2/internal/boot"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/version"
 )
 
 var (

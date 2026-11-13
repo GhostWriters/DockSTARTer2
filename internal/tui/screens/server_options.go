@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // ServerOptionsScreen allows the user to configure the SSH (and web) server.

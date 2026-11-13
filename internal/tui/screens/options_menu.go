@@ -1,10 +1,10 @@
 package screens
 
 import (
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // NewOptionsMenuScreen creates the options menu as a standalone screen.

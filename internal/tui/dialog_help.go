@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
 	"image/color"
 	"strings"
 
@@ -9,6 +8,8 @@ import (
 	keybind "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // subKeyMap implements help.KeyMap with a subset of FullHelp columns for per-page rendering.

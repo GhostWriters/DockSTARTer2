@@ -1,9 +1,10 @@
 package update
 
 import (
-	"DockSTARTer2/internal/testutils"
 	"fmt"
 	"testing"
+
+	"DockSTARTer2/internal/testutils"
 )
 
 func TestCompareVersions(t *testing.T) {

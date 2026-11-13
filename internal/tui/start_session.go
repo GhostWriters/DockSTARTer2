@@ -3,12 +3,12 @@ package tui
 import (
 	"context"
 
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/sessionlocks"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // StartForSession builds and registers a Bubble Tea program for a single

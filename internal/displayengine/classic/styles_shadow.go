@@ -4,9 +4,9 @@ import (
 	"image/color"
 	"strings"
 
-	"DockSTARTer2/internal/strutil"
-
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // Render3DBorderCtx renders content with 3D border using specific context

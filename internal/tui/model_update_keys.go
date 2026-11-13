@@ -3,14 +3,14 @@ package tui
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
-
-	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
 )
 
 func (m *AppModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {

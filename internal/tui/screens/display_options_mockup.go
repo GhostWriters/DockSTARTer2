@@ -5,13 +5,13 @@ import (
 	"image/color"
 	"strings"
 
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/strutil"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/strutil"
 )
 
 // previewContentWidth is the fixed inner content width every piece of the
@@ -514,7 +514,6 @@ func (s *DisplayOptionsScreen) menuPreviewDialog(previewCtx displayengine.StyleC
 
 	return displayengine.RenderBorderedBoxCtx(dTitle, contentStr, 38, 0, true, true, false, previewCtx.DialogTitleAlign, "Title", previewCtx, displayengine.TitleBarState{Show: true})
 }
-
 
 // buildPreviewSection builds the fake preview dialog as a submenu-mode
 // Content section (title "Preview"), for nesting inside the outer Appearance

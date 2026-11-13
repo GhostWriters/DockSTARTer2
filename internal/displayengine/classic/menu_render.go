@@ -1,12 +1,13 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
 	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 )
 
 // renderCheckboxGlyphSplit renders a 3-rune checkbox/radio glyph (e.g. "[✓]",

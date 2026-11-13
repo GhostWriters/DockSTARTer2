@@ -19,11 +19,11 @@ import (
 	"sync"
 	"time"
 
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
-
 	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/client"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 )
 
 // MinAPIVersion is the oldest Docker daemon API version DS2 supports.

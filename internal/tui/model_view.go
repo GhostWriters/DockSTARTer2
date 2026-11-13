@@ -1,10 +1,6 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/strutil"
 	"image/color"
 	"sort"
 	"strings"
@@ -12,6 +8,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/strutil"
 )
 
 // shadowBoxCache caches the most recently computed shadow box.

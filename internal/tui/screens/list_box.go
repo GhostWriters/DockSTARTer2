@@ -3,10 +3,10 @@ package screens
 import (
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
-
-	"charm.land/lipgloss/v2"
 )
 
 // TwoColumnRow is one pre-built display row for a two-column list.

@@ -1,10 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
 	"os"
@@ -15,6 +11,11 @@ import (
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
 	"go.yaml.in/yaml/v4"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
 )
 
 // IsAppNameValid checks if an app name is valid according to DS rules.

@@ -8,14 +8,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/GhostWriters/semstyle"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/go-units"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/logger"
-	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
-
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/go-units"
 )
 
 const (
@@ -412,7 +412,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	// ── summary ───────────────────────────────────────────────────────────────
 	// Added after the indent loop so it aligns with "prune:" in the header, not the children.
 	if r.SpaceReclaimed > 0 {
-		lines = append(lines, GlobalIndent+strutil.Repeat(" ", IconW+SpaceW)+semstyle.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}" +
+		lines = append(lines, GlobalIndent+strutil.Repeat(" ", IconW+SpaceW)+semstyle.ToANSI("{{[white::B]}}Total reclaimed space:{{[-]}} {{|DockerMarkerDone|}}"+
 			units.HumanSize(float64(r.SpaceReclaimed))+"{{[-]}}"))
 	}
 

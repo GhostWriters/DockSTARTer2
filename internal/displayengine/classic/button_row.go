@@ -5,9 +5,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"DockSTARTer2/internal/console"
-
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/console"
 )
 
 var buttonRowCounter atomic.Uint64

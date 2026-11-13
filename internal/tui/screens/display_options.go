@@ -14,6 +14,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/GhostWriters/semstyle"
 
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
@@ -22,8 +23,6 @@ import (
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/sinput"
-
-	"github.com/GhostWriters/semstyle"
 )
 
 // DisplayOptionsScreen allows the user to configure UI settings and themes together.

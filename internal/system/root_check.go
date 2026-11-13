@@ -1,10 +1,11 @@
 package system
 
 import (
-	"DockSTARTer2/internal/logger"
 	"context"
 	"os"
 	"runtime"
+
+	"DockSTARTer2/internal/logger"
 )
 
 // CheckNotRoot exits fatally only for a broken-identity case: a process

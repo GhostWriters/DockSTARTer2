@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
-
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
 )
 
 // Prune removes unused docker resources.

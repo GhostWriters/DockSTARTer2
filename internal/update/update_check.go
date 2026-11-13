@@ -12,17 +12,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
+	"github.com/go-git/go-git/v5"
+	gitConfig "github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
-
-	"github.com/Masterminds/semver/v3"
-	"github.com/go-git/go-git/v5"
-	gitConfig "github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 // CheckCurrentStatus verifies if the current channel still exists on GitHub.

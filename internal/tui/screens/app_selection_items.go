@@ -1,9 +1,6 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/displayengine"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -12,6 +9,10 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/displayengine"
 )
 
 // appSelectShowSpinnerMsg is sent after a short delay to show the loading spinner,

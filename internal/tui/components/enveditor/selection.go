@@ -251,7 +251,6 @@ func (m *Model) moveCursorTo(pos Position) {
 	m.col = clamp(pos.Col, 0, len(m.value[row]))
 }
 
-
 // startKeyboardSelection begins (or continues) a shift-modified keyboard
 // selection at the cursor's current position.
 func (m *Model) startKeyboardSelection() {

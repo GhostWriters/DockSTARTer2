@@ -1,17 +1,18 @@
 package system
 
 import (
-	dsexec "DockSTARTer2/internal/exec"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/version"
 	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
+
+	"DockSTARTer2/internal/console"
+	dsexec "DockSTARTer2/internal/exec"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/version"
 )
 
 // AutoSetcapStartup manages the optional CAP_CHOWN/CAP_FOWNER grant on the

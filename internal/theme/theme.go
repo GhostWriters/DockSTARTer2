@@ -1,10 +1,6 @@
 package theme
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
 	"bytes"
 	"context"
 	"fmt"
@@ -13,12 +9,16 @@ import (
 	"strings"
 	"sync"
 
+	"charm.land/lipgloss/v2"
 	semstyle "github.com/GhostWriters/semstyle/lg"
 	semtheme "github.com/GhostWriters/semstyle/theme"
-
-	"charm.land/lipgloss/v2"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/pelletier/go-toml/v2"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
 )
 
 // ThemeConfig holds the metadata for the active theme

@@ -1,11 +1,6 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"image/color"
 	"regexp"
 	"strconv"
@@ -13,6 +8,12 @@ import (
 	"sync"
 
 	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 )
 
 // GetMenuItemID returns a unique ID for a menu item

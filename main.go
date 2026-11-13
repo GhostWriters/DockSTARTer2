@@ -14,6 +14,9 @@ import (
 	"sync"
 	"syscall"
 
+	"charm.land/lipgloss/v2"
+	"github.com/adrg/xdg"
+
 	"DockSTARTer2/cmd"
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/assets"
@@ -32,8 +35,6 @@ import (
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
-	"charm.land/lipgloss/v2"
-	"github.com/adrg/xdg"
 )
 
 func main() {

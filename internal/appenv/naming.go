@@ -9,9 +9,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"DockSTARTer2/internal/console"
-
 	"go.yaml.in/yaml/v4"
+
+	"DockSTARTer2/internal/console"
 )
 
 // appURLCache caches AppURL results: app name → url string, or "" if not built-in.

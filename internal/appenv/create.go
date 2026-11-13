@@ -1,14 +1,15 @@
 package appenv
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
-	"context"
-	"os"
-	"path/filepath"
 )
 
 // Create ensures the environment file exists.

@@ -3,11 +3,11 @@ package classic
 import (
 	"strings"
 
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
+	"charm.land/lipgloss/v2"
 	semstyle "github.com/GhostWriters/semstyle/lg"
 
-	"charm.land/lipgloss/v2"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 )
 
 // LargeTitleBarOverhead is the extra lines a large titlebar adds over a small one (title row + separator).

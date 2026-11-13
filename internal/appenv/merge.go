@@ -1,15 +1,17 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
-	"github.com/GhostWriters/semstyle"
-	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 )
 
 // MergeNewOnly merges variables from source file to target file, adding only new ones.

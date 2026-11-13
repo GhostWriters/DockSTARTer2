@@ -11,6 +11,11 @@ import (
 	"sync"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	semstyle "github.com/GhostWriters/semstyle"
+	"github.com/charmbracelet/colorprofile"
+	"golang.org/x/term"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/config"
@@ -23,11 +28,6 @@ import (
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
 	"DockSTARTer2/internal/webmsg"
-
-	tea "charm.land/bubbletea/v2"
-	semstyle "github.com/GhostWriters/semstyle"
-	"github.com/charmbracelet/colorprofile"
-	"golang.org/x/term"
 )
 
 var (

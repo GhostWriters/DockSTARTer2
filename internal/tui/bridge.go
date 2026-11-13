@@ -1,12 +1,13 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/commands"
-	"DockSTARTer2/internal/console"
 	"context"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/commands"
+	"DockSTARTer2/internal/console"
 )
 
 // bridgeSend delivers msg via ctx's session-scoped callback (see

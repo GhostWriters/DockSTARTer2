@@ -13,15 +13,14 @@ import (
 	"sync"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	sip "github.com/Gaurav-Gosain/sip"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
-
-	sip "github.com/Gaurav-Gosain/sip"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // webUserAgentKey is the context key sip's User-Agent-capturing

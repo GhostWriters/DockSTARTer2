@@ -7,15 +7,15 @@ import (
 	"regexp"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/GhostWriters/semstyle"
+	"github.com/charmbracelet/x/ansi"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
-	"github.com/GhostWriters/semstyle"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // overrideSlot is one color an element's overrides can set.

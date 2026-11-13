@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
-
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/console"
 )
 
 // sessionConfirmFunc returns a confirm callback bound to p specifically,

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -327,5 +328,3 @@ func splitLines(s string) []string {
 	}
 	return out
 }
-
-

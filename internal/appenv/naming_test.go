@@ -1,12 +1,13 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/paths"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/paths"
 )
 
 func TestGetDeprecatedFromLabels(t *testing.T) {

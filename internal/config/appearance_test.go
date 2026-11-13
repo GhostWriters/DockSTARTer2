@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"DockSTARTer2/internal/paths"
-
 	toml "github.com/pelletier/go-toml/v2"
+
+	"DockSTARTer2/internal/paths"
 )
 
 // loadFromBytes mirrors LoadAppConfig's overlay-and-migrate steps for an

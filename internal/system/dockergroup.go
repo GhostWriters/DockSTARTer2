@@ -1,9 +1,6 @@
 package system
 
 import (
-	dsexec "DockSTARTer2/internal/exec"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
 	"bytes"
 	"context"
 	"fmt"
@@ -11,6 +8,10 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"DockSTARTer2/internal/console"
+	dsexec "DockSTARTer2/internal/exec"
+	"DockSTARTer2/internal/logger"
 )
 
 // OfferDockerGroupFix handles permission-denied-on-docker-socket when caused

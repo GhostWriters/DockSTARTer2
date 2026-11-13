@@ -6,14 +6,14 @@ import (
 	"io"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
-
-	"charm.land/lipgloss/v2"
 )
 
 // renderHeaderUI renders the tasks and progress bar. Subtitle is rendered by

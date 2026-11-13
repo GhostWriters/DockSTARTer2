@@ -12,12 +12,12 @@ import (
 	"time"
 	"unicode"
 
-	"DockSTARTer2/internal/colorutil"
-	"DockSTARTer2/internal/tui/components/enveditor/memoization"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/sergi/go-diff/diffmatchpatch"
+
+	"DockSTARTer2/internal/colorutil"
+	"DockSTARTer2/internal/tui/components/enveditor/memoization"
 )
 
 // undoSnapshot captures editor state before a modifying operation.

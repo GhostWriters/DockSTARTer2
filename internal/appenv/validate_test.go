@@ -1,12 +1,13 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/constants"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
 )
 
 func TestValidateComposeOverride(t *testing.T) {

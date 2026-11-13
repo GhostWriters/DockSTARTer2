@@ -1,17 +1,17 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/theme"
-	"DockSTARTer2/internal/tui"
 	"slices"
 	"strconv"
 	"strings"
 
-	"DockSTARTer2/internal/tui/components/sinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/GhostWriters/semstyle"
 
-	tea "charm.land/bubbletea/v2"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/tui/components/sinput"
 )
 
 // newFindBox builds a list's Find box (see displayengine.NewFooteredList):

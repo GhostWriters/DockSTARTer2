@@ -3,10 +3,10 @@ package config
 import (
 	"strings"
 
-	"DockSTARTer2/internal/console"
-
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/pelletier/go-toml/v2"
+
+	"DockSTARTer2/internal/console"
 )
 
 // ConnTypes lists every connection type a session can have, in display order:

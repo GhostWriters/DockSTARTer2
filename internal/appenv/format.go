@@ -1,11 +1,8 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/envutil"
-	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
-	"github.com/GhostWriters/semstyle"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/envutil"
+	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/strutil"
 )
 

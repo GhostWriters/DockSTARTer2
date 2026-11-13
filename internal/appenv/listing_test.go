@@ -1,12 +1,13 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
 	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"DockSTARTer2/internal/config"
 )
 
 func TestListReferencedApps_Comments(t *testing.T) {

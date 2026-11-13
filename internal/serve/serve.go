@@ -12,16 +12,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"charm.land/ssh"
+	"charm.land/wish/v2"
+	"charm.land/wish/v2/logging"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
-
-	"charm.land/wish/v2"
-	"charm.land/wish/v2/logging"
-	"charm.land/ssh"
 )
 
 func init() {

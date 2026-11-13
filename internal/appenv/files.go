@@ -1,16 +1,17 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/system"
 	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 )
 
 // LogAppTemplateOverride logs (unconditionally -- callers decide when to

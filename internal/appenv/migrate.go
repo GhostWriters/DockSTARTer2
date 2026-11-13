@@ -1,11 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
 	"fmt"
@@ -13,6 +8,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 )
 
 // MigrateAppVars performs variable migrations for an application based on a .migrate file.

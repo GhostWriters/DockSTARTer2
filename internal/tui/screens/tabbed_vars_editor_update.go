@@ -1,9 +1,6 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui"
 	"context"
 	"os"
 	"strconv"
@@ -12,6 +9,10 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui"
 )
 
 func (m *TabbedVarsEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

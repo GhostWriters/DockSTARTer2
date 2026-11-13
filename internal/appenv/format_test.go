@@ -1,7 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/paths"
 	"context"
 	"os"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"DockSTARTer2/internal/paths"
 )
 
 func TestFormatLinesCore(t *testing.T) {

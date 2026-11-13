@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/ssh"
+	"charm.land/wish/v2"
+
 	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/tui"
-
-	"charm.land/wish/v2"
-	"charm.land/ssh"
 )
 
 // ds2TrustEnvPrefixes are the env vars DS2 itself sets to convey trusted

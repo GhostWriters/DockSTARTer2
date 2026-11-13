@@ -1,10 +1,11 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // RenderWithBackdrop renders dialog content with header and helpline

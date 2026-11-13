@@ -1,9 +1,11 @@
 package cmd
 
 import (
-	"DockSTARTer2/internal/commands"
-	"github.com/GhostWriters/semstyle"
 	"fmt"
+
+	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/commands"
 )
 
 // PrintHelp prints usage information to stdout.

@@ -3,11 +3,11 @@ package tui
 import (
 	"time"
 
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui/components/sinput"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui/components/sinput"
 )
 
 // promptDialogModel represents a single-line text/password input dialog.

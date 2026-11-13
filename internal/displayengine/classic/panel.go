@@ -5,13 +5,14 @@ import (
 	"context"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/tui/components/streamvp"
-	"charm.land/bubbles/v2/textinput"
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 const (
@@ -52,7 +53,6 @@ type ConsoleLockMsg struct {
 	ID     string
 	Locked bool
 }
-
 
 // ConsoleDoneMsg signals that a console command has finished.
 type ConsoleDoneMsg struct {
@@ -105,20 +105,20 @@ type PanelModel struct {
 	// sessionLockers tracks active locks by ID. Input is locked when non-empty.
 	sessionLockers map[string]struct{}
 
-	PanelMode            string // "log", "console", "system", or "none"
-	connType             string // "local", "ssh", or "web"
-	graphicsSupported    bool   // resolved terminal capability -- see AppModel.graphicsSupported; kept in sync via SetGraphicsSupported
-	clientIP             string // the owning session's real client IP/address, for edit-lock terminal attribution (see sessionlocks.SessionManager.AcquireEditLock)
-	sessionKey           string // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
-	logSub               <-chan string // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
-	logUnsub             func()        // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
-	confirmFunc          func(title, question string, defaultYes bool) bool // this session's own confirm callback, set via SetConfirmFunc; attached to console commands' ctx so their prompts reach this session, not whichever session's Program is currently the global tui.program
-	promptFunc           func(title, question string, sensitive bool, initialValue ...string) (string, error) // this session's own text-prompt callback, set via SetPromptFunc; same purpose as confirmFunc but for TextPrompt (e.g. the sudo password prompt)
-	sendFunc             func(tea.Msg) // this session's own message-delivery callback, set via SetSendFunc; same purpose as confirmFunc but for a bare tea.Msg (e.g. TUIBridge navigation, RunCommand's dialog)
-	titleSpinner         TitleSpinner
-	lastLineTime         time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
-	panelChanged         bool      // new content arrived while collapsed; cleared on expand
-	replaceHeaderCount   int       // line count before first ReplaceOutputMsg (-1 = not yet set)
+	PanelMode          string                                                                               // "log", "console", "system", or "none"
+	connType           string                                                                               // "local", "ssh", or "web"
+	graphicsSupported  bool                                                                                 // resolved terminal capability -- see AppModel.graphicsSupported; kept in sync via SetGraphicsSupported
+	clientIP           string                                                                               // the owning session's real client IP/address, for edit-lock terminal attribution (see sessionlocks.SessionManager.AcquireEditLock)
+	sessionKey         string                                                                               // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
+	logSub             <-chan string                                                                        // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
+	logUnsub           func()                                                                               // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
+	confirmFunc        func(title, question string, defaultYes bool) bool                                   // this session's own confirm callback, set via SetConfirmFunc; attached to console commands' ctx so their prompts reach this session, not whichever session's Program is currently the global tui.program
+	promptFunc         func(title, question string, sensitive bool, initialValue ...string) (string, error) // this session's own text-prompt callback, set via SetPromptFunc; same purpose as confirmFunc but for TextPrompt (e.g. the sudo password prompt)
+	sendFunc           func(tea.Msg)                                                                        // this session's own message-delivery callback, set via SetSendFunc; same purpose as confirmFunc but for a bare tea.Msg (e.g. TUIBridge navigation, RunCommand's dialog)
+	titleSpinner       TitleSpinner
+	lastLineTime       time.Time // when the last log line arrived; spinner runs until idle for spinnerIdleTimeout
+	panelChanged       bool      // new content arrived while collapsed; cleared on expand
+	replaceHeaderCount int       // line count before first ReplaceOutputMsg (-1 = not yet set)
 }
 
 const spinnerIdleTimeout = 1500 * time.Millisecond
@@ -644,4 +644,3 @@ func panelMaxHeight(totalTermHeight int) int {
 	}
 	return maxH
 }
-

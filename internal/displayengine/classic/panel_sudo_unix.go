@@ -21,7 +21,7 @@ import (
 // parseShellArgs) and passed to sudo as separate argv elements, never as a
 // string handed to a shell -- so there's no shell expansion step left for
 // cmd to reconstruct "sudo" or anything else behind dispatchShellCommand's
-// blacklist. -p '' suppresses sudo's own redundant password prompt banner,
+// blacklist. -p ” suppresses sudo's own redundant password prompt banner,
 // since DS2 already showed its own password dialog.
 //
 // Stdout/Stderr are wired through a raw *os.File pipe we manage ourselves,

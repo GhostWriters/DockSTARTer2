@@ -1,14 +1,15 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/paths"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/paths"
 )
 
 // AppStatus returns the status of an app.

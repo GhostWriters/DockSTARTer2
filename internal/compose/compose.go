@@ -10,14 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/dockercheck"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/version"
-
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
@@ -26,6 +18,14 @@ import (
 	"github.com/docker/compose/v5/pkg/api"
 	composev5 "github.com/docker/compose/v5/pkg/compose"
 	mobyclient "github.com/moby/moby/client"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/dockercheck"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/version"
 )
 
 // setPullPolicy sets the pull policy on all services in the project.
