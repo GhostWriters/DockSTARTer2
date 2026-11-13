@@ -22,8 +22,7 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	netCount := len(p.visibleNetworkIDs()) // excludes in-use networks hidden on teardown
 	volCount := len(p.volumeIDs)
 
-	// Count unique DiffIDs across all images (each sha256 counted once regardless of sharing).
-	layerCount := len(p.diffIDImageCount)
+	layerCount := p.layerCount()
 
 	var parts []string
 	if svcCount > 0 {
@@ -47,6 +46,22 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	// Prepend an overall spinner/marker (icon + space) so the summary reads as the
 	// top-level rollup header, shifting the whole block 3 chars right to align under it.
 	return globalIndent + p.overallRollupIcon() + " " + summaryFmt
+}
+
+// layerCount returns the number of layer rows across all images: each sha256 DiffID once
+// regardless of sharing, plus each download not placed on a layer.
+func (p *consoleEventProcessor) layerCount() int {
+	n := len(p.diffIDImageCount)
+	seen := make(map[string]bool)
+	for _, rawIDs := range p.imagePullOrder {
+		for _, rawID := range rawIDs {
+			if p.tasks[rawID] != nil && !seen[rawID] {
+				seen[rawID] = true
+				n++
+			}
+		}
+	}
+	return n
 }
 
 type timerStyle int

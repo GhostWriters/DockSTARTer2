@@ -193,7 +193,8 @@ type consoleEventProcessor struct {
 	imageLayerDiffIDs map[string][]string // imgRef → ordered sha256 DiffIDs
 	diffIDImageCount  map[string]int      // sha256 → count of images containing it
 	diffIDGroupNum    map[string]int      // sha256 → sharing group number (assigned in first-seen order)
-	localDiffIDs      map[string]bool     // sha256 DiffIDs of every image on disk before the pull
+	localDiffIDs      map[string]bool     // sha256 DiffIDs of every image on disk before the pull; read only after waitDiskScan
+	diskScanDone      chan struct{}       // closed when the disk scan that fills localDiffIDs finishes; nil when none ran
 
 	// Downloaded layer identity. Layer tasks are keyed by the pull-event rawID during the
 	// pull: the download belongs to the image being pulled, whose layers may differ from
@@ -570,6 +571,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 			if err != nil {
 				return
 			}
+			p.waitDiskScan()
 			p.mtx.Lock()
 			p.applyInspectResult(imgRef, info.RootFS.Layers)
 			p.mtx.Unlock()
@@ -760,68 +762,98 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 			}
 		}
 	}
-	if len(p.imageLayerDiffIDs) < len(p.imageOrder) || p.command == "pull" || p.command == "update" {
-		p.localDiffIDs = p.diskLayers(ctx)
+	if commandMayPull(p.command) {
+		p.startDiskScan(ctx)
 	}
 }
 
-// diskLayerInspects bounds the concurrent inspects in diskLayers, and
+// commandMayPull reports whether command can pull images.
+func commandMayPull(command string) bool {
+	switch command {
+	case "down", "rm", "stop", "kill", "pause", "unpause", "restart", "start":
+		return false
+	}
+	return true
+}
+
+// diskLayerInspects bounds the concurrent inspects in the disk scan, and
 // diskLayerTimeout the whole scan, so a stalled daemon can't hold up the pull.
 const (
 	diskLayerInspects = 8
 	diskLayerTimeout  = 5 * time.Second
 )
 
-// diskLayers returns the DiffIDs of every image on disk, so an image pulled for
-// the first time can tell which of its layers needed no download.
-func (p *consoleEventProcessor) diskLayers(ctx context.Context) map[string]bool {
+// startDiskScan collects the DiffIDs of every image on disk into localDiffIDs, so a
+// pulled image can tell which of its layers needed no download. The image list is read
+// before returning, ahead of the pull; the inspects run in the background, and
+// waitDiskScan blocks until they finish.
+func (p *consoleEventProcessor) startDiskScan(ctx context.Context) {
+	done := make(chan struct{})
+	p.diskScanDone = done
 	ctx, cancel := context.WithTimeout(ctx, diskLayerTimeout)
-	defer cancel()
 	list, err := p.dockerClient.ImageList(ctx, dockerclient.ImageListOptions{All: true})
 	if err != nil {
-		return nil
+		cancel()
+		close(done)
+		return
 	}
-	var (
-		mu  sync.Mutex
-		wg  sync.WaitGroup
-		sem = make(chan struct{}, diskLayerInspects)
-	)
-	layers := make(map[string]bool)
-	for _, img := range list.Items {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(id string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			info, err := p.dockerClient.ImageInspect(ctx, id)
-			if err != nil {
-				return
-			}
-			mu.Lock()
-			for _, sha := range info.RootFS.Layers {
-				layers[sha] = true
-			}
-			mu.Unlock()
-		}(img.ID)
+	go func() {
+		defer close(done)
+		defer cancel()
+		var (
+			mu  sync.Mutex
+			wg  sync.WaitGroup
+			sem = make(chan struct{}, diskLayerInspects)
+		)
+		layers := make(map[string]bool)
+		for _, img := range list.Items {
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(id string) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				info, err := p.dockerClient.ImageInspect(ctx, id)
+				if err != nil {
+					return
+				}
+				mu.Lock()
+				for _, sha := range info.RootFS.Layers {
+					layers[sha] = true
+				}
+				mu.Unlock()
+			}(img.ID)
+		}
+		wg.Wait()
+		p.localDiffIDs = layers
+	}()
+}
+
+// waitDiskScan blocks until the disk scan, if one started, has finished. Reads of
+// localDiffIDs must follow it.
+func (p *consoleEventProcessor) waitDiskScan() {
+	if p.diskScanDone != nil {
+		<-p.diskScanDone
 	}
-	wg.Wait()
-	return layers
 }
 
 // applyInspectResult runs after an image finishes pulling (it's now on disk). It replaces
 // the image's layer list with the pulled image's and positionally remaps its rawID-keyed
 // download tasks to their sha256 DiffIDs, unifying identity so shared layers collapse onto
 // one sha task. This is how dup badges/counts work across images: rawIDs differ per image
-// for the same layer, but DiffIDs match. An image already on disk that downloaded nothing
-// keeps its pre-flight layers.
+// for the same layer, but DiffIDs match. When the downloads can't be matched to layers
+// one-to-one, they stay as their own rows rather than land on the wrong layers.
 func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []string) {
-	order := p.imagePullOrder[imgRef]
-	if len(layers) == 0 || (len(p.imageLayerDiffIDs[imgRef]) > 0 && len(order) == 0) {
-		return // nothing downloaded for an image already on disk, or nothing to do
+	if len(layers) == 0 {
+		return
 	}
-	p.imageLayerDiffIDs[imgRef] = layers
-	// Downloads not placed on a layer below are dropped with the list.
-	defer delete(p.imagePullOrder, imgRef)
+
+	// Downloads still keyed by rawID; one another image already remapped has no task left.
+	var order []string
+	for _, rawID := range p.imagePullOrder[imgRef] {
+		if p.tasks[rawID] != nil {
+			order = append(order, rawID)
+		}
+	}
 
 	// Alignment: the SDK drops "Already exists" events for cached layers, so `order` (the
 	// rawIDs we actually saw download) only contains this image's NON-cached layers, while
@@ -834,16 +866,29 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 			downloadSlots = append(downloadSlots, sha)
 		}
 	}
-	n := len(order)
-	if len(downloadSlots) < n {
-		n = len(downloadSlots)
-	}
-	for i := 0; i < n; i++ {
-		rawID, sha := order[i], downloadSlots[i]
-		rawTask := p.tasks[rawID]
-		if rawTask == nil {
-			continue
+
+	// Counts that differ mean a cached layer went unrecognised (an incomplete disk scan,
+	// or a layer another image registered mid-pull), so position no longer identifies a
+	// download's layer. List only the layers known to need no download, and keep the
+	// downloads as their own rows.
+	if len(downloadSlots) != len(order) {
+		var known []string
+		for _, sha := range layers {
+			if !slices.Contains(downloadSlots, sha) {
+				known = append(known, sha)
+			}
 		}
+		p.imageLayerDiffIDs[imgRef] = known
+		p.addCachedLayerTasks(known)
+		p.recomputeDiffIDSharing()
+		return
+	}
+
+	p.imageLayerDiffIDs[imgRef] = layers
+	delete(p.imagePullOrder, imgRef)
+	for i, rawID := range order {
+		sha := downloadSlots[i]
+		rawTask := p.tasks[rawID]
 		// Rekey the downloaded rawID task in place to its sha DiffID.
 		rawTask.id = sha
 		delete(p.tasks, rawID)
@@ -856,7 +901,15 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 		}
 	}
 
-	// A layer with no task by now needed no download.
+	p.addCachedLayerTasks(layers)
+
+	// Recompute sharing counts + badge group numbers from unified sha identity.
+	p.recomputeDiffIDSharing()
+}
+
+// addCachedLayerTasks gives each layer with no task an "Already exists" one: by now it
+// needed no download.
+func (p *consoleEventProcessor) addCachedLayerTasks(layers []string) {
 	for _, sha := range layers {
 		if _, ok := p.tasks[sha]; !ok {
 			p.tasks[sha] = &consoleTask{
@@ -869,9 +922,6 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 			p.ids = append(p.ids, sha)
 		}
 	}
-
-	// Recompute sharing counts + badge group numbers from unified sha identity.
-	p.recomputeDiffIDSharing()
 }
 
 // recomputeDiffIDSharing rebuilds diffIDImageCount and diffIDGroupNum from imageLayerDiffIDs,

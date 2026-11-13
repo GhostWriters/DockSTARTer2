@@ -196,16 +196,11 @@ func (p *consoleEventProcessor) imageFetched(imgName string) bool {
 }
 
 // worstChildStatus returns the worst EventStatus among all layer children of imgName.
-// With sha256-keyed tasks, layers are looked up via imageLayerDiffIDs rather than parentID.
+// With sha256-keyed tasks, layers are looked up via layersForImage rather than parentID.
 func (p *consoleEventProcessor) worstChildStatus(imgName string) api.EventStatus {
 	worst := api.Done
-	diffIDs := p.imageLayerDiffIDs[imgName]
-	if len(diffIDs) > 0 {
-		for _, sha := range diffIDs {
-			t := p.tasks[sha]
-			if t == nil {
-				continue
-			}
+	if len(p.imageLayerDiffIDs[imgName]) > 0 {
+		for _, t := range p.layersForImage(imgName) {
 			switch t.status {
 			case api.Error:
 				return api.Error
@@ -260,15 +255,20 @@ func (p *consoleEventProcessor) worstImageStatus(imgName string) api.EventStatus
 	return img.status
 }
 
-// allLayersAlreadyExist reports whether every layer of imgName has text "Already exists".
+// allLayersAlreadyExist reports whether every layer of imgName, including downloads not yet
+// placed on a layer, has text "Already exists".
 func (p *consoleEventProcessor) allLayersAlreadyExist(imgName string) bool {
 	diffIDs := p.imageLayerDiffIDs[imgName]
 	if len(diffIDs) == 0 {
 		return false
 	}
 	for _, sha := range diffIDs {
-		l := p.tasks[sha]
-		if l == nil || l.text != "Already exists" {
+		if l := p.tasks[sha]; l == nil || l.text != "Already exists" {
+			return false
+		}
+	}
+	for _, rawID := range p.imagePullOrder[imgName] {
+		if l := p.tasks[rawID]; l != nil && l.text != "Already exists" {
 			return false
 		}
 	}
