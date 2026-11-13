@@ -173,6 +173,8 @@ github.com/docker/cli v29.9.3+incompatible h1:SBaMp7ecohadEHMDrUJg22t9I3awqsAVhn
 github.com/docker/cli v29.9.3+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/compose/v5 v5.7.0 h1:nRBxm4HkCFo8Bgb49o6xdhnJ0nl1eGb1H0FAb/ExldE=
 github.com/docker/compose/v5 v5.7.0/go.mod h1:FD9FBNvFvruYI+QiKZ5AoSH+FdO0gguWdF8AqSUGXtY=
+github.com/docker/compose/v5 v5.7.1 h1:WbO2IZu7NNZ3zktPBsoJkxSxPdKoFpKKBHY0gUIDqBw=
+github.com/docker/compose/v5 v5.7.1/go.mod h1:ly9/c4pDGIOPLwoX3BwS6mTePUGb2zlzjnaiCuY/WDs=
 github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBirtxJnzDrHLEKxTAYk=
 github.com/docker/distribution v2.8.3+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
 github.com/docker/docker v28.5.2+incompatible h1:DBX0Y0zAjZbSrm1uzOkdr1onVghKaftjlSWt4AFexzM=
@@ -555,6 +557,8 @@ google.golang.org/genproto/googleapis/rpc v0.0.0-20260911204522-f61a6ca850bd h1:
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260911204522-f61a6ca850bd/go.mod h1:DjtHYE8FKJLivXcBEjGwndXfIC23G0VpXiXKqG179uA=
 google.golang.org/grpc v1.84.0 h1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0=
 google.golang.org/grpc v1.84.0/go.mod h1:ljCht0DrxQrXBDRTZp52Qxh3Ffk8CdYm2sj4O2QN2C0=
+google.golang.org/grpc v1.85.0 h1:BPBCfuVRQ1qvBhKDOq9uvQllMvO59rKsYhXpp7Dd8vw=
+google.golang.org/grpc v1.85.0/go.mod h1:0rQrOD58yjal/0EaVbGBANindixsCZNQPDV3VKtaKuQ=
 google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=
 google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
