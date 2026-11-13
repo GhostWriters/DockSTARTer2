@@ -81,14 +81,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			var statusText, statusTag, icon string
 			if t == nil {
 				if img != nil && p.allLayersAlreadyExist(imgName) {
-					statusText = "Cached"
-					if p.command == "pull" {
-						statusTag = "{{|DockerStatusFinal|}}Cached{{[-]}}"
-						icon = "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
-					} else {
-						statusTag = "{{|DockerStatusActive|}}Cached{{[-]}}"
-						icon = p.activeSpinnerTag(p.icons().spinner)
-					}
+					statusText, statusTag, icon = p.cachedStatus(isPullingText(img.text))
 				} else if img != nil {
 					statusText = abbreviateStatus(img.text)
 					statusTag = imageStatusTag(img.status, img.text, p.command)
@@ -104,27 +97,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 					}
 				}
 			} else {
-				switch t.text {
-				case api.StatusPulling, api.StatusBuilding:
-					if p.allLayersAlreadyExist(imgName) {
-						statusText = "Cached"
-						if p.command == "pull" {
-							statusTag = "{{|DockerStatusFinal|}}Cached{{[-]}}"
-							icon = "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
-						} else {
-							statusTag = "{{|DockerStatusActive|}}Cached{{[-]}}"
-							icon = p.activeSpinnerTag(p.icons().spinner)
-						}
-					} else {
-						statusText = abbreviateStatus(t.text)
-						statusTag = serviceStatusTag(t.status, t.text, p.command)
-						icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
-					}
-				default:
-					statusText = abbreviateStatus(t.text)
-					statusTag = serviceStatusTag(t.status, t.text, p.command)
-					icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
-				}
+				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
@@ -178,6 +151,34 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 	}
 
 	return p.prependSummary(lines, timers)
+}
+
+// isPullingText reports whether text is an image fetch still in progress.
+func isPullingText(text string) bool {
+	return text == api.StatusPulling || text == api.StatusBuilding
+}
+
+// cachedStatus returns the status for a row whose image needed no download:
+// active while the SDK is still checking for a newer image, final once it is done.
+func (p *consoleEventProcessor) cachedStatus(checking bool) (text, tag, icon string) {
+	if checking {
+		return "Cached", "{{|DockerStatusActive|}}Cached{{[-]}}", p.activeSpinnerTag(p.icons().spinner)
+	}
+	return "Cached", "{{|DockerStatusFinal|}}Cached{{[-]}}", "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
+}
+
+// serviceRowStatus returns a service row's status, showing Cached in place of
+// Pulling or Pulled when its image needed no download.
+func (p *consoleEventProcessor) serviceRowStatus(svc, imgName string, t *consoleTask) (text, tag, icon string) {
+	if p.allLayersAlreadyExist(imgName) {
+		switch t.text {
+		case api.StatusPulling, api.StatusBuilding:
+			return p.cachedStatus(true)
+		case api.StatusPulled:
+			return p.cachedStatus(false)
+		}
+	}
+	return abbreviateStatus(t.text), serviceStatusTag(t.status, t.text, p.command), p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
 }
 
 // layersForImage returns the ordered layer tasks for an image: from pre-flight/remapped
@@ -250,10 +251,9 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	}
 
 	if t == nil || allLayersCached {
-		cachedIcon := "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
-		cachedStatus := "{{|DockerStatusFinal|}}Cached{{[-]}}"
-		statusPad := strutil.Repeat(" ", sectionStatusW-len("Cached"))
-		return globalIndent + cachedIcon + " " + cachedStatus + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
+		statusText, statusTag, icon := p.cachedStatus(t != nil && isPullingText(t.text))
+		statusPad := strutil.Repeat(" ", sectionStatusW-len(statusText))
+		return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
@@ -546,27 +546,7 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 			if t == nil {
 				icon, statusTag, statusText = impliedIcon, impliedTag+impliedText+"{{[-]}}", impliedText
 			} else {
-				switch t.text {
-				case api.StatusPulling, api.StatusBuilding:
-					if p.allLayersAlreadyExist(imgName) {
-						statusText = "Cached"
-						if p.command == "pull" {
-							statusTag = "{{|DockerStatusFinal|}}Cached{{[-]}}"
-							icon = "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
-						} else {
-							statusTag = "{{|DockerStatusActive|}}Cached{{[-]}}"
-							icon = p.activeSpinnerTag(p.icons().spinner)
-						}
-					} else {
-						statusText = abbreviateStatus(t.text)
-						statusTag = serviceStatusTag(t.status, t.text, p.command)
-						icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
-					}
-				default:
-					statusText = abbreviateStatus(t.text)
-					statusTag = serviceStatusTag(t.status, t.text, p.command)
-					icon = p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
-				}
+				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)

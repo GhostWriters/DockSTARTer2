@@ -132,6 +132,9 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			// An image with no events by the time the SDK returns needed no pull; its row
 			// shows Cached, so it counts as done.
 			anyStarted = true
+		} else if imageForID != nil && p.command == "pull" && p.imageFetched(imageForID(id)) {
+			// A pull has no container work, so a service is done once its image is.
+			anyStarted = true
 		} else {
 			allDone = false
 			if imageForID != nil {
@@ -160,6 +163,18 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 	default:
 		return rollupProcessing
 	}
+}
+
+// imageFetched reports whether imgName's pull has finished, or needed none: an
+// image with no events by the time the SDK returns.
+func (p *consoleEventProcessor) imageFetched(imgName string) bool {
+	if imgName == "" {
+		return false
+	}
+	if t := p.tasks[imgName]; t != nil {
+		return t.completed()
+	}
+	return p.finished
 }
 
 // worstChildStatus returns the worst EventStatus among all layer children of imgName.
