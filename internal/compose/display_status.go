@@ -63,6 +63,9 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	ids = append(ids, netIDs...)
 	ids = append(ids, p.volumeIDs...)
 	state := p.rollupState(ids, nil)
+	if p.finished && !p.succeeded {
+		state = rollupError // the call failed, whatever its rows show
+	}
 	if state == rollupProcessing || state == rollupPending {
 		return p.activeSpinnerTag(p.icons().spinner)
 	}
@@ -151,8 +154,9 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			anyWarning = true
 		}
 	}
-	// A failed SDK call fails the services section even when no row reported the error.
-	if imageForID != nil && p.finished && !p.succeeded {
+	// A failed SDK call that no row reported fails the services section; a failure
+	// shown on a row (a network or volume one too) leaves it to that row.
+	if imageForID != nil && p.finished && !p.succeeded && !p.anyRowFailed() {
 		anyError = true
 	}
 	switch {
@@ -167,6 +171,16 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 	default:
 		return rollupProcessing
 	}
+}
+
+// anyRowFailed reports whether any task has reported an error.
+func (p *consoleEventProcessor) anyRowFailed() bool {
+	for _, t := range p.tasks {
+		if t.status == api.Error {
+			return true
+		}
+	}
+	return false
 }
 
 // imageFetched reports whether imgName's pull has finished, or needed none: an
