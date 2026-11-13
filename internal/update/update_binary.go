@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 
+	selfupdate "github.com/creativeprojects/go-selfupdate"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	dsexec "DockSTARTer2/internal/exec"
@@ -23,8 +25,6 @@ import (
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/system"
 	"DockSTARTer2/internal/version"
-
-	selfupdate "github.com/creativeprojects/go-selfupdate"
 )
 
 // latestChannelTag returns the most recent tag for the given channel.

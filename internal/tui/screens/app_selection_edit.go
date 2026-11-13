@@ -1,11 +1,12 @@
 package screens
 
 import (
+	"context"
+	"fmt"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
-	"context"
-	"fmt"
 )
 
 func (s *AppSelectionScreen) editingTag(niceName, content, errMsg string) string {

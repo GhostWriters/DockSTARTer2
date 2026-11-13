@@ -5,12 +5,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/GhostWriters/semstyle"
+	"github.com/docker/compose/v5/pkg/api"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
-	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
-
-	"github.com/docker/compose/v5/pkg/api"
 )
 
 func (p *consoleEventProcessor) buildSummaryLine() string {

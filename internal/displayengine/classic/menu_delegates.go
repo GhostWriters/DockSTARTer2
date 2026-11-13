@@ -20,9 +20,9 @@ type menuItemDelegate struct {
 	paddingWidth        int
 }
 
-func (d menuItemDelegate) Height() int                             { return 1 }
-func (d menuItemDelegate) Spacing() int                            { return 0 }
-func (d menuItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d menuItemDelegate) Height() int                                          { return 1 }
+func (d menuItemDelegate) Spacing() int                                         { return 0 }
+func (d menuItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd              { return nil }
 func (d menuItemDelegate) Render(_ io.Writer, _ list.Model, _ int, _ list.Item) {}
 
 // checkboxItemDelegate implements list.ItemDelegate for single-column checkbox menus.
@@ -37,9 +37,9 @@ type checkboxItemDelegate struct {
 	paddingWidth        int
 }
 
-func (d checkboxItemDelegate) Height() int                             { return 1 }
-func (d checkboxItemDelegate) Spacing() int                            { return 0 }
-func (d checkboxItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d checkboxItemDelegate) Height() int                                          { return 1 }
+func (d checkboxItemDelegate) Spacing() int                                         { return 0 }
+func (d checkboxItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd              { return nil }
 func (d checkboxItemDelegate) Render(_ io.Writer, _ list.Model, _ int, _ list.Item) {}
 
 // groupedItemDelegate implements list.ItemDelegate for the hierarchical app-selection list.
@@ -52,7 +52,7 @@ type groupedItemDelegate struct {
 	activityGutterWidth int
 }
 
-func (d groupedItemDelegate) Height() int                             { return 1 }
-func (d groupedItemDelegate) Spacing() int                            { return 0 }
-func (d groupedItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d groupedItemDelegate) Height() int                                          { return 1 }
+func (d groupedItemDelegate) Spacing() int                                         { return 0 }
+func (d groupedItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd              { return nil }
 func (d groupedItemDelegate) Render(_ io.Writer, _ list.Model, _ int, _ list.Item) {}

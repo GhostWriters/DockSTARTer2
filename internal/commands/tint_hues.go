@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/config"
-
-	"github.com/pelletier/go-toml/v2"
 )
 
 // TintHueNames are the hue tags a scheme can carry (see TintEntry.Hues), in

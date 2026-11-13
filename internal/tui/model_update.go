@@ -1,6 +1,9 @@
 package tui
 
 import (
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/input"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/graphics"
@@ -8,9 +11,6 @@ import (
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/theme"
 	"DockSTARTer2/internal/version"
-
-	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/input"
 )
 
 // Update implements tea.Model. Wraps updateWithTint so this session's own

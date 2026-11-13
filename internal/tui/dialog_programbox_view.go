@@ -1,11 +1,12 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // ViewString delegates to outer for the dialog's own content, overlaying the

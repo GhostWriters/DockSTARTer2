@@ -1,12 +1,8 @@
 package logger
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"io"
 	"log/slog"
 	"os"
@@ -17,7 +13,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	charmlog "charm.land/log/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 	"github.com/charmbracelet/colorprofile"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/version"
 )
 
 // TUIMode suppresses direct console output (stdout/stderr) when active.

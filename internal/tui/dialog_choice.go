@@ -4,11 +4,10 @@ import (
 	"strings"
 	"time"
 
-	semstyle "github.com/GhostWriters/semstyle/lg"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 
 	"DockSTARTer2/internal/displayengine"
 )

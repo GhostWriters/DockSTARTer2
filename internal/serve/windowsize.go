@@ -3,9 +3,9 @@ package serve
 import (
 	"context"
 
-	"DockSTARTer2/internal/tui"
-
 	"charm.land/ssh"
+
+	"DockSTARTer2/internal/tui"
 )
 
 // makeWindowSizeChan converts wish's window-change channel into a

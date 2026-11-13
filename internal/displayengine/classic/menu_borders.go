@@ -3,9 +3,9 @@ package classic
 import (
 	"fmt"
 
-	"DockSTARTer2/internal/strutil"
-
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // aeLabelsWidth is the width of both column labels and the dash between them.

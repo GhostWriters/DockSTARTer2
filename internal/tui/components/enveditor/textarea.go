@@ -12,12 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/tui/components/enveditor/memoization"
-	"DockSTARTer2/internal/tui/components/enveditor/runeutil"
-	"DockSTARTer2/internal/tui/glyphs"
-
 	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
@@ -29,6 +23,12 @@ import (
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 	"github.com/sergi/go-diff/diffmatchpatch"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/tui/components/enveditor/memoization"
+	"DockSTARTer2/internal/tui/components/enveditor/runeutil"
+	"DockSTARTer2/internal/tui/glyphs"
 )
 
 const (

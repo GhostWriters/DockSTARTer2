@@ -1,6 +1,11 @@
 package screens
 
 import (
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/constants"
@@ -8,10 +13,6 @@ import (
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/components/enveditor"
 	"DockSTARTer2/internal/version"
-	"strings"
-	"time"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 type envFocusArea int

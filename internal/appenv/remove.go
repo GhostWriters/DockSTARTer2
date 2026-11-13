@@ -1,10 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
 	"bufio"
 	"context"
 	"fmt"
@@ -13,6 +9,11 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
 )
 
 // Remove (purge) prompts to remove variables for the specified apps or all disabled

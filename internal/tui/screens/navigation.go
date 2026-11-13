@@ -3,11 +3,11 @@ package screens
 import (
 	"context"
 
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/tui"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // navigateToConfigMenu returns a command to navigate to the config menu

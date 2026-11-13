@@ -6,10 +6,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"DockSTARTer2/internal/theme"
+	"charm.land/lipgloss/v2"
 	semstyle "github.com/GhostWriters/semstyle/lg"
 
-	"charm.land/lipgloss/v2"
+	"DockSTARTer2/internal/theme"
 )
 
 var (

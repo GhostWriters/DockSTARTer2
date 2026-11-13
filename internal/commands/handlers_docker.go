@@ -9,12 +9,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/docker/docker/pkg/stdcopy"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/dockercheck"
 	"DockSTARTer2/internal/logger"
-
-	"github.com/docker/docker/pkg/stdcopy"
 )
 
 // HandleContainerStart runs the standalone --start command.

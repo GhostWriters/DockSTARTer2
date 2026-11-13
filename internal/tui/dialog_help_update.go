@@ -1,10 +1,10 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
-
 	keybind "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

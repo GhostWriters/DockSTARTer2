@@ -1,12 +1,13 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/displayengine"
 	"sort"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
 )
 
 // FlagsToggleDialog is the dialog for toggling global application flags.

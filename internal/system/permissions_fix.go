@@ -3,7 +3,6 @@
 package system
 
 import (
-	dsexec "DockSTARTer2/internal/exec"
 	"context"
 	"fmt"
 	"io/fs"
@@ -11,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	dsexec "DockSTARTer2/internal/exec"
 )
 
 // fixPermissions applies ownership (to puid:pgid) and/or DS2's target modes

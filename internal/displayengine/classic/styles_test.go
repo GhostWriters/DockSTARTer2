@@ -4,9 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	semstyle "github.com/GhostWriters/semstyle/lg"
-
 	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 )
 
 func TestStripHyperlinks(t *testing.T) {

@@ -1,11 +1,11 @@
 package screens
 
 import (
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/version"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // NewConfigMenuScreen creates the configuration menu as a standalone screen.

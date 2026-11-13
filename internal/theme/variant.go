@@ -3,10 +3,10 @@ package theme
 import (
 	"strings"
 
-	"DockSTARTer2/internal/colorutil"
-
 	"github.com/GhostWriters/semstyle"
 	semtheme "github.com/GhostWriters/semstyle/theme"
+
+	"DockSTARTer2/internal/colorutil"
 )
 
 // Theme variants (see Variant).

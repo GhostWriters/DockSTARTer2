@@ -1,17 +1,18 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/system"
 )
 
 // CreateAppFolders reads *.folders files from app templates and creates corresponding directories.

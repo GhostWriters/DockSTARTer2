@@ -1,13 +1,14 @@
 package theme
 
 import (
-	semstyle "github.com/GhostWriters/semstyle/lg"
-	"DockSTARTer2/internal/testutils"
 	"fmt"
 	"image/color"
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+
+	"DockSTARTer2/internal/testutils"
 )
 
 func TestGetColorStr(t *testing.T) {

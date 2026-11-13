@@ -1,11 +1,12 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // MessageType represents the type of message dialog
@@ -140,4 +141,3 @@ func (m *messageDialogModel) HelpText() string {
 func (m *messageDialogModel) AdvanceSpinners(now time.Time) bool {
 	return m.outer.AdvanceSpinners(now)
 }
-

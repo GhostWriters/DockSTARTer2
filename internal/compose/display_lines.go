@@ -5,10 +5,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/GhostWriters/semstyle"
 	"github.com/docker/compose/v5/pkg/api"
+
 	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/strutil"
-	"github.com/GhostWriters/semstyle"
 )
 
 func (p *consoleEventProcessor) isTeardownCommand() bool {
@@ -336,9 +337,9 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 
 	var sizes string
 	if total > 0 {
-		sizes = " " + "{{|DockerMarkerDone|}}"+fixedSize(current)+"{{[-]}}"+
-			"{{|DockerColon|}}/{{[-]}}"+
-			"{{|DockerMarkerDone|}}"+fixedSize(total)+"{{[-]}}"
+		sizes = " " + "{{|DockerMarkerDone|}}" + fixedSize(current) + "{{[-]}}" +
+			"{{|DockerColon|}}/{{[-]}}" +
+			"{{|DockerMarkerDone|}}" + fixedSize(total) + "{{[-]}}"
 	} else {
 		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}
@@ -383,7 +384,7 @@ func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerE
 	}
 	netIcon, netStatusTag, netStatusText, _ := p.sectionRollupWithPropagation(netIDs, nil)
 	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
-	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + "{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}" }
+	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + "{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(netIDs), style: timerSection}}
 	for _, netID := range netIDs {
 		t := p.tasks[netID]
@@ -415,7 +416,7 @@ func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEn
 	}
 	volIcon, volStatusTag, volStatusText, _ := p.sectionRollupWithPropagation(p.volumeIDs, nil)
 	volStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(volStatusText))
-	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + "{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}" }
+	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + "{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
 	for _, volID := range p.volumeIDs {
 		t := p.tasks[volID]
@@ -456,9 +457,9 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 
 	var sizes string
 	if t.total > 0 {
-		sizes = " " + "{{[::D]}}"+fixedSize(current)+"{{[-]}}"+
-			"{{|DockerColon|}}/{{[-]}}"+
-			"{{[::D]}}"+fixedSize(t.total)+"{{[-]}}"
+		sizes = " " + "{{[::D]}}" + fixedSize(current) + "{{[-]}}" +
+			"{{|DockerColon|}}/{{[-]}}" +
+			"{{[::D]}}" + fixedSize(t.total) + "{{[-]}}"
 	} else {
 		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}

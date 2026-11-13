@@ -3,11 +3,11 @@ package classic
 import (
 	"strings"
 
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/strutil"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/strutil"
 )
 
 // RenderButton renders a button with the given label and focus state
@@ -308,7 +308,7 @@ func renderCenteredButtonsImpl(contentWidth int, useBorders bool, ctx StyleConte
 				markerTag = "LargeButtonLockedMarker"
 			}
 			markerStyle := lipgloss.NewStyle().Background(buttonStyle.GetBackground())
-			renderedEdgeL = RenderThemeText("{{|"+markerTag+"|}}" + markerChar + "{{[-]}}", markerStyle)
+			renderedEdgeL = RenderThemeText("{{|"+markerTag+"|}}"+markerChar+"{{[-]}}", markerStyle)
 			renderedEdgeR = renderedEdgeL
 		}
 

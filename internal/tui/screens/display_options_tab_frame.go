@@ -3,10 +3,10 @@ package screens
 import (
 	"strings"
 
-	"DockSTARTer2/internal/displayengine"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // tabFrame is one box, with a tab strip in its top border, drawn around

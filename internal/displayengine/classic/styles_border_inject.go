@@ -1,9 +1,10 @@
 package classic
 
 import (
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"regexp"
 	"strings"
+
+	semstyle "github.com/GhostWriters/semstyle/lg"
 )
 
 // ansiSeqRe matches ANSI SGR escape sequences (e.g. \x1b[1m, \x1b[38;5;15m).

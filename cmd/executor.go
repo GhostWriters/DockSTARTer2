@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/commands"
@@ -15,10 +19,6 @@ import (
 	_ "DockSTARTer2/internal/tui/screens" // Register screen creators
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
-	"context"
-	"errors"
-	"fmt"
-	"strings"
 )
 
 // quoteCmdPart wraps part in double quotes if it's empty or contains

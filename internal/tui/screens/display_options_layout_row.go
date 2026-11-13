@@ -1,12 +1,12 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui/glyphs"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui/glyphs"
 )
 
 // Layout constants for the settings/preview pairing -- single definition

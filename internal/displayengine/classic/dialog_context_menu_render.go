@@ -1,12 +1,13 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 )
 
 // ViewString renders the context menu as a string.

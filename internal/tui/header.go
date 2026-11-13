@@ -1,10 +1,10 @@
 package tui
 
 import (
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/update"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // ShowWebDisplaySettingsMsg requests the web display settings dialog

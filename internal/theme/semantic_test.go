@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"DockSTARTer2/internal/console"
 	semstyle "github.com/GhostWriters/semstyle/lg"
-
 	"github.com/charmbracelet/colorprofile"
+
+	"DockSTARTer2/internal/console"
 )
 
 func TestResolveThemeValue(t *testing.T) {

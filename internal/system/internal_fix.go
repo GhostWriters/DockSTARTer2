@@ -1,10 +1,11 @@
 package system
 
 import (
-	"DockSTARTer2/internal/constants"
 	"fmt"
 	"os"
 	"strconv"
+
+	"DockSTARTer2/internal/constants"
 )
 
 // InternalFixPermissionsArg is the hidden first argument that turns a DS2

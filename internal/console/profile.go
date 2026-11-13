@@ -3,9 +3,8 @@ package console
 import (
 	"os"
 
-	"github.com/charmbracelet/colorprofile"
-
 	"github.com/GhostWriters/semstyle"
+	"github.com/charmbracelet/colorprofile"
 )
 
 var (

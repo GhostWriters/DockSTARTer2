@@ -1,6 +1,16 @@
 package screens
 
 import (
+	"context"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
@@ -11,15 +21,6 @@ import (
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/tui"
-	"context"
-	"io"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // loadEnv is a tea.Cmd: reads all data from disk and returns it as envLoadDoneMsg.

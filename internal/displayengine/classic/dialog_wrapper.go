@@ -160,4 +160,3 @@ func (m DialogWithBackdrop[T]) View() tea.View {
 	v.AltScreen = true
 	return v
 }
-

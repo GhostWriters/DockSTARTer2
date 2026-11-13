@@ -5,15 +5,15 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui"
 	"DockSTARTer2/internal/tui/glyphs"
-
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // columnLabel renders a column label as the focused column header shows it.
@@ -97,10 +97,10 @@ type AppSelectionScreen struct {
 func (s *AppSelectionScreen) Init() tea.Cmd {
 	return tea.Batch(s.menu.Init(), showSpinnerAfterDelayCmd(), s.loadAppSelectItemsCmd())
 }
-func (s *AppSelectionScreen) View() tea.View              { return s.menu.View() }
-func (s *AppSelectionScreen) ViewString() string          { return s.menu.ViewString() }
-func (s *AppSelectionScreen) Layers() []*lipgloss.Layer   { return s.menu.Layers() }
-func (s *AppSelectionScreen) Title() string               { return s.menu.Title() }
+func (s *AppSelectionScreen) View() tea.View            { return s.menu.View() }
+func (s *AppSelectionScreen) ViewString() string        { return s.menu.ViewString() }
+func (s *AppSelectionScreen) Layers() []*lipgloss.Layer { return s.menu.Layers() }
+func (s *AppSelectionScreen) Title() string             { return s.menu.Title() }
 func (s *AppSelectionScreen) HelpText() string {
 	items := s.menu.GetItems()
 	idx := s.menu.Cursor()

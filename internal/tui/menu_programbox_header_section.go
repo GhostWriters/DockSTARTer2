@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
-
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // newProgramBoxHeaderSection builds a borderless, fixed-height, non-focusable

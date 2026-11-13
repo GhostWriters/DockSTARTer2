@@ -4,14 +4,14 @@ import (
 	"os"
 	"sort"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
-
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // HeaderFocus states for interactive elements

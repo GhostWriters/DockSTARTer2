@@ -5,9 +5,9 @@
 package displayengine
 
 import (
-	"DockSTARTer2/internal/displayengine/classic"
-
 	tea "charm.land/bubbletea/v2"
+
+	"DockSTARTer2/internal/displayengine/classic"
 )
 
 // DialogWithBackdrop is generic, so it is aliased with its own type

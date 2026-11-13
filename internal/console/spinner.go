@@ -2,13 +2,13 @@ package console
 
 import (
 	"fmt"
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"io"
 	"os"
 	"sync"
 	"time"
 
 	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
 )
 
 var (

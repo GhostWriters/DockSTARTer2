@@ -1,14 +1,15 @@
 package commands
 
 import (
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/version"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
+
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/version"
 )
 
 var ErrHelp = errors.New("help shown")

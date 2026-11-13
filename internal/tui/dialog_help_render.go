@@ -4,20 +4,18 @@ import (
 	"fmt"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	glamour "charm.land/glamour/v2"
+	glamouransi "charm.land/glamour/v2/ansi"
+	glamourstyles "charm.land/glamour/v2/styles"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/theme"
-
-	"github.com/charmbracelet/x/ansi"
-
-	glamour "charm.land/glamour/v2"
-	glamouransi "charm.land/glamour/v2/ansi"
-	glamourstyles "charm.land/glamour/v2/styles"
-
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // getRenderedMarkdown renders DocMarkdown via glamour at the given column width,

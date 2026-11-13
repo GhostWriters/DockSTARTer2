@@ -7,13 +7,13 @@ import (
 	"io"
 	"time"
 
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui/components/streamvp"
-
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui/components/streamvp"
 )
 
 // TaskStatus defines the state of a background task

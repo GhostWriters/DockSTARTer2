@@ -3,10 +3,10 @@ package compose
 import (
 	"strings"
 
+	"github.com/docker/compose/v5/pkg/api"
+
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
-
-	"github.com/docker/compose/v5/pkg/api"
 )
 
 // sectionRollupState is the computed rollup state for a section header.

@@ -3,19 +3,19 @@ package commands
 import (
 	"context"
 	"fmt"
-	"golang.org/x/term"
 	"os"
 	"regexp"
-
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
 
 	glamour "charm.land/glamour/v2"
 	glamouransi "charm.land/glamour/v2/ansi"
 	glamourstyles "charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
+	"golang.org/x/term"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 )
 
 // osc8MarkerRegex matches a single OSC 8 hyperlink marker (open or close),

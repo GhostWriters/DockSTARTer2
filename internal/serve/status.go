@@ -7,9 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/GhostWriters/semstyle"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
-	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/sessionlocks"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"

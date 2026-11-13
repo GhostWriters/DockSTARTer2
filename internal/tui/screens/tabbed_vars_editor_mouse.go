@@ -1,16 +1,17 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/tui"
-	"DockSTARTer2/internal/version"
 	"context"
 	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/tui"
+	"DockSTARTer2/internal/version"
 )
 
 func (m *TabbedVarsEditorModel) GetHitRegions(offsetX, offsetY int) []displayengine.HitRegion {

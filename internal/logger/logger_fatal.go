@@ -1,10 +1,6 @@
 package logger
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/version"
 	"context"
 	"fmt"
 	"os"
@@ -16,6 +12,11 @@ import (
 	"time"
 
 	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/version"
 )
 
 // defaultAppRepo/defaultTemplatesRepo mirror the identically-named

@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/tui/components/sinput"
 	"DockSTARTer2/internal/webmsg"
-
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // WebDisplaySettings holds font and refresh-rate settings for the xterm.js terminal.
@@ -370,7 +370,6 @@ func (d *WebDisplayDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-
 
 	switch msg.(type) {
 	case applyWebDisplayMsg:

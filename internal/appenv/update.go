@@ -1,12 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/system"
 	"context"
 	"fmt"
 	"os"
@@ -14,6 +8,13 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 )
 
 // lastWrittenLineRe matches a "### Last written: ..." line stampLastWritten

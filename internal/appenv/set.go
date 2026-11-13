@@ -1,7 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/system"
 	"bufio"
 	"context"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"DockSTARTer2/internal/system"
 )
 
 // Set sets the variable in the file.

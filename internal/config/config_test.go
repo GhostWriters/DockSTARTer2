@@ -1,10 +1,11 @@
 package config
 
 import (
-	"DockSTARTer2/internal/paths"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"DockSTARTer2/internal/paths"
 )
 
 func TestConfigMigration(t *testing.T) {

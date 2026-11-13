@@ -1,13 +1,14 @@
 package theme
 
 import (
-	"DockSTARTer2/internal/paths"
 	"io/fs"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/paths"
 )
 
 // EmbeddedThemeLister is set at startup to provide the list of built-in theme names.

@@ -1,10 +1,10 @@
 package screens
 
 import (
+	tea "charm.land/bubbletea/v2"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
-
-	tea "charm.land/bubbletea/v2"
 )
 
 // sectionResetIcons returns a list's reset icon, disabled unless changed

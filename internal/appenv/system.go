@@ -1,10 +1,11 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/logger"
 	"context"
 	"os/user"
 	"runtime"
+
+	"DockSTARTer2/internal/logger"
 )
 
 // GroupId returns the group ID for the given group name.

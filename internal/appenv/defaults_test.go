@@ -1,11 +1,12 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/paths"
 	"context"
 	"os"
 	"testing"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/paths"
 )
 
 // TestVarDefaultValue mirrors test_var_default_value in var_default_value.sh.

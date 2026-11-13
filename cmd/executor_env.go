@@ -1,15 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/tui"
-	"context"
-	"errors"
-	"fmt"
-	"strings"
 )
 
 func handleEnvEdit(ctx context.Context, group *CommandGroup) error {

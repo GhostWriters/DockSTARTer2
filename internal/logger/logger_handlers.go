@@ -1,12 +1,14 @@
 package logger
 
 import (
-	"DockSTARTer2/internal/console"
 	"context"
 	"fmt"
-	"github.com/GhostWriters/semstyle"
 	"io"
 	"log/slog"
+
+	"github.com/GhostWriters/semstyle"
+
+	"DockSTARTer2/internal/console"
 )
 
 // TUIHandler redirects logs to a writer in the context or a global channel.

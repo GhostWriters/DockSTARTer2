@@ -1,7 +1,6 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/tui/components/sinput"
 	"strconv"
 	"strings"
 
@@ -10,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	semstyle "github.com/GhostWriters/semstyle/lg"
+
+	"DockSTARTer2/internal/tui/components/sinput"
 )
 
 // SetInputEditing starts or stops editing in an input section (see

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"DockSTARTer2/internal/dockerlayout"
 	"github.com/GhostWriters/semstyle"
-	"DockSTARTer2/internal/strutil"
-
 	"github.com/docker/compose/v5/pkg/api"
+
+	"DockSTARTer2/internal/dockerlayout"
+	"DockSTARTer2/internal/strutil"
 )
 
 func styleImage(imgName string) string { return dockerlayout.StyleImageRef(imgName) }

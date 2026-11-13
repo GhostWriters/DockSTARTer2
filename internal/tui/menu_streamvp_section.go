@@ -1,11 +1,12 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // newStreamOutputSection builds a borderless, variable-height

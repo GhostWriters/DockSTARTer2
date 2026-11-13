@@ -1,15 +1,16 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/logger"
 )
 
 // CreateAll generates environment variables for all added applications,

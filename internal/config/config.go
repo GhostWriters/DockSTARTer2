@@ -16,16 +16,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GhostWriters/semstyle"
+	"github.com/adrg/xdg"
+	"github.com/go-viper/mapstructure/v2"
+	toml "github.com/pelletier/go-toml/v2"
+
 	"DockSTARTer2/internal/assets"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
 	"DockSTARTer2/internal/version"
-	"github.com/GhostWriters/semstyle"
-
-	"github.com/adrg/xdg"
-	"github.com/go-viper/mapstructure/v2"
-	toml "github.com/pelletier/go-toml/v2"
 )
 
 // MinRefreshRateMS and MaxRefreshRateMS bound Appearance.RefreshRate (screen repaint

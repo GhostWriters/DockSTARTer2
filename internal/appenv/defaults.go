@@ -1,10 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/config"
-	"DockSTARTer2/internal/constants"
-	"DockSTARTer2/internal/paths"
-	"DockSTARTer2/internal/system"
 	"bufio"
 	"bytes"
 	"context"
@@ -13,6 +9,11 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"DockSTARTer2/internal/config"
+	"DockSTARTer2/internal/constants"
+	"DockSTARTer2/internal/paths"
+	"DockSTARTer2/internal/system"
 )
 
 // Variable type strings used in VarDefaultValue.

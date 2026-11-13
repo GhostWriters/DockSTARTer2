@@ -1,11 +1,12 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // BackdropModel represents the shared background for all dialogs

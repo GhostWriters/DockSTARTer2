@@ -1,7 +1,6 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/system"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"DockSTARTer2/internal/system"
 )
 
 // DetectDockerSocket attempts to find the docker socket on the system without using command dependencies.

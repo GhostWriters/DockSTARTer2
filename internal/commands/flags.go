@@ -1,9 +1,9 @@
 package commands
 
 import (
-	"DockSTARTer2/internal/version"
-
 	"github.com/spf13/pflag"
+
+	"DockSTARTer2/internal/version"
 )
 
 // NewFlagSet returns a fresh, isolated FlagSet with all ds2 flags registered.

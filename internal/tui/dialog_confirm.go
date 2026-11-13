@@ -1,11 +1,12 @@
 package tui
 
 import (
-	"DockSTARTer2/internal/displayengine"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/displayengine"
 )
 
 // confirmDialogModel represents a yes/no confirmation dialog. Built as an

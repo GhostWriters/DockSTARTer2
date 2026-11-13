@@ -1,11 +1,6 @@
 package screens
 
 import (
-	"DockSTARTer2/internal/appenv"
-	"DockSTARTer2/internal/displayengine"
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
-	"DockSTARTer2/internal/tui/components/enveditor"
 	"context"
 	"fmt"
 	"strings"
@@ -13,6 +8,12 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"DockSTARTer2/internal/appenv"
+	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
+	"DockSTARTer2/internal/tui/components/enveditor"
 )
 
 func (m *TabbedVarsEditorModel) ViewString() string {

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/GhostWriters/semstyle"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/update"
 	"DockSTARTer2/internal/version"
-
-	"github.com/GhostWriters/semstyle"
 )
 
 // usageParagraphWidth is the goal visible width (see paragraph) for

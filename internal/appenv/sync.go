@@ -1,11 +1,12 @@
 package appenv
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
 	"context"
 	"fmt"
 	"sort"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 )
 
 // SyncVariables performs a surgical per-variable update of a file.

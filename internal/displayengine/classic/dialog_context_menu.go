@@ -40,7 +40,7 @@ type ContextMenuModel struct {
 	maxVisible int // max items to show at once (default 12)
 
 	subMenu  *ContextMenuModel // open submenu, managed internally
-	isClosed bool             // set when submenu wants to close (signals parent to nil it)
+	isClosed bool              // set when submenu wants to close (signals parent to nil it)
 }
 
 // NewContextMenuModel creates a context menu positioned near (clickX, clickY).

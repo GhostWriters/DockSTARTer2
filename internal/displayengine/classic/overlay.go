@@ -1,17 +1,16 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
 	"regexp"
-	"strings"
-	"unicode/utf8"
-
 	"sort"
-
+	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 var (

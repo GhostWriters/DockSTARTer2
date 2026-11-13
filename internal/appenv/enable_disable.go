@@ -1,13 +1,14 @@
 package appenv
 
 import (
+	"context"
+	"path/filepath"
+	"strings"
+
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/logger"
-	"context"
-	"path/filepath"
-	"strings"
 )
 
 // Enable sets the __ENABLED variable to 'true' for the specified app(s).

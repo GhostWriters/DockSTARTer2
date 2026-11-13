@@ -4,13 +4,13 @@ import (
 	"context"
 	"path/filepath"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/fsnotify/fsnotify"
+
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/lockfile"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/paths"
-
-	tea "charm.land/bubbletea/v2"
-	"github.com/fsnotify/fsnotify"
 )
 
 // startLockFileWatcher watches for lock file events in the locks directory

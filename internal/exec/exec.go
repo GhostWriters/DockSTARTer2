@@ -1,8 +1,6 @@
 package exec
 
 import (
-	"DockSTARTer2/internal/console"
-	"DockSTARTer2/internal/logger"
 	"bufio"
 	"bytes"
 	"context"
@@ -10,6 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/logger"
 )
 
 // RunAndLog mirrors the Bash RunAndLog function: executes a command,

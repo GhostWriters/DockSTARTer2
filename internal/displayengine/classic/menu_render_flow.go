@@ -1,12 +1,13 @@
 package classic
 
 import (
-	"DockSTARTer2/internal/strutil"
-	"DockSTARTer2/internal/theme"
-	semstyle "github.com/GhostWriters/semstyle/lg"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	semstyle "github.com/GhostWriters/semstyle/lg"
+
+	"DockSTARTer2/internal/strutil"
+	"DockSTARTer2/internal/theme"
 )
 
 // FlowItemSpacing is the gap between adjacent items on a flow-mode row.

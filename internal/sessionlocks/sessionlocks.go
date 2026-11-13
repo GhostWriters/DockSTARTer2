@@ -11,11 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"DockSTARTer2/internal/paths"
 	"github.com/gofrs/flock"
 	"github.com/google/uuid"
 	"github.com/pelletier/go-toml/v2"
 	"golang.org/x/crypto/bcrypt"
+
+	"DockSTARTer2/internal/paths"
 )
 
 // HashPassword returns a bcrypt hash of the plaintext password for storage
@@ -67,11 +68,11 @@ func (m *SessionManager) forceDisconnect(pid int) error {
 
 // SessionManager tracks the active session state and manages lock files.
 type SessionManager struct {
-	mu                  sync.Mutex
-	editActive          bool
-	editFlock           *flock.Flock
-	procFlock           *flock.Flock // shared flock held on our own .toml for the process lifetime
-	restartUnsafeFlock  *flock.Flock // shared flock held on our .restartunsafe file while unsafe
+	mu                 sync.Mutex
+	editActive         bool
+	editFlock          *flock.Flock
+	procFlock          *flock.Flock // shared flock held on our own .toml for the process lifetime
+	restartUnsafeFlock *flock.Flock // shared flock held on our .restartunsafe file while unsafe
 
 	editLockPath      string // $STATE/locks/edit.lock
 	serverPIDPath     string // $STATE/locks/server.pid — kept for legacy cleanup only
@@ -843,8 +844,6 @@ func ResolvedExePath() string {
 	}
 	return real
 }
-
-
 
 func (m *SessionManager) RequestDisconnect() error {
 	return os.WriteFile(m.disconnectReqPath, []byte{}, 0644)

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"sync"
 
+	semstyle "github.com/GhostWriters/semstyle"
+	"github.com/charmbracelet/colorprofile"
+
 	"DockSTARTer2/internal/commands"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/displayengine"
 	"DockSTARTer2/internal/logger"
-
-	semstyle "github.com/GhostWriters/semstyle"
-	"github.com/charmbracelet/colorprofile"
 )
 
 // resolveTintRef reads ref's scheme bytes -- see
