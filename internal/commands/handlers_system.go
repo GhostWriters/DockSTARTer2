@@ -237,7 +237,7 @@ func HandleCompose(ctx context.Context, group *CommandGroup, state *CmdState) er
 	}
 
 	if err := compose.ExecuteCompose(ctx, state.Yes, state.Force, operation, appsList...); err != nil {
-		if !errors.Is(err, console.ErrUserAborted) {
+		if !errors.Is(err, console.ErrUserAborted) && !errors.Is(err, compose.ErrReported) {
 			logger.Error(ctx, "Compose failed: %v", err)
 		}
 		return err

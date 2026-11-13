@@ -90,6 +90,7 @@ type consoleTask struct {
 	workStart time.Time // first Working event; zero for a task that never worked
 	workEnd   time.Time // latest finishing event after workStart
 	working   bool      // the latest event was Working
+	message   string    // an Error event's message, shown under the row and in the failure summary
 }
 
 // markWork records an event's effect on the task's work span.
@@ -540,7 +541,20 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	// through phases again for another image. But progress (sizes/bar) is NEVER cleared:
 	// total/current/percent only ever advance, so a sizeless re-pull event from a second
 	// image can't blank a row that already showed download progress.
-	if e.Text != "" {
+	if e.Status == api.Error {
+		// The SDK puts an error's message in Text, or "Error" in Text and the message
+		// in Details; the row shows a short status and the message goes under it.
+		t.message = e.Text
+		if t.message == "" || t.message == "Error" {
+			t.message = e.Details
+		}
+		t.text = "Error"
+		if strings.Contains(t.message, "is unhealthy") {
+			t.text = "Unhealthy"
+		}
+		t.status = e.Status
+		t.markWork(e.Status)
+	} else if e.Text != "" {
 		t.text = e.Text
 		t.status = e.Status
 		t.markWork(e.Status)

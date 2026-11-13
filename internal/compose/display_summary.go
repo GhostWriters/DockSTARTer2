@@ -9,6 +9,8 @@ import (
 	"DockSTARTer2/internal/logger"
 	"github.com/GhostWriters/semstyle"
 	"DockSTARTer2/internal/strutil"
+
+	"github.com/docker/compose/v5/pkg/api"
 )
 
 func (p *consoleEventProcessor) buildSummaryLine() string {
@@ -162,6 +164,65 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 		elapsed = strutil.Repeat(" ", p.maxTimerWidth-w) + elapsed
 	}
 	return summary + pad + "{{[yellow::B]}}" + elapsed + "{{[-]}}"
+}
+
+// rowFailure is a failure's name (a service, an image no service uses, a network
+// or a volume) and message.
+type rowFailure struct {
+	name, message string
+}
+
+// failures returns every failure that has a message, in display order. A
+// service's failures are its own row's and its image's, each distinct message
+// once; a shared image's failure is listed under every service using it.
+func (p *consoleEventProcessor) failures() []rowFailure {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	var out []rowFailure
+	failed := func(t *consoleTask) bool {
+		return t != nil && t.status == api.Error && t.message != ""
+	}
+	listed := make(map[string]bool)
+	addService := func(svc string, rows ...*consoleTask) {
+		if listed[svc] {
+			return
+		}
+		listed[svc] = true
+		var msgs []string
+		for _, t := range rows {
+			if failed(t) && !contains(msgs, t.message) {
+				msgs = append(msgs, t.message)
+				out = append(out, rowFailure{svc, t.message})
+			}
+		}
+	}
+	for _, img := range p.imageOrder {
+		svcs := p.serviceIDsForImage(img)
+		if len(svcs) == 0 && failed(p.tasks[img]) {
+			out = append(out, rowFailure{img, p.tasks[img].message})
+		}
+		for _, svc := range svcs {
+			addService(svc, p.tasks[svc], p.tasks[img])
+		}
+	}
+	// An image's pull error has the text "Error", a service status, which also
+	// files the image under serviceIDs; it is already listed above.
+	for _, svc := range p.serviceIDs {
+		if !contains(p.imageOrder, svc) && !looksLikeImageName(svc) {
+			addService(svc, p.tasks[svc])
+		}
+	}
+	for _, id := range p.networkIDs {
+		if failed(p.tasks[id]) {
+			out = append(out, rowFailure{"network " + id, p.tasks[id].message})
+		}
+	}
+	for _, id := range p.volumeIDs {
+		if failed(p.tasks[id]) {
+			out = append(out, rowFailure{"volume " + id, p.tasks[id].message})
+		}
+	}
+	return out
 }
 
 // logSummary writes a structured summary to the log file only.
