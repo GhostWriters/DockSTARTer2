@@ -93,6 +93,20 @@ type consoleTask struct {
 	message   string    // an Error event's message, shown under the row and in the failure summary
 }
 
+// stripControl removes control characters other than newline and tab from s, so
+// text from the daemon or a registry can't send escape sequences to the terminal.
+func stripControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // markWork records an event's effect on the task's work span.
 func (t *consoleTask) markWork(s api.EventStatus) {
 	now := time.Now()
@@ -128,6 +142,7 @@ type consoleEventProcessor struct {
 
 	operation string
 	finished  bool     // the SDK call has returned (set in Done)
+	succeeded bool     // the SDK call returned without error (set in Done)
 	ids       []string // insertion-ordered task IDs
 	tasks     map[string]*consoleTask
 
@@ -332,15 +347,21 @@ func (p *consoleEventProcessor) finalizeActiveTasks() {
 			t.text = finalText
 			t.status = api.Done
 			t.endTime = time.Now()
+			if t.working {
+				t.markWork(api.Done)
+			}
 		}
 	}
 }
 
-func (p *consoleEventProcessor) Done(_ string, _ bool) {
+// Done's second argument is named success in api.EventProcessor, but the SDK
+// passes err != nil (pkg/compose/progress.go Run), so it is true on failure.
+func (p *consoleEventProcessor) Done(_ string, failed bool) {
 	// Synthesize final status for any service still in an active state.
 	// Some SDK operations (e.g. restart) never emit a per-service Done event.
 	p.mtx.Lock()
 	p.finished = true
+	p.succeeded = !failed
 	p.finalizeActiveTasks()
 	p.mtx.Unlock()
 
@@ -453,12 +474,13 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		}
 	}
 
-	// Outside "start", Starting/Started apply only to a row that was just Created, so it
-	// ends on Started; Recreated and Running rows keep their status. A recreated row's
-	// start still counts as its work.
+	// Outside "start", Starting/Started don't replace a status the row should keep:
+	// Recreated and Running rows keep theirs (a recreated row's start still counts as
+	// its work). A row with no events yet, such as an existing container up starts,
+	// and a row that was just Created take them.
 	if p.command != "start" && (e.Text == api.StatusStarted || e.Text == api.StatusStarting) {
-		if t := p.tasks[id]; t == nil || (t.text != api.StatusCreated && t.text != api.StatusStarting) {
-			if t != nil && t.text == "Recreated" {
+		if t := p.tasks[id]; t != nil && t.text != api.StatusCreated && t.text != api.StatusStarting {
+			if t.text == "Recreated" {
 				t.markWork(e.Status)
 			}
 			return
@@ -527,7 +549,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 				p.networkIDs = append(p.networkIDs, id)
 			} else if isVolume {
 				p.volumeIDs = append(p.volumeIDs, id)
-			} else if isServiceStatus(e.Text) && !looksLikeImageName(id) {
+			} else if (isServiceStatus(e.Text) || e.Status == api.Error && p.isKnownServiceName(id)) && !looksLikeImageName(id) {
 				p.serviceIDs = append(p.serviceIDs, id)
 			} else {
 				p.imageIDs = append(p.imageIDs, id)
@@ -548,6 +570,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		if t.message == "" || t.message == "Error" {
 			t.message = e.Details
 		}
+		t.message = stripControl(t.message)
 		t.text = "Error"
 		if strings.Contains(t.message, "is unhealthy") {
 			t.text = "Unhealthy"
@@ -777,13 +800,19 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 	}
 }
 
-// diskLayerInspects bounds the concurrent inspects in diskLayers.
-const diskLayerInspects = 8
+// diskLayerInspects bounds the concurrent inspects in diskLayers, and
+// diskLayerTimeout the whole scan, so a stalled daemon can't hold up the pull.
+const (
+	diskLayerInspects = 8
+	diskLayerTimeout  = 5 * time.Second
+)
 
 // diskLayers returns the DiffIDs of every image on disk, so an image pulled for
 // the first time can tell which of its layers needed no download.
 func (p *consoleEventProcessor) diskLayers(ctx context.Context) map[string]bool {
-	list, err := p.dockerClient.ImageList(ctx, dockerclient.ImageListOptions{})
+	ctx, cancel := context.WithTimeout(ctx, diskLayerTimeout)
+	defer cancel()
+	list, err := p.dockerClient.ImageList(ctx, dockerclient.ImageListOptions{All: true})
 	if err != nil {
 		return nil
 	}

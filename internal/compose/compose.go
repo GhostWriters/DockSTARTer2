@@ -591,11 +591,20 @@ func reportFailures(ctx context.Context, bus api.EventProcessor, err error) erro
 	if !covered {
 		logger.Error(ctx, "  %v", err)
 	}
-	return fmt.Errorf("%w: %w", ErrReported, err)
+	return reportedError{err}
 }
 
-// ErrReported marks a compose error whose failures ExecuteCompose already logged.
+// ErrReported marks a compose error whose failures ExecuteCompose already logged;
+// test for it with errors.Is.
 var ErrReported = errors.New("compose failures reported")
+
+// reportedError is an error ExecuteCompose already logged. It reads as the
+// original error and matches ErrReported.
+type reportedError struct{ err error }
+
+func (e reportedError) Error() string        { return e.err.Error() }
+func (e reportedError) Unwrap() error        { return e.err }
+func (e reportedError) Is(target error) bool { return target == ErrReported }
 
 // LoadImageServices loads the compose project and returns a map of image ref → []service names.
 // Returns an empty map (not an error) if the compose file cannot be read.

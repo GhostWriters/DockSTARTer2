@@ -63,6 +63,9 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	ids = append(ids, netIDs...)
 	ids = append(ids, p.volumeIDs...)
 	state := p.rollupState(ids, nil)
+	if p.finished && !p.succeeded {
+		state = rollupError // the call failed, whatever its rows show
+	}
 	if state == rollupProcessing || state == rollupPending {
 		return p.activeSpinnerTag(p.icons().spinner)
 	}
@@ -128,8 +131,8 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			}
 		} else if p.isTeardownCommand() {
 			anyStarted = true
-		} else if p.finished && imageForID == nil && contains(p.imageOrder, id) {
-			// An image with no events by the time the SDK returns needed no pull; its row
+		} else if p.finished && p.succeeded && imageForID == nil && contains(p.imageOrder, id) {
+			// An image with no events by the time the SDK succeeds needed no pull; its row
 			// shows Cached, so it counts as done.
 			anyStarted = true
 		} else if imageForID != nil && p.command == "pull" && p.imageFetched(imageForID(id)) {
@@ -151,6 +154,11 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			anyWarning = true
 		}
 	}
+	// A failed SDK call that no row reported fails the services section; a failure
+	// shown on a row (a network or volume one too) leaves it to that row.
+	if imageForID != nil && p.finished && !p.succeeded && !p.anyRowFailed() {
+		anyError = true
+	}
 	switch {
 	case anyError:
 		return rollupError
@@ -165,8 +173,18 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 	}
 }
 
+// anyRowFailed reports whether any task has reported an error.
+func (p *consoleEventProcessor) anyRowFailed() bool {
+	for _, t := range p.tasks {
+		if t.status == api.Error {
+			return true
+		}
+	}
+	return false
+}
+
 // imageFetched reports whether imgName's pull has finished, or needed none: an
-// image with no events by the time the SDK returns.
+// image with no events by the time the SDK call succeeds.
 func (p *consoleEventProcessor) imageFetched(imgName string) bool {
 	if imgName == "" {
 		return false
@@ -174,7 +192,7 @@ func (p *consoleEventProcessor) imageFetched(imgName string) bool {
 	if t := p.tasks[imgName]; t != nil {
 		return t.completed()
 	}
-	return p.finished
+	return p.finished && p.succeeded
 }
 
 // worstChildStatus returns the worst EventStatus among all layer children of imgName.

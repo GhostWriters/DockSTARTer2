@@ -92,6 +92,8 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 					statusText = abbreviateStatus(img.text)
 					statusTag = imageStatusTag(img.status, img.text, p.command)
 					icon = p.spinnerIcon(img)
+				} else if p.command == "pull" && p.imageFetched(imgName) {
+					statusText, statusTag, icon = p.cachedStatus(false)
 				} else {
 					impliedText, impliedTag := p.impliedStatus()
 					statusText = impliedText
@@ -200,9 +202,9 @@ func fitErrorLines(lines []string) {
 	}
 }
 
-// cutRunes returns s cut to at most maxW runes (at least 10), ending in "…" when cut.
+// cutRunes returns s cut to at most maxW runes (at least 1), ending in "…" when cut.
 func cutRunes(s string, maxW int) string {
-	maxW = max(maxW, 10)
+	maxW = max(maxW, 1)
 	r := []rune(s)
 	if len(r) <= maxW {
 		return s
@@ -216,9 +218,10 @@ func isPullingText(text string) bool {
 }
 
 // cachedStatus returns the status for a row whose image needed no download:
-// active while the SDK is still checking for a newer image, final once it is done.
+// active while the SDK is still checking for a newer image, final once it is done
+// or the call has returned.
 func (p *consoleEventProcessor) cachedStatus(checking bool) (text, tag, icon string) {
-	if checking {
+	if checking && !p.finished {
 		return "Cached", "{{|DockerStatusActive|}}Cached{{[-]}}", p.activeSpinnerTag(p.icons().spinner)
 	}
 	return "Cached", "{{|DockerStatusFinal|}}Cached{{[-]}}", "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
