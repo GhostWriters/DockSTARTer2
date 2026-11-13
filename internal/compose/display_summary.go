@@ -49,13 +49,14 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 }
 
 // layerCount returns the number of layer rows across all images: each sha256 DiffID once
-// regardless of sharing, plus each download not placed on a layer.
+// regardless of sharing, plus each download not placed on a layer. A download another
+// image placed is already counted by its DiffID.
 func (p *consoleEventProcessor) layerCount() int {
 	n := len(p.diffIDImageCount)
 	seen := make(map[string]bool)
 	for _, rawIDs := range p.imagePullOrder {
 		for _, rawID := range rawIDs {
-			if p.tasks[rawID] != nil && !seen[rawID] {
+			if p.tasks[rawID] != nil && !seen[rawID] && p.diffIDImageCount[rawID] == 0 {
 				seen[rawID] = true
 				n++
 			}

@@ -1,18 +1,29 @@
 package compose
 
 import (
+	"context"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/GhostWriters/semstyle"
 	"github.com/docker/compose/v5/pkg/api"
 )
 
-const testImg = "example/app:latest"
+const (
+	testImg   = "example/app:latest"
+	otherImg  = "example/other:latest"
+	rawSizeR1 = 100
+	rawSizeR2 = 200
+)
 
 // newLayerTestProcessor returns a processor holding testImg's pre-flight layers as
-// "Already exists" tasks and its downloads as rawID-keyed tasks.
+// "Already exists" tasks and its downloads as rawID-keyed tasks, each sized so a
+// misplaced download shows: r1 is 100 bytes, r2 200, and so on.
 func newLayerTestProcessor(preflight, rawIDs []string) *consoleEventProcessor {
 	p := &consoleEventProcessor{
+		logCtx:            context.Background(),
+		command:           "pull",
 		tasks:             make(map[string]*consoleTask),
 		imageLayerDiffIDs: make(map[string][]string),
 		diffIDImageCount:  make(map[string]int),
@@ -25,12 +36,26 @@ func newLayerTestProcessor(preflight, rawIDs []string) *consoleEventProcessor {
 		p.imageLayerDiffIDs[testImg] = preflight
 	}
 	p.addCachedLayerTasks(preflight)
-	for _, id := range rawIDs {
-		p.tasks[id] = &consoleTask{id: id, parentID: testImg, text: "Pull complete", status: api.Done}
-		p.ids = append(p.ids, id)
-		p.imagePullOrder[testImg] = append(p.imagePullOrder[testImg], id)
+	for i, id := range rawIDs {
+		addRawDownload(p, testImg, id, int64(100*(i+1)))
 	}
 	return p
+}
+
+func addRawDownload(p *consoleEventProcessor, img, id string, size int64) {
+	if p.tasks[id] == nil {
+		p.tasks[id] = &consoleTask{id: id, parentID: img, text: "Pull complete", status: api.Done, total: size, current: size, percent: 100}
+		p.ids = append(p.ids, id)
+	}
+	p.imagePullOrder[img] = append(p.imagePullOrder[img], id)
+}
+
+// wantDownload fails unless sha holds the download of the given size.
+func wantDownload(t *testing.T, p *consoleEventProcessor, sha string, size int64) {
+	t.Helper()
+	if tk := p.tasks[sha]; tk == nil || tk.text != "Pull complete" || tk.total != size {
+		t.Errorf("%s = %+v, want the %d-byte download", sha, tk, size)
+	}
 }
 
 func TestApplyInspectResultMapsDownloadsInOrder(t *testing.T) {
@@ -40,11 +65,8 @@ func TestApplyInspectResultMapsDownloadsInOrder(t *testing.T) {
 	if got := p.imageLayerDiffIDs[testImg]; !slices.Equal(got, []string{"sha:a", "sha:c", "sha:d"}) {
 		t.Fatalf("layers = %v", got)
 	}
-	for _, sha := range []string{"sha:c", "sha:d"} {
-		if tk := p.tasks[sha]; tk == nil || tk.text != "Pull complete" {
-			t.Errorf("%s not mapped from a download: %+v", sha, tk)
-		}
-	}
+	wantDownload(t, p, "sha:c", rawSizeR1)
+	wantDownload(t, p, "sha:d", rawSizeR2)
 	if p.tasks["r1"] != nil || p.tasks["r2"] != nil || len(p.imagePullOrder[testImg]) != 0 {
 		t.Errorf("raw downloads left after mapping")
 	}
@@ -64,8 +86,22 @@ func TestApplyInspectResultKeepsDownloadsWhenAmbiguous(t *testing.T) {
 	if got := len(p.layersForImage(testImg)); got != 3 {
 		t.Errorf("layersForImage = %d rows, want the cached layer plus both downloads", got)
 	}
-	if got := p.layerCount(); got != 3 {
-		t.Errorf("layerCount = %d, want the cached layer plus both downloads", got)
+	if got := semstyle.ToPlain(p.buildSummaryLine()); !strings.Contains(got, "3 layers") {
+		t.Errorf("summary = %q, want 3 layers", got)
+	}
+}
+
+func TestApplyInspectResultKeepsDownloadsOnContainerdStore(t *testing.T) {
+	// The counts match, but the containerd store's downloads have no fixed order.
+	p := newLayerTestProcessor([]string{"sha:a"}, []string{"r1", "r2"})
+	p.containerdStore = true
+	p.applyInspectResult(testImg, []string{"sha:a", "sha:c", "sha:d"})
+
+	if got := p.imageLayerDiffIDs[testImg]; !slices.Equal(got, []string{"sha:a"}) {
+		t.Fatalf("layers = %v, want only the known cached layer", got)
+	}
+	if p.tasks["r1"] == nil || p.tasks["r2"] == nil {
+		t.Errorf("downloads not kept as their own rows")
 	}
 }
 
@@ -87,14 +123,51 @@ func TestApplyInspectResultSkipsDownloadsRemappedByAnotherImage(t *testing.T) {
 	// r1 was shared with another image, which already moved it onto sha:c.
 	p := newLayerTestProcessor([]string{"sha:a"}, []string{"r1", "r2"})
 	p.tasks["sha:c"] = p.tasks["r1"]
+	p.tasks["sha:c"].id = "sha:c"
 	delete(p.tasks, "r1")
 	p.applyInspectResult(testImg, []string{"sha:a", "sha:c", "sha:d"})
 
 	if got := p.imageLayerDiffIDs[testImg]; !slices.Equal(got, []string{"sha:a", "sha:c", "sha:d"}) {
 		t.Fatalf("layers = %v", got)
 	}
-	if tk := p.tasks["sha:d"]; tk == nil || tk.text != "Pull complete" {
-		t.Errorf("sha:d not mapped from r2: %+v", tk)
+	wantDownload(t, p, "sha:c", rawSizeR1)
+	wantDownload(t, p, "sha:d", rawSizeR2)
+	if !slices.Contains(p.layersForImage(testImg), p.tasks["sha:c"]) {
+		t.Errorf("layersForImage lost the shared layer sha:c")
+	}
+}
+
+func TestApplyInspectResultKeepsSharedDownloadForOtherImage(t *testing.T) {
+	// otherImg keeps r1 as its own row; testImg then places r1 on sha:c.
+	p := newLayerTestProcessor([]string{"sha:a"}, []string{"r1"})
+	p.imageOrder = append(p.imageOrder, otherImg)
+	addRawDownload(p, otherImg, "r1", rawSizeR1)
+	p.applyInspectResult(testImg, []string{"sha:a", "sha:c"})
+
+	wantDownload(t, p, "sha:c", rawSizeR1)
+	if !slices.Contains(p.layersForImage(otherImg), p.tasks["sha:c"]) {
+		t.Errorf("otherImg lost its row for the shared download")
+	}
+	if got := p.layerCount(); got != 2 {
+		t.Errorf("layerCount = %d, want sha:a and sha:c once each", got)
+	}
+}
+
+func TestApplyInspectResultRepeatedLayerIsOneSlot(t *testing.T) {
+	// sha:c appears twice in RootFS but downloads once.
+	p := newLayerTestProcessor([]string{"sha:a"}, []string{"r1"})
+	p.applyInspectResult(testImg, []string{"sha:a", "sha:c", "sha:c"})
+
+	wantDownload(t, p, "sha:c", rawSizeR1)
+	if p.tasks["r1"] != nil {
+		t.Errorf("r1 left unplaced")
+	}
+
+	// Two downloads for the one repeated layer can't share its task.
+	p = newLayerTestProcessor([]string{"sha:a"}, []string{"r1", "r2"})
+	p.applyInspectResult(testImg, []string{"sha:a", "sha:c", "sha:c"})
+	if p.tasks["r1"] == nil || p.tasks["r2"] == nil {
+		t.Errorf("a download was overwritten on the repeated layer")
 	}
 }
 
@@ -112,5 +185,14 @@ func TestStatusIncludesUnmappedDownloads(t *testing.T) {
 	p.tasks["r1"].status = api.Error
 	if got := p.worstChildStatus(testImg); got != api.Error {
 		t.Errorf("worstChildStatus = %v, want Error from the download", got)
+	}
+}
+
+func TestUsesContainerdStore(t *testing.T) {
+	if !usesContainerdStore([][2]string{{"driver-type", "io.containerd.snapshotter.v1"}}) {
+		t.Errorf("containerd snapshotter not detected")
+	}
+	if usesContainerdStore([][2]string{{"Backing Filesystem", "extfs"}, {"Supports d_type", "true"}}) {
+		t.Errorf("overlay2 graphdriver detected as containerd")
 	}
 }

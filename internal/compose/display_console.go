@@ -23,6 +23,7 @@ import (
 type imageInspector interface {
 	ImageInspect(ctx context.Context, imageID string, opts ...dockerclient.ImageInspectOption) (dockerclient.ImageInspectResult, error)
 	ImageList(ctx context.Context, options dockerclient.ImageListOptions) (dockerclient.ImageListResult, error)
+	Info(ctx context.Context, options dockerclient.InfoOptions) (dockerclient.SystemInfoResult, error)
 }
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
@@ -195,6 +196,7 @@ type consoleEventProcessor struct {
 	diffIDGroupNum    map[string]int      // sha256 → sharing group number (assigned in first-seen order)
 	localDiffIDs      map[string]bool     // sha256 DiffIDs of every image on disk before the pull; read only after waitDiskScan
 	diskScanDone      chan struct{}       // closed when the disk scan that fills localDiffIDs finishes; nil when none ran
+	containerdStore   bool                // daemon uses the containerd image store; read only after waitDiskScan
 
 	// Downloaded layer identity. Layer tasks are keyed by the pull-event rawID during the
 	// pull: the download belongs to the image being pulled, whose layers may differ from
@@ -800,6 +802,9 @@ func (p *consoleEventProcessor) startDiskScan(ctx context.Context) {
 	go func() {
 		defer close(done)
 		defer cancel()
+		if info, err := p.dockerClient.Info(ctx, dockerclient.InfoOptions{}); err == nil {
+			p.containerdStore = usesContainerdStore(info.Info.DriverStatus)
+		}
 		var (
 			mu  sync.Mutex
 			wg  sync.WaitGroup
@@ -826,6 +831,17 @@ func (p *consoleEventProcessor) startDiskScan(ctx context.Context) {
 		wg.Wait()
 		p.localDiffIDs = layers
 	}()
+}
+
+// usesContainerdStore reports whether a daemon's storage driver status names the
+// containerd snapshotter, as `docker info` shows for the containerd image store.
+func usesContainerdStore(driverStatus [][2]string) bool {
+	for _, kv := range driverStatus {
+		if kv[0] == "driver-type" && strings.HasPrefix(kv[1], "io.containerd.snapshotter") {
+			return true
+		}
+	}
+	return false
 }
 
 // waitDiskScan blocks until the disk scan, if one started, has finished. Reads of
@@ -859,19 +875,21 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 	// rawIDs we actually saw download) only contains this image's NON-cached layers, while
 	// `layers` is the full RootFS DiffID list. A cached layer either already has a sha task
 	// (from pre-flight, this image's or another's) or was on disk before the pull
-	// (localDiffIDs). The downloaded rawIDs map, in order, to the remaining DiffIDs.
+	// (localDiffIDs). The downloaded rawIDs map, in order, to the remaining DiffIDs. A layer
+	// listed twice in RootFS is one slot, so two downloads can't land on one task.
 	var downloadSlots []string // DiffIDs (sha) neither owned nor on disk — these were downloaded
 	for _, sha := range layers {
-		if _, ok := p.tasks[sha]; !ok && !p.localDiffIDs[sha] {
+		if _, ok := p.tasks[sha]; !ok && !p.localDiffIDs[sha] && !slices.Contains(downloadSlots, sha) {
 			downloadSlots = append(downloadSlots, sha)
 		}
 	}
 
-	// Counts that differ mean a cached layer went unrecognised (an incomplete disk scan,
-	// or a layer another image registered mid-pull), so position no longer identifies a
-	// download's layer. List only the layers known to need no download, and keep the
-	// downloads as their own rows.
-	if len(downloadSlots) != len(order) {
+	// Position identifies a download's layer only on the graphdriver store with matching
+	// counts. The containerd store also reports manifest and config blobs, in no fixed
+	// order; counts that differ mean a cached layer went unrecognised (an incomplete disk
+	// scan, or a layer another image registered mid-pull). Otherwise list only the layers
+	// known to need no download, and keep the downloads as their own rows.
+	if p.containerdStore || len(downloadSlots) != len(order) {
 		var known []string
 		for _, sha := range layers {
 			if !slices.Contains(downloadSlots, sha) {
@@ -897,6 +915,12 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 			if x == rawID {
 				p.ids[j] = sha
 				break
+			}
+		}
+		// Another image keeping this shared download as its own row follows it to its layer.
+		for other, rawIDs := range p.imagePullOrder {
+			if i := slices.Index(rawIDs, rawID); i >= 0 {
+				p.imagePullOrder[other][i] = sha
 			}
 		}
 	}
