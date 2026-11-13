@@ -241,8 +241,8 @@ func (p *consoleEventProcessor) serviceRowStatus(svc, imgName string, t *console
 	return abbreviateStatus(t.text), serviceStatusTag(t.status, t.text, p.command), p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
 }
 
-// layersForImage returns the ordered layer tasks for an image: from pre-flight/remapped
-// DiffIDs when present, else the parentID fallback for images with no DiffID data.
+// layersForImage returns the ordered layer tasks for an image: its pre-flight/remapped
+// DiffIDs, then its downloads not yet remapped (an update's new layers while it pulls).
 func (p *consoleEventProcessor) layersForImage(imgName string) []*consoleTask {
 	var layers []*consoleTask
 	for _, sha := range p.imageLayerDiffIDs[imgName] {
@@ -250,12 +250,9 @@ func (p *consoleEventProcessor) layersForImage(imgName string) []*consoleTask {
 			layers = append(layers, t)
 		}
 	}
-	if len(layers) == 0 {
-		for _, id := range p.ids {
-			t := p.tasks[id]
-			if t.parentID == imgName {
-				layers = append(layers, t)
-			}
+	for _, rawID := range p.imagePullOrder[imgName] {
+		if t := p.tasks[rawID]; t != nil {
+			layers = append(layers, t)
 		}
 	}
 	return layers
