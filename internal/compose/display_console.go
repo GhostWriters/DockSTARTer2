@@ -87,6 +87,25 @@ type consoleTask struct {
 	percent   int
 	startTime time.Time
 	endTime   time.Time
+	workStart time.Time // first Working event; zero for a task that never worked
+	workEnd   time.Time // latest finishing event after workStart
+	working   bool      // the latest event was Working
+}
+
+// markWork records an event's effect on the task's work span.
+func (t *consoleTask) markWork(s api.EventStatus) {
+	now := time.Now()
+	if s == api.Working {
+		if t.workStart.IsZero() {
+			t.workStart = now
+		}
+		t.working = true
+		return
+	}
+	if !t.workStart.IsZero() {
+		t.workEnd = now
+	}
+	t.working = false
 }
 
 func (t *consoleTask) completed() bool {
@@ -134,11 +153,8 @@ type consoleEventProcessor struct {
 	// unknownContainers maps raw container name -> assigned "<Unknown N>" id.
 	unknownContainers map[string]string
 	unknownCount      int
-	// serviceStartTimes records the earliest wall-clock time work began for a service.
-	// Set when the service's image task is first seen, before the container lifecycle starts.
-	serviceStartTimes map[string]time.Time
 
-	startTime     time.Time       // set on first event; used for overall elapsed timer in summary
+	startTime     time.Time       // set when the processor is created, just before the compose call; used for overall elapsed timer in summary
 	numLines      int             // lines written in last render
 	started       bool
 	spinnerFrame  int
@@ -204,7 +220,6 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		containerToService: containerToService,
 		projectName:        projectName,
 		unknownContainers:  make(map[string]string),
-		serviceStartTimes:  make(map[string]time.Time),
 		// Also gate on console.IsTUIEnabled() directly, not just updateFn != nil:
 		// a caller that forgets to thread the TUI writer through context (and so
 		// never sets updateFn) would otherwise fall through to the raw-ANSI
@@ -438,9 +453,13 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	}
 
 	// Outside "start", Starting/Started apply only to a row that was just Created, so it
-	// ends on Started; Recreated and Running rows keep their status.
+	// ends on Started; Recreated and Running rows keep their status. A recreated row's
+	// start still counts as its work.
 	if p.command != "start" && (e.Text == api.StatusStarted || e.Text == api.StatusStarting) {
 		if t := p.tasks[id]; t == nil || (t.text != api.StatusCreated && t.text != api.StatusStarting) {
+			if t != nil && t.text == "Recreated" {
+				t.markWork(e.Status)
+			}
 			return
 		}
 	}
@@ -509,18 +528,8 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 				p.volumeIDs = append(p.volumeIDs, id)
 			} else if isServiceStatus(e.Text) && !looksLikeImageName(id) {
 				p.serviceIDs = append(p.serviceIDs, id)
-				// If we haven't stamped a start time yet (image may not have been seen), record now.
-				if _, ok := p.serviceStartTimes[id]; !ok {
-					p.serviceStartTimes[id] = t.startTime
-				}
 			} else {
 				p.imageIDs = append(p.imageIDs, id)
-				// Stamp start time for every service that uses this image.
-				for _, svc := range p.imageServices[id] {
-					if _, ok := p.serviceStartTimes[svc]; !ok {
-						p.serviceStartTimes[svc] = t.startTime
-					}
-				}
 			}
 		}
 		// layer tasks (ParentID != "") are rendered as children — no separate list needed
@@ -534,6 +543,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	if e.Text != "" {
 		t.text = e.Text
 		t.status = e.Status
+		t.markWork(e.Status)
 	}
 	if e.Total > t.total {
 		t.total = e.Total
