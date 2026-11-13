@@ -19,9 +19,10 @@ import (
 	dockerclient "github.com/moby/moby/client"
 )
 
-// imageInspector is the subset of the Docker client API used for post-pull layer inspection.
+// imageInspector is the subset of the Docker client API used for layer inspection.
 type imageInspector interface {
 	ImageInspect(ctx context.Context, imageID string, opts ...dockerclient.ImageInspectOption) (dockerclient.ImageInspectResult, error)
+	ImageList(ctx context.Context, options dockerclient.ImageListOptions) (dockerclient.ImageListResult, error)
 }
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
@@ -160,6 +161,7 @@ type consoleEventProcessor struct {
 	imageLayerDiffIDs map[string][]string // imgRef → ordered sha256 DiffIDs
 	diffIDImageCount  map[string]int      // sha256 → count of images containing it
 	diffIDGroupNum    map[string]int      // sha256 → sharing group number (assigned in first-seen order)
+	localDiffIDs      map[string]bool     // sha256 DiffIDs of every image on disk before the pull
 
 	// Pull-event → DiffID positional mapping.
 	// Docker sends MANY events per layer (Pulling fs layer → Downloading → Download
@@ -746,6 +748,46 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 			}
 		}
 	}
+	if len(p.imageLayerDiffIDs) < len(p.imageOrder) {
+		p.localDiffIDs = p.diskLayers(ctx)
+	}
+}
+
+// diskLayerInspects bounds the concurrent inspects in diskLayers.
+const diskLayerInspects = 8
+
+// diskLayers returns the DiffIDs of every image on disk, so an image pulled for
+// the first time can tell which of its layers needed no download.
+func (p *consoleEventProcessor) diskLayers(ctx context.Context) map[string]bool {
+	list, err := p.dockerClient.ImageList(ctx, dockerclient.ImageListOptions{})
+	if err != nil {
+		return nil
+	}
+	var (
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		sem = make(chan struct{}, diskLayerInspects)
+	)
+	layers := make(map[string]bool)
+	for _, img := range list.Items {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			info, err := p.dockerClient.ImageInspect(ctx, id)
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			for _, sha := range info.RootFS.Layers {
+				layers[sha] = true
+			}
+			mu.Unlock()
+		}(img.ID)
+	}
+	wg.Wait()
+	return layers
 }
 
 // applyInspectResult runs after a cold-pull image finishes pulling (it's now on disk).
@@ -763,12 +805,12 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 
 	// Alignment: the SDK drops "Already exists" events for cached layers, so `order` (the
 	// rawIDs we actually saw download) only contains this image's NON-cached layers, while
-	// `layers` is the full RootFS DiffID list. The cached layers are exactly the DiffIDs that
-	// already have a sha task (owned by a warm image that shares them). So the downloaded
-	// rawIDs map, in order, to the subsequence of DiffIDs that have NO existing sha task.
-	var downloadSlots []string // DiffIDs (sha) not yet owned — these were downloaded
+	// `layers` is the full RootFS DiffID list. A cached layer either already has a sha task
+	// (owned by a warm image that shares it) or was on disk before the pull (localDiffIDs).
+	// The downloaded rawIDs map, in order, to the remaining DiffIDs.
+	var downloadSlots []string // DiffIDs (sha) neither owned nor on disk — these were downloaded
 	for _, sha := range layers {
-		if _, ok := p.tasks[sha]; !ok {
+		if _, ok := p.tasks[sha]; !ok && !p.localDiffIDs[sha] {
 			downloadSlots = append(downloadSlots, sha)
 		}
 	}
@@ -791,6 +833,20 @@ func (p *consoleEventProcessor) applyInspectResult(imgRef string, layers []strin
 				p.ids[j] = sha
 				break
 			}
+		}
+	}
+
+	// A layer with no task by now needed no download.
+	for _, sha := range layers {
+		if _, ok := p.tasks[sha]; !ok {
+			p.tasks[sha] = &consoleTask{
+				id:        sha,
+				startTime: time.Now(),
+				text:      "Already exists",
+				status:    api.Done,
+				percent:   100,
+			}
+			p.ids = append(p.ids, sha)
 		}
 	}
 
