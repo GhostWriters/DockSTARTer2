@@ -8,6 +8,7 @@ import (
 	"github.com/docker/compose/v5/pkg/api"
 	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/strutil"
+	"github.com/GhostWriters/semstyle"
 )
 
 func (p *consoleEventProcessor) isTeardownCommand() bool {
@@ -23,7 +24,7 @@ func (p *consoleEventProcessor) isTeardownCommand() bool {
 // passes true so layers always appear there regardless of the -v flag.
 func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string {
 	if p.isTeardownCommand() {
-		return p.buildTeardownLines()
+		return p.buildTeardownLines(termW)
 	}
 
 	svcRollupIDs := append([]string{}, p.serviceIDs...)
@@ -44,6 +45,11 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 	appendLine := func(line string, t *consoleTask, style timerStyle) {
 		lines = append(lines, line)
 		timers = append(timers, timerEntry{task: t, style: style})
+	}
+	appendError := func(t *consoleTask) {
+		if line := p.errorLine(t, termW); line != "" {
+			appendLine(line, nil, timerLayer)
+		}
 	}
 
 	// ── services: section ──────────────────────────────────────────────────
@@ -100,16 +106,19 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
+			appendError(p.tasks[svc])
 		}
 
 		layers := p.layersForImage(imgName)
 
 		appendLine(p.buildImageLine(imgName, img, layers, maxImgNameW, termW), img, timerImage)
+		appendError(img)
 
 		if showLayers {
 			layerLines, layerTasks := p.buildLayerLines(layers, maxImgNameW, termW)
 			for i, line := range layerLines {
 				appendLine(line, layerTasks[i], timerLayer)
+				appendError(layerTasks[i])
 			}
 		}
 	}
@@ -138,18 +147,66 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
+		appendError(p.tasks[svcID])
 	}
 
-	netLines, netTimers := p.buildNetworkLines()
+	netLines, netTimers := p.buildNetworkLines(termW)
 	for i, line := range netLines {
 		appendLine(line, netTimers[i].task, netTimers[i].style)
 	}
-	volLines, volTimers := p.buildVolumeLines()
+	volLines, volTimers := p.buildVolumeLines(termW)
 	for i, line := range volLines {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
 
+	fitErrorLines(lines)
 	return p.prependSummary(lines, timers)
+}
+
+// errorIndentW is the column of a row's error message: two past the service name column.
+const errorIndentW = globalIndentW + iconW + spaceW + sectionStatusW + sectionChildIndentW + 2
+
+// errorLinePrefix starts every line errorLine returns, so fitErrorLines can find them.
+var errorLinePrefix = strutil.Repeat(" ", errorIndentW) + "{{|DockerStatusFail|}}"
+
+// errorLine returns the line under a failed row showing its message on one line,
+// without Docker's "Error response from daemon: " prefix (the row already says
+// Error) and cut to fit termW, or "" when t has no message. fitErrorLines later
+// cuts it to the table's width.
+func (p *consoleEventProcessor) errorLine(t *consoleTask, termW int) string {
+	if t == nil || t.status != api.Error || t.message == "" {
+		return ""
+	}
+	msg := strings.Join(strings.Fields(t.message), " ")
+	msg = strings.TrimPrefix(msg, "Error response from daemon: ")
+	return errorLinePrefix + cutRunes(msg, termW-errorIndentW-timerReserveW-summaryHeaderIndentW) + "{{[-]}}"
+}
+
+// fitErrorLines cuts the error lines in lines to the width of the other lines, so
+// a message never pushes the timer column right.
+func fitErrorLines(lines []string) {
+	width := 0
+	for _, line := range lines {
+		if !strings.HasPrefix(line, errorLinePrefix) {
+			width = max(width, utf8.RuneCountInString(semstyle.ToPlain(line)))
+		}
+	}
+	for i, line := range lines {
+		if msg, ok := strings.CutPrefix(line, errorLinePrefix); ok {
+			msg = strings.TrimSuffix(msg, "{{[-]}}")
+			lines[i] = errorLinePrefix + cutRunes(msg, width-errorIndentW) + "{{[-]}}"
+		}
+	}
+}
+
+// cutRunes returns s cut to at most maxW runes (at least 10), ending in "…" when cut.
+func cutRunes(s string, maxW int) string {
+	maxW = max(maxW, 10)
+	r := []rune(s)
+	if len(r) <= maxW {
+		return s
+	}
+	return string(append(r[:maxW-1], '…'))
 }
 
 // isPullingText reports whether text is an image fetch still in progress.
@@ -318,7 +375,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 	return sizes, " " + renderProgressBarLayers(layerPcts, progressChars, "{{|DockerMarkerDone|}}")
 }
 
-func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
+func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerEntry) {
 	// Only surface networks we actually act on — in-use Warnings on teardown are hidden.
 	netIDs := p.visibleNetworkIDs()
 	if len(netIDs) == 0 {
@@ -344,11 +401,15 @@ func (p *consoleEventProcessor) buildNetworkLines() ([]string, []timerEntry) {
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
+		if line := p.errorLine(t, termW); line != "" {
+			lines = append(lines, line)
+			timers = append(timers, timerEntry{})
+		}
 	}
 	return lines, timers
 }
 
-func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
+func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEntry) {
 	if len(p.volumeIDs) == 0 {
 		return nil, nil
 	}
@@ -372,6 +433,10 @@ func (p *consoleEventProcessor) buildVolumeLines() ([]string, []timerEntry) {
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
+		if line := p.errorLine(t, termW); line != "" {
+			lines = append(lines, line)
+			timers = append(timers, timerEntry{})
+		}
 	}
 	return lines, timers
 }
@@ -503,7 +568,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 	return out, outTasks
 }
 
-func (p *consoleEventProcessor) buildTeardownLines() []string {
+func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 	impliedText, impliedTag := p.impliedStatus()
 	ic := p.icons()
 	var impliedIcon string
@@ -532,6 +597,11 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 		lines = append(lines, line)
 		timers = append(timers, timerEntry{task: t, style: style})
 	}
+	appendError := func(t *consoleTask) {
+		if line := p.errorLine(t, termW); line != "" {
+			appendLine(line, nil, timerLayer)
+		}
+	}
 
 	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 
@@ -552,6 +622,7 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 			}
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
+			appendError(p.tasks[svc])
 		}
 	}
 	for _, svcID := range p.serviceIDs {
@@ -571,16 +642,18 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
+		appendError(p.tasks[svcID])
 	}
 
-	netLines, netTimers := p.buildNetworkLines()
+	netLines, netTimers := p.buildNetworkLines(termW)
 	for i, line := range netLines {
 		appendLine(line, netTimers[i].task, netTimers[i].style)
 	}
-	volLines, volTimers := p.buildVolumeLines()
+	volLines, volTimers := p.buildVolumeLines(termW)
 	for i, line := range volLines {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
 
+	fitErrorLines(lines)
 	return p.prependSummary(lines, timers)
 }

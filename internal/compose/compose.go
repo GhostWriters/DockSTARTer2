@@ -2,6 +2,7 @@ package compose
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -475,96 +476,126 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	// Pause our spinner just before calling the SDK — it has its own progress display.
 	console.PauseSpinner()
 	defer console.ResumeSpinner()
-	switch command {
-	case "create":
-		logRunning("create", "--remove-orphans")
-		createOpts := api.CreateOptions{RemoveOrphans: true}
-		if len(appNames) > 0 {
-			createOpts.Services = serviceNames
+	run := func() error {
+		switch command {
+		case "create":
+			logRunning("create", "--remove-orphans")
+			createOpts := api.CreateOptions{RemoveOrphans: true}
+			if len(appNames) > 0 {
+				createOpts.Services = serviceNames
+			}
+			return srv.Create(sdkCtx, project, createOpts)
+		case "kill":
+			logRunning("kill")
+			killOpts := api.KillOptions{Project: project}
+			if len(appNames) > 0 {
+				killOpts.Services = serviceNames
+			}
+			return srv.Kill(sdkCtx, project.Name, killOpts)
+		case "start":
+			logRunning("start")
+			startOpts := api.StartOptions{Project: project}
+			if len(appNames) > 0 {
+				startOpts.AttachTo = serviceNames
+			}
+			return srv.Start(sdkCtx, project.Name, startOpts)
+		case "rm":
+			logRunning("rm")
+			rmOpts := api.RemoveOptions{Project: project}
+			if len(appNames) > 0 {
+				rmOpts.Services = serviceNames
+			}
+			return srv.Remove(sdkCtx, project.Name, rmOpts)
+		case "down":
+			logRunning("down", "--remove-orphans")
+			downOpts := api.DownOptions{RemoveOrphans: true}
+			if len(appNames) > 0 {
+				downOpts.Services = serviceNames
+			}
+			return srv.Down(sdkCtx, project.Name, downOpts)
+		case "pause":
+			logRunning("pause")
+			pauseOpts := api.PauseOptions{}
+			if len(appNames) > 0 {
+				pauseOpts.Services = serviceNames
+			}
+			return srv.Pause(sdkCtx, project.Name, pauseOpts)
+		case "pull":
+			logRunning("pull", "--include-deps")
+			return srv.Pull(sdkCtx, project, api.PullOptions{})
+		case "restart":
+			logRunning("restart")
+			restartOpts := api.RestartOptions{}
+			if len(appNames) > 0 {
+				restartOpts.Services = serviceNames
+			}
+			return srv.Restart(sdkCtx, project.Name, restartOpts)
+		case "stop":
+			logRunning("stop")
+			stopOpts := api.StopOptions{}
+			if len(appNames) > 0 {
+				stopOpts.Services = serviceNames
+			}
+			return srv.Stop(sdkCtx, project.Name, stopOpts)
+		case "unpause":
+			logRunning("unpause")
+			unpauseOpts := api.PauseOptions{}
+			if len(appNames) > 0 {
+				unpauseOpts.Services = serviceNames
+			}
+			return srv.UnPause(sdkCtx, project.Name, unpauseOpts)
+		case "update":
+			logRunning("up", "-d", "--remove-orphans", "--pull", "always")
+			setPullPolicy(project, types.PullPolicyAlways)
+			return srv.Up(sdkCtx, project, api.UpOptions{
+				Create: api.CreateOptions{RemoveOrphans: true},
+				Start:  api.StartOptions{Attach: nil, Project: project},
+			})
+		case "up":
+			logRunning("up", "-d", "--remove-orphans", "--pull", "missing")
+			setPullPolicy(project, types.PullPolicyMissing)
+			return srv.Up(sdkCtx, project, api.UpOptions{
+				Create: api.CreateOptions{RemoveOrphans: true},
+				Start:  api.StartOptions{Attach: nil, Project: project},
+			})
+		default: // unknown commands
+			logRunning("up", "-d", "--remove-orphans", "--pull", "always")
+			setPullPolicy(project, types.PullPolicyAlways)
+			return srv.Up(sdkCtx, project, api.UpOptions{
+				Create: api.CreateOptions{RemoveOrphans: true},
+				Start:  api.StartOptions{Attach: nil, Project: project},
+			})
 		}
-		return srv.Create(sdkCtx, project, createOpts)
-	case "kill":
-		logRunning("kill")
-		killOpts := api.KillOptions{Project: project}
-		if len(appNames) > 0 {
-			killOpts.Services = serviceNames
-		}
-		return srv.Kill(sdkCtx, project.Name, killOpts)
-	case "start":
-		logRunning("start")
-		startOpts := api.StartOptions{Project: project}
-		if len(appNames) > 0 {
-			startOpts.AttachTo = serviceNames
-		}
-		return srv.Start(sdkCtx, project.Name, startOpts)
-	case "rm":
-		logRunning("rm")
-		rmOpts := api.RemoveOptions{Project: project}
-		if len(appNames) > 0 {
-			rmOpts.Services = serviceNames
-		}
-		return srv.Remove(sdkCtx, project.Name, rmOpts)
-	case "down":
-		logRunning("down", "--remove-orphans")
-		downOpts := api.DownOptions{RemoveOrphans: true}
-		if len(appNames) > 0 {
-			downOpts.Services = serviceNames
-		}
-		return srv.Down(sdkCtx, project.Name, downOpts)
-	case "pause":
-		logRunning("pause")
-		pauseOpts := api.PauseOptions{}
-		if len(appNames) > 0 {
-			pauseOpts.Services = serviceNames
-		}
-		return srv.Pause(sdkCtx, project.Name, pauseOpts)
-	case "pull":
-		logRunning("pull", "--include-deps")
-		return srv.Pull(sdkCtx, project, api.PullOptions{})
-	case "restart":
-		logRunning("restart")
-		restartOpts := api.RestartOptions{}
-		if len(appNames) > 0 {
-			restartOpts.Services = serviceNames
-		}
-		return srv.Restart(sdkCtx, project.Name, restartOpts)
-	case "stop":
-		logRunning("stop")
-		stopOpts := api.StopOptions{}
-		if len(appNames) > 0 {
-			stopOpts.Services = serviceNames
-		}
-		return srv.Stop(sdkCtx, project.Name, stopOpts)
-	case "unpause":
-		logRunning("unpause")
-		unpauseOpts := api.PauseOptions{}
-		if len(appNames) > 0 {
-			unpauseOpts.Services = serviceNames
-		}
-		return srv.UnPause(sdkCtx, project.Name, unpauseOpts)
-	case "update":
-		logRunning("up", "-d", "--remove-orphans", "--pull", "always")
-		setPullPolicy(project, types.PullPolicyAlways)
-		return srv.Up(sdkCtx, project, api.UpOptions{
-			Create: api.CreateOptions{RemoveOrphans: true},
-			Start:  api.StartOptions{Attach: nil, Project: project},
-		})
-	case "up":
-		logRunning("up", "-d", "--remove-orphans", "--pull", "missing")
-		setPullPolicy(project, types.PullPolicyMissing)
-		return srv.Up(sdkCtx, project, api.UpOptions{
-			Create: api.CreateOptions{RemoveOrphans: true},
-			Start:  api.StartOptions{Attach: nil, Project: project},
-		})
-	default: // unknown commands
-		logRunning("up", "-d", "--remove-orphans", "--pull", "always")
-		setPullPolicy(project, types.PullPolicyAlways)
-		return srv.Up(sdkCtx, project, api.UpOptions{
-			Create: api.CreateOptions{RemoveOrphans: true},
-			Start:  api.StartOptions{Attach: nil, Project: project},
-		})
 	}
+	return reportFailures(ctx, bus, run())
 }
+
+// reportFailures logs every failed row of err's operation as one summary and
+// returns err wrapped in ErrReported, so callers don't log it again. It returns
+// err unchanged when no row failed.
+func reportFailures(ctx context.Context, bus api.EventProcessor, err error) error {
+	p, ok := bus.(*consoleEventProcessor)
+	if err == nil || !ok {
+		return err
+	}
+	fails := p.failures()
+	if len(fails) == 0 {
+		return err
+	}
+	logger.Error(ctx, "Compose failed: %d %s", len(fails), plural(len(fails), "error", "errors"))
+	covered := false
+	for _, f := range fails {
+		logger.Error(ctx, "  %s: %s", f.name, f.message)
+		covered = covered || strings.Contains(err.Error(), f.message)
+	}
+	if !covered {
+		logger.Error(ctx, "  %v", err)
+	}
+	return fmt.Errorf("%w: %w", ErrReported, err)
+}
+
+// ErrReported marks a compose error whose failures ExecuteCompose already logged.
+var ErrReported = errors.New("compose failures reported")
 
 // LoadImageServices loads the compose project and returns a map of image ref → []service names.
 // Returns an empty map (not an error) if the compose file cannot be read.

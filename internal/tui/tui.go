@@ -1540,7 +1540,9 @@ func doTriggerComposeUpdate(clientIP, connType, sessionKey string) tea.Msg {
 		ctx = console.WithTUIWriter(ctx, w)
 		ctx = console.WithReplaceOutputFunc(ctx, dialog.ReplaceOutput)
 		if err := compose.ExecuteCompose(ctx, console.AssumeYes(), console.Force(), "update"); err != nil {
-			logger.Error(ctx, "%v", err)
+			if !errors.Is(err, compose.ErrReported) {
+				logger.Error(ctx, "%v", err)
+			}
 			return err
 		}
 		return nil
@@ -1569,13 +1571,17 @@ func doTriggerComposeStop(clientIP, connType, sessionKey string) tea.Msg {
 		case 0: // Stop
 			SetProgramBoxHeader(compose.YesNotice("stop", ""), CmdLine("--compose", "stop"))
 			if err := compose.ExecuteCompose(ctx, true, console.Force(), "stop"); err != nil {
-				logger.Error(ctx, "%v", err)
+				if !errors.Is(err, compose.ErrReported) {
+					logger.Error(ctx, "%v", err)
+				}
 				return err
 			}
 		case 1: // Down
 			SetProgramBoxHeader(compose.YesNotice("down", ""), CmdLine("--compose", "down"))
 			if err := compose.ExecuteCompose(ctx, true, console.Force(), "down"); err != nil {
-				logger.Error(ctx, "%v", err)
+				if !errors.Is(err, compose.ErrReported) {
+					logger.Error(ctx, "%v", err)
+				}
 				return err
 			}
 		}
