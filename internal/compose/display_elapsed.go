@@ -36,21 +36,90 @@ func elapsedStr(t *consoleTask) string {
 	return formatElapsed(end.Sub(t.startTime))
 }
 
-// serviceTimerTask returns a synthetic consoleTask for a service timer:
-// startTime = earliest recorded start (image pull or container start),
-// endTime/status = from the service container task once it completes.
-// Returns nil if work hasn't started yet.
+// serviceTimerTask returns a synthetic consoleTask timing the work done for a
+// service: its image's time (registry check or download), plus its container
+// work. The time between them is not counted, so the timer pauses while the
+// service waits. Returns nil when no work was done.
 func (p *consoleEventProcessor) serviceTimerTask(svcID string) *consoleTask {
-	start, ok := p.serviceStartTimes[svcID]
-	if !ok || start.IsZero() {
+	now := time.Now()
+	var total time.Duration
+	active, worked := false, false
+	if img := p.imageForService(svcID); img != "" {
+		if t := p.tasks[img]; t != nil {
+			end := t.endTime
+			if !t.completed() || end.IsZero() {
+				end, active = now, true
+			}
+			total += end.Sub(t.startTime)
+			worked = true
+		}
+	}
+	if t := p.tasks[svcID]; t != nil && !t.workStart.IsZero() {
+		end := t.workEnd
+		if t.working || end.IsZero() {
+			end, active = now, true
+		}
+		total += end.Sub(t.workStart)
+		worked = true
+	}
+	if !worked {
+		return nil
+	}
+	synthetic := &consoleTask{startTime: now.Add(-total)}
+	if !active {
+		synthetic.status = api.Done
+		synthetic.endTime = now
+	}
+	return synthetic
+}
+
+// serviceSectionTask returns a synthetic consoleTask spanning the work of the
+// services in svcIDs and their images, from the first work to start to the last
+// to finish. Returns nil when none of them worked.
+func (p *consoleEventProcessor) serviceSectionTask(svcIDs []string) *consoleTask {
+	var start, end time.Time
+	active := false
+	add := func(s, e time.Time, running bool) {
+		if start.IsZero() || s.Before(start) {
+			start = s
+		}
+		if running {
+			active = true
+		} else if e.After(end) {
+			end = e
+		}
+	}
+	seenImages := make(map[string]bool)
+	for _, svc := range svcIDs {
+		if img := p.imageForService(svc); img != "" && !seenImages[img] {
+			seenImages[img] = true
+			if t := p.tasks[img]; t != nil {
+				add(t.startTime, t.endTime, !t.completed() || t.endTime.IsZero())
+			}
+		}
+		if t := p.tasks[svc]; t != nil && !t.workStart.IsZero() {
+			add(t.workStart, t.workEnd, t.working || t.workEnd.IsZero())
+		}
+	}
+	if start.IsZero() {
 		return nil
 	}
 	synthetic := &consoleTask{startTime: start}
-	if t := p.tasks[svcID]; t != nil && t.completed() && !t.endTime.IsZero() {
+	if !active {
 		synthetic.status = api.Done
-		synthetic.endTime = t.endTime
+		synthetic.endTime = end
 	}
 	return synthetic
+}
+
+// imageForService returns the image svcID runs, or "".
+func (p *consoleEventProcessor) imageForService(svcID string) string {
+	for _, imgName := range p.imageOrder {
+		if contains(p.serviceIDsForImage(imgName), svcID) {
+			return imgName
+		}
+	}
+	return ""
 }
 
 // sectionTaskFor returns a synthetic consoleTask whose startTime/endTime span all tasks in ids.

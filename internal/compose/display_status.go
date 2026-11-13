@@ -368,12 +368,7 @@ func abbreviateStatus(text string) string {
 	case "Restart":
 		return "Restarting"
 	}
-	result := dockerlayout.AbbreviateStatus(text)
-	// Remap "Running" → "Started" to match Docker's own *ed naming (service_started).
-	if result == "Running" {
-		return "Started"
-	}
-	return result
+	return dockerlayout.AbbreviateStatus(text)
 }
 
 // applyStatusTag wraps short in the appropriate semantic tag based on event status.

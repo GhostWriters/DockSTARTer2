@@ -47,8 +47,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 	}
 
 	// ── services: section ──────────────────────────────────────────────────
-	allSvcIDs := append(append([]string{}, p.imageOrder...), svcRollupIDs...)
-	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.sectionTaskFor(allSvcIDs), timerSection)
+	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 
 	maxImgNameW := 0
 	for _, imgName := range p.imageOrder {
@@ -495,7 +494,11 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 		}
 
 		out = append(out, p.buildLayerLine(t, layerStatusW, maxImgNameW, layerPcts, p.diffIDGroupNum[t.id]))
-		outTasks = append(outTasks, t)
+		if t.text == "Already exists" && t.total == 0 {
+			outTasks = append(outTasks, nil) // never downloaded, so no time to show
+		} else {
+			outTasks = append(outTasks, t)
+		}
 	}
 	return out, outTasks
 }
@@ -530,8 +533,7 @@ func (p *consoleEventProcessor) buildTeardownLines() []string {
 		timers = append(timers, timerEntry{task: t, style: style})
 	}
 
-	allSvcIDs := append(append([]string{}, p.imageOrder...), svcRollupIDs...)
-	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.sectionTaskFor(allSvcIDs), timerSection)
+	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 
 	seenSvcs := make(map[string]bool)
 	for _, imgName := range p.imageOrder {
