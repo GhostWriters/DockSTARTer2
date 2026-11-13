@@ -173,8 +173,9 @@ type rowFailure struct {
 }
 
 // failures returns every failure that has a message, in display order. A
-// service's failures are its own row's and its image's, each distinct message
-// once; a shared image's failure is listed under every service using it.
+// service's failures are its own row's, its image's and its image's layers',
+// each distinct message once; a shared image's failure is listed under every
+// service using it.
 func (p *consoleEventProcessor) failures() []rowFailure {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -202,7 +203,7 @@ func (p *consoleEventProcessor) failures() []rowFailure {
 			out = append(out, rowFailure{img, p.tasks[img].message})
 		}
 		for _, svc := range svcs {
-			addService(svc, p.tasks[svc], p.tasks[img])
+			addService(svc, append([]*consoleTask{p.tasks[svc], p.tasks[img]}, p.layersForImage(img)...)...)
 		}
 	}
 	// An image's pull error has the text "Error", a service status, which also

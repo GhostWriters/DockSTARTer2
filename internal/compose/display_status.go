@@ -128,8 +128,8 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			}
 		} else if p.isTeardownCommand() {
 			anyStarted = true
-		} else if p.finished && imageForID == nil && contains(p.imageOrder, id) {
-			// An image with no events by the time the SDK returns needed no pull; its row
+		} else if p.finished && p.succeeded && imageForID == nil && contains(p.imageOrder, id) {
+			// An image with no events by the time the SDK succeeds needed no pull; its row
 			// shows Cached, so it counts as done.
 			anyStarted = true
 		} else if imageForID != nil && p.command == "pull" && p.imageFetched(imageForID(id)) {
@@ -151,6 +151,10 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			anyWarning = true
 		}
 	}
+	// A failed SDK call fails the services section even when no row reported the error.
+	if imageForID != nil && p.finished && !p.succeeded {
+		anyError = true
+	}
 	switch {
 	case anyError:
 		return rollupError
@@ -166,7 +170,7 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 }
 
 // imageFetched reports whether imgName's pull has finished, or needed none: an
-// image with no events by the time the SDK returns.
+// image with no events by the time the SDK call succeeds.
 func (p *consoleEventProcessor) imageFetched(imgName string) bool {
 	if imgName == "" {
 		return false
@@ -174,7 +178,7 @@ func (p *consoleEventProcessor) imageFetched(imgName string) bool {
 	if t := p.tasks[imgName]; t != nil {
 		return t.completed()
 	}
-	return p.finished
+	return p.finished && p.succeeded
 }
 
 // worstChildStatus returns the worst EventStatus among all layer children of imgName.
