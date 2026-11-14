@@ -23,6 +23,8 @@ type CmdState struct {
 	Verbose bool
 	Debug   bool
 	Follow  bool
+	Deps    bool // -D: include the requested apps' dependencies
+	NoDeps  bool // --no-deps: neither dependencies nor dependents
 }
 
 // UIProvider defines an interface for commands to request UI interactions.
@@ -136,6 +138,10 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 				console.GlobalGUI = true
 			case "-F", "--follow":
 				state.Follow = true
+			case "-D", "--deps":
+				state.Deps = true
+			case "--no-deps":
+				state.NoDeps = true
 			}
 		}
 

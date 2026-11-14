@@ -200,6 +200,10 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				console.GlobalYes = true
 			case "-F", "--follow":
 				state.Follow = true
+			case "-D", "--deps":
+				state.Deps = true
+			case "--no-deps":
+				state.NoDeps = true
 			}
 		}
 
