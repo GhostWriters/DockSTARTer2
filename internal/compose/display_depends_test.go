@@ -178,9 +178,10 @@ func TestPreRunState(t *testing.T) {
 
 func TestDependsLineNoResultIsAWarning(t *testing.T) {
 	p := newDependsTestProcessor(dep("db", types.ServiceConditionHealthy, true))
+	p.On(containerEvent("web", api.StatusStarted, api.Done))
 	p.setHealth("db", "db", healthStarting)
 	p.finished = true
-	if lines := p.dependsLines("web", 160); len(lines) != 1 || !strings.Contains(lines[0], "Waiting") {
+	if lines := p.dependsLines("web", 160); len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
 		t.Errorf("lines = %q, want Waiting while the end-of-run wait runs", lines)
 	}
 	p.healthWaitDone = true
@@ -208,7 +209,7 @@ func TestNeededByOnStop(t *testing.T) {
 	p := newNeededByTestProcessor("stop")
 	p.On(containerEvent("web", api.StatusStopping, api.Working))
 	lines := p.neededByLines("db", 160)
-	if len(lines) != 1 || !strings.Contains(lines[0], "Waiting") ||
+	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") ||
 		!strings.Contains(semstyle.ToPlain(lines[0]), "needed by: cache (Still Running), web") {
 		t.Fatalf("lines = %q, want web pending and cache, outside the run, still running", plainLines(lines))
 	}
@@ -231,7 +232,7 @@ func TestNeededByOnRestartOnlyRestartTrue(t *testing.T) {
 	if len(got) != 1 || got[0].name != "web" {
 		t.Fatalf("neededBy = %+v, want only web (restart: true)", got)
 	}
-	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], "Waiting") {
+	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
 		t.Errorf("lines = %q, want Waiting until web restarts", plainLines(lines))
 	}
 	p.On(containerEvent("web", api.StatusRestarted, api.Done))
@@ -244,5 +245,28 @@ func TestNeededByNotOnUp(t *testing.T) {
 	p := newNeededByTestProcessor("up")
 	if lines := p.neededByLines("db", 160); lines != nil {
 		t.Errorf("up shows %q, want no needed-by lines", lines)
+	}
+}
+
+func TestDependsLinePendingUntilContainers(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+
+	// web hasn't reached its containers: compose isn't waiting on db yet.
+	lines := p.dependsLines("web", 160)
+	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusPending|}}Pending") {
+		t.Fatalf("lines = %q, want Pending before web's containers", plainLines(lines))
+	}
+	if !strings.Contains(lines[0], "{{|DockerDependsWaiting|}}db") {
+		t.Errorf("lines = %q, want db still in the waiting style", lines)
+	}
+
+	p.On(containerEvent("web", api.StatusCreating, api.Working))
+	if lines := p.dependsLines("web", 160); !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
+		t.Errorf("lines = %q, want Waiting once web is creating", plainLines(lines))
+	}
+
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	if lines := p.dependsLines("web", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
+		t.Errorf("lines = %q, want Ready once db started", plainLines(lines))
 	}
 }

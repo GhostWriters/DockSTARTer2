@@ -171,7 +171,7 @@ func (p *consoleEventProcessor) dependsLines(svc string, termW int) []string {
 				entries = append(entries, depEntry{d.name, state, problem, d.required})
 			}
 		}
-		lines = append(lines, p.detailNameLines(g.label, entries, termW)...)
+		lines = append(lines, p.detailNameLines(g.label, entries, p.reachedContainers(svc), termW)...)
 	}
 	return lines
 }
@@ -240,13 +240,42 @@ func (p *consoleEventProcessor) neededByLines(svc string, termW int) []string {
 		state, problem := p.dependentStatus(d)
 		entries = append(entries, depEntry{d.name, state, problem, true})
 	}
-	return p.detailNameLines("needed by", entries, termW)
+	return p.detailNameLines("needed by", entries, true, termW)
+}
+
+// depRank orders states for a line's status: a failure, then work still pending, then a
+// warning, then met.
+func depRank(s depState) int {
+	switch s {
+	case depFailed:
+		return 3
+	case depPending:
+		return 2
+	case depWarning:
+		return 1
+	}
+	return 0
+}
+
+// reachedContainers reports whether svc's row has reached its container stage, past
+// pulling or building its image, so compose may be waiting on its dependencies.
+func (p *consoleEventProcessor) reachedContainers(svc string) bool {
+	t := p.tasks[svc]
+	if t == nil {
+		return false
+	}
+	switch t.text {
+	case "", api.StatusPulling, api.StatusPulled, api.StatusBuilding, api.StatusBuilt:
+		return false
+	}
+	return true
 }
 
 // detailNameLines returns a detail line listing entries under label, wrapped to fit
 // termW with continuation lines under the first name, or nil when there are none. Each
-// name takes its state's style; the line's status is the worst of them.
-func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry, termW int) []string {
+// name takes its state's style; the line's status is the worst of them. A line with a
+// name still pending reads Waiting when compose may be waiting on it, else Pending.
+func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry, waiting bool, termW int) []string {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -269,7 +298,7 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 		if state == depWarning && e.problem != "No Result" {
 			onlyNoResult = false
 		}
-		if state > worst || state == depPending && worst == depMet {
+		if depRank(state) > depRank(worst) {
 			worst = state
 		}
 		text := e.name
@@ -287,8 +316,13 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 		icon = "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
 		statusText, statusTag = "Failed", "{{|DockerStatusFail|}}Failed{{[-]}}"
 	case depPending:
-		icon = p.activeSpinnerTag(ic.spinner)
-		statusText, statusTag = "Waiting", "{{|DockerStatusActive|}}Waiting{{[-]}}"
+		if waiting {
+			icon = p.activeSpinnerTag(ic.spinner)
+			statusText, statusTag = "Waiting", "{{|DockerStatusActive|}}Waiting{{[-]}}"
+		} else {
+			icon = "{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}"
+			statusText, statusTag = "Pending", "{{|DockerStatusPending|}}Pending{{[-]}}"
+		}
 	case depWarning:
 		icon = "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
 		statusText = "Warning"
