@@ -95,8 +95,9 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 				if img != nil && p.allLayersAlreadyExist(imgName) {
 					statusText, statusTag, icon = p.cachedStatus(isPullingText(img.text), serviceFinalTag)
 				} else if img != nil {
+					// The row shows its image's status, styled as a service row's.
 					statusText = abbreviateStatus(img.text)
-					statusTag = imageStatusTag(img.status, img.text, p.command)
+					statusTag = serviceStatusTag(img.status, img.text, p.command)
 					icon = p.spinnerIcon(img)
 				} else if p.command == "pull" && p.imageFetched(imgName) {
 					statusText, statusTag, icon = p.cachedStatus(false, serviceFinalTag)
