@@ -34,22 +34,19 @@ const (
 	SectionStatusTextW   = 11 // max status text width ("Downloading", "Untagged")
 	SectionStatusGutterW = 1  // spaces after status text before next column
 	SectionStatusW       = SectionStatusTextW + SectionStatusGutterW
-	SectionChildIndentW  = 2  // extra indent per nesting level (matches YAML convention)
-	ImageLabelTextW      = 7  // visible width of "image: "
-	TimerGutterW         = 1  // spaces between rightmost content column and timer
-	LayerStatusW         = 11 // max layer status width ("Downloading"); shared so prune and compose layer columns align
+	SectionChildIndentW  = 2 // extra indent per nesting level (matches YAML convention)
+	ImageLabelTextW      = 7 // visible width of "image: "
+	TimerGutterW         = 1 // spaces between rightmost content column and timer
 
 	// Derived column positions.
 	SectionHeaderIndent = GlobalIndentW + IconW + SpaceW + SectionStatusW
 	ImageLabelW         = 2*SectionChildIndentW + ImageLabelTextW
-	LayerPrefixW        = SectionHeaderIndent + 3*SectionChildIndentW
 )
 
 // Indent strings derived from layout constants.
 var (
 	GlobalIndent       = strutil.Repeat(" ", GlobalIndentW)
 	SectionChildIndent = strutil.Repeat(" ", SectionChildIndentW)
-	LayerPrefix        = strutil.Repeat(" ", LayerPrefixW)
 )
 
 // AbbreviateStatus shortens verbose Docker status strings to compact display labels.
