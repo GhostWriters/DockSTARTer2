@@ -136,8 +136,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	doneIconANSI := semstyle.ToANSI(doneIcon)
 	errorIconANSI := semstyle.ToANSI(errorIcon)
 
-	untaggedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Untagged{{[-]}}")
-	removedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
+	// Final statuses take their row's style, as in the compose display: section headers
+	// DockerStatusFinal; services, networks, volumes and containers App; images and the
+	// container_name line DockerMarkerDone; layers dim.
+	untaggedStatus := semstyle.ToANSI("{{|DockerMarkerDone|}}Untagged{{[-]}}")
+	headerRemovedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
+	removedStatus := semstyle.ToANSI("{{|App|}}Removed{{[-]}}")
 	errorStatus := semstyle.ToANSI("{{|DockerStatusFail|}}Error{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", SectionStatusW-len("Untagged"))
 	removedPad := strutil.Repeat(" ", SectionStatusW-len("Removed"))
@@ -158,7 +162,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 			return GlobalIndent + errorIconANSI + " " + errorStatus + semstyle.CodeReset + errorPad +
 				semstyle.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 		}
-		return GlobalIndent + doneIconANSI + " " + removedStatus + semstyle.CodeReset + removedPad +
+		return GlobalIndent + doneIconANSI + " " + headerRemovedStatus + semstyle.CodeReset + removedPad +
 			semstyle.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
 	childRow := func(nameANSI string, s entryStatus) string {
@@ -166,7 +170,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		return GlobalIndent + icon + " " + status + semstyle.CodeReset + pad +
 			SectionChildIndent + nameANSI + semstyle.ToANSI("{{|DockerColon|}}:{{[-]}}")
 	}
-	deletedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}")
+	deletedStatus := semstyle.ToANSI("{{|DockerMarkerDone|}}Deleted{{[-]}}")
 	deletedPad := strutil.Repeat(" ", SectionStatusW-len("Deleted"))
 	// containerNameRow renders a "container_name: <name>" sub-line under a service,
 	// parallel to the image: line, with Deleted status.
@@ -295,7 +299,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 
 		layerDeletedPad := strutil.Repeat(" ", pruneLayerStatusW-len("Deleted"))
 		layerFailedPad := strutil.Repeat(" ", pruneLayerStatusW-len("Failed"))
-		layerDeletedANSI := semstyle.ToANSI("{{|DockerStatusFinal|}}Deleted{{[-]}}") + layerDeletedPad
+		layerDeletedANSI := semstyle.ToANSI("{{[::D]}}Deleted{{[-]}}") + layerDeletedPad
 		layerFailedANSI := semstyle.ToANSI("{{|DockerStatusFail|}}Failed{{[-]}}") + layerFailedPad
 
 		renderImageGroup := func(g imageGroup) {

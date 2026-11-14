@@ -157,7 +157,7 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 		// check, a warning once unhealthy.
 		if p.healthChecking(id) {
 			allDone = false
-		} else if p.health[id] == healthUnhealthy {
+		} else if p.serviceHealth(id) == healthUnhealthy {
 			anyWarning = true
 		}
 	}

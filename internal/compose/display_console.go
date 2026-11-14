@@ -239,15 +239,15 @@ type consoleEventProcessor struct {
 
 	dockerClient daemonClient // Docker client for layer inspection and container health
 
-	// Container health, shown after a service row's action. health[svc] is Docker's
-	// state (starting/healthy/unhealthy), absent until known and for a container with
-	// no healthcheck.
-	health         map[string]string
-	healthChecked  map[string]bool // svc → its container's health inspect has started
-	healthWG       sync.WaitGroup  // pending health inspects
-	healthStop     func()          // ends the health event watch; nil when none runs
-	healthWaitDone bool            // the end-of-run wait for first check results ran out
-	statusColW     int             // status column width with gutter for this render; 0 before the first
+	// Container health, shown after a service row's action. health[svc][container] is
+	// Docker's state (starting/healthy/unhealthy), absent until known and for a container
+	// with no healthcheck; serviceHealth combines a service's containers.
+	health         map[string]map[string]string
+	healthChecked  map[string]string // container → its service, for containers this run tracks
+	healthWG       sync.WaitGroup    // pending health inspects
+	healthStop     func()            // ends the health event watch; nil when none runs
+	healthWaitDone bool              // the end-of-run wait for first check results ran out
+	statusColW     int               // status column width with gutter for this render; 0 before the first
 
 	// Pre-flight layer data (populated before pull starts via ImageInspect on local images).
 	// imageLayerDiffIDs[imgRef] = ordered RootFS.Layers sha256s from pre-flight inspect.
@@ -310,8 +310,8 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		inspectedImages:   make(map[string]bool),
 		imagePullOrder:    make(map[string][]string),
 		rawIDSeen:         make(map[string]bool),
-		health:            make(map[string]string),
-		healthChecked:     make(map[string]bool),
+		health:            make(map[string]map[string]string),
+		healthChecked:     make(map[string]string),
 	}
 }
 
@@ -321,11 +321,11 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 
 	// Pre-flight: inspect all images to get RootFS DiffIDs before pull events arrive.
 	p.preflight(ctx)
-	p.startHealthWatch(ctx)
 
 	// Static mode (redirected stdout, no TTY/TUI): no live rendering or ticker — events are
 	// processed silently and the final lines are emitted once in Done.
 	if p.staticOut {
+		p.startHealthWatch(ctx)
 		return
 	}
 
@@ -366,6 +366,9 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 			}
 		}
 	}
+
+	// The health watch writes under p.mtx, so it starts after the unlocked first render.
+	p.startHealthWatch(ctx)
 
 	tickInterval := time.Duration(console.SpinnerSpeedFor(console.ConnTypeFromContext(ctx))) * time.Millisecond
 	if tickInterval <= 0 {

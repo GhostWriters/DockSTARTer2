@@ -3,6 +3,7 @@ package compose
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -27,6 +28,7 @@ const (
 	healthInspectTimeout = 5 * time.Second        // bounds each container inspect for its health
 	healthWaitTimeout    = 10 * time.Second       // how long the end of a run waits for first check results
 	healthWaitPoll       = 100 * time.Millisecond // how often that wait looks for them
+	healthWatchRetry     = time.Second            // pause before reopening an event stream that ended
 )
 
 // commandWatchesHealth reports whether command can leave containers running, so
@@ -75,7 +77,8 @@ func containerHealth(c container.InspectResponse) string {
 }
 
 // startHealthWatch follows Docker's health_status events for the project's containers
-// until stopHealthWatch, recording each service's health as it changes.
+// until stopHealthWatch, recording each tracked container's health as it changes. A
+// stream that ends early is reopened; refreshHealth covers anything missed meanwhile.
 func (p *consoleEventProcessor) startHealthWatch(ctx context.Context) {
 	if p.dockerClient == nil || p.projectName == "" || !commandWatchesHealth(p.command) || p.healthStop != nil {
 		return
@@ -85,7 +88,6 @@ func (p *consoleEventProcessor) startHealthWatch(ctx context.Context) {
 	f.Add("type", "container")
 	f.Add("event", "health_status")
 	f.Add("label", api.ProjectLabel+"="+p.projectName)
-	res := p.dockerClient.Events(ctx, dockerclient.EventsListOptions{Filters: f})
 	done := make(chan struct{})
 	p.healthStop = func() {
 		cancel()
@@ -94,44 +96,69 @@ func (p *consoleEventProcessor) startHealthWatch(ctx context.Context) {
 	go func() {
 		defer close(done)
 		for {
+			p.followHealthEvents(ctx, p.dockerClient.Events(ctx, dockerclient.EventsListOptions{Filters: f}))
 			select {
 			case <-ctx.Done():
 				return
-			case err := <-res.Err:
-				_ = err // the watch only feeds the display; a closed stream ends it, and inspects cover the rest
-				return
-			case m, ok := <-res.Messages:
-				if !ok {
-					return
-				}
-				svc := m.Actor.Attributes[api.ServiceLabel]
-				_, status, found := strings.Cut(string(m.Action), ":")
-				if svc == "" || !found {
-					continue
-				}
-				p.mtx.Lock()
-				p.health[svc] = strings.TrimSpace(status)
-				p.mtx.Unlock()
+			case <-time.After(healthWatchRetry):
 			}
 		}
 	}()
 }
 
-// waitForHealth waits, up to healthWaitTimeout, for every container still on its first
-// health check to report a result; those still without one then show No Result.
+// followHealthEvents records health from res until its stream ends or ctx is done.
+func (p *consoleEventProcessor) followHealthEvents(ctx context.Context, res dockerclient.EventsResult) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-res.Err:
+			_ = err // the caller reopens the stream
+			return
+		case m, ok := <-res.Messages:
+			if !ok {
+				return
+			}
+			_, status, found := strings.Cut(string(m.Action), ":")
+			name := m.Actor.Attributes["name"]
+			if !found || name == "" {
+				continue
+			}
+			p.mtx.Lock()
+			if svc, tracked := p.healthChecked[name]; tracked { // only containers this run started
+				p.setHealth(svc, name, strings.TrimSpace(status))
+			}
+			p.mtx.Unlock()
+		}
+	}
+}
+
+// waitForHealth waits, up to healthWaitTimeout from when it is called, for every
+// container still on its first health check to report a result; those still without
+// one then show No Result.
 func (p *consoleEventProcessor) waitForHealth() {
-	p.healthWG.Wait()
+	deadline := time.Now().Add(healthWaitTimeout)
+	inspected := make(chan struct{})
+	go func() {
+		p.healthWG.Wait()
+		close(inspected)
+	}()
+	select {
+	case <-inspected:
+	case <-time.After(time.Until(deadline)):
+	}
 	checking := func() bool {
 		p.mtx.Lock()
 		defer p.mtx.Unlock()
-		for _, h := range p.health {
-			if h == healthStarting {
-				return true
+		for _, containers := range p.health {
+			for _, h := range containers {
+				if h == healthStarting {
+					return true
+				}
 			}
 		}
 		return false
 	}
-	deadline := time.Now().Add(healthWaitTimeout)
 	for checking() {
 		if time.Now().After(deadline) {
 			p.mtx.Lock()
@@ -143,49 +170,112 @@ func (p *consoleEventProcessor) waitForHealth() {
 	}
 }
 
-// stopHealthWatch waits for pending health inspects, then ends the event watch.
+// stopHealthWatch waits for pending health inspects, ends the event watch, then
+// refreshes every tracked container's health for the final render.
 func (p *consoleEventProcessor) stopHealthWatch() {
 	p.healthWG.Wait()
 	if p.healthStop != nil {
 		p.healthStop()
 		p.healthStop = nil
 	}
+	p.refreshHealth()
 }
 
-// checkHealth inspects svc's container once for its current health, which covers a
+// refreshHealth inspects every tracked container once more, so the final render shows
+// its latest health even if events were missed while the stream was down.
+func (p *consoleEventProcessor) refreshHealth() {
+	if p.dockerClient == nil {
+		return
+	}
+	p.mtx.Lock()
+	tracked := make(map[string]string, len(p.healthChecked))
+	for name, svc := range p.healthChecked {
+		tracked[name] = svc
+	}
+	p.mtx.Unlock()
+	var wg sync.WaitGroup
+	for name, svc := range tracked {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if status := p.inspectHealth(name); status != "" {
+				p.mtx.Lock()
+				p.setHealth(svc, name, status)
+				p.mtx.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// checkHealth inspects a container once for its current health, which covers a
 // container that has no events yet and any event missed before the watch began.
 // Callers hold p.mtx.
 func (p *consoleEventProcessor) checkHealth(svc, containerName string) {
-	if p.dockerClient == nil || !commandWatchesHealth(p.command) || p.healthChecked[svc] {
+	if p.dockerClient == nil || !commandWatchesHealth(p.command) {
 		return
 	}
-	p.healthChecked[svc] = true
+	if _, ok := p.healthChecked[containerName]; ok {
+		return
+	}
+	p.healthChecked[containerName] = svc
 	p.healthWG.Add(1)
 	go func() {
 		defer p.healthWG.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), healthInspectTimeout)
-		defer cancel()
-		res, err := p.dockerClient.ContainerInspect(ctx, containerName, dockerclient.ContainerInspectOptions{})
-		if err != nil {
-			return
-		}
-		status := containerHealth(res.Container)
+		status := p.inspectHealth(containerName)
 		if status == "" {
 			return
 		}
 		p.mtx.Lock()
 		defer p.mtx.Unlock()
-		if _, ok := p.health[svc]; !ok { // an event since is newer
-			p.health[svc] = status
+		if _, ok := p.health[svc][containerName]; !ok { // an event since is newer
+			p.setHealth(svc, containerName, status)
 		}
 	}()
+}
+
+// inspectHealth returns a container's health, or "" when it has none or the inspect fails.
+func (p *consoleEventProcessor) inspectHealth(containerName string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), healthInspectTimeout)
+	defer cancel()
+	res, err := p.dockerClient.ContainerInspect(ctx, containerName, dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		return ""
+	}
+	return containerHealth(res.Container)
+}
+
+// setHealth records one container's health. Callers hold p.mtx.
+func (p *consoleEventProcessor) setHealth(svc, containerName, status string) {
+	if p.health[svc] == nil {
+		p.health[svc] = make(map[string]string)
+	}
+	p.health[svc][containerName] = status
+}
+
+// serviceHealth returns a service's health across its containers: unhealthy if any
+// is, else starting if any is still on its first check, else healthy, or "" when none
+// has a healthcheck.
+func (p *consoleEventProcessor) serviceHealth(svc string) string {
+	worst := ""
+	for _, h := range p.health[svc] {
+		switch {
+		case h == healthUnhealthy:
+			return healthUnhealthy
+		case h == healthStarting:
+			worst = healthStarting
+		case h == healthHealthy && worst == "":
+			worst = healthHealthy
+		}
+	}
+	return worst
 }
 
 // actionStatus returns a service row's action text and tag. A row that failed only
 // because its health check did keeps its action, styled as before the failure.
 func (p *consoleEventProcessor) actionStatus(t *consoleTask) (text, tag string) {
 	if t.healthErr {
-		if p.health[t.id] == healthUnhealthy {
+		if p.serviceHealth(t.id) == healthUnhealthy {
 			return abbreviateStatus(t.text), serviceStatusTag(t.prevStatus, t.text, p.command)
 		}
 		return api.StatusError, serviceStatusTag(api.Error, api.StatusError, p.command)
@@ -197,7 +287,7 @@ func (p *consoleEventProcessor) actionStatus(t *consoleTask) (text, tag string) 
 // leading space, or "" when its container has no healthcheck.
 func (p *consoleEventProcessor) healthSuffix(svc string) (text, tag string) {
 	var word, style string
-	switch p.health[svc] {
+	switch p.serviceHealth(svc) {
 	case healthStarting:
 		word, style = "Checking", "{{|DockerHealthChecking|}}"
 		if p.healthWaitDone {
@@ -223,7 +313,7 @@ func (p *consoleEventProcessor) serviceStatus(t *consoleTask) (text, tag string)
 // healthChecking reports whether svc's container is on its first health check and
 // the run is still waiting for the result.
 func (p *consoleEventProcessor) healthChecking(svc string) bool {
-	return p.health[svc] == healthStarting && !p.healthWaitDone
+	return p.serviceHealth(svc) == healthStarting && !p.healthWaitDone
 }
 
 // serviceIcon returns a service row's icon for worst: a spinner while its container
@@ -233,7 +323,7 @@ func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatu
 	if worst != api.Error && p.healthChecking(t.id) {
 		return p.activeSpinnerTag(p.icons().spinner)
 	}
-	if worst != api.Error && p.health[t.id] == healthUnhealthy {
+	if worst != api.Error && p.serviceHealth(t.id) == healthUnhealthy {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)
@@ -245,9 +335,9 @@ func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatu
 // only misalign its own row.
 func (p *consoleEventProcessor) updateStatusW() {
 	w := sectionStatusTextW
-	for svc, h := range p.health {
+	for svc := range p.health {
 		t := p.tasks[svc]
-		if t == nil || h == "" {
+		if t == nil || p.serviceHealth(svc) == "" {
 			continue
 		}
 		text, _ := p.actionStatus(t)
@@ -275,7 +365,7 @@ func (p *consoleEventProcessor) unhealthyServices() []string {
 	defer p.mtx.Unlock()
 	var out []string
 	add := func(svc string) {
-		if p.health[svc] == healthUnhealthy && !contains(out, svc) {
+		if p.serviceHealth(svc) == healthUnhealthy && !contains(out, svc) {
 			out = append(out, svc)
 		}
 	}
