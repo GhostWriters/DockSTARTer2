@@ -54,7 +54,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 	}
 
 	// ── services: section ──────────────────────────────────────────────────
-	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 
 	maxImgNameW := 0
 	for _, imgName := range p.imageOrder {
@@ -416,7 +416,7 @@ func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerE
 	}
 	netIcon, netStatusTag, netStatusText, _ := p.sectionRollupWithPropagation(netIDs, nil)
 	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
-	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + "{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}"}
+	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + "{{|DockerSection|}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(netIDs), style: timerSection}}
 	for _, netID := range netIDs {
 		t := p.tasks[netID]
@@ -448,7 +448,7 @@ func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEn
 	}
 	volIcon, volStatusTag, volStatusText, _ := p.sectionRollupWithPropagation(p.volumeIDs, nil)
 	volStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(volStatusText))
-	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + "{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}"}
+	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + "{{|DockerSection|}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
 	for _, volID := range p.volumeIDs {
 		t := p.tasks[volID]
@@ -636,7 +636,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		}
 	}
 
-	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{[white::B]}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 
 	seenSvcs := make(map[string]bool)
 	for _, imgName := range p.imageOrder {

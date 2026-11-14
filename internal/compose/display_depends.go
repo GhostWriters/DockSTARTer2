@@ -10,6 +10,7 @@ import (
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/moby/moby/api/types/container"
 
+	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/strutil"
 )
 
@@ -294,12 +295,12 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 	onlyNoResult := true
 	for _, e := range entries {
 		state := e.state
-		style := "{{|DockerDependsWaiting|}}"
+		style := "DockerDependsWaiting"
 		switch {
 		case state == depMet:
-			style = "{{|DockerDependsMet|}}"
+			style = "DockerDependsMet"
 		case state == depFailed && e.required:
-			style = "{{|DockerDependsFailed|}}"
+			style = "DockerDependsFailed"
 		}
 		if (state == depFailed || state == depWarning) && !e.required {
 			state = depMet // compose starts the service anyway; the name shows the problem
@@ -311,10 +312,12 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 			worst = state
 		}
 		text := e.name
+		name := dockerlayout.StyleServiceName(e.name, style)
 		if e.problem != "" {
 			text += " (" + e.problem + ")"
+			name += "{{|" + style + "|}} (" + e.problem + "){{[-]}}"
 		}
-		names = append(names, style+text+"{{[-]}}")
+		names = append(names, name)
 		nameWs = append(nameWs, utf8.RuneCountInString(text))
 	}
 

@@ -121,8 +121,8 @@ func TestDependsLinesGroupByCondition(t *testing.T) {
 		t.Errorf("Ready = %q, want the detail line's style", lines[0])
 	}
 	if !strings.Contains(lines[0], "{{|DockerDependsMet|}}cache") ||
-		!strings.Contains(lines[1], "{{|DockerDependsFailed|}}db (Unhealthy)") ||
-		!strings.Contains(lines[2], "{{|DockerDependsWaiting|}}search (Unhealthy)") {
+		!strings.Contains(lines[1], "{{|DockerDependsFailed|}}db{{[-]}}{{|DockerDependsFailed|}} (Unhealthy)") ||
+		!strings.Contains(lines[2], "{{|DockerDependsWaiting|}}search{{[-]}}{{|DockerDependsWaiting|}} (Unhealthy)") {
 		t.Errorf("name styles wrong: %q", lines)
 	}
 }
@@ -187,7 +187,7 @@ func TestDependsLineNoResultIsAWarning(t *testing.T) {
 	p.healthWaitDone = true
 	lines := p.dependsLines("web", 160)
 	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusWarn|}}No Result") ||
-		!strings.Contains(lines[0], "{{|DockerDependsWaiting|}}db (No Result)") {
+		!strings.Contains(lines[0], "{{|DockerDependsWaiting|}}db{{[-]}}{{|DockerDependsWaiting|}} (No Result)") {
 		t.Errorf("lines = %q, want a No Result warning with db in the waiting style", lines)
 	}
 }

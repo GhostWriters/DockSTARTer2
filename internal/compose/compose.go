@@ -145,7 +145,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	if len(appNames) > 0 {
 		var niceNames []string
 		for _, appName := range appNames {
-			niceNames = append(niceNames, appenv.GetNiceName(ctx, appName))
+			niceNames = append(niceNames, appenv.StyledInstanceName(ctx, appName))
 		}
 		appNamesJoined = strings.Join(niceNames, ", ")
 		// Name the services beyond the requested ones that the command will act on too,
@@ -727,19 +727,19 @@ func extraServicesText(ctx context.Context, project *types.Project, command stri
 	nice := func(list []string) string {
 		out := make([]string, len(list))
 		for i, name := range list {
-			out[i] = appenv.GetNiceName(ctx, name)
+			out[i] = appenv.StyledInstanceName(ctx, name)
 		}
 		return strings.Join(out, ", ")
 	}
 	var text string
 	if len(dependencies) > 0 {
-		text += "{{[-]}}, and " + possessive + " dependencies: {{|App|}}" + nice(dependencies)
+		text += "{{[-]}}, and " + possessive + " dependencies: " + nice(dependencies)
 	}
 	switch {
 	case len(dependents) > 0 && restartOnly:
-		text += "{{[-]}}, and the apps that restart with " + object + ": {{|App|}}" + nice(dependents)
+		text += "{{[-]}}, and the apps that restart with " + object + ": " + nice(dependents)
 	case len(dependents) > 0:
-		text += "{{[-]}}, and the apps that depend on " + object + ": {{|App|}}" + nice(dependents)
+		text += "{{[-]}}, and the apps that depend on " + object + ": " + nice(dependents)
 	}
 	return text
 }

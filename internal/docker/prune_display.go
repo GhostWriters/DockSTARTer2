@@ -137,10 +137,10 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	errorIconANSI := semstyle.ToANSI(errorIcon)
 
 	// Final statuses take their row's style, as in the compose display: section headers
-	// DockerStatusFinal; services, networks, volumes and containers App; images and the
+	// DockerSection; services, networks, volumes and containers App; images and the
 	// container_name line DockerMarkerDone; layers dim.
 	untaggedStatus := semstyle.ToANSI("{{|DockerMarkerDone|}}Untagged{{[-]}}")
-	headerRemovedStatus := semstyle.ToANSI("{{|DockerStatusFinal|}}Removed{{[-]}}")
+	headerRemovedStatus := semstyle.ToANSI("{{|DockerSection|}}Removed{{[-]}}")
 	removedStatus := semstyle.ToANSI("{{|App|}}Removed{{[-]}}")
 	errorStatus := semstyle.ToANSI("{{|DockerStatusFail|}}Error{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", SectionStatusW-len("Untagged"))
@@ -160,10 +160,10 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	sectionHeader := func(label string, hasErr bool) string {
 		if hasErr {
 			return GlobalIndent + errorIconANSI + " " + errorStatus + semstyle.CodeReset + errorPad +
-				semstyle.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+				semstyle.ToANSI("{{|DockerSection|}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 		}
 		return GlobalIndent + doneIconANSI + " " + headerRemovedStatus + semstyle.CodeReset + removedPad +
-			semstyle.ToANSI("{{[white::B]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+			semstyle.ToANSI("{{|DockerSection|}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
 	}
 	childRow := func(nameANSI string, s entryStatus) string {
 		icon, status, pad := iconStatus(s)
