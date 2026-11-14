@@ -53,15 +53,12 @@ const (
 	timerGutterW         = dockerlayout.TimerGutterW
 	sectionHeaderIndent  = dockerlayout.SectionHeaderIndent
 	imageLabelW          = dockerlayout.ImageLabelW
-	layerPrefixW         = dockerlayout.LayerPrefixW
 
 	// Compose-specific constants.
-	layerStatusW      = dockerlayout.LayerStatusW // max width of any abbreviated layer status ("Downloading")
-	sizeColW          = 8                         // width of one fixedSize() value
-	sizeSepW          = 1                         // width of "/" between current/total sizes
-	timerReserveW     = 10                        // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
+	sizeColW          = 8  // width of one fixedSize() value
+	sizeSepW          = 1  // width of "/" between current/total sizes
+	timerReserveW     = 10 // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
 	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
-	layerSizesColBase = layerPrefixW + iconW + spaceW
 	minDetailW        = 20 // narrowest a detail line's text wraps or cuts to
 	// summaryHeaderIndentW shifts content lines right to nest under the summary header.
 	// Content lines carry their own global indent, so this adds the header's icon + space
@@ -74,7 +71,6 @@ const (
 var (
 	globalIndent       = dockerlayout.GlobalIndent
 	sectionChildIndent = dockerlayout.SectionChildIndent
-	layerPrefix        = dockerlayout.LayerPrefix
 )
 
 var brailleChars = strings.Split("⠀⡀⣀⣄⣤⣦⣶⣷⣿", "")

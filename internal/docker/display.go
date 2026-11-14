@@ -15,14 +15,11 @@ const (
 	TimerGutterW         = dockerlayout.TimerGutterW
 	SectionHeaderIndent  = dockerlayout.SectionHeaderIndent
 	ImageLabelW          = dockerlayout.ImageLabelW
-	LayerPrefixW         = dockerlayout.LayerPrefixW
-	LayerStatusW         = dockerlayout.LayerStatusW
 )
 
 var (
 	GlobalIndent       = dockerlayout.GlobalIndent
 	SectionChildIndent = dockerlayout.SectionChildIndent
-	LayerPrefix        = dockerlayout.LayerPrefix
 )
 
 var (

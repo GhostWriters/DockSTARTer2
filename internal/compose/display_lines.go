@@ -530,17 +530,21 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "(" + digits + ")"
 	}
 
-	idPad := (imageSizesColBase + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW + badgeW)
-	if idPad < 1 {
-		idPad = 1
-	}
+	// The status shares the main status column; the ID sits one step in under image:.
+	idCol := globalIndentW + iconW + spaceW + sectionStatusW + layerIDIndentW
+	idPad := max(imageSizesColBase+maxImgNameW-(idCol+idW+badgeW), 1)
 	barReset := ""
 	if bar != "" {
 		barReset = "{{[-]}}"
 	}
 
-	return "{{[::D]}}" + layerPrefix + icon + " " + statusTag + "{{[-]}}{{[::D]}}" + statusPad + " " + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + "{{[-]}}"
+	return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + strutil.Repeat(" ", layerIDIndentW) +
+		"{{[::D]}}" + id + badge + strutil.Repeat(" ", idPad) + sizes + barReset + bar + "{{[-]}}"
 }
+
+// layerIDIndentW is how far a layer's ID sits past the status column: one step in from
+// its image's image: label.
+const layerIDIndentW = 3 * sectionChildIndentW
 
 func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNameW int, termW int) ([]string, []*consoleTask) {
 	if len(layers) == 0 {
@@ -591,7 +595,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 			layerPcts[i] = pct
 		}
 
-		out = append(out, p.buildLayerLine(t, layerStatusW, maxImgNameW, layerPcts, p.diffIDGroupNum[t.id]))
+		out = append(out, p.buildLayerLine(t, sectionStatusW, maxImgNameW, layerPcts, p.diffIDGroupNum[t.id]))
 		if t.text == "Already exists" && t.total == 0 {
 			outTasks = append(outTasks, nil) // never downloaded, so no time to show
 		} else {

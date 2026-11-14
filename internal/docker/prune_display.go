@@ -19,12 +19,9 @@ import (
 )
 
 const (
-	// pruneImageColW: column where the 2*childIndent prefix before "image:" starts
-	pruneImageColW = GlobalIndentW + IconW + SpaceW + SectionStatusW
-	// pruneLayerPrefixW: indent for layer icon — sits under the "a" of "image:"
-	pruneLayerPrefixW = pruneImageColW + 2*SectionChildIndentW + 2
-	// pruneLayerStatusW: matches compose layerStatusW so columns align when -p and -c are combined
-	pruneLayerStatusW = LayerStatusW
+	// pruneLayerIDIndentW: a layer's ID sits one step in from its image's "image:" label,
+	// past the shared status column, as in the compose display
+	pruneLayerIDIndentW = 3 * SectionChildIndentW
 )
 
 // PruneReport holds structured prune results for display.
@@ -295,10 +292,8 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		imageLabel := strutil.Repeat(" ", 2*SectionChildIndentW) +
 			semstyle.ToANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} ")
 
-		layerIconIndent := strutil.Repeat(" ", pruneLayerPrefixW)
-
-		layerDeletedPad := strutil.Repeat(" ", pruneLayerStatusW-len("Deleted"))
-		layerFailedPad := strutil.Repeat(" ", pruneLayerStatusW-len("Failed"))
+		layerDeletedPad := strutil.Repeat(" ", SectionStatusW-len("Deleted"))
+		layerFailedPad := strutil.Repeat(" ", SectionStatusW-len("Failed"))
 		layerDeletedANSI := semstyle.ToANSI("{{[::D]}}Deleted{{[-]}}") + layerDeletedPad
 		layerFailedANSI := semstyle.ToANSI("{{|DockerStatusFail|}}Failed{{[-]}}") + layerFailedPad
 
@@ -336,8 +331,8 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 					if len(lid) > 12 {
 						lid = lid[:12]
 					}
-					add(layerIconIndent + semstyle.CodeDim + lIcon + " " + lStatus + " " +
-						semstyle.ToANSI("{{[::D]}}"+lid+"{{[-]}}") + semstyle.CodeDimOff)
+					add(GlobalIndent + lIcon + " " + lStatus + strutil.Repeat(" ", pruneLayerIDIndentW) +
+						semstyle.ToANSI("{{[::D]}}"+lid+"{{[-]}}"))
 				}
 			}
 		}
