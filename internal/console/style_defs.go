@@ -123,11 +123,16 @@ type AppColors struct {
 	DockerStatusWarn    string
 	DockerStatusPending string
 	DockerStatusActive  string
-	// Docker Compose progress colors — container health suffix
+	// Docker Compose progress colors — healthcheck line status
 	DockerHealthChecking  string
-	DockerHealthHealthy   string
 	DockerHealthUnhealthy string
 	DockerHealthNoResult  string
+	// Docker Compose progress colors — detail line labels (healthcheck, depends_on)
+	DockerDetailLabel string
+	// Docker Compose progress colors — dependency names, by whether their condition is met
+	DockerDependsWaiting string
+	DockerDependsMet     string
+	DockerDependsFailed  string
 }
 
 // Colors is DS2's global style instance. RegisterBaseTags reads from it.
@@ -236,11 +241,16 @@ var Colors = AppColors{
 	DockerStatusWarn:    "{{[-]}}{{[yellow]}}",
 	DockerStatusPending: "{{[-]}}{{[gray::D]}}",
 	DockerStatusActive:  "{{[-]}}{{[yellow]}}",
-	// Docker Compose progress colors — container health suffix
+	// Docker Compose progress colors — healthcheck line status
 	DockerHealthChecking:  "{{[-]}}{{[yellow]}}",
-	DockerHealthHealthy:   "{{[-]}}{{[green::B]}}",
 	DockerHealthUnhealthy: "{{[-]}}{{[red]}}",
 	DockerHealthNoResult:  "{{[-]}}{{[yellow]}}",
+	// Docker Compose progress colors — detail line labels
+	DockerDetailLabel: "{{[-]}}{{[white]}}",
+	// Docker Compose progress colors — dependency names
+	DockerDependsWaiting: "{{[-]}}{{[yellow]}}",
+	DockerDependsMet:     "{{[-]}}{{[green]}}",
+	DockerDependsFailed:  "{{[-]}}{{[red]}}",
 }
 
 func init() {

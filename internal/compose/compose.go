@@ -411,6 +411,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 				containerToService[svc.ContainerName] = name
 			}
 		}
+		preRun := make(map[string]string) // service → container state before the run, for the dependency lines
 		// Also query running containers to map their actual names (which may include
 		// random suffixes like "<project>-<service>-<random>") to service names via label.
 		f := mobyclient.Filters{}
@@ -424,6 +425,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 				if svcName == "" {
 					continue
 				}
+				preRun[svcName] = preRunState(ctr)
 				for _, rawName := range ctr.Names {
 					cname := strings.TrimPrefix(rawName, "/")
 					if cname != svcName {
@@ -449,6 +451,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			}
 		}
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
+		if p, ok := bus.(*consoleEventProcessor); ok {
+			p.dependsOn = projectDependencies(project)
+			p.preRun = preRun
+		}
 	}
 
 	srv, err := composev5.NewComposeService(dockerCLI,

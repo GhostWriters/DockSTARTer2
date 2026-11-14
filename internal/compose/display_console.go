@@ -60,8 +60,9 @@ const (
 	sizeColW          = 8                         // width of one fixedSize() value
 	sizeSepW          = 1                         // width of "/" between current/total sizes
 	timerReserveW     = 10                        // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
+	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
 	layerSizesColBase = layerPrefixW + iconW + spaceW
-	minImgNameW       = 20 // narrowest the image name column shrinks to on a narrow terminal
+	minDetailW        = 20 // narrowest a detail line's text wraps or cuts to
 	// summaryHeaderIndentW shifts content lines right to nest under the summary header.
 	// Content lines carry their own global indent, so this adds the header's icon + space
 	// plus one child-indent step, putting content markers under the 3rd char of the header
@@ -247,7 +248,15 @@ type consoleEventProcessor struct {
 	healthWG       sync.WaitGroup    // pending health inspects
 	healthStop     func()            // ends the health event watch; nil when none runs
 	healthWaitDone bool              // the end-of-run wait for first check results ran out
-	statusColW     int               // status column width with gutter for this render; 0 before the first
+	healthCmd      map[string]string // svc → its healthcheck's command, shown on its healthcheck line
+	healthOutput   map[string]string // container → its last health check's output, shown while unhealthy
+
+	// Dependencies, listed under each service row. dependsOn[svc] is its depends_on
+	// entries; containerStarted[svc] marks a container this run reported running; preRun
+	// [svc] is the state before the run of a container the run may not touch.
+	dependsOn        map[string][]serviceDep
+	containerStarted map[string]bool
+	preRun           map[string]string
 
 	// Pre-flight layer data (populated before pull starts via ImageInspect on local images).
 	// imageLayerDiffIDs[imgRef] = ordered RootFS.Layers sha256s from pre-flight inspect.
@@ -312,6 +321,9 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		rawIDSeen:         make(map[string]bool),
 		health:            make(map[string]map[string]string),
 		healthChecked:     make(map[string]string),
+		containerStarted:  make(map[string]bool),
+		healthCmd:         make(map[string]string),
+		healthOutput:      make(map[string]string),
 	}
 }
 
@@ -520,12 +532,13 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 
 	isServiceEvent := parentID == "" && !isNetwork && !isVolume && p.isKnownServiceName(id)
 	if isServiceEvent && startsContainer(e.Text) {
+		p.containerStarted[id] = true
 		p.checkHealth(id, containerName)
 	}
 
 	// Compose's Waiting and Healthy come from waiting on a dependency, and its Healthy
-	// also covers a running container with no healthcheck. The health shows as the
-	// row's suffix instead, so they keep the row's action; a row with none is Running.
+	// also covers a running container with no healthcheck. Health shows on the row's
+	// healthcheck line instead, so they keep the row's action; a row with none is Running.
 	if isServiceEvent && (e.Text == api.StatusWaiting || e.Text == api.StatusHealthy) {
 		if t := p.tasks[id]; t != nil && t.text != "" {
 			return
