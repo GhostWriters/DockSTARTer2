@@ -7,9 +7,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/GhostWriters/semstyle"
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/moby/moby/api/types/container"
 	dockerclient "github.com/moby/moby/client"
+
+	"DockSTARTer2/internal/strutil"
 )
 
 // Health states, as Docker reports them.
@@ -18,11 +21,6 @@ const (
 	healthHealthy   = string(container.Healthy)
 	healthUnhealthy = string(container.Unhealthy)
 )
-
-// healthSuffixW is the room a service row's health suffix takes: " (Unhealthy)" and
-// " (No Result)", its longest. Reserving the longest keeps the columns still as a
-// container's health changes.
-const healthSuffixW = len(" (Unhealthy)")
 
 const (
 	healthInspectTimeout = 5 * time.Second        // bounds each container inspect for its health
@@ -76,6 +74,27 @@ func containerHealth(c container.InspectResponse) string {
 	return ""
 }
 
+// healthInfo is what an inspect tells about a container's health: its state, its
+// healthcheck's command and its last check's output.
+type healthInfo struct {
+	status, command, output string
+}
+
+// containerHealthInfo returns a container's health state, command and last output.
+func containerHealthInfo(c container.InspectResponse) healthInfo {
+	info := healthInfo{status: containerHealth(c)}
+	if hc := c.Config; hc != nil && hc.Healthcheck != nil && len(hc.Healthcheck.Test) > 1 {
+		// Test is ["CMD-SHELL", "<command>"] or ["CMD", "<arg>", ...].
+		info.command = strings.Join(hc.Healthcheck.Test[1:], " ")
+	}
+	if c.State != nil && c.State.Health != nil {
+		if log := c.State.Health.Log; len(log) > 0 && log[len(log)-1] != nil {
+			info.output = log[len(log)-1].Output
+		}
+	}
+	return info
+}
+
 // startHealthWatch follows Docker's health_status events for the project's containers
 // until stopHealthWatch, recording each tracked container's health as it changes. A
 // stream that ends early is reopened; refreshHealth covers anything missed meanwhile.
@@ -124,9 +143,14 @@ func (p *consoleEventProcessor) followHealthEvents(ctx context.Context, res dock
 			if !found || name == "" {
 				continue
 			}
+			status = strings.TrimSpace(status)
 			p.mtx.Lock()
-			if svc, tracked := p.healthChecked[name]; tracked { // only containers this run started
-				p.setHealth(svc, name, strings.TrimSpace(status))
+			svc, tracked := p.healthChecked[name] // only containers this run started
+			if tracked {
+				p.setHealth(svc, name, status)
+				if status == healthUnhealthy {
+					p.fetchHealthOutput(svc, name)
+				}
 			}
 			p.mtx.Unlock()
 		}
@@ -198,9 +222,9 @@ func (p *consoleEventProcessor) refreshHealth() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if status := p.inspectHealth(name); status != "" {
+			if info := p.inspectHealth(name); info.status != "" {
 				p.mtx.Lock()
-				p.setHealth(svc, name, status)
+				p.recordHealth(svc, name, info)
 				p.mtx.Unlock()
 			}
 		}()
@@ -222,27 +246,61 @@ func (p *consoleEventProcessor) checkHealth(svc, containerName string) {
 	p.healthWG.Add(1)
 	go func() {
 		defer p.healthWG.Done()
-		status := p.inspectHealth(containerName)
-		if status == "" {
+		info := p.inspectHealth(containerName)
+		if info.status == "" {
 			return
 		}
 		p.mtx.Lock()
 		defer p.mtx.Unlock()
-		if _, ok := p.health[svc][containerName]; !ok { // an event since is newer
-			p.setHealth(svc, containerName, status)
+		if h, ok := p.health[svc][containerName]; ok { // an event since is newer
+			info.status = h
+		}
+		p.recordHealth(svc, containerName, info)
+	}()
+}
+
+// fetchHealthOutput inspects a container that just turned unhealthy for its last
+// check's output. Callers hold p.mtx.
+func (p *consoleEventProcessor) fetchHealthOutput(svc, containerName string) {
+	if p.dockerClient == nil {
+		return
+	}
+	p.healthWG.Add(1)
+	go func() {
+		defer p.healthWG.Done()
+		info := p.inspectHealth(containerName)
+		p.mtx.Lock()
+		defer p.mtx.Unlock()
+		if info.output != "" {
+			p.healthOutput[containerName] = info.output
+		}
+		if info.command != "" {
+			p.healthCmd[svc] = info.command
 		}
 	}()
 }
 
-// inspectHealth returns a container's health, or "" when it has none or the inspect fails.
-func (p *consoleEventProcessor) inspectHealth(containerName string) string {
+// inspectHealth returns what an inspect tells about a container's health, with an
+// empty status when it has none or the inspect fails.
+func (p *consoleEventProcessor) inspectHealth(containerName string) healthInfo {
 	ctx, cancel := context.WithTimeout(context.Background(), healthInspectTimeout)
 	defer cancel()
 	res, err := p.dockerClient.ContainerInspect(ctx, containerName, dockerclient.ContainerInspectOptions{})
 	if err != nil {
-		return ""
+		return healthInfo{}
 	}
-	return containerHealth(res.Container)
+	return containerHealthInfo(res.Container)
+}
+
+// recordHealth records an inspect's health for one container. Callers hold p.mtx.
+func (p *consoleEventProcessor) recordHealth(svc, containerName string, info healthInfo) {
+	p.setHealth(svc, containerName, info.status)
+	if info.command != "" {
+		p.healthCmd[svc] = info.command
+	}
+	if info.output != "" {
+		p.healthOutput[containerName] = info.output
+	}
 }
 
 // setHealth records one container's health. Callers hold p.mtx.
@@ -283,80 +341,19 @@ func (p *consoleEventProcessor) actionStatus(t *consoleTask) (text, tag string) 
 	return abbreviateStatus(t.text), serviceStatusTag(t.status, t.text, p.command)
 }
 
-// healthSuffix returns a service's health as a suffix for its status, with its
-// leading space, or "" when its container has no healthcheck.
-func (p *consoleEventProcessor) healthSuffix(svc string) (text, tag string) {
-	var word, style string
-	switch p.serviceHealth(svc) {
-	case healthStarting:
-		word, style = "Checking", "{{|DockerHealthChecking|}}"
-		if p.healthWaitDone {
-			word, style = "No Result", "{{|DockerHealthNoResult|}}"
-		}
-	case healthHealthy:
-		word, style = "Healthy", "{{|DockerHealthHealthy|}}"
-	case healthUnhealthy:
-		word, style = "Unhealthy", "{{|DockerHealthUnhealthy|}}"
-	default:
-		return "", ""
-	}
-	return " (" + word + ")", " " + style + "(" + word + "){{[-]}}"
-}
-
-// serviceStatus returns a service row's status: its action, then its health.
-func (p *consoleEventProcessor) serviceStatus(t *consoleTask) (text, tag string) {
-	text, tag = p.actionStatus(t)
-	suffixText, suffixTag := p.healthSuffix(t.id)
-	return text + suffixText, tag + suffixTag
-}
-
 // healthChecking reports whether svc's container is on its first health check and
 // the run is still waiting for the result.
 func (p *consoleEventProcessor) healthChecking(svc string) bool {
 	return p.serviceHealth(svc) == healthStarting && !p.healthWaitDone
 }
 
-// serviceIcon returns a service row's icon for worst: a spinner while its container
-// is on its first health check, and a warning for one that is unhealthy without
-// having failed the operation.
+// serviceIcon returns a service row's icon for worst, with a warning for a container
+// that is unhealthy without having failed the operation.
 func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatus) string {
-	if worst != api.Error && p.healthChecking(t.id) {
-		return p.activeSpinnerTag(p.icons().spinner)
-	}
 	if worst != api.Error && p.serviceHealth(t.id) == healthUnhealthy {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)
-}
-
-// updateStatusW sets the status column's width for this render: the default, or room
-// for the longest action that has a health suffix plus the longest suffix. An action
-// counts at most the default width, so a status longer than any compose sends can
-// only misalign its own row.
-func (p *consoleEventProcessor) updateStatusW() {
-	w := sectionStatusTextW
-	for svc := range p.health {
-		t := p.tasks[svc]
-		if t == nil || p.serviceHealth(svc) == "" {
-			continue
-		}
-		text, _ := p.actionStatus(t)
-		w = max(w, min(utf8.RuneCountInString(text), sectionStatusTextW)+healthSuffixW)
-	}
-	p.statusColW = w + sectionStatusGutterW
-}
-
-// statusW returns the status column's width, including its gutter.
-func (p *consoleEventProcessor) statusW() int {
-	if p.statusColW == 0 {
-		return sectionStatusW
-	}
-	return p.statusColW
-}
-
-// imageSizesColBase returns the column where an image row's name starts.
-func (p *consoleEventProcessor) imageSizesColBase() int {
-	return globalIndentW + iconW + spaceW + p.statusW() + imageLabelW
 }
 
 // unhealthyServices returns the services whose containers are unhealthy, in display order.
@@ -378,4 +375,44 @@ func (p *consoleEventProcessor) unhealthyServices() []string {
 		add(svc)
 	}
 	return out
+}
+
+// healthLine returns the line under svc's row showing its container's health, or ""
+// when it has no healthcheck: the state in the status column, then the check's command,
+// or its last output while unhealthy.
+func (p *consoleEventProcessor) healthLine(svc string, termW int) string {
+	health := p.serviceHealth(svc)
+	if health == "" {
+		return ""
+	}
+	ic := p.icons()
+	var icon, word, style string
+	detail := p.healthCmd[svc]
+	switch {
+	case health == healthStarting && !p.healthWaitDone:
+		icon, word, style = p.activeSpinnerTag(ic.spinner), "Checking", "{{|DockerHealthChecking|}}"
+	case health == healthStarting:
+		icon, word, style = "{{|DockerMarkerWarn|}}"+ic.warn+"{{[-]}}", "No Result", "{{|DockerHealthNoResult|}}"
+	case health == healthHealthy:
+		icon, word, style = "{{|DockerMarkerDone|}}"+ic.done+"{{[-]}}", "Healthy", detailFinalTag
+	default:
+		icon, word, style = "{{|DockerMarkerWarn|}}"+ic.warn+"{{[-]}}", "Unhealthy", "{{|DockerHealthUnhealthy|}}"
+		if t := p.tasks[svc]; t != nil && t.status == api.Error {
+			icon = "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}" // its check failed the run
+		}
+		for name, h := range p.health[svc] {
+			if out := p.healthOutput[name]; h == healthUnhealthy && out != "" {
+				detail = out
+				break
+			}
+		}
+	}
+	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
+		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
+		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerDetailLabel|}}healthcheck{{[-]}}{{|DockerColon|}}:{{[-]}}"
+	if detail = strings.Join(strings.Fields(stripControl(detail)), " "); detail == "" {
+		return prefix
+	}
+	room := termW - timerReserveW - summaryHeaderIndentW - utf8.RuneCountInString(semstyle.ToPlain(prefix)) - 1
+	return prefix + " {{[::D]}}" + cutRunes(detail, max(room, minDetailW)) + "{{[-]}}"
 }
