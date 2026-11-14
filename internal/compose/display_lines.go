@@ -24,6 +24,7 @@ func (p *consoleEventProcessor) isTeardownCommand() bool {
 // controls whether they're included — the console passes p.verbose, the final log
 // passes true so layers always appear there regardless of the -v flag.
 func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string {
+	p.updateStatusW()
 	if p.isTeardownCommand() {
 		return p.buildTeardownLines(termW)
 	}
@@ -39,7 +40,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		}
 	}
 	svcIcon, svcStatusTag, svcStatusText, _ := p.sectionRollupWithPropagation(svcRollupIDs, func(id string) string { return svcImageMap[id] })
-	svcStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(svcStatusText))
+	svcStatusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(svcStatusText))
 	var lines []string
 	var timers []timerEntry
 
@@ -71,6 +72,11 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		}
 	}
 	maxImgNameW += maxCountW
+	// When the status column's health room doesn't fit, the image name column gives up
+	// that room rather than the status column.
+	if avail := termW - timerReserveW - summaryHeaderIndentW - p.imageSizesColBase() - spaceW - sizeColW - sizeSepW - sizeColW; maxImgNameW > avail {
+		maxImgNameW = max(avail, maxImgNameW-(p.statusW()-sectionStatusW), minImgNameW, maxCountW+1)
+	}
 
 	coveredSvcs := make(map[string]bool)
 
@@ -87,13 +93,13 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			var statusText, statusTag, icon string
 			if t == nil {
 				if img != nil && p.allLayersAlreadyExist(imgName) {
-					statusText, statusTag, icon = p.cachedStatus(isPullingText(img.text))
+					statusText, statusTag, icon = p.cachedStatus(isPullingText(img.text), serviceFinalTag)
 				} else if img != nil {
 					statusText = abbreviateStatus(img.text)
 					statusTag = imageStatusTag(img.status, img.text, p.command)
 					icon = p.spinnerIcon(img)
 				} else if p.command == "pull" && p.imageFetched(imgName) {
-					statusText, statusTag, icon = p.cachedStatus(false)
+					statusText, statusTag, icon = p.cachedStatus(false, serviceFinalTag)
 				} else {
 					impliedText, impliedTag := p.impliedStatus()
 					statusText = impliedText
@@ -107,7 +113,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			} else {
 				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
 			}
-			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+			statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
 			appendError(p.tasks[svc])
 		}
@@ -144,11 +150,10 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 				icon = "{{|DockerMarkerDone|}}✓{{[-]}}"
 			}
 		} else {
-			statusText = abbreviateStatus(t.text)
-			statusTag = serviceStatusTag(t.status, t.text, p.command)
-			icon = p.propagatedIcon(t, t.status)
+			statusText, statusTag = p.serviceStatus(t)
+			icon = p.serviceIcon(t, t.status)
 		}
-		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
 		appendError(p.tasks[svcID])
 	}
@@ -162,42 +167,61 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
 
-	fitErrorLines(lines)
+	p.fitErrorLines(lines)
 	return p.prependSummary(lines, timers)
 }
 
-// errorIndentW is the column of a row's error message: two past the service name column.
-const errorIndentW = globalIndentW + iconW + spaceW + sectionStatusW + sectionChildIndentW + 2
+// errorIndentW returns the column of a row's error message: two past the service name column.
+func (p *consoleEventProcessor) errorIndentW() int {
+	return globalIndentW + iconW + spaceW + p.statusW() + sectionChildIndentW + 2
+}
 
-// errorLinePrefix starts every line errorLine returns, so fitErrorLines can find them.
-var errorLinePrefix = strutil.Repeat(" ", errorIndentW) + "{{|DockerStatusFail|}}"
+// errorLinePrefixes start every line errorLine returns, so fitErrorLines can find
+// them: a failed row's message, then a warning row's (interrupted or skipped).
+func (p *consoleEventProcessor) errorLinePrefixes() []string {
+	indent := strutil.Repeat(" ", p.errorIndentW())
+	return []string{indent + "{{|DockerStatusFail|}}", indent + "{{|DockerStatusWarn|}}"}
+}
 
-// errorLine returns the line under a failed row showing its message on one line,
-// without Docker's "Error response from daemon: " prefix (the row already says
-// Error) and cut to fit termW, or "" when t has no message. fitErrorLines later
-// cuts it to the table's width.
+// errorLine returns the line under a failed or warning row showing its message on one
+// line, without Docker's "Error response from daemon: " prefix (the row already shows
+// its status) and cut to fit termW, or "" when t has no message. fitErrorLines later cuts
+// it to the table's width.
 func (p *consoleEventProcessor) errorLine(t *consoleTask, termW int) string {
-	if t == nil || t.status != api.Error || t.message == "" {
+	if t == nil || t.message == "" || t.status != api.Error && t.status != api.Warning {
 		return ""
+	}
+	prefix := p.errorLinePrefixes()[0]
+	if t.status == api.Warning {
+		prefix = p.errorLinePrefixes()[1]
 	}
 	msg := strings.Join(strings.Fields(t.message), " ")
 	msg = strings.TrimPrefix(msg, "Error response from daemon: ")
-	return errorLinePrefix + cutRunes(msg, termW-errorIndentW-timerReserveW-summaryHeaderIndentW) + "{{[-]}}"
+	return prefix + cutRunes(msg, termW-p.errorIndentW()-timerReserveW-summaryHeaderIndentW) + "{{[-]}}"
 }
 
 // fitErrorLines cuts the error lines in lines to the width of the other lines, so
 // a message never pushes the timer column right.
-func fitErrorLines(lines []string) {
+func (p *consoleEventProcessor) fitErrorLines(lines []string) {
+	prefixes := p.errorLinePrefixes()
+	errorPrefix := func(line string) string {
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(line, prefix) {
+				return prefix
+			}
+		}
+		return ""
+	}
 	width := 0
 	for _, line := range lines {
-		if !strings.HasPrefix(line, errorLinePrefix) {
+		if errorPrefix(line) == "" {
 			width = max(width, utf8.RuneCountInString(semstyle.ToPlain(line)))
 		}
 	}
 	for i, line := range lines {
-		if msg, ok := strings.CutPrefix(line, errorLinePrefix); ok {
-			msg = strings.TrimSuffix(msg, "{{[-]}}")
-			lines[i] = errorLinePrefix + cutRunes(msg, width-errorIndentW) + "{{[-]}}"
+		if prefix := errorPrefix(line); prefix != "" {
+			msg := strings.TrimSuffix(strings.TrimPrefix(line, prefix), "{{[-]}}")
+			lines[i] = prefix + cutRunes(msg, width-p.errorIndentW()) + "{{[-]}}"
 		}
 	}
 }
@@ -219,26 +243,28 @@ func isPullingText(text string) bool {
 
 // cachedStatus returns the status for a row whose image needed no download:
 // active while the SDK is still checking for a newer image, final once it is done
-// or the call has returned.
-func (p *consoleEventProcessor) cachedStatus(checking bool) (text, tag, icon string) {
+// or the call has returned, in finalTag, its row's final style.
+func (p *consoleEventProcessor) cachedStatus(checking bool, finalTag string) (text, tag, icon string) {
 	if checking && !p.finished {
 		return "Cached", "{{|DockerStatusActive|}}Cached{{[-]}}", p.activeSpinnerTag(p.icons().spinner)
 	}
-	return "Cached", "{{|DockerStatusFinal|}}Cached{{[-]}}", "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
+	return "Cached", finalTag + "Cached{{[-]}}", "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
 }
 
 // serviceRowStatus returns a service row's status, showing Cached in place of
-// Pulling or Pulled when its image needed no download.
+// Pulling or Pulled when its image needed no download, and its container's health
+// after its action.
 func (p *consoleEventProcessor) serviceRowStatus(svc, imgName string, t *consoleTask) (text, tag, icon string) {
 	if p.allLayersAlreadyExist(imgName) {
 		switch t.text {
 		case api.StatusPulling, api.StatusBuilding:
-			return p.cachedStatus(true)
+			return p.cachedStatus(true, serviceFinalTag)
 		case api.StatusPulled:
-			return p.cachedStatus(false)
+			return p.cachedStatus(false, serviceFinalTag)
 		}
 	}
-	return abbreviateStatus(t.text), serviceStatusTag(t.status, t.text, p.command), p.propagatedIcon(t, p.worstServiceStatus(svc, imgName))
+	text, tag = p.serviceStatus(t)
+	return text, tag, p.serviceIcon(t, p.worstServiceStatus(svc, imgName))
 }
 
 // layersForImage returns the ordered layer tasks for an image: its pre-flight/remapped
@@ -281,9 +307,6 @@ func (p *consoleEventProcessor) layerCountWidth(imgName string) int {
 
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
 	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} "
-	imgStr := styleImage(imgName)
-	imgNameW := utf8.RuneCountInString(imgName)
-
 	// Layer count is appended directly to the image URL (e.g. "radarr:latest [9/2]").
 	// Brackets use the image-tag color (DockerTag); the count interior is dim.
 	layerCount := ""
@@ -292,6 +315,10 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 		layerCount = " {{|DockerTag|}}[{{[-]}}{{[::D]}}" + inner + "{{[-]}}{{|DockerTag|}}]{{[-]}}"
 		countW = 1 + 1 + len(inner) + 1 // " " + "[" + inner + "]"
 	}
+	// A name wider than its column (shrunk on a narrow terminal) is cut.
+	shownName := cutRunes(imgName, maxImgNameW-countW)
+	imgStr := styleImage(shownName)
+	imgNameW := utf8.RuneCountInString(shownName)
 	// maxImgNameW already includes the widest count suffix; pad by what this row lacks
 	// so the size/bar columns stay aligned across images.
 	imgPad := strutil.Repeat(" ", maxImgNameW-imgNameW-countW)
@@ -308,15 +335,15 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 	}
 
 	if t == nil || allLayersCached {
-		statusText, statusTag, icon := p.cachedStatus(t != nil && isPullingText(t.text))
-		statusPad := strutil.Repeat(" ", sectionStatusW-len(statusText))
+		statusText, statusTag, icon := p.cachedStatus(t != nil && isPullingText(t.text), imageFinalTag)
+		statusPad := strutil.Repeat(" ", p.statusW()-len(statusText))
 		return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}
 	worst := p.worstImageStatus(imgName)
 	icon := p.propagatedIcon(t, worst)
 	statusText := abbreviateStatus(t.text)
 	statusTag := imageStatusTag(t.status, t.text, p.command)
-	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+	statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 	return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 }
 
@@ -344,7 +371,7 @@ func (p *consoleEventProcessor) buildImageSizesAndBar(layers []*consoleTask, max
 		sizes = strutil.Repeat(" ", 1+8+1+8)
 	}
 
-	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
+	usedW := p.imageSizesColBase() + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
 	barW := len(layers)
 	maxBarW := termW - usedW - timerReserveW - summaryHeaderIndentW
 	if maxBarW < 1 {
@@ -383,7 +410,7 @@ func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerE
 		return nil, nil
 	}
 	netIcon, netStatusTag, netStatusText, _ := p.sectionRollupWithPropagation(netIDs, nil)
-	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
+	netStatusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(netStatusText))
 	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + "{{[white::B]}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(netIDs), style: timerSection}}
 	for _, netID := range netIDs {
@@ -399,7 +426,7 @@ func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerE
 			statusText = "Pending"
 			statusTag = "{{|DockerStatusPending|}}Pending{{[-]}}"
 		}
-		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
 		if line := p.errorLine(t, termW); line != "" {
@@ -415,7 +442,7 @@ func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEn
 		return nil, nil
 	}
 	volIcon, volStatusTag, volStatusText, _ := p.sectionRollupWithPropagation(p.volumeIDs, nil)
-	volStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(volStatusText))
+	volStatusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(volStatusText))
 	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + "{{[white::B]}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
 	for _, volID := range p.volumeIDs {
@@ -431,7 +458,7 @@ func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEn
 			statusText = "Pending"
 			statusTag = "{{|DockerStatusPending|}}Pending{{[-]}}"
 		}
-		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
 		if line := p.errorLine(t, termW); line != "" {
@@ -498,7 +525,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "(" + digits + ")"
 	}
 
-	idPad := (imageSizesColBase + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW + badgeW)
+	idPad := (p.imageSizesColBase() + maxImgNameW) - (layerSizesColBase + statusW + spaceW + idW + badgeW)
 	if idPad < 1 {
 		idPad = 1
 	}
@@ -517,7 +544,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 
 	// Bar starts after the size column; cap its width so the line stays within termW,
 	// leaving timerReserveW chars for the timer column.
-	usedW := imageSizesColBase + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
+	usedW := p.imageSizesColBase() + maxImgNameW + spaceW + sizeColW + sizeSepW + sizeColW
 	maxBarW := termW - usedW - timerReserveW - summaryHeaderIndentW
 	if maxBarW < 1 {
 		maxBarW = 1
@@ -590,7 +617,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		}
 	}
 	svcIcon, svcStatusTag, svcStatusText, _ := p.sectionRollupWithPropagation(svcRollupIDs, func(id string) string { return svcImageMap[id] })
-	svcStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(svcStatusText))
+	svcStatusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(svcStatusText))
 
 	var lines []string
 	var timers []timerEntry
@@ -621,7 +648,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 			} else {
 				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
 			}
-			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+			statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
 			appendError(p.tasks[svc])
 		}
@@ -637,11 +664,10 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		if t == nil {
 			icon, statusTag, statusText = impliedIcon, impliedTag+impliedText+"{{[-]}}", impliedText
 		} else {
-			statusText = abbreviateStatus(t.text)
-			statusTag = serviceStatusTag(t.status, t.text, p.command)
-			icon = p.propagatedIcon(t, t.status)
+			statusText, statusTag = p.serviceStatus(t)
+			icon = p.serviceIcon(t, t.status)
 		}
-		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+		statusPad := strutil.Repeat(" ", p.statusW()-utf8.RuneCountInString(statusText))
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
 		appendError(p.tasks[svcID])
 	}
@@ -655,6 +681,6 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
 
-	fitErrorLines(lines)
+	p.fitErrorLines(lines)
 	return p.prependSummary(lines, timers)
 }

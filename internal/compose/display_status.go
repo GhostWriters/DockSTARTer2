@@ -153,6 +153,13 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 		case api.Warning:
 			anyWarning = true
 		}
+		// A service's health counts like its row's: still working while on its first
+		// check, a warning once unhealthy.
+		if p.healthChecking(id) {
+			allDone = false
+		} else if p.health[id] == healthUnhealthy {
+			anyWarning = true
+		}
 	}
 	// A failed SDK call that no row reported fails the services section; a failure
 	// shown on a row (a network or volume one too) leaves it to that row.
@@ -353,21 +360,21 @@ func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	switch p.command {
 	case "down":
-		return "Removed", "{{|DockerStatusFinal|}}"
+		return "Removed", serviceFinalTag
 	case "stop":
-		return "Stopped", "{{|DockerStatusFinal|}}"
+		return "Stopped", serviceFinalTag
 	case "kill":
 		return "Killed", "{{|DockerStatusWarn|}}"
 	case "pause":
-		return "Paused", "{{|DockerStatusFinal|}}"
+		return "Paused", serviceFinalTag
 	case "unpause":
-		return "Unpaused", "{{|DockerStatusFinal|}}"
+		return "Unpaused", serviceFinalTag
 	case "start":
-		return "Started", "{{|DockerStatusFinal|}}"
+		return "Started", serviceFinalTag
 	case "create":
-		return "Created", "{{|DockerStatusFinal|}}"
+		return "Created", serviceFinalTag
 	case "rm":
-		return "Removed", "{{|DockerStatusFinal|}}"
+		return "Removed", serviceFinalTag
 	default:
 		return "Pending", "{{|DockerStatusPending|}}"
 	}
@@ -389,8 +396,17 @@ func abbreviateStatus(text string) string {
 	return dockerlayout.AbbreviateStatus(text)
 }
 
-// applyStatusTag wraps short in the appropriate semantic tag based on event status.
-func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, successTexts []string) string {
+// Final statuses take their row's style, the one its timer uses: services, networks
+// and volumes App, images DockerMarkerDone, layers dim.
+const (
+	serviceFinalTag = "{{|App|}}"
+	imageFinalTag   = "{{|DockerMarkerDone|}}"
+	layerFinalTag   = "{{[::D]}}"
+)
+
+// applyStatusTag wraps short in the appropriate semantic tag based on event status,
+// with finalTag for a final status.
+func applyStatusTag(s api.EventStatus, text, finalTag string, finalTexts, activeTexts, successTexts []string) string {
 	short := abbreviateStatus(text)
 	switch s {
 	case api.Warning:
@@ -402,12 +418,12 @@ func applyStatusTag(s api.EventStatus, text string, finalTexts, activeTexts, suc
 		return "{{|DockerStatusFail|}}" + short + "{{[-]}}"
 	case api.Done:
 		if contains(finalTexts, text) {
-			return "{{|DockerStatusFinal|}}" + short + "{{[-]}}"
+			return finalTag + short + "{{[-]}}"
 		}
 		return "{{|DockerStatusSuccess|}}" + short + "{{[-]}}"
 	default: // Working
 		if contains(finalTexts, text) {
-			return "{{|DockerStatusFinal|}}" + short + "{{[-]}}"
+			return finalTag + short + "{{[-]}}"
 		}
 		if contains(activeTexts, text) {
 			return "{{|DockerStatusActive|}}" + short + "{{[-]}}"
@@ -434,7 +450,7 @@ func serviceStatusTag(s api.EventStatus, text string, command string) string {
 			filtered = append(filtered, v)
 		}
 	}
-	return applyStatusTag(s, text,
+	return applyStatusTag(s, text, serviceFinalTag,
 		final,
 		[]string{api.StatusCreating, api.StatusStarting, api.StatusStopping,
 			api.StatusRestarting, api.StatusKilling, api.StatusRemoving,
@@ -467,7 +483,7 @@ func serviceFinalStatuses(command string) []string {
 // imageStatusTag styles an image-level (pull/build) status.
 func imageStatusTag(s api.EventStatus, text string, command string) string {
 	_ = command
-	return applyStatusTag(s, text,
+	return applyStatusTag(s, text, imageFinalTag,
 		[]string{api.StatusPulled, api.StatusBuilt},
 		[]string{api.StatusPulling, api.StatusBuilding},
 		nil,
@@ -478,7 +494,7 @@ func imageStatusTag(s api.EventStatus, text string, command string) string {
 // Note: the SDK drops "Pull complete" events (jm.Progress == nil guard in toPullProgressEvent),
 // so "Extracting" is the terminal state for extracted layers and must be treated as final.
 func layerStatusTag(s api.EventStatus, text string) string {
-	return applyStatusTag(s, text,
+	return applyStatusTag(s, text, layerFinalTag,
 		[]string{api.StatusDownloadComplete, "Pull complete", "Already exists", "Extracted"},
 		[]string{api.StatusDownloading, "Extracting", "Verifying Checksum", "Pulling fs layer", api.StatusWaiting},
 		nil,
@@ -495,7 +511,7 @@ func networkStatusTag(s api.EventStatus, text string, command string) string {
 			filtered = append(filtered, v)
 		}
 	}
-	return applyStatusTag(s, text,
+	return applyStatusTag(s, text, serviceFinalTag,
 		final,
 		[]string{api.StatusCreating, api.StatusRemoving},
 		filtered,
@@ -521,7 +537,7 @@ func volumeStatusTag(s api.EventStatus, text string, command string) string {
 			filtered = append(filtered, v)
 		}
 	}
-	return applyStatusTag(s, text,
+	return applyStatusTag(s, text, serviceFinalTag,
 		final,
 		[]string{api.StatusCreating, api.StatusRemoving},
 		filtered,
