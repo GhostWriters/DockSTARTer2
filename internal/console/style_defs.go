@@ -117,6 +117,7 @@ type AppColors struct {
 	DockerBar           string
 	DockerSharedLayer   string
 	DockerSection       string // section headers (services:, networks:, volumes:), their timers and final status
+	DockerInfo          string // an image's info lines: their marker, Info status and label
 	DockerStatusSuccess string
 	DockerStatusFail    string
 	DockerStatusWarn    string
@@ -234,6 +235,7 @@ var Colors = AppColors{
 	DockerBar:         "{{[-]}}{{[cyan]}}",
 	DockerSharedLayer: "{{[-]}}{{[yellow]}}",
 	DockerSection:     "{{[-]}}{{[white::B]}}",
+	DockerInfo:        "{{[-]}}{{[bright-blue]}}",
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
 	DockerStatusFail:    "{{[-]}}{{[red]}}",

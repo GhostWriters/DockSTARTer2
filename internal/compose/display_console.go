@@ -273,7 +273,12 @@ type consoleEventProcessor struct {
 	// get its RootFS DiffIDs and positionally remap each rawID task to its sha256 DiffID —
 	// unifying identity so shared layers collapse onto one sha task and badges/counts work.
 	imagePullOrder map[string][]string // imgRef → rawIDs in first-seen pull order
-	rawIDSeen      map[string]bool     // imgRef+":"+rawID → already recorded in order
+
+	// Image details for the info lines under an image: from the inspect before the pull
+	// (the copy on disk) and the one after it (the image pulled).
+	imageMetaBefore map[string]imageMeta
+	imageMetaAfter  map[string]imageMeta
+	rawIDSeen       map[string]bool // imgRef+":"+rawID → already recorded in order
 
 	// Post-pull inspect (for images not already local at start, or to confirm).
 	inspectWG       sync.WaitGroup
@@ -314,6 +319,8 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		diffIDGroupNum:    make(map[string]int),
 		inspectedImages:   make(map[string]bool),
 		imagePullOrder:    make(map[string][]string),
+		imageMetaBefore:   make(map[string]imageMeta),
+		imageMetaAfter:    make(map[string]imageMeta),
 		rawIDSeen:         make(map[string]bool),
 		health:            make(map[string]map[string]string),
 		healthChecked:     make(map[string]string),
@@ -666,6 +673,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 			}
 			p.waitDiskScan()
 			p.mtx.Lock()
+			p.imageMetaAfter[imgRef] = metaFromInspect(info.InspectResponse)
 			p.applyInspectResult(imgRef, info.RootFS.Layers)
 			p.mtx.Unlock()
 		}(id)
@@ -805,22 +813,24 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 	type result struct {
 		imgRef string
 		layers []string
+		meta   imageMeta
 	}
 	ch := make(chan result, len(p.imageOrder))
 	for _, imgRef := range p.imageOrder {
 		go func(ref string) {
 			info, err := p.dockerClient.ImageInspect(ctx, ref)
 			if err != nil {
-				ch <- result{ref, nil}
+				ch <- result{ref, nil, imageMeta{}}
 				return
 			}
-			ch <- result{ref, info.RootFS.Layers}
+			ch <- result{ref, info.RootFS.Layers, metaFromInspect(info.InspectResponse)}
 		}(imgRef)
 	}
 	for range p.imageOrder {
 		r := <-ch
 		if len(r.layers) > 0 {
 			p.imageLayerDiffIDs[r.imgRef] = r.layers
+			p.imageMetaBefore[r.imgRef] = r.meta
 			for _, sha := range r.layers {
 				p.diffIDImageCount[sha]++
 			}
