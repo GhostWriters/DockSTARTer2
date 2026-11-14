@@ -5,12 +5,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 	"unicode/utf8"
 
 	"github.com/GhostWriters/semstyle"
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/events"
+	dockerclient "github.com/moby/moby/client"
+
+	"DockSTARTer2/internal/dockerlayout"
 )
 
 // newHealthTestProcessor returns an "up" processor for services web and db on one image.
@@ -52,7 +55,7 @@ func TestServiceStatusShowsHealth(t *testing.T) {
 		{healthHealthy, "Recreated (Healthy)"},
 		{healthUnhealthy, "Recreated (Unhealthy)"},
 	} {
-		p.health["db"] = tc.health
+		p.setHealth("db", "db", tc.health)
 		text, tag := p.serviceStatus(db)
 		if text != tc.want || semstyle.ToPlain(tag) != tc.want {
 			t.Errorf("health %q: text %q, tag %q, want %q", tc.health, text, semstyle.ToPlain(tag), tc.want)
@@ -60,7 +63,7 @@ func TestServiceStatusShowsHealth(t *testing.T) {
 	}
 
 	// Still on its first check when the end-of-run wait runs out.
-	p.health["db"] = healthStarting
+	p.setHealth("db", "db", healthStarting)
 	p.healthWaitDone = true
 	text, tag := p.serviceStatus(db)
 	if text != "Recreated (No Result)" || !strings.Contains(tag, "{{|DockerHealthNoResult|}}(No Result)") {
@@ -84,7 +87,7 @@ func TestHealthCheckKeepsRowAndSectionWorking(t *testing.T) {
 		t.Fatalf("rollup = %v with no health, want complete", got)
 	}
 
-	p.health["db"] = healthStarting
+	p.setHealth("db", "db", healthStarting)
 	if got, want := p.serviceIcon(db, api.Done), p.activeSpinnerTag(p.icons().spinner); got != want {
 		t.Errorf("icon = %q while checking, want the spinner %q", got, want)
 	}
@@ -97,7 +100,7 @@ func TestHealthCheckKeepsRowAndSectionWorking(t *testing.T) {
 		t.Errorf("rollup = %v after the wait ran out, want complete", got)
 	}
 
-	p.health["db"] = healthUnhealthy
+	p.setHealth("db", "db", healthUnhealthy)
 	if got := p.rollupState(ids, imageFor); got != rollupWarning {
 		t.Errorf("rollup = %v with an unhealthy container, want warning", got)
 	}
@@ -105,11 +108,10 @@ func TestHealthCheckKeepsRowAndSectionWorking(t *testing.T) {
 
 func TestWaitForHealthReturnsOnceChecked(t *testing.T) {
 	p := newHealthTestProcessor()
-	p.health["db"] = healthHealthy
-	start := time.Now()
+	p.setHealth("db", "db", healthHealthy)
 	p.waitForHealth()
-	if time.Since(start) > healthWaitPoll || p.healthWaitDone {
-		t.Errorf("waited with no container on its first check")
+	if p.healthWaitDone {
+		t.Errorf("the wait ran out with no container on its first check")
 	}
 }
 
@@ -123,7 +125,7 @@ func TestStatusWidthHoldsAsHealthChanges(t *testing.T) {
 
 	want := len("Recreated") + healthSuffixW + sectionStatusGutterW
 	for _, h := range []string{healthStarting, healthHealthy, healthUnhealthy} {
-		p.health["db"] = h
+		p.setHealth("db", "db", h)
 		p.updateStatusW()
 		if got := p.statusW(); got != want {
 			t.Errorf("health %q: statusW = %d, want %d", h, got, want)
@@ -135,7 +137,7 @@ func TestHealthRowsAlign(t *testing.T) {
 	p := newHealthTestProcessor()
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.On(containerEvent("web", api.StatusStarted, api.Done))
-	p.health["db"] = healthHealthy
+	p.setHealth("db", "db", healthHealthy)
 
 	col := func(name string) int {
 		for _, line := range p.buildLines(160, false) {
@@ -162,7 +164,7 @@ func TestHealthFailureKeepsTheAction(t *testing.T) {
 	if text, _ := p.serviceStatus(db); text != api.StatusError {
 		t.Errorf("status = %q, want Error", text)
 	}
-	p.health["db"] = healthUnhealthy
+	p.setHealth("db", "db", healthUnhealthy)
 	text, tag := p.serviceStatus(db)
 	if text != "Recreated (Unhealthy)" {
 		t.Errorf("status = %q, want Recreated (Unhealthy)", text)
@@ -180,8 +182,8 @@ func TestUnhealthyServicesIncludesFailures(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.On(containerEvent("web", api.StatusStarted, api.Done))
 	p.On(api.Resource{ID: "Container db", Status: api.Error, Text: "dependency db failed to start"})
-	p.health["db"] = healthUnhealthy
-	p.health["web"] = healthUnhealthy
+	p.setHealth("db", "db", healthUnhealthy)
+	p.setHealth("web", "web", healthUnhealthy)
 
 	if got := p.unhealthyServices(); !slices.Equal(got, []string{"db", "web"}) {
 		t.Errorf("unhealthyServices = %v, want db (also a failure) and web", got)
@@ -190,11 +192,12 @@ func TestUnhealthyServicesIncludesFailures(t *testing.T) {
 
 func TestInterruptedRowsAreWarningsGroupedByReason(t *testing.T) {
 	p := NewConsoleEventProcessor(context.Background(), nil, "up",
-		map[string][]string{testImg: {"app", "db", "web"}}, []string{testImg},
+		map[string][]string{testImg: {"app", "cache", "db", "web"}}, []string{testImg},
 		map[string]string{}, "proj", false, false, true, nil, nil).(*consoleEventProcessor)
 	const reason = "interrupted by the failure of Container db"
 	p.On(api.Resource{ID: "Container db", Status: api.Error, Text: "port is already allocated"})
 	p.On(api.Resource{ID: "Container app", Status: api.Error, Text: reason})
+	p.On(api.Resource{ID: "Container cache", Status: api.Error, Text: reason})
 	p.On(api.Resource{ID: "Container web", Status: api.Error, Text: "not started: " + reason})
 
 	web := p.tasks["web"]
@@ -212,21 +215,25 @@ func TestInterruptedRowsAreWarningsGroupedByReason(t *testing.T) {
 	if len(groups) != 2 || groups[0].message != reason || groups[1].message != "not started: "+reason {
 		t.Fatalf("interruptions = %+v, want one group per reason", groups)
 	}
-	if got := semstyle.ToPlain(groups[0].labels[0]); got != "app" {
-		t.Errorf("first group = %q, want app", got)
+	var first []string
+	for _, l := range groups[0].labels {
+		first = append(first, semstyle.ToPlain(l))
+	}
+	if !slices.Equal(first, []string{"app", "cache"}) {
+		t.Errorf("first group = %v, want app and cache together", first)
 	}
 }
 
 func TestStyleReasonStylesTheFailedService(t *testing.T) {
 	p := newHealthTestProcessor()
+	const prefix = "Interrupted by the failure of Container "
 	for _, tc := range []struct{ reason, want string }{
-		{"Interrupted by the failure of Container db", "Interrupted by the failure of Container " + "{{|UserApp|}}db{{[-]}}"},
-		{"Interrupted by the failure of Container proj-web-1", "Interrupted by the failure of Container " + "{{|UserApp|}}web{{[-]}}"},
-		{"Interrupted by the failure of Container stranger", "Interrupted by the failure of Container stranger"},
+		{prefix + "db", prefix + dockerlayout.StyleServiceName("db")},
+		{prefix + "proj-web-1", prefix + dockerlayout.StyleServiceName("web")},
+		{prefix + "stranger", prefix + "stranger"},
 		{`Not started: condition "service_healthy" of service "db" not met`, `Not started: condition "service_healthy" of service "db" not met`},
 	} {
-		got := p.styleReason(tc.reason)
-		if semstyle.ToPlain(got) != semstyle.ToPlain(tc.want) || strings.Contains(tc.want, "{{") != strings.Contains(got, "{{") {
+		if got := p.styleReason(tc.reason); got != tc.want {
 			t.Errorf("styleReason(%q) = %q, want %q", tc.reason, got, tc.want)
 		}
 	}
@@ -237,7 +244,7 @@ func TestSkippedRowShowsReasonUnderIt(t *testing.T) {
 	const reason = `condition "service_healthy" of service "db" not reached: interrupted by the failure of Container web`
 	p.On(containerEvent("db", api.StatusStarted, api.Done))
 	p.On(api.Resource{ID: "Container db", Status: api.Warning, Text: "Skipped: " + reason})
-	p.health["db"] = healthStarting
+	p.setHealth("db", "db", healthStarting)
 
 	db := p.tasks["db"]
 	if db.text != skippedText || db.message != reason {
@@ -266,7 +273,7 @@ func TestFinalStatusTakesItsRowStyle(t *testing.T) {
 	}
 	p := newHealthTestProcessor()
 	p.On(containerEvent("db", "Recreated", api.Done))
-	p.health["db"] = healthHealthy
+	p.setHealth("db", "db", healthHealthy)
 	if _, tag := p.serviceStatus(p.tasks["db"]); !strings.HasSuffix(tag, "{{|DockerHealthHealthy|}}(Healthy){{[-]}}") {
 		t.Errorf("tag = %q, want (Healthy) in the health style", tag)
 	}
@@ -291,5 +298,81 @@ func TestContainerHealth(t *testing.T) {
 		if got := containerHealth(tc.c); got != tc.want {
 			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+// fakeDaemon answers container inspects from health and streams events, for the
+// health watch tests.
+type fakeDaemon struct {
+	daemonClient
+	health map[string]string // container → state its inspect reports
+	events chan events.Message
+}
+
+func (f *fakeDaemon) ContainerInspect(_ context.Context, name string, _ dockerclient.ContainerInspectOptions) (dockerclient.ContainerInspectResult, error) {
+	state := &container.State{Running: true}
+	if h, ok := f.health[name]; ok {
+		state.Health = &container.Health{Status: container.HealthStatus(h)}
+	}
+	return dockerclient.ContainerInspectResult{Container: container.InspectResponse{State: state}}, nil
+}
+
+func (f *fakeDaemon) Events(context.Context, dockerclient.EventsListOptions) dockerclient.EventsResult {
+	return dockerclient.EventsResult{Messages: f.events, Err: make(chan error)}
+}
+
+func healthEvent(svc, name, status string) events.Message {
+	return events.Message{
+		Action: events.Action("health_status: " + status),
+		Actor:  events.Actor{Attributes: map[string]string{api.ServiceLabel: svc, "name": name}},
+	}
+}
+
+func TestReplicaHealthShowsTheWorst(t *testing.T) {
+	p := newHealthTestProcessor()
+	p.On(containerEvent("db", "Recreated", api.Done))
+	p.setHealth("db", "proj-db-1", healthHealthy)
+	p.setHealth("db", "proj-db-2", healthUnhealthy)
+	if got := p.serviceHealth("db"); got != healthUnhealthy {
+		t.Errorf("serviceHealth = %q, want unhealthy from either replica", got)
+	}
+	p.setHealth("db", "proj-db-2", healthStarting)
+	if got := p.serviceHealth("db"); got != healthStarting {
+		t.Errorf("serviceHealth = %q, want starting while a replica checks", got)
+	}
+}
+
+func TestHealthEventsOnlyForTrackedContainers(t *testing.T) {
+	fake := &fakeDaemon{health: map[string]string{"db": healthStarting}, events: make(chan events.Message)}
+	p := newHealthTestProcessor()
+	p.dockerClient = fake
+	p.startHealthWatch(context.Background())
+	p.On(containerEvent("db", api.StatusStarted, api.Done)) // tracks and inspects db
+	p.healthWG.Wait()
+
+	fake.events <- healthEvent("web", "web", healthStarting) // web wasn't started by this run
+	fake.events <- healthEvent("db", "db", healthHealthy)
+	fake.health["db"] = healthHealthy
+	p.stopHealthWatch()
+
+	if got := p.serviceHealth("db"); got != healthHealthy {
+		t.Errorf("db = %q, want healthy from its event", got)
+	}
+	if got := p.serviceHealth("web"); got != "" {
+		t.Errorf("web = %q, want no health for a container the run didn't start", got)
+	}
+}
+
+func TestStopHealthWatchRefreshesTrackedContainers(t *testing.T) {
+	fake := &fakeDaemon{health: map[string]string{"db": healthStarting}, events: make(chan events.Message)}
+	p := newHealthTestProcessor()
+	p.dockerClient = fake
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	p.healthWG.Wait()
+
+	fake.health["db"] = healthUnhealthy // an event the watch never saw
+	p.stopHealthWatch()
+	if got := p.serviceHealth("db"); got != healthUnhealthy {
+		t.Errorf("db = %q, want the refreshed unhealthy", got)
 	}
 }

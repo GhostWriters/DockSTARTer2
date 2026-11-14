@@ -593,8 +593,8 @@ func reportUnhealthy(ctx context.Context, bus api.EventProcessor) {
 	}
 }
 
-// reportFailures logs every failed row of err's operation as one summary, then the
-// rows compose gave up on because of them, one line per reason, and returns err
+// reportFailures logs every failed row of err's operation as one summary (err itself
+// when no row failed), then the rows compose gave up on, under each reason, and returns err
 // wrapped in ErrReported, so callers don't log it again. It returns err unchanged
 // when no row failed or was given up on.
 func reportFailures(ctx context.Context, bus api.EventProcessor, err error) error {
@@ -607,8 +607,16 @@ func reportFailures(ctx context.Context, bus api.EventProcessor, err error) erro
 	if len(fails) == 0 && len(interrupted) == 0 {
 		return err
 	}
-	logger.Error(ctx, "Compose failed: %d %s", len(fails), plural(len(fails), "error", "errors"))
 	covered := false
+	if len(fails) == 0 {
+		// No row failed itself (a depends_on wait did, which has no row), so the
+		// operation's error is the failure.
+		logger.Error(ctx, "Compose failed:")
+		logger.Error(ctx, "  %v", err)
+		covered = true
+	} else {
+		logger.Error(ctx, "Compose failed: %d %s", len(fails), plural(len(fails), "error", "errors"))
+	}
 	for _, f := range fails {
 		logger.Error(ctx, "  %s{{|DockerColon|}}:{{[-]}} %s", f.label, f.message)
 		covered = covered || strings.Contains(err.Error(), f.message)
