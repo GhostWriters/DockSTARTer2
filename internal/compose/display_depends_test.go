@@ -108,9 +108,9 @@ func TestDependsLinesGroupByCondition(t *testing.T) {
 	lines := p.dependsLines("web", 160)
 	got := plainLines(lines)
 	want := []string{
-		"✓ Ready                   started: cache",
-		"× Failed                  healthy: db (Unhealthy)",
-		"✓ Ready                   healthy (optional): search (Unhealthy)",
+		"✓ Ready                   needs started: cache",
+		"× Failed                  needs healthy: db (Unhealthy)",
+		"✓ Ready                   needs healthy (optional): search (Unhealthy)",
 	}
 	for i := range want {
 		if i >= len(got) || strings.Join(strings.Fields(got[i]), " ") != strings.Join(strings.Fields(want[i]), " ") {
@@ -268,5 +268,20 @@ func TestDependsLinePendingUntilContainers(t *testing.T) {
 	p.On(containerEvent("db", api.StatusStarted, api.Done))
 	if lines := p.dependsLines("web", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
 		t.Errorf("lines = %q, want Ready once db started", plainLines(lines))
+	}
+}
+
+func TestNeededByPendingUntilReached(t *testing.T) {
+	// A full down: web and db are both in the run, and compose hasn't reached web yet.
+	p := newNeededByTestProcessor("down")
+	p.dependsOn = map[string][]serviceDep{"web": {{name: "db", condition: types.ServiceConditionStarted, required: true}}}
+	lines := p.neededByLines("db", 160)
+	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") || strings.Contains(lines[0], "Still Running") {
+		t.Fatalf("lines = %q, want web pending, not still running", plainLines(lines))
+	}
+
+	p.On(containerEvent("web", api.StatusRemoved, api.Done))
+	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
+		t.Errorf("lines = %q, want Ready once web is removed", plainLines(lines))
 	}
 }
