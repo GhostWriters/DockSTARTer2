@@ -20,7 +20,7 @@ func NewFlagSet() *pflag.FlagSet {
 	fs.BoolP("yes", "y", false, "Assume yes")
 	fs.BoolP("help", "h", false, "Show help")
 	fs.BoolP("follow", "F", false, "Follow log output (must come before --logs, e.g. -F --logs <container>)")
-	fs.BoolP("deps", "D", false, "Include dependencies (must come before -c, e.g. -D -c stop <app>)")
+	fs.BoolP("deps", "D", false, "Include the apps that depend on them for stop, down, restart and the like (must come before -c, e.g. -D -c stop <app>)")
 	fs.Bool("no-deps", false, "Exclude dependencies and dependents (must come before -c, e.g. --no-deps -c up <app>)")
 
 	// App Management

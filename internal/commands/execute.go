@@ -23,7 +23,7 @@ type CmdState struct {
 	Verbose bool
 	Debug   bool
 	Follow  bool
-	Deps    bool // -D: include the requested apps' dependencies
+	Deps    bool // -D: include the services the command affects
 	NoDeps  bool // --no-deps: neither dependencies nor dependents
 }
 

@@ -192,7 +192,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("-D", "--deps") {
 		printStr(
 			"{{|UsageCommand|}}-D --deps{{[-]}}",
-			"	Include the apps' dependencies (used with {{|UsageCommand|}}-c{{[-]}}) -- for commands that don't already, such as stop, down and restart. Must come before the command, e.g. {{|UsageCommand|}}-D -c stop{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+			"	Include everything the apps affect (used with {{|UsageCommand|}}-c{{[-]}}) -- for stop, kill, pause, unpause, rm, down and restart, the apps that depend on them (up and the like already include their dependencies). Must come before the command, e.g. {{|UsageCommand|}}-D -c stop{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
 		)
 	}
 	if match("--no-deps") {
