@@ -51,12 +51,12 @@ var depGroups = []struct {
 	condition string
 	required  bool
 }{
-	{"started", types.ServiceConditionStarted, true},
-	{"healthy", types.ServiceConditionHealthy, true},
-	{"completed", types.ServiceConditionCompletedSuccessfully, true},
-	{"started (optional)", types.ServiceConditionStarted, false},
-	{"healthy (optional)", types.ServiceConditionHealthy, false},
-	{"completed (optional)", types.ServiceConditionCompletedSuccessfully, false},
+	{"needs started", types.ServiceConditionStarted, true},
+	{"needs healthy", types.ServiceConditionHealthy, true},
+	{"needs completed", types.ServiceConditionCompletedSuccessfully, true},
+	{"needs started (optional)", types.ServiceConditionStarted, false},
+	{"needs healthy (optional)", types.ServiceConditionHealthy, false},
+	{"needs completed (optional)", types.ServiceConditionCompletedSuccessfully, false},
 }
 
 // projectDependencies returns each service's depends_on entries, sorted by name.
@@ -193,8 +193,8 @@ func (p *consoleEventProcessor) neededBy(svc string) []serviceDep {
 
 // dependentStatus returns a dependent's state on svc's needed-by line: on stop and
 // down, whether it has stopped (compose stops it first); on restart, whether compose
-// has restarted it after svc. A dependent with no row in this run counts by its state
-// before the run.
+// has restarted it after svc. A dependent in the run that compose hasn't reached yet is
+// pending; one outside the run counts by its state before the run.
 func (p *consoleEventProcessor) dependentStatus(d serviceDep) (depState, string) {
 	t := p.tasks[d.name]
 	if t != nil && (t.status == api.Error && !t.healthErr || t.interrupted) {
@@ -222,6 +222,15 @@ func (p *consoleEventProcessor) dependentStatus(d serviceDep) (depState, string)
 	switch p.preRun[d.name] {
 	case "stopped", "":
 		return depMet, "" // already down
+	}
+	if p.isKnownServiceName(d.name) { // part of the run, not reached yet
+		switch {
+		case !p.finished:
+			return depPending, ""
+		case !p.succeeded:
+			return depWarning, "Still Running"
+		}
+		return depMet, ""
 	}
 	return depWarning, "Still Running" // outside the run, so it stays up
 }
