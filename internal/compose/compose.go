@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -351,13 +352,21 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		project.Services[i] = s
 	}
 
-	// The dependency lines need every service's depends_on, including dependents of the
-	// requested services that the filter below drops.
-	dependencies := projectDependencies(project)
+	// The full project, before the filter below: the dependency lines need every
+	// service's depends_on, and restart and down hand it to compose so it can add the
+	// requested services' dependents (restart's only through restart: true).
+	fullProject := project
+	dependencies := projectDependencies(fullProject)
 
-	// Filter to requested services if specified
+	// Filter to requested services if specified. Commands that bring services up include
+	// their dependencies, as docker compose up does; the others act on the requested
+	// services only, so stopping one app doesn't stop what it depends on.
 	if len(appNames) > 0 {
-		project, err = project.WithSelectedServices(appNames, types.IncludeDependencies)
+		selection := types.IgnoreDependencies
+		if includesDependencies(command) {
+			selection = types.IncludeDependencies
+		}
+		project, err = project.WithSelectedServices(appNames, selection)
 		if err != nil {
 			return fmt.Errorf("failed to filter project services: %w", err)
 		}
@@ -404,9 +413,18 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	{
+		// The display lists what compose acts on: for restart and down, the requested
+		// services plus the dependents compose adds to them.
+		displayProject := project
+		if len(appNames) > 0 && (command == "restart" || command == "down") {
+			names := withDependents(fullProject, serviceNames, command == "restart")
+			if dp, err := fullProject.WithSelectedServices(names, types.IgnoreDependencies); err == nil {
+				displayProject = dp
+			}
+		}
 		imageServices := make(map[string][]string)
 		containerToService := make(map[string]string)
-		for name, svc := range project.Services {
+		for name, svc := range displayProject.Services {
 			if svc.Image != "" {
 				imageServices[svc.Image] = append(imageServices[svc.Image], name)
 			}
@@ -465,6 +483,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		composev5.WithOutputStream(io.Discard),
 		composev5.WithErrorStream(io.Discard),
 		composev5.WithEventProcessor(bus),
+		composev5.WithPrompt(confirmComposePrompt),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create compose service: %w", err)
@@ -513,17 +532,25 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			}
 			return srv.Start(sdkCtx, project.Name, startOpts)
 		case "rm":
-			logRunning("rm")
-			rmOpts := api.RemoveOptions{Project: project}
+			// DS2 has already asked; Force skips compose's own confirmation, as rm -f does.
+			logRunning("rm", "-f")
+			rmOpts := api.RemoveOptions{Project: project, Force: true}
 			if len(appNames) > 0 {
 				rmOpts.Services = serviceNames
 			}
 			return srv.Remove(sdkCtx, project.Name, rmOpts)
 		case "down":
-			logRunning("down", "--remove-orphans")
-			downOpts := api.DownOptions{RemoveOrphans: true}
+			// The full project lets compose take down the requested services' dependents
+			// too; container labels can be stale, since changing depends_on doesn't
+			// recreate a container. Orphans go only on a full down, so taking down one
+			// app never removes another's container.
+			downOpts := api.DownOptions{Project: fullProject}
 			if len(appNames) > 0 {
+				logRunning("down")
 				downOpts.Services = serviceNames
+			} else {
+				logRunning("down", "--remove-orphans")
+				downOpts.RemoveOrphans = true
 			}
 			return srv.Down(sdkCtx, project.Name, downOpts)
 		case "pause":
@@ -538,7 +565,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			return srv.Pull(sdkCtx, project, api.PullOptions{})
 		case "restart":
 			logRunning("restart")
-			restartOpts := api.RestartOptions{}
+			restartOpts := api.RestartOptions{Project: fullProject}
 			if len(appNames) > 0 {
 				restartOpts.Services = serviceNames
 			}
@@ -583,6 +610,48 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	err = run()
 	reportUnhealthy(ctx, bus)
 	return reportFailures(ctx, bus, err)
+}
+
+// confirmComposePrompt answers the compose SDK's own confirmations yes, silently: DS2
+// asks before running a command, and the SDK's default prompt prints to stdout and
+// answers no, which cancels the command.
+func confirmComposePrompt(string, bool) (bool, error) {
+	return true, nil
+}
+
+// withDependents returns names plus every service that depends on one of them, directly
+// or through another; with onlyRestart, only through restart: true entries, the ones
+// compose's restart follows.
+func withDependents(project *types.Project, names []string, onlyRestart bool) []string {
+	out := slices.Clone(names)
+	for added := true; added; {
+		added = false
+		for name, svc := range project.Services {
+			if slices.Contains(out, name) {
+				continue
+			}
+			for dep, cfg := range svc.DependsOn {
+				if slices.Contains(out, dep) && (cfg.Restart || !onlyRestart) {
+					out = append(out, name)
+					added = true
+					break
+				}
+			}
+		}
+	}
+	return out
+}
+
+// includesDependencies reports whether command's requested services bring their
+// dependencies with them: commands that bring services up do; stop, kill, pause,
+// unpause, rm, down and restart act on the requested services only, leaving compose to
+// add dependents where it does (down's, and restart's restart: true ones).
+func includesDependencies(command string) bool {
+	switch command {
+	case "stop", "kill", "pause", "unpause", "rm", "down", "restart":
+		return false
+	}
+	return true
 }
 
 // reportUnhealthy warns about every container left unhealthy, including one whose
