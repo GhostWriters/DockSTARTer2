@@ -55,19 +55,10 @@ func MergeYML(ctx context.Context, force bool) error {
 		return fmt.Errorf("no enabled apps found")
 	}
 
-	arch := conf.Arch
 	var composeFiles []string
-
 	for _, appName := range enabledApps {
-		appNameLower := strings.ToLower(appName)
 		niceName := appenv.GetNiceName(ctx, appName)
 		appenv.LogAppTemplateOverride(ctx, appName)
-
-		instanceFolder := paths.GetInstanceDir(appNameLower)
-		if !dirExists(instanceFolder) {
-			logger.Error(ctx, "Folder '"+console.FormatFolderPath(instanceFolder)+"/' does not exist.")
-			return fmt.Errorf("folder %s does not exist", instanceFolder)
-		}
 
 		// Check if app is deprecated
 		if appenv.IsAppDeprecated(ctx, appName) {
@@ -79,113 +70,16 @@ func MergeYML(ctx context.Context, force bool) error {
 				niceName)
 		}
 
-		// Get architecture-specific file
-		archFile, err := appenv.AppInstanceFile(ctx, appName, fmt.Sprintf("*.%s.yml", arch))
-		if err != nil {
-			return fmt.Errorf("failed to get arch file for %s: %w", appName, err)
-		}
-		if archFile == "" || !fileExists(archFile) {
-			logger.Error(ctx, "File '"+console.FormatFilePath(archFile)+"' does not exist.")
-			return fmt.Errorf("file %s does not exist", archFile)
-		}
-		composeFiles = append(composeFiles, archFile)
-
-		// Network mode specific files
-		netMode, _ := appenv.Get(fmt.Sprintf("%s__NETWORK_MODE", appName), envFile)
-		if netMode == "" || netMode == "bridge" {
-			// Add hostname file if exists
-			hostnameFile, err := appenv.AppInstanceFile(ctx, appName, "*.hostname.yml")
-			if err != nil {
-				return err
-			}
-			if hostnameFile != "" && fileExists(hostnameFile) {
-				composeFiles = append(composeFiles, hostnameFile)
-			} else if hostnameFile != "" {
-				logger.Info(ctx, "File '"+console.FormatFilePath(hostnameFile)+"' does not exist.")
-			}
-
-			// Add ports file if exists
-			portsFile, err := appenv.AppInstanceFile(ctx, appName, "*.ports.yml")
-			if err != nil {
-				return err
-			}
-			if portsFile != "" && fileExists(portsFile) {
-				composeFiles = append(composeFiles, portsFile)
-			} else if portsFile != "" {
-				logger.Info(ctx, "File '"+console.FormatFilePath(portsFile)+"' does not exist.")
-			}
-		} else if netMode != "" {
-			// Add netmode file if exists
-			netmodeFile, err := appenv.AppInstanceFile(ctx, appName, "*.netmode.yml")
-			if err != nil {
-				return err
-			}
-			if netmodeFile != "" && fileExists(netmodeFile) {
-				composeFiles = append(composeFiles, netmodeFile)
-			} else if netmodeFile != "" {
-				logger.Info(ctx, "File '"+console.FormatFilePath(netmodeFile)+"' does not exist.")
-			}
-		}
-
-		// Storage files
-		multipleStorage, _ := appenv.Get("DOCKER_MULTIPLE_STORAGE", envFile)
-		storageNumbers := []string{""}
-		if appenv.IsTrue(multipleStorage) {
-			storageNumbers = append(storageNumbers, "2", "3", "4")
-		}
-
-		for _, num := range storageNumbers {
-			storageOn, _ := appenv.Get(fmt.Sprintf("%s__STORAGE%s_ON", appName, num), envFile)
-			if storageOn == "" {
-				storageOn, _ = appenv.Get(fmt.Sprintf("DOCKER_STORAGE%s_ON", num), envFile)
-			}
-			if appenv.IsTrue(storageOn) {
-				storageVolume, _ := appenv.Get(fmt.Sprintf("DOCKER_VOLUME_STORAGE%s", num), envFile)
-				if storageVolume != "" {
-					storageFile, err := appenv.AppInstanceFile(ctx, appName, fmt.Sprintf("*.storage%s.yml", num))
-					if err != nil {
-						return err
-					}
-					if storageFile != "" && fileExists(storageFile) {
-						composeFiles = append(composeFiles, storageFile)
-					} else if storageFile != "" {
-						logger.Info(ctx, "File '"+console.FormatFilePath(storageFile)+"' does not exist.")
-					}
-				}
-			}
-		}
-
-		// Devices file
-		appDevices, _ := appenv.Get(fmt.Sprintf("%s__DEVICES", appName), envFile)
-		if appenv.IsTrue(appDevices) {
-			devicesFile, err := appenv.AppInstanceFile(ctx, appName, "*.devices.yml")
-			if err != nil {
-				return err
-			}
-			if devicesFile != "" && fileExists(devicesFile) {
-				composeFiles = append(composeFiles, devicesFile)
-			} else if devicesFile != "" {
-				logger.Info(ctx, "File '"+console.FormatFilePath(devicesFile)+"' does not exist.")
-			}
-		}
-
-		// Main file (always last)
-		mainFile, err := appenv.AppInstanceFile(ctx, appName, "*.yml")
+		files, err := appTemplateFiles(ctx, conf.Arch, appName, envFile, true)
 		if err != nil {
 			return err
 		}
-		if mainFile == "" || !fileExists(mainFile) {
-			expectedMain := filepath.Join(instanceFolder, fmt.Sprintf("%s.yml", appNameLower))
-			logger.Error(ctx, "File '"+console.FormatFilePath(expectedMain)+"' does not exist.")
-			return fmt.Errorf("file %s does not exist", expectedMain)
-		}
-		composeFiles = append(composeFiles, mainFile)
+		composeFiles = append(composeFiles, files...)
 
 		// Create config folders (mirrors yml_merge.sh logic)
 		if err := appenv.CreateAppFolders(ctx, appName, conf); err != nil {
 			logger.Warn(ctx, "Failed to create config folders for %s: %v", appName, err)
 		}
-
 	}
 
 	// Use SDK to load and merge all compose files
@@ -260,4 +154,104 @@ func MergeYML(ctx context.Context, force bool) error {
 	UnsetNeedsYMLMerge(ctx)
 
 	return nil
+}
+
+// appTemplateFiles returns the template files that make up appName in the merged
+// compose file, in merge order: its arch file, its hostname and ports files or its
+// netmode file, its storage and devices files, then its main file. With report, it
+// checks the app's instance folder and logs what's missing, as the merge does; without
+// it, it does neither, for a preview before anything is merged.
+func appTemplateFiles(ctx context.Context, arch, appName, envFile string, report bool) ([]string, error) {
+	appNameLower := strings.ToLower(appName)
+	instanceFolder := paths.GetInstanceDir(appNameLower)
+	if report && !dirExists(instanceFolder) {
+		logger.Error(ctx, "Folder '"+console.FormatFolderPath(instanceFolder)+"/' does not exist.")
+		return nil, fmt.Errorf("folder %s does not exist", instanceFolder)
+	}
+	info := func(file string) {
+		if report {
+			logger.Info(ctx, "File '"+console.FormatFilePath(file)+"' does not exist.")
+		}
+	}
+	var files []string
+	// optional adds the instance file for suffix when it exists.
+	optional := func(suffix string) error {
+		file, err := appenv.AppInstanceFile(ctx, appName, suffix)
+		if err != nil {
+			return err
+		}
+		if file != "" && fileExists(file) {
+			files = append(files, file)
+		} else if file != "" {
+			info(file)
+		}
+		return nil
+	}
+
+	// Get architecture-specific file
+	archFile, err := appenv.AppInstanceFile(ctx, appName, fmt.Sprintf("*.%s.yml", arch))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get arch file for %s: %w", appName, err)
+	}
+	if archFile == "" || !fileExists(archFile) {
+		if report {
+			logger.Error(ctx, "File '"+console.FormatFilePath(archFile)+"' does not exist.")
+		}
+		return nil, fmt.Errorf("file %s does not exist", archFile)
+	}
+	files = append(files, archFile)
+
+	// Network mode specific files
+	netMode, _ := appenv.Get(fmt.Sprintf("%s__NETWORK_MODE", appName), envFile)
+	if netMode == "" || netMode == "bridge" {
+		if err := optional("*.hostname.yml"); err != nil {
+			return nil, err
+		}
+		if err := optional("*.ports.yml"); err != nil {
+			return nil, err
+		}
+	} else if err := optional("*.netmode.yml"); err != nil {
+		return nil, err
+	}
+
+	// Storage files
+	multipleStorage, _ := appenv.Get("DOCKER_MULTIPLE_STORAGE", envFile)
+	storageNumbers := []string{""}
+	if appenv.IsTrue(multipleStorage) {
+		storageNumbers = append(storageNumbers, "2", "3", "4")
+	}
+	for _, num := range storageNumbers {
+		storageOn, _ := appenv.Get(fmt.Sprintf("%s__STORAGE%s_ON", appName, num), envFile)
+		if storageOn == "" {
+			storageOn, _ = appenv.Get(fmt.Sprintf("DOCKER_STORAGE%s_ON", num), envFile)
+		}
+		if appenv.IsTrue(storageOn) {
+			if storageVolume, _ := appenv.Get(fmt.Sprintf("DOCKER_VOLUME_STORAGE%s", num), envFile); storageVolume != "" {
+				if err := optional(fmt.Sprintf("*.storage%s.yml", num)); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// Devices file
+	if appDevices, _ := appenv.Get(fmt.Sprintf("%s__DEVICES", appName), envFile); appenv.IsTrue(appDevices) {
+		if err := optional("*.devices.yml"); err != nil {
+			return nil, err
+		}
+	}
+
+	// Main file (always last)
+	mainFile, err := appenv.AppInstanceFile(ctx, appName, "*.yml")
+	if err != nil {
+		return nil, err
+	}
+	if mainFile == "" || !fileExists(mainFile) {
+		expectedMain := filepath.Join(instanceFolder, fmt.Sprintf("%s.yml", appNameLower))
+		if report {
+			logger.Error(ctx, "File '"+console.FormatFilePath(expectedMain)+"' does not exist.")
+		}
+		return nil, fmt.Errorf("file %s does not exist", expectedMain)
+	}
+	return append(files, mainFile), nil
 }

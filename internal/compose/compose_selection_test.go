@@ -7,29 +7,31 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
-func TestIncludesDependencies(t *testing.T) {
-	bringUp := []string{"up", "update", "create", "start", "pull"}
-	takeDown := []string{"stop", "kill", "pause", "unpause", "rm", "down", "restart"}
-	for _, cmd := range bringUp {
-		if !includesDependencies(cmd, DepsDefault) || !includesDependencies(cmd, DepsInclude) {
-			t.Errorf("%s: want dependencies by default and with -D", cmd)
+func TestIncludesDependenciesAndDependents(t *testing.T) {
+	for _, cmd := range []string{"up", "update", "create", "start", "pull"} {
+		for _, deps := range []DepsMode{DepsDefault, DepsInclude} {
+			if !includesDependencies(cmd, deps) || includesDependents(cmd, deps) {
+				t.Errorf("%s %v: want dependencies only", cmd, deps)
+			}
 		}
 		if includesDependencies(cmd, DepsNone) {
-			t.Errorf("%s: want none with --no-deps", cmd)
+			t.Errorf("%s --no-deps: want no dependencies", cmd)
 		}
 	}
-	for _, cmd := range takeDown {
-		if includesDependencies(cmd, DepsDefault) || includesDependencies(cmd, DepsNone) {
-			t.Errorf("%s: want none by default and with --no-deps", cmd)
+	for _, cmd := range []string{"stop", "kill", "pause", "unpause", "rm", "down", "restart"} {
+		for _, deps := range []DepsMode{DepsDefault, DepsInclude, DepsNone} {
+			if includesDependencies(cmd, deps) {
+				t.Errorf("%s %v: want no dependencies", cmd, deps)
+			}
 		}
-		if !includesDependencies(cmd, DepsInclude) {
-			t.Errorf("%s: want dependencies with -D", cmd)
+		if !includesDependents(cmd, DepsInclude) || includesDependents(cmd, DepsDefault) || includesDependents(cmd, DepsNone) {
+			t.Errorf("%s: want dependents only with -D", cmd)
 		}
 	}
 }
 
 func TestExtraServices(t *testing.T) {
-	// app depends on vpn (restart: true) and db.
+	// app depends on vpn (restart: true) and db; front depends on app.
 	project := &types.Project{Services: types.Services{
 		"vpn": {Name: "vpn"},
 		"db":  {Name: "db"},
@@ -37,30 +39,35 @@ func TestExtraServices(t *testing.T) {
 			"vpn": {Condition: types.ServiceConditionHealthy, Restart: true, Required: true},
 			"db":  {Condition: types.ServiceConditionStarted, Required: true},
 		}},
+		"front": {Name: "front", DependsOn: types.DependsOnConfig{
+			"app": {Condition: types.ServiceConditionStarted, Required: true},
+		}},
 	}}
 	for _, tc := range []struct {
 		command                       string
 		deps                          DepsMode
 		names                         []string
 		wantDependencies, wantDepends []string
+		wantRestartOnly               bool
 	}{
-		{"stop", DepsDefault, []string{"app"}, nil, nil},
-		{"stop", DepsInclude, []string{"app"}, []string{"db", "vpn"}, nil},
-		{"up", DepsDefault, []string{"app"}, []string{"db", "vpn"}, nil},
-		{"up", DepsNone, []string{"app"}, nil, nil},
-		{"restart", DepsDefault, []string{"vpn"}, nil, []string{"app"}},
-		{"restart", DepsNone, []string{"vpn"}, nil, nil},
-		{"restart", DepsInclude, []string{"app"}, []string{"db", "vpn"}, nil},
+		{"stop", DepsDefault, []string{"app"}, nil, nil, false},
+		{"stop", DepsInclude, []string{"app"}, nil, []string{"front"}, false},
+		{"stop", DepsInclude, []string{"vpn"}, nil, []string{"app", "front"}, false},
+		{"up", DepsDefault, []string{"front"}, []string{"app", "db", "vpn"}, nil, false},
+		{"up", DepsNone, []string{"front"}, nil, nil, false},
+		{"restart", DepsDefault, []string{"vpn"}, nil, []string{"app"}, true},
+		{"restart", DepsInclude, []string{"vpn"}, nil, []string{"app", "front"}, false},
+		{"restart", DepsNone, []string{"vpn"}, nil, nil, false},
 	} {
-		deps, dependents := extraServices(project, tc.command, tc.deps, tc.names)
-		if !slices.Equal(deps, tc.wantDependencies) || !slices.Equal(dependents, tc.wantDepends) {
-			t.Errorf("%s %v %v: dependencies %v dependents %v, want %v and %v",
-				tc.command, tc.deps, tc.names, deps, dependents, tc.wantDependencies, tc.wantDepends)
+		deps, dependents, restartOnly := extraServices(project, tc.command, tc.deps, tc.names)
+		if !slices.Equal(deps, tc.wantDependencies) || !slices.Equal(dependents, tc.wantDepends) || restartOnly != tc.wantRestartOnly {
+			t.Errorf("%s %v %v: dependencies %v dependents %v restartOnly %v, want %v, %v, %v",
+				tc.command, tc.deps, tc.names, deps, dependents, restartOnly, tc.wantDependencies, tc.wantDepends, tc.wantRestartOnly)
 		}
 	}
 }
 
-func TestWithRestartDependents(t *testing.T) {
+func TestWithDependents(t *testing.T) {
 	// app depends on vpn (restart: true) and db; worker depends on app (restart: true).
 	project := &types.Project{Services: types.Services{
 		"vpn": {Name: "vpn"},
@@ -75,10 +82,10 @@ func TestWithRestartDependents(t *testing.T) {
 	}}
 	sorted := func(s []string) []string { slices.Sort(s); return s }
 
-	if got := sorted(withRestartDependents(project, []string{"vpn"})); !slices.Equal(got, []string{"app", "vpn", "worker"}) {
+	if got := sorted(withDependents(project, []string{"vpn"}, true)); !slices.Equal(got, []string{"app", "vpn", "worker"}) {
 		t.Errorf("restart vpn = %v, want vpn, app and, through app, worker", got)
 	}
-	if got := sorted(withRestartDependents(project, []string{"db"})); !slices.Equal(got, []string{"db"}) {
+	if got := sorted(withDependents(project, []string{"db"}, true)); !slices.Equal(got, []string{"db"}) {
 		t.Errorf("restart db = %v, want db only: app's entry on db has no restart: true", got)
 	}
 }

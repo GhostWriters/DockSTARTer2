@@ -115,7 +115,7 @@ type DepsMode int
 
 const (
 	DepsDefault DepsMode = iota // the command's own default (see includesDependencies)
-	DepsInclude                 // -D: also the requested apps' dependencies
+	DepsInclude                 // -D: also the services the command affects (see includesDependents)
 	DepsNone                    // --no-deps: the requested apps only, no dependencies or dependents
 )
 
@@ -149,9 +149,13 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		}
 		appNamesJoined = strings.Join(niceNames, ", ")
 		// Name the services beyond the requested ones that the command will act on too,
-		// read from the compose files as they are before the merge.
+		// from the depends_on the next merge will produce (nothing is written yet).
 		if command != "merge" && command != "generate" {
-			if project, err := loadComposeProject(ctx); err == nil {
+			project, err := previewDependencies(ctx)
+			switch {
+			case err != nil:
+				logger.Warn(ctx, "Can't list the services this affects from the app templates: %v", err)
+			case project != nil:
 				appNamesJoined += extraServicesText(ctx, project, command, deps, appNames)
 			}
 		}
@@ -369,19 +373,24 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	}
 
 	// The full project, before the filter below: the dependency lines need every
-	// service's depends_on, and restart hands it to compose so it can add the requested
-	// services' restart: true dependents.
+	// service's depends_on, -D finds the requested services' dependents in it, and
+	// restart hands it to compose so it can add their restart: true dependents.
 	fullProject := project
 	dependencies := projectDependencies(fullProject)
 
-	// Filter to requested services if specified, with or without their dependencies per
-	// includesDependencies: -D and --no-deps change the command's default.
+	// Filter to requested services if specified, with the services the command brings:
+	// their dependencies for commands that bring services up (includesDependencies), or
+	// with -D on the others, the services that depend on them (includesDependents).
 	if len(appNames) > 0 {
-		selection := types.IgnoreDependencies
-		if includesDependencies(command, deps) {
-			selection = types.IncludeDependencies
+		if includesDependents(command, deps) {
+			project, err = fullProject.WithSelectedServices(withDependents(fullProject, appNames, false), types.IgnoreDependencies)
+		} else {
+			selection := types.IgnoreDependencies
+			if includesDependencies(command, deps) {
+				selection = types.IncludeDependencies
+			}
+			project, err = project.WithSelectedServices(appNames, selection)
 		}
-		project, err = project.WithSelectedServices(appNames, selection)
 		if err != nil {
 			return fmt.Errorf("failed to filter project services: %w", err)
 		}
@@ -428,11 +437,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	}
 
 	{
-		// The display lists what compose acts on: for restart, the requested services
-		// plus the restart: true dependents compose adds to them.
+		// The display lists what compose acts on: for a plain restart, the requested
+		// services plus the restart: true dependents compose adds to them.
 		displayProject := project
-		if len(appNames) > 0 && command == "restart" && deps != DepsNone {
-			names := withRestartDependents(fullProject, serviceNames)
+		if len(appNames) > 0 && command == "restart" && deps == DepsDefault {
+			names := withDependents(fullProject, serviceNames, true)
 			if dp, err := fullProject.WithSelectedServices(names, types.IgnoreDependencies); err == nil {
 				displayProject = dp
 			}
@@ -634,10 +643,10 @@ func confirmComposePrompt(string, bool) (bool, error) {
 	return true, nil
 }
 
-// withRestartDependents returns names plus every service that depends on one of them
-// through a restart: true entry, directly or through another: the ones compose's
-// restart follows.
-func withRestartDependents(project *types.Project, names []string) []string {
+// withDependents returns names plus every service that depends on one of them, directly
+// or through another; with onlyRestart, only through restart: true entries, the ones
+// compose's restart follows.
+func withDependents(project *types.Project, names []string, onlyRestart bool) []string {
 	out := slices.Clone(names)
 	for added := true; added; {
 		added = false
@@ -646,7 +655,7 @@ func withRestartDependents(project *types.Project, names []string) []string {
 				continue
 			}
 			for dep, cfg := range svc.DependsOn {
-				if slices.Contains(out, dep) && cfg.Restart {
+				if slices.Contains(out, dep) && (cfg.Restart || !onlyRestart) {
 					out = append(out, name)
 					added = true
 					break
@@ -657,27 +666,34 @@ func withRestartDependents(project *types.Project, names []string) []string {
 	return out
 }
 
-// includesDependencies reports whether command's requested services bring their
-// dependencies with them. By default, commands that bring services up do (as docker
-// compose up does), and stop, kill, pause, unpause, rm, down and restart act on the
-// requested services only; -D adds the dependencies and --no-deps drops them.
-func includesDependencies(command string, deps DepsMode) bool {
-	switch deps {
-	case DepsInclude:
-		return true
-	case DepsNone:
-		return false
-	}
+// takesDown reports whether command stops, removes or restarts services rather than
+// bringing them up.
+func takesDown(command string) bool {
 	switch command {
 	case "stop", "kill", "pause", "unpause", "rm", "down", "restart":
-		return false
+		return true
 	}
-	return true
+	return false
+}
+
+// includesDependencies reports whether command's requested services bring their
+// dependencies with them: commands that bring services up do, as docker compose up
+// does, unless --no-deps.
+func includesDependencies(command string, deps DepsMode) bool {
+	return !takesDown(command) && deps != DepsNone
+}
+
+// includesDependents reports whether command's requested services bring the services
+// that depend on them: with -D, commands that take services down (or restart them) do,
+// since those services stop working without them.
+func includesDependents(command string, deps DepsMode) bool {
+	return takesDown(command) && deps == DepsInclude
 }
 
 // extraServices returns the services beyond names that command will act on too: the
-// dependencies it brings, and for restart the restart: true dependents compose adds.
-func extraServices(project *types.Project, command string, deps DepsMode, names []string) (dependencies, dependents []string) {
+// dependencies it brings, or the services that depend on them, which for a plain
+// restart (restartOnly) are only the restart: true ones compose adds.
+func extraServices(project *types.Project, command string, deps DepsMode, names []string) (dependencies, dependents []string, restartOnly bool) {
 	if includesDependencies(command, deps) {
 		if p, err := project.WithSelectedServices(names, types.IncludeDependencies); err == nil {
 			for name := range p.Services {
@@ -687,25 +703,26 @@ func extraServices(project *types.Project, command string, deps DepsMode, names 
 			}
 		}
 	}
-	if command == "restart" && deps != DepsNone {
-		for _, name := range withRestartDependents(project, names) {
-			if !slices.Contains(names, name) && !slices.Contains(dependencies, name) {
+	if includesDependents(command, deps) || command == "restart" && deps == DepsDefault {
+		restartOnly = !includesDependents(command, deps)
+		for _, name := range withDependents(project, names, restartOnly) {
+			if !slices.Contains(names, name) {
 				dependents = append(dependents, name)
 			}
 		}
 	}
 	slices.Sort(dependencies)
 	slices.Sort(dependents)
-	return dependencies, dependents
+	return dependencies, dependents, restartOnly
 }
 
 // extraServicesText returns the extra services command acts on, for appending to the
 // requested apps' names in its question and notices, or "" when there are none.
 func extraServicesText(ctx context.Context, project *types.Project, command string, deps DepsMode, names []string) string {
-	dependencies, dependents := extraServices(project, command, deps, names)
-	possessive := "its"
+	dependencies, dependents, restartOnly := extraServices(project, command, deps, names)
+	possessive, object := "its", "it"
 	if len(names) > 1 {
-		possessive = "their"
+		possessive, object = "their", "them"
 	}
 	nice := func(list []string) string {
 		out := make([]string, len(list))
@@ -718,8 +735,11 @@ func extraServicesText(ctx context.Context, project *types.Project, command stri
 	if len(dependencies) > 0 {
 		text += "{{[-]}}, and " + possessive + " dependencies: {{|App|}}" + nice(dependencies)
 	}
-	if len(dependents) > 0 {
-		text += "{{[-]}}, and " + possessive + " restart: true dependents: {{|App|}}" + nice(dependents)
+	switch {
+	case len(dependents) > 0 && restartOnly:
+		text += "{{[-]}}, and the apps that restart with " + object + ": {{|App|}}" + nice(dependents)
+	case len(dependents) > 0:
+		text += "{{[-]}}, and the apps that depend on " + object + ": {{|App|}}" + nice(dependents)
 	}
 	return text
 }
