@@ -19,11 +19,14 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// imageInspector is the subset of the Docker client API used for layer inspection.
-type imageInspector interface {
+// daemonClient is the subset of the Docker client API used for layer inspection and
+// container health.
+type daemonClient interface {
 	ImageInspect(ctx context.Context, imageID string, opts ...dockerclient.ImageInspectOption) (dockerclient.ImageInspectResult, error)
 	ImageList(ctx context.Context, options dockerclient.ImageListOptions) (dockerclient.ImageListResult, error)
 	Info(ctx context.Context, options dockerclient.InfoOptions) (dockerclient.SystemInfoResult, error)
+	ContainerInspect(ctx context.Context, containerID string, options dockerclient.ContainerInspectOptions) (dockerclient.ContainerInspectResult, error)
+	Events(ctx context.Context, options dockerclient.EventsListOptions) dockerclient.EventsResult
 }
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
@@ -57,8 +60,8 @@ const (
 	sizeColW          = 8                         // width of one fixedSize() value
 	sizeSepW          = 1                         // width of "/" between current/total sizes
 	timerReserveW     = 10                        // reserved trailing width for the right-aligned elapsed timer + gutter (e.g. "  9999.9s")
-	imageSizesColBase = globalIndentW + iconW + spaceW + sectionStatusW + imageLabelW
 	layerSizesColBase = layerPrefixW + iconW + spaceW
+	minImgNameW       = 20 // narrowest the image name column shrinks to on a narrow terminal
 	// summaryHeaderIndentW shifts content lines right to nest under the summary header.
 	// Content lines carry their own global indent, so this adds the header's icon + space
 	// plus one child-indent step, putting content markers under the 3rd char of the header
@@ -92,6 +95,55 @@ type consoleTask struct {
 	workEnd   time.Time // latest finishing event after workStart
 	working   bool      // the latest event was Working
 	message   string    // an Error event's message, shown under the row and in the failure summary
+	// healthErr marks a service row whose error is compose's report of its failed health
+	// check; the row keeps its action, styled with prevStatus, the status before the error.
+	healthErr  bool
+	prevStatus api.EventStatus
+	// interrupted marks a row compose gave up on because another row failed; it shows
+	// as a warning, with its message.
+	interrupted bool
+}
+
+// serviceForContainer returns the service a container name belongs to, or name itself
+// when it matches none.
+func (p *consoleEventProcessor) serviceForContainer(name string) string {
+	// Remap container_name back to service name (e.g. "qbittorrentx" -> "qbittorrent")
+	if svc, ok := p.containerToService[name]; ok {
+		name = svc
+	}
+
+	// Container names from down/stop/restart use "<project>-<service>-<n>" format.
+	// Strip the project prefix and instance suffix to recover the service name.
+	if p.projectName != "" {
+		prefix := p.projectName + "-"
+		if strings.HasPrefix(name, prefix) {
+			trimmed := strings.TrimPrefix(name, prefix)
+			// Strip trailing "-<digits>" instance suffix
+			if idx := strings.LastIndex(trimmed, "-"); idx >= 0 {
+				if _, err := fmt.Sscanf(trimmed[idx+1:], "%d", new(int)); err == nil {
+					trimmed = trimmed[:idx]
+				}
+			}
+			// Only use trimmed form if it matches a known service (avoid false matches)
+			if _, ok := p.containerToService[trimmed]; ok || p.isKnownServiceName(trimmed) {
+				name = trimmed
+			}
+		}
+	}
+	return name
+}
+
+// interruptedText is the status of a row compose gave up on because another row
+// failed, and skippedText that of a row it skipped, such as an optional dependency.
+const (
+	interruptedText = "Interrupted"
+	skippedText     = "Skipped"
+)
+
+// isInterruption reports whether an error message is compose giving up on a row
+// because another row failed (executor_events.go onNodeAborted and interruption).
+func isInterruption(msg string) bool {
+	return strings.HasPrefix(msg, "interrupted by ") || strings.HasPrefix(msg, "not started: ")
 }
 
 // stripControl removes control characters other than newline and tab from s, so
@@ -185,7 +237,17 @@ type consoleEventProcessor struct {
 	staticOut     bool           // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
 	forceSummary  bool           // when true, prependSummary includes the header even if GlobalViewport still reports active -- set around the final pre-Deactivate render, whose whole point is baking the summary into the scrollback dump
 
-	dockerClient imageInspector // Docker client for pre-flight and post-pull ImageInspect
+	dockerClient daemonClient // Docker client for layer inspection and container health
+
+	// Container health, shown after a service row's action. health[svc] is Docker's
+	// state (starting/healthy/unhealthy), absent until known and for a container with
+	// no healthcheck.
+	health         map[string]string
+	healthChecked  map[string]bool // svc → its container's health inspect has started
+	healthWG       sync.WaitGroup  // pending health inspects
+	healthStop     func()          // ends the health event watch; nil when none runs
+	healthWaitDone bool            // the end-of-run wait for first check results ran out
+	statusColW     int             // status column width with gutter for this render; 0 before the first
 
 	// Pre-flight layer data (populated before pull starts via ImageInspect on local images).
 	// imageLayerDiffIDs[imgRef] = ordered RootFS.Layers sha256s from pre-flight inspect.
@@ -217,7 +279,7 @@ type consoleEventProcessor struct {
 // imageServices maps image name (e.g. "lscr.io/linuxserver/plex:latest") to the list of
 // service names that use it, so service headers can be shown before lifecycle events arrive.
 // imageOrder is the stable key order for imageServices (caller must provide sorted/deterministic order).
-func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, staticOut bool, updateFn func([]string), dockerClient imageInspector) api.EventProcessor {
+func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, staticOut bool, updateFn func([]string), dockerClient daemonClient) api.EventProcessor {
 	return &consoleEventProcessor{
 		out:                out,
 		logCtx:             logCtx,
@@ -248,6 +310,8 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		inspectedImages:   make(map[string]bool),
 		imagePullOrder:    make(map[string][]string),
 		rawIDSeen:         make(map[string]bool),
+		health:            make(map[string]string),
+		healthChecked:     make(map[string]bool),
 	}
 }
 
@@ -257,6 +321,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 
 	// Pre-flight: inspect all images to get RootFS DiffIDs before pull events arrive.
 	p.preflight(ctx)
+	p.startHealthWatch(ctx)
 
 	// Static mode (redirected stdout, no TTY/TUI): no live rendering or ticker — events are
 	// processed silently and the final lines are emitted once in Done.
@@ -360,6 +425,8 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 	// inspects, then emit the fully rendered output once to out, plus the log summary.
 	if p.staticOut {
 		p.inspectWG.Wait()
+		p.waitForHealth()
+		p.stopHealthWatch()
 		p.mtx.Lock()
 		termW := goterm.Width()
 		if termW <= 0 {
@@ -374,6 +441,9 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 		return
 	}
 
+	// Wait for first health check results while the display still updates.
+	p.waitForHealth()
+
 	// Stop the ticker goroutine first.
 	p.doneCh <- struct{}{}
 	p.mtx.Lock()
@@ -386,6 +456,7 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 	// sha256 DiffIDs) to complete before the final render. inspectWG.Wait establishes a
 	// happens-before edge for their writes, so no extra lock barrier is needed here.
 	p.inspectWG.Wait()
+	p.stopHealthWatch()
 	p.render()
 
 	// Deactivate the viewport first — leaves alt screen, dumps history to main screen.
@@ -441,28 +512,22 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	parentID = strings.TrimPrefix(parentID, "Network ")
 	parentID = strings.TrimPrefix(parentID, "Volume ")
 
-	// Remap container_name back to service name (e.g. "qbittorrentx" -> "qbittorrent")
-	if svc, ok := p.containerToService[id]; ok {
-		id = svc
+	containerName := id // a container event's ID before it becomes a service name
+	id = p.serviceForContainer(id)
+
+	isServiceEvent := parentID == "" && !isNetwork && !isVolume && p.isKnownServiceName(id)
+	if isServiceEvent && startsContainer(e.Text) {
+		p.checkHealth(id, containerName)
 	}
 
-	// Container names from down/stop/restart use "<project>-<service>-<n>" format.
-	// Strip the project prefix and instance suffix to recover the service name.
-	if p.projectName != "" {
-		prefix := p.projectName + "-"
-		if strings.HasPrefix(id, prefix) {
-			trimmed := strings.TrimPrefix(id, prefix)
-			// Strip trailing "-<digits>" instance suffix
-			if idx := strings.LastIndex(trimmed, "-"); idx >= 0 {
-				if _, err := fmt.Sscanf(trimmed[idx+1:], "%d", new(int)); err == nil {
-					trimmed = trimmed[:idx]
-				}
-			}
-			// Only use trimmed form if it matches a known service (avoid false matches)
-			if _, ok := p.containerToService[trimmed]; ok || p.isKnownServiceName(trimmed) {
-				id = trimmed
-			}
+	// Compose's Waiting and Healthy come from waiting on a dependency, and its Healthy
+	// also covers a running container with no healthcheck. The health shows as the
+	// row's suffix instead, so they keep the row's action; a row with none is Running.
+	if isServiceEvent && (e.Text == api.StatusWaiting || e.Text == api.StatusHealthy) {
+		if t := p.tasks[id]; t != nil && t.text != "" {
+			return
 		}
+		e.Text, e.Status = api.StatusRunning, api.Done
 	}
 
 	// Outside "start", Starting/Started don't replace a status the row should keep:
@@ -539,14 +604,28 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 			t.message = e.Details
 		}
 		t.message = stripControl(t.message)
-		t.text = "Error"
-		if strings.Contains(t.message, "is unhealthy") {
+		status := e.Status
+		switch {
+		case isInterruption(t.message):
+			// Given up because another row failed: a warning, so the failure stands out.
+			t.text, t.interrupted, status = interruptedText, true, api.Warning
+		case t.healthErr:
+		case isServiceEvent && isHealthFailure(t.message) && t.text != "" && t.text != api.StatusError:
+			t.healthErr, t.prevStatus = true, t.status
+		case strings.Contains(t.message, "is unhealthy"):
 			t.text = "Unhealthy"
+		default:
+			t.text = api.StatusError
 		}
-		t.status = e.Status
-		t.markWork(e.Status)
+		t.status = status
+		t.markWork(status)
 	} else if e.Text != "" {
 		t.text = e.Text
+		// A Skipped event carries its reason in its text (progress.Skipped); the row
+		// shows Skipped and the reason goes under it.
+		if reason, ok := strings.CutPrefix(e.Text, skippedText+": "); ok {
+			t.text, t.message = skippedText, stripControl(reason)
+		}
 		t.status = e.Status
 		t.markWork(e.Status)
 	}

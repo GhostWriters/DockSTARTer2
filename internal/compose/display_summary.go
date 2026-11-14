@@ -2,6 +2,7 @@ package compose
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/docker/compose/v5/pkg/api"
 
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/strutil"
 )
@@ -183,9 +185,9 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 }
 
 // rowFailure is a failure's name (a service, an image no service uses, a network
-// or a volume) and message.
+// or a volume), that name styled as the display shows it, and its message.
 type rowFailure struct {
-	name, message string
+	name, label, message string
 }
 
 // failures returns every failure that has a message, in display order. A
@@ -195,9 +197,62 @@ type rowFailure struct {
 func (p *consoleEventProcessor) failures() []rowFailure {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
+	return p.rowMessages(func(t *consoleTask) bool { return t.status == api.Error })
+}
+
+// interruptedGroup is the rows compose gave up on for one reason: their names styled
+// as the display shows them, and the reason.
+type interruptedGroup struct {
+	labels  []string
+	message string
+}
+
+// interruptions returns the rows compose gave up on because another row failed,
+// grouped by reason in display order.
+func (p *consoleEventProcessor) interruptions() []interruptedGroup {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	var out []interruptedGroup
+	for _, r := range p.rowMessages(func(t *consoleTask) bool { return t.interrupted }) {
+		i := slices.IndexFunc(out, func(g interruptedGroup) bool { return g.message == r.message })
+		if i < 0 {
+			out = append(out, interruptedGroup{message: r.message})
+			i = len(out) - 1
+		}
+		out[i].labels = append(out[i].labels, r.label)
+	}
+	return out
+}
+
+// styleReason returns an interruption's reason with the container that failed, which
+// compose names last ("… of Container azuracast"), styled as its service when it is
+// one of the project's.
+func (p *consoleEventProcessor) styleReason(reason string) string {
+	const kind = "Container "
+	i := strings.LastIndex(reason, kind)
+	if i < 0 {
+		return reason
+	}
+	name := reason[i+len(kind):]
+	if name == "" || strings.ContainsAny(name, " \t") {
+		return reason
+	}
+	p.mtx.Lock()
+	svc := p.serviceForContainer(name)
+	known := p.isKnownServiceName(svc)
+	p.mtx.Unlock()
+	if !known {
+		return reason
+	}
+	return reason[:i+len(kind)] + dockerlayout.StyleServiceName(svc)
+}
+
+// rowMessages returns the message of every row match accepts, in display order, as
+// failures describes. Callers hold p.mtx.
+func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []rowFailure {
 	var out []rowFailure
 	failed := func(t *consoleTask) bool {
-		return t != nil && t.status == api.Error && t.message != ""
+		return t != nil && t.message != "" && match(t)
 	}
 	listed := make(map[string]bool)
 	addService := func(svc string, rows ...*consoleTask) {
@@ -209,14 +264,14 @@ func (p *consoleEventProcessor) failures() []rowFailure {
 		for _, t := range rows {
 			if failed(t) && !contains(msgs, t.message) {
 				msgs = append(msgs, t.message)
-				out = append(out, rowFailure{svc, t.message})
+				out = append(out, rowFailure{svc, dockerlayout.StyleServiceName(svc), t.message})
 			}
 		}
 	}
 	for _, img := range p.imageOrder {
 		svcs := p.serviceIDsForImage(img)
 		if len(svcs) == 0 && failed(p.tasks[img]) {
-			out = append(out, rowFailure{img, p.tasks[img].message})
+			out = append(out, rowFailure{img, styleImage(img), p.tasks[img].message})
 		}
 		for _, svc := range svcs {
 			addService(svc, append([]*consoleTask{p.tasks[svc], p.tasks[img]}, p.layersForImage(img)...)...)
@@ -231,12 +286,12 @@ func (p *consoleEventProcessor) failures() []rowFailure {
 	}
 	for _, id := range p.networkIDs {
 		if failed(p.tasks[id]) {
-			out = append(out, rowFailure{"network " + id, p.tasks[id].message})
+			out = append(out, rowFailure{"network " + id, "network {{|IPAddress|}}" + id + "{{[-]}}", p.tasks[id].message})
 		}
 	}
 	for _, id := range p.volumeIDs {
 		if failed(p.tasks[id]) {
-			out = append(out, rowFailure{"volume " + id, p.tasks[id].message})
+			out = append(out, rowFailure{"volume " + id, "volume {{|Folder|}}" + id + "{{[-]}}", p.tasks[id].message})
 		}
 	}
 	return out

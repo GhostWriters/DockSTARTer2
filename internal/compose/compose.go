@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
@@ -24,6 +26,7 @@ import (
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/constants"
 	"DockSTARTer2/internal/dockercheck"
+	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/logger"
 	"DockSTARTer2/internal/version"
 )
@@ -567,31 +570,67 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			})
 		}
 	}
-	return reportFailures(ctx, bus, run())
+	err = run()
+	reportUnhealthy(ctx, bus)
+	return reportFailures(ctx, bus, err)
 }
 
-// reportFailures logs every failed row of err's operation as one summary and
-// returns err wrapped in ErrReported, so callers don't log it again. It returns
-// err unchanged when no row failed.
+// reportUnhealthy warns about every container left unhealthy, including one whose
+// health check also failed the operation. Like compose without --wait, it doesn't
+// change the result.
+func reportUnhealthy(ctx context.Context, bus api.EventProcessor) {
+	p, ok := bus.(*consoleEventProcessor)
+	if !ok {
+		return
+	}
+	svcs := p.unhealthyServices()
+	if len(svcs) == 0 {
+		return
+	}
+	logger.Warn(ctx, "Compose finished with %d unhealthy %s", len(svcs), plural(len(svcs), "container", "containers"))
+	for _, svc := range svcs {
+		logger.Warn(ctx, "  %s{{|DockerColon|}}:{{[-]}} health check failing", dockerlayout.StyleServiceName(svc))
+	}
+}
+
+// reportFailures logs every failed row of err's operation as one summary, then the
+// rows compose gave up on because of them, one line per reason, and returns err
+// wrapped in ErrReported, so callers don't log it again. It returns err unchanged
+// when no row failed or was given up on.
 func reportFailures(ctx context.Context, bus api.EventProcessor, err error) error {
 	p, ok := bus.(*consoleEventProcessor)
 	if err == nil || !ok {
 		return err
 	}
 	fails := p.failures()
-	if len(fails) == 0 {
+	interrupted := p.interruptions()
+	if len(fails) == 0 && len(interrupted) == 0 {
 		return err
 	}
 	logger.Error(ctx, "Compose failed: %d %s", len(fails), plural(len(fails), "error", "errors"))
 	covered := false
 	for _, f := range fails {
-		logger.Error(ctx, "  %s: %s", f.name, f.message)
+		logger.Error(ctx, "  %s{{|DockerColon|}}:{{[-]}} %s", f.label, f.message)
 		covered = covered || strings.Contains(err.Error(), f.message)
+	}
+	for _, g := range interrupted {
+		logger.Error(ctx, "  %s{{|DockerColon|}}:{{[-]}}", p.styleReason(capitalize(g.message)))
+		logger.Error(ctx, "    %s", strings.Join(g.labels, "{{|DockerColon|}},{{[-]}} "))
+		covered = covered || strings.Contains(err.Error(), g.message)
 	}
 	if !covered {
 		logger.Error(ctx, "  %v", err)
 	}
 	return reportedError{err}
+}
+
+// capitalize returns s with its first rune upper-cased and the rest unchanged.
+func capitalize(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	if n == 0 {
+		return s
+	}
+	return string(unicode.ToUpper(r)) + s[n:]
 }
 
 // ErrReported marks a compose error whose failures ExecuteCompose already logged;
