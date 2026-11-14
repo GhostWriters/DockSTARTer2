@@ -351,6 +351,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		project.Services[i] = s
 	}
 
+	// The dependency lines need every service's depends_on, including dependents of the
+	// requested services that the filter below drops.
+	dependencies := projectDependencies(project)
+
 	// Filter to requested services if specified
 	if len(appNames) > 0 {
 		project, err = project.WithSelectedServices(appNames, types.IncludeDependencies)
@@ -452,7 +456,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		}
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
 		if p, ok := bus.(*consoleEventProcessor); ok {
-			p.dependsOn = projectDependencies(project)
+			p.dependsOn = dependencies
 			p.preRun = preRun
 		}
 	}

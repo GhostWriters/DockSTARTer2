@@ -73,7 +73,7 @@ func TestDepStatus(t *testing.T) {
 			p.setHealth("db", "db", healthStarting)
 			p.finished = true
 			p.healthWaitDone = true
-		}, depUnknown, "No Result"},
+		}, depWarning, "No Result"},
 		{"healthy outside the run", healthy, func(p *consoleEventProcessor) { p.preRun["db"] = healthHealthy }, depMet, ""},
 		{"completed met", completed, func(p *consoleEventProcessor) { p.On(containerEvent("db", api.StatusExited, api.Done)) }, depMet, ""},
 		{"completed never", completed, func(p *consoleEventProcessor) { p.finished = true }, depFailed, "Not Completed"},
@@ -188,5 +188,61 @@ func TestDependsLineNoResultIsAWarning(t *testing.T) {
 	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusWarn|}}No Result") ||
 		!strings.Contains(lines[0], "{{|DockerDependsWaiting|}}db (No Result)") {
 		t.Errorf("lines = %q, want a No Result warning with db in the waiting style", lines)
+	}
+}
+
+// newNeededByTestProcessor returns a processor running command, where web depends on
+// db (restart: true) and cache depends on db without it.
+func newNeededByTestProcessor(command string) *consoleEventProcessor {
+	p := newHealthTestProcessor()
+	p.command = command
+	p.preRun = map[string]string{"web": "running", "cache": "running"}
+	p.dependsOn = map[string][]serviceDep{
+		"web":   {{name: "db", condition: types.ServiceConditionStarted, required: true, restart: true}},
+		"cache": {{name: "db", condition: types.ServiceConditionStarted, required: true}},
+	}
+	return p
+}
+
+func TestNeededByOnStop(t *testing.T) {
+	p := newNeededByTestProcessor("stop")
+	p.On(containerEvent("web", api.StatusStopping, api.Working))
+	lines := p.neededByLines("db", 160)
+	if len(lines) != 1 || !strings.Contains(lines[0], "Waiting") ||
+		!strings.Contains(semstyle.ToPlain(lines[0]), "needed by: cache (Still Running), web") {
+		t.Fatalf("lines = %q, want web pending and cache, outside the run, still running", plainLines(lines))
+	}
+
+	p.On(containerEvent("web", api.StatusStopped, api.Done))
+	p.preRun["cache"] = "stopped" // already down before the run
+	lines = p.neededByLines("db", 160)
+	if !strings.Contains(lines[0], detailFinalTag+"Ready") ||
+		!strings.Contains(lines[0], "{{|DockerDependsMet|}}web") || !strings.Contains(lines[0], "{{|DockerDependsMet|}}cache") {
+		t.Errorf("lines = %q, want Ready with both stopped", lines)
+	}
+	if lines := p.dependsLines("web", 160); lines != nil {
+		t.Errorf("stop shows depends_on lines %q, want none", lines)
+	}
+}
+
+func TestNeededByOnRestartOnlyRestartTrue(t *testing.T) {
+	p := newNeededByTestProcessor("restart")
+	got := p.neededBy("db")
+	if len(got) != 1 || got[0].name != "web" {
+		t.Fatalf("neededBy = %+v, want only web (restart: true)", got)
+	}
+	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], "Waiting") {
+		t.Errorf("lines = %q, want Waiting until web restarts", plainLines(lines))
+	}
+	p.On(containerEvent("web", api.StatusRestarted, api.Done))
+	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
+		t.Errorf("lines = %q, want Ready once web restarted", plainLines(lines))
+	}
+}
+
+func TestNeededByNotOnUp(t *testing.T) {
+	p := newNeededByTestProcessor("up")
+	if lines := p.neededByLines("db", 160); lines != nil {
+		t.Errorf("up shows %q, want no needed-by lines", lines)
 	}
 }

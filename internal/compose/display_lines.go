@@ -662,6 +662,9 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 			for _, line := range p.dependsLines(svc, termW) {
 				appendLine(line, nil, timerLayer)
 			}
+			for _, line := range p.neededByLines(svc, termW) {
+				appendLine(line, nil, timerLayer)
+			}
 		}
 	}
 	for _, svcID := range p.serviceIDs {
@@ -685,6 +688,9 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 			appendLine(line, nil, timerLayer)
 		}
 		for _, line := range p.dependsLines(svcID, termW) {
+			appendLine(line, nil, timerLayer)
+		}
+		for _, line := range p.neededByLines(svcID, termW) {
 			appendLine(line, nil, timerLayer)
 		}
 	}
