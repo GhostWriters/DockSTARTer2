@@ -236,7 +236,18 @@ func HandleCompose(ctx context.Context, group *CommandGroup, state *CmdState) er
 		operation = "update"
 	}
 
-	if err := compose.ExecuteCompose(ctx, state.Yes, state.Force, operation, appsList...); err != nil {
+	deps := compose.DepsDefault
+	switch {
+	case state.Deps && state.NoDeps:
+		logger.Error(ctx, "{{|UsageCommand|}}-D{{[-]}} and {{|UsageCommand|}}--no-deps{{[-]}} can't be used together.")
+		return errors.New("-D and --no-deps can't be used together")
+	case state.Deps:
+		deps = compose.DepsInclude
+	case state.NoDeps:
+		deps = compose.DepsNone
+	}
+
+	if err := compose.ExecuteCompose(ctx, state.Yes, state.Force, deps, operation, appsList...); err != nil {
 		if !errors.Is(err, console.ErrUserAborted) && !errors.Is(err, compose.ErrReported) {
 			logger.Error(ctx, "Compose failed: %v", err)
 		}

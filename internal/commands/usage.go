@@ -189,6 +189,18 @@ func GetUsage(target string, noHeading bool) string {
 			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}}) -- like other modifiers, must come before the command it modifies, e.g. {{|UsageCommand|}}-F --logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
 		)
 	}
+	if match("-D", "--deps") {
+		printStr(
+			"{{|UsageCommand|}}-D --deps{{[-]}}",
+			"	Include the apps' dependencies (used with {{|UsageCommand|}}-c{{[-]}}) -- for commands that don't already, such as stop, down and restart. Must come before the command, e.g. {{|UsageCommand|}}-D -c stop{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+		)
+	}
+	if match("--no-deps") {
+		printStr(
+			"{{|UsageCommand|}}--no-deps{{[-]}}",
+			"	Act on the named apps only (used with {{|UsageCommand|}}-c{{[-]}}) -- no dependencies for up, update, create, start and pull, and no restart: true dependents for restart. Must come before the command, e.g. {{|UsageCommand|}}--no-deps -c up{{[-]}} {{|UsageApp|}}<app>{{[-]}}",
+		)
+	}
 
 	if showAll && !noHeading {
 		printStr(

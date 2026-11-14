@@ -110,8 +110,17 @@ func YesNotice(command, appNamesJoined string) string {
 	}
 }
 
+// DepsMode is how a compose command's requested apps extend to the services around them.
+type DepsMode int
+
+const (
+	DepsDefault DepsMode = iota // the command's own default (see includesDependencies)
+	DepsInclude                 // -D: also the requested apps' dependencies
+	DepsNone                    // --no-deps: the requested apps only, no dependencies or dependents
+)
+
 // ExecuteCompose executes Docker Compose commands
-func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, appNames ...string) error {
+func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, command string, appNames ...string) error {
 	conf := config.LoadAppConfig()
 
 	// For merge/generate: do an upfront read-only check before prompting
@@ -139,6 +148,13 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			niceNames = append(niceNames, appenv.GetNiceName(ctx, appName))
 		}
 		appNamesJoined = strings.Join(niceNames, ", ")
+		// Name the services beyond the requested ones that the command will act on too,
+		// read from the compose files as they are before the merge.
+		if command != "merge" && command != "generate" {
+			if project, err := loadComposeProject(ctx); err == nil {
+				appNamesJoined += extraServicesText(ctx, project, command, deps, appNames)
+			}
+		}
 	}
 
 	// Build question and notice strings
@@ -353,17 +369,16 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	// The full project, before the filter below: the dependency lines need every
-	// service's depends_on, and restart and down hand it to compose so it can add the
-	// requested services' dependents (restart's only through restart: true).
+	// service's depends_on, and restart hands it to compose so it can add the requested
+	// services' restart: true dependents.
 	fullProject := project
 	dependencies := projectDependencies(fullProject)
 
-	// Filter to requested services if specified. Commands that bring services up include
-	// their dependencies, as docker compose up does; the others act on the requested
-	// services only, so stopping one app doesn't stop what it depends on.
+	// Filter to requested services if specified, with or without their dependencies per
+	// includesDependencies: -D and --no-deps change the command's default.
 	if len(appNames) > 0 {
 		selection := types.IgnoreDependencies
-		if includesDependencies(command) {
+		if includesDependencies(command, deps) {
 			selection = types.IncludeDependencies
 		}
 		project, err = project.WithSelectedServices(appNames, selection)
@@ -413,11 +428,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	}
 
 	{
-		// The display lists what compose acts on: for restart and down, the requested
-		// services plus the dependents compose adds to them.
+		// The display lists what compose acts on: for restart, the requested services
+		// plus the restart: true dependents compose adds to them.
 		displayProject := project
-		if len(appNames) > 0 && (command == "restart" || command == "down") {
-			names := withDependents(fullProject, serviceNames, command == "restart")
+		if len(appNames) > 0 && command == "restart" && deps != DepsNone {
+			names := withRestartDependents(fullProject, serviceNames)
 			if dp, err := fullProject.WithSelectedServices(names, types.IgnoreDependencies); err == nil {
 				displayProject = dp
 			}
@@ -540,11 +555,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			}
 			return srv.Remove(sdkCtx, project.Name, rmOpts)
 		case "down":
-			// The full project lets compose take down the requested services' dependents
-			// too; container labels can be stale, since changing depends_on doesn't
-			// recreate a container. Orphans go only on a full down, so taking down one
-			// app never removes another's container.
-			downOpts := api.DownOptions{Project: fullProject}
+			// The requested services' project keeps compose from also taking down their
+			// dependents, which without it it finds from container labels. Orphans go
+			// only on a full down, so taking down one app never removes another's
+			// container.
+			downOpts := api.DownOptions{Project: project}
 			if len(appNames) > 0 {
 				logRunning("down")
 				downOpts.Services = serviceNames
@@ -565,7 +580,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			return srv.Pull(sdkCtx, project, api.PullOptions{})
 		case "restart":
 			logRunning("restart")
-			restartOpts := api.RestartOptions{Project: fullProject}
+			restartOpts := api.RestartOptions{Project: fullProject, NoDeps: deps == DepsNone}
 			if len(appNames) > 0 {
 				restartOpts.Services = serviceNames
 			}
@@ -619,10 +634,10 @@ func confirmComposePrompt(string, bool) (bool, error) {
 	return true, nil
 }
 
-// withDependents returns names plus every service that depends on one of them, directly
-// or through another; with onlyRestart, only through restart: true entries, the ones
-// compose's restart follows.
-func withDependents(project *types.Project, names []string, onlyRestart bool) []string {
+// withRestartDependents returns names plus every service that depends on one of them
+// through a restart: true entry, directly or through another: the ones compose's
+// restart follows.
+func withRestartDependents(project *types.Project, names []string) []string {
 	out := slices.Clone(names)
 	for added := true; added; {
 		added = false
@@ -631,7 +646,7 @@ func withDependents(project *types.Project, names []string, onlyRestart bool) []
 				continue
 			}
 			for dep, cfg := range svc.DependsOn {
-				if slices.Contains(out, dep) && (cfg.Restart || !onlyRestart) {
+				if slices.Contains(out, dep) && cfg.Restart {
 					out = append(out, name)
 					added = true
 					break
@@ -643,15 +658,70 @@ func withDependents(project *types.Project, names []string, onlyRestart bool) []
 }
 
 // includesDependencies reports whether command's requested services bring their
-// dependencies with them: commands that bring services up do; stop, kill, pause,
-// unpause, rm, down and restart act on the requested services only, leaving compose to
-// add dependents where it does (down's, and restart's restart: true ones).
-func includesDependencies(command string) bool {
+// dependencies with them. By default, commands that bring services up do (as docker
+// compose up does), and stop, kill, pause, unpause, rm, down and restart act on the
+// requested services only; -D adds the dependencies and --no-deps drops them.
+func includesDependencies(command string, deps DepsMode) bool {
+	switch deps {
+	case DepsInclude:
+		return true
+	case DepsNone:
+		return false
+	}
 	switch command {
 	case "stop", "kill", "pause", "unpause", "rm", "down", "restart":
 		return false
 	}
 	return true
+}
+
+// extraServices returns the services beyond names that command will act on too: the
+// dependencies it brings, and for restart the restart: true dependents compose adds.
+func extraServices(project *types.Project, command string, deps DepsMode, names []string) (dependencies, dependents []string) {
+	if includesDependencies(command, deps) {
+		if p, err := project.WithSelectedServices(names, types.IncludeDependencies); err == nil {
+			for name := range p.Services {
+				if !slices.Contains(names, name) {
+					dependencies = append(dependencies, name)
+				}
+			}
+		}
+	}
+	if command == "restart" && deps != DepsNone {
+		for _, name := range withRestartDependents(project, names) {
+			if !slices.Contains(names, name) && !slices.Contains(dependencies, name) {
+				dependents = append(dependents, name)
+			}
+		}
+	}
+	slices.Sort(dependencies)
+	slices.Sort(dependents)
+	return dependencies, dependents
+}
+
+// extraServicesText returns the extra services command acts on, for appending to the
+// requested apps' names in its question and notices, or "" when there are none.
+func extraServicesText(ctx context.Context, project *types.Project, command string, deps DepsMode, names []string) string {
+	dependencies, dependents := extraServices(project, command, deps, names)
+	possessive := "its"
+	if len(names) > 1 {
+		possessive = "their"
+	}
+	nice := func(list []string) string {
+		out := make([]string, len(list))
+		for i, name := range list {
+			out[i] = appenv.GetNiceName(ctx, name)
+		}
+		return strings.Join(out, ", ")
+	}
+	var text string
+	if len(dependencies) > 0 {
+		text += "{{[-]}}, and " + possessive + " dependencies: {{|App|}}" + nice(dependencies)
+	}
+	if len(dependents) > 0 {
+		text += "{{[-]}}, and " + possessive + " restart: true dependents: {{|App|}}" + nice(dependents)
+	}
+	return text
 }
 
 // reportUnhealthy warns about every container left unhealthy, including one whose
@@ -752,6 +822,26 @@ func ProjectName() string {
 }
 
 func LoadImageServices(ctx context.Context) map[string][]string {
+	project, err := loadComposeProject(ctx)
+	if err != nil {
+		return map[string][]string{}
+	}
+
+	result := make(map[string][]string)
+	for name, svc := range project.Services {
+		if svc.Image != "" {
+			result[svc.Image] = append(result[svc.Image], name)
+		}
+	}
+	for img := range result {
+		sort.Strings(result[img])
+	}
+	return result
+}
+
+// loadComposeProject loads the compose project from the compose files as they are on
+// disk, without merging or changing anything.
+func loadComposeProject(ctx context.Context) (*types.Project, error) {
 	conf := config.LoadAppConfig()
 	composePath := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
 	envFile := filepath.Join(conf.ComposeDir, constants.EnvFileName)
@@ -782,22 +872,8 @@ func LoadImageServices(ctx context.Context) map[string][]string {
 		override = false
 	}
 
-	project, err := loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
+	return loader.LoadWithContext(ctx, configDetails, func(options *loader.Options) {
 		options.SetProjectName(projectName, override)
 		options.SkipInterpolation = false
 	})
-	if err != nil {
-		return map[string][]string{}
-	}
-
-	result := make(map[string][]string)
-	for name, svc := range project.Services {
-		if svc.Image != "" {
-			result[svc.Image] = append(result[svc.Image], name)
-		}
-	}
-	for img := range result {
-		sort.Strings(result[img])
-	}
-	return result
 }

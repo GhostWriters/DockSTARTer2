@@ -133,6 +133,8 @@ func Parse(args []string) ([]CommandGroup, error) {
 		"-x": true, "--debug": true,
 		"-y": true, "--yes": true,
 		"-F": true, "--follow": true,
+		"-D": true, "--deps": true,
+		"--no-deps": true,
 	}
 
 	IsModifier := func(s string) bool {
