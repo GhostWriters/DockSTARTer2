@@ -128,7 +128,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		var styleTag string
 		switch e.style {
 		case timerSection:
-			styleTag = "{{[white::B]}}"
+			styleTag = "{{|DockerSection|}}"
 		case timerService:
 			styleTag = "{{|App|}}"
 		case timerImage:

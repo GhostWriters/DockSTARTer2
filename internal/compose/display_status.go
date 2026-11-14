@@ -30,7 +30,7 @@ func sectionStatusText(s sectionRollupState) (text, statusTag, iconTag string) {
 	case rollupPending:
 		return "Pending", "{{|DockerStatusPending|}}", "{{|DockerStatusPending|}}"
 	case rollupComplete:
-		return "Complete", "{{|DockerStatusFinal|}}", "{{|DockerMarkerDone|}}"
+		return "Complete", sectionFinalTag, "{{|DockerMarkerDone|}}"
 	default: // rollupProcessing
 		return "Processing", "{{|DockerStatusActive|}}", "{{|DockerSpinner|}}"
 	}
@@ -396,10 +396,11 @@ func abbreviateStatus(text string) string {
 	return dockerlayout.AbbreviateStatus(text)
 }
 
-// Final statuses take their row's style, the one its timer or label uses: services,
-// networks and volumes App, images DockerMarkerDone, layers dim, and detail lines
-// (healthcheck, depends_on) DockerDetailLabel.
+// Final statuses take their row's style, the one its timer or label uses: section
+// headers DockerSection, services, networks and volumes App, images DockerMarkerDone,
+// layers dim, and detail lines (healthcheck, depends_on) DockerDetailLabel.
 const (
+	sectionFinalTag = "{{|DockerSection|}}"
 	serviceFinalTag = "{{|App|}}"
 	imageFinalTag   = "{{|DockerMarkerDone|}}"
 	layerFinalTag   = "{{[::D]}}"

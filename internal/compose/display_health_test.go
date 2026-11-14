@@ -267,6 +267,7 @@ func TestSkippedRowShowsReasonUnderIt(t *testing.T) {
 
 func TestFinalStatusTakesItsRowStyle(t *testing.T) {
 	for _, tc := range []struct{ name, got, want string }{
+		{"section", func() string { _, tag, _ := sectionStatusText(rollupComplete); return tag }(), "{{|DockerSection|}}"},
 		{"service", serviceStatusTag(api.Done, "Recreated", "up"), "{{|App|}}Recreated"},
 		{"image", imageStatusTag(api.Done, api.StatusPulled, "up"), "{{|DockerMarkerDone|}}Pulled"},
 		{"layer", layerStatusTag(api.Done, "Already exists"), "{{[::D]}}"},

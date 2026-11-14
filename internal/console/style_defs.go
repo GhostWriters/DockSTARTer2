@@ -107,18 +107,17 @@ type AppColors struct {
 	ConsoleBox string
 
 	// Docker Compose progress colors — markers (icons, labels, decorations)
-	DockerMarkerDone  string
-	DockerMarkerError string
-	DockerMarkerWarn  string
-	DockerColon       string
-	DockerImage       string
-	DockerTag         string
-	DockerSpinner     string
-	DockerBar         string
-	DockerSharedLayer string
-	// Docker Compose progress colors — status text
+	DockerMarkerDone    string
+	DockerMarkerError   string
+	DockerMarkerWarn    string
+	DockerColon         string
+	DockerImage         string
+	DockerTag           string
+	DockerSpinner       string
+	DockerBar           string
+	DockerSharedLayer   string
+	DockerSection       string // section headers (services:, networks:, volumes:), their timers and final status
 	DockerStatusSuccess string
-	DockerStatusFinal   string
 	DockerStatusFail    string
 	DockerStatusWarn    string
 	DockerStatusPending string
@@ -234,9 +233,9 @@ var Colors = AppColors{
 	DockerSpinner:     "{{[-]}}{{[yellow]}}",
 	DockerBar:         "{{[-]}}{{[cyan]}}",
 	DockerSharedLayer: "{{[-]}}{{[yellow]}}",
+	DockerSection:     "{{[-]}}{{[white::B]}}",
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
-	DockerStatusFinal:   "{{[-]}}{{[green::B]}}",
 	DockerStatusFail:    "{{[-]}}{{[red]}}",
 	DockerStatusWarn:    "{{[-]}}{{[yellow]}}",
 	DockerStatusPending: "{{[-]}}{{[gray::D]}}",

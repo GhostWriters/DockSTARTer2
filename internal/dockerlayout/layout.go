@@ -8,16 +8,21 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// StyleServiceName returns a semstyle tag string for a compose service name.
-// If the service maps to a known built-in app, the name is wrapped in a
-// hyperlink tag pointing to its dockstarter.com docs page (see appenv.AppURL).
-// Callers must convert to ANSI with semstyle.ToANSI when ready to output.
-func StyleServiceName(svc string) string {
+// StyleServiceName returns a semstyle tag string for a compose service name, in
+// style when given, else App (UserApp for a service that isn't a built-in app). A
+// built-in app's name is wrapped in a hyperlink to its dockstarter.com docs page
+// (see appenv.AppURL) whatever the style. Callers must convert to ANSI with
+// semstyle.ToANSI when ready to output.
+func StyleServiceName(svc string, style ...string) string {
 	url := appenv.AppURL(svc)
+	tag := "App"
 	if url == "" {
-		return "{{|UserApp|}}" + svc + "{{[-]}}"
+		tag = "UserApp"
 	}
-	return console.FormatLink("App", svc, url)
+	if len(style) > 0 {
+		tag = style[0]
+	}
+	return console.FormatLink(tag, svc, url)
 }
 
 // Layout primitive widths — shared by compose and prune display.
