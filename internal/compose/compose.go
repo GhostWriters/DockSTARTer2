@@ -483,6 +483,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 		composev5.WithOutputStream(io.Discard),
 		composev5.WithErrorStream(io.Discard),
 		composev5.WithEventProcessor(bus),
+		composev5.WithPrompt(confirmComposePrompt),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create compose service: %w", err)
@@ -531,8 +532,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 			}
 			return srv.Start(sdkCtx, project.Name, startOpts)
 		case "rm":
-			// DS2 has already asked; compose's own confirmation has no prompt to answer
-			// it here, so without Force it removes nothing.
+			// DS2 has already asked; Force skips compose's own confirmation, as rm -f does.
 			logRunning("rm", "-f")
 			rmOpts := api.RemoveOptions{Project: project, Force: true}
 			if len(appNames) > 0 {
@@ -610,6 +610,13 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, command string, a
 	err = run()
 	reportUnhealthy(ctx, bus)
 	return reportFailures(ctx, bus, err)
+}
+
+// confirmComposePrompt answers the compose SDK's own confirmations yes, silently: DS2
+// asks before running a command, and the SDK's default prompt prints to stdout and
+// answers no, which cancels the command.
+func confirmComposePrompt(string, bool) (bool, error) {
+	return true, nil
 }
 
 // withDependents returns names plus every service that depends on one of them, directly
