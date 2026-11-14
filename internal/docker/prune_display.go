@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/GhostWriters/semstyle"
-	"github.com/docker/docker/api/types/image"
 	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/image"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/dockerlayout"
