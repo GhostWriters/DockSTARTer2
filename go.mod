@@ -24,7 +24,6 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.7.1
 	github.com/docker/cli v29.9.3+incompatible
 	github.com/docker/compose/v5 v5.7.1
-	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.3

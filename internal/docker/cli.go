@@ -7,8 +7,7 @@ import (
 	"sync"
 
 	"github.com/containerd/errdefs"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 var (
@@ -20,7 +19,7 @@ var (
 // GetClient returns a shared Docker SDK client instance.
 func GetClient() (*client.Client, error) {
 	clientOnce.Do(func() {
-		dockerClient, clientErr = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		dockerClient, clientErr = client.New(client.FromEnv)
 	})
 	return dockerClient, clientErr
 }
@@ -33,9 +32,10 @@ func StopContainer(ctx context.Context, containerID string) error {
 	}
 
 	timeout := 10
-	return cli.ContainerStop(ctx, containerID, container.StopOptions{
+	_, err = cli.ContainerStop(ctx, containerID, client.ContainerStopOptions{
 		Timeout: &timeout,
 	})
+	return err
 }
 
 // RemoveContainer removes a container by ID.
@@ -45,10 +45,11 @@ func RemoveContainer(ctx context.Context, containerID string) error {
 		return err
 	}
 
-	return cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+	_, err = cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		Force:         true,
 		RemoveVolumes: true,
 	})
+	return err
 }
 
 // StartContainer starts a container by name or ID.
@@ -57,7 +58,8 @@ func StartContainer(ctx context.Context, containerName string) error {
 	if err != nil {
 		return err
 	}
-	return cli.ContainerStart(ctx, containerName, container.StartOptions{})
+	_, err = cli.ContainerStart(ctx, containerName, client.ContainerStartOptions{})
+	return err
 }
 
 // RestartContainer restarts a container by name or ID.
@@ -66,7 +68,8 @@ func RestartContainer(ctx context.Context, containerName string) error {
 	if err != nil {
 		return err
 	}
-	return cli.ContainerRestart(ctx, containerName, container.StopOptions{})
+	_, err = cli.ContainerRestart(ctx, containerName, client.ContainerRestartOptions{})
+	return err
 }
 
 // ContainerIsTTY reports whether a container was created with Config.Tty
@@ -80,24 +83,24 @@ func ContainerIsTTY(ctx context.Context, containerName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	inspect, err := cli.ContainerInspect(ctx, containerName)
+	res, err := cli.ContainerInspect(ctx, containerName, client.ContainerInspectOptions{})
 	if err != nil {
 		return false, err
 	}
-	return inspect.Config != nil && inspect.Config.Tty, nil
+	return res.Container.Config != nil && res.Container.Config.Tty, nil
 }
 
 // ContainerLogs returns the raw log stream for a container by name or ID.
 // Follow keeps the stream open for new log lines as they're written; the
 // caller is responsible for closing the returned ReadCloser. Whether the
-// stream needs demultiplexing (see github.com/docker/docker/pkg/stdcopy.StdCopy)
+// stream needs demultiplexing (see github.com/moby/moby/api/pkg/stdcopy.StdCopy)
 // depends on the container's TTY setting -- see ContainerIsTTY.
 func ContainerLogs(ctx context.Context, containerName string, follow bool) (io.ReadCloser, error) {
 	cli, err := GetClient()
 	if err != nil {
 		return nil, err
 	}
-	return cli.ContainerLogs(ctx, containerName, container.LogsOptions{
+	return cli.ContainerLogs(ctx, containerName, client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     follow,
@@ -145,12 +148,12 @@ func listContainerNames(ctx context.Context, all bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: all})
+	res, err := cli.ContainerList(ctx, client.ContainerListOptions{All: all})
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(containers))
-	for _, c := range containers {
+	names := make([]string, 0, len(res.Items))
+	for _, c := range res.Items {
 		if len(c.Names) > 0 {
 			names = append(names, strings.TrimPrefix(c.Names[0], "/"))
 		}
@@ -165,13 +168,15 @@ func GetContainerStatus(ctx context.Context, containerID string) (string, error)
 		return "", err
 	}
 
-	inspect, err := cli.ContainerInspect(ctx, containerID)
+	res, err := cli.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		if errdefs.IsNotFound(err) {
 			return "not found", nil
 		}
 		return "", err
 	}
-
-	return inspect.State.Status, nil
+	if res.Container.State == nil {
+		return "", nil
+	}
+	return string(res.Container.State.Status), nil
 }

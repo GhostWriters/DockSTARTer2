@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
+	"github.com/moby/moby/client/pkg/versions"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/logger"
@@ -80,13 +80,14 @@ func Check(ctx context.Context) Status {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		return Status{Err: err}
 	}
 	defer cli.Close()
 
-	ping, err := cli.Ping(ctx)
+	// The ping negotiates the client's API version down to the daemon's, when lower.
+	ping, err := cli.Ping(ctx, client.PingOptions{NegotiateAPIVersion: true})
 	if err != nil {
 		st := Status{Err: err}
 		if strings.Contains(strings.ToLower(err.Error()), "permission denied") {
@@ -96,13 +97,12 @@ func Check(ctx context.Context) Status {
 	}
 
 	st := Status{Reachable: true, APIVersion: ping.APIVersion}
-	if sv, err := cli.ServerVersion(ctx); err == nil {
+	if sv, err := cli.ServerVersion(ctx, client.ServerVersionOptions{}); err == nil {
 		st.ServerVersion = sv.Version
 		if st.APIVersion == "" {
 			st.APIVersion = sv.APIVersion
 		}
 	}
-	cli.NegotiateAPIVersionPing(ping)
 	st.NegotiatedAPIVersion = cli.ClientVersion()
 	if st.NegotiatedAPIVersion == "" {
 		st.NegotiatedAPIVersion = st.APIVersion

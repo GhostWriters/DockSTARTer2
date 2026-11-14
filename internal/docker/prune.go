@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 
 	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/console"
@@ -62,42 +60,42 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	report := PruneReport{AsciiMode: asciiMode, ContainerInfo: containerInfo}
 
 	// 1. Containers
-	cReport, err := cli.ContainersPrune(ctx, filters.NewArgs())
+	cRes, err := cli.ContainerPrune(ctx, client.ContainerPruneOptions{})
 	if err != nil {
 		report.ContainersError = err
 	}
-	if cReport.ContainersDeleted != nil {
-		report.ContainersDeleted = cReport.ContainersDeleted
-		report.SpaceReclaimed += cReport.SpaceReclaimed
+	if cRes.Report.ContainersDeleted != nil {
+		report.ContainersDeleted = cRes.Report.ContainersDeleted
+		report.SpaceReclaimed += cRes.Report.SpaceReclaimed
 	}
 
 	// 2. Networks
-	nReport, err := cli.NetworksPrune(ctx, filters.NewArgs())
+	nRes, err := cli.NetworkPrune(ctx, client.NetworkPruneOptions{})
 	if err != nil {
 		report.NetworksError = err
 	}
-	if nReport.NetworksDeleted != nil {
-		report.NetworksDeleted = nReport.NetworksDeleted
+	if nRes.Report.NetworksDeleted != nil {
+		report.NetworksDeleted = nRes.Report.NetworksDeleted
 	}
 
 	// 3. Volumes
-	vReport, err := cli.VolumesPrune(ctx, filters.NewArgs())
+	vRes, err := cli.VolumePrune(ctx, client.VolumePruneOptions{})
 	if err != nil {
 		report.VolumesError = err
 	}
-	if vReport.VolumesDeleted != nil {
-		report.VolumesDeleted = vReport.VolumesDeleted
-		report.SpaceReclaimed += vReport.SpaceReclaimed
+	if vRes.Report.VolumesDeleted != nil {
+		report.VolumesDeleted = vRes.Report.VolumesDeleted
+		report.SpaceReclaimed += vRes.Report.SpaceReclaimed
 	}
 
 	// 4. Images (--all = include non-dangling, equivalent to docker image prune --all)
-	iReport, err := cli.ImagesPrune(ctx, filters.NewArgs(filters.Arg("dangling", "false")))
+	iRes, err := cli.ImagePrune(ctx, client.ImagePruneOptions{Filters: make(client.Filters).Add("dangling", "false")})
 	if err != nil {
 		report.ImagesError = err
 	}
-	if iReport.ImagesDeleted != nil {
-		report.ImagesDeleted = iReport.ImagesDeleted
-		report.SpaceReclaimed += iReport.SpaceReclaimed
+	if iRes.Report.ImagesDeleted != nil {
+		report.ImagesDeleted = iRes.Report.ImagesDeleted
+		report.SpaceReclaimed += iRes.Report.SpaceReclaimed
 	}
 
 	stopSpinner()
@@ -119,16 +117,16 @@ func containerServiceMap(ctx context.Context, cli *client.Client) map[string]con
 	const serviceLabel = "com.docker.compose.service"
 
 	projectName := compose.ProjectName()
-	f := filters.NewArgs()
+	f := make(client.Filters)
 	if projectName != "" {
 		f.Add("label", projectLabel+"="+projectName)
 	}
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+	res, err := cli.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: f})
 	if err != nil {
 		return nil
 	}
-	m := make(map[string]containerMeta, len(containers)*2)
-	for _, c := range containers {
+	m := make(map[string]containerMeta, len(res.Items)*2)
+	for _, c := range res.Items {
 		svc := c.Labels[serviceLabel]
 		if svc == "" {
 			continue

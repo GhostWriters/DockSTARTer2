@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
 
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
