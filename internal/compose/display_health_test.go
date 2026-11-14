@@ -271,6 +271,17 @@ func TestFinalStatusTakesItsRowStyle(t *testing.T) {
 			t.Errorf("%s: %q, want it to start with %q", tc.name, tc.got, tc.want)
 		}
 	}
+	// A service row showing its image's status keeps the service row's styles.
+	for _, tc := range []struct{ name, got, want string }{
+		{"pulling", serviceStatusTag(api.Working, api.StatusPulling, "update"), "{{|DockerStatusActive|}}Pulling"},
+		{"pulled midway", serviceStatusTag(api.Done, api.StatusPulled, "update"), "{{|DockerStatusSuccess|}}Pulled"},
+		{"pulled final", serviceStatusTag(api.Done, api.StatusPulled, "pull"), "{{|App|}}Pulled"},
+	} {
+		if !strings.HasPrefix(tc.got, tc.want) {
+			t.Errorf("service %s: %q, want it to start with %q", tc.name, tc.got, tc.want)
+		}
+	}
+
 	p := newHealthTestProcessor()
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.setHealth("db", "db", healthHealthy)

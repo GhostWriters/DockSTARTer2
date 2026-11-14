@@ -443,7 +443,7 @@ func serviceStatusTag(s api.EventStatus, text string, command string) string {
 	}
 	final := serviceFinalStatuses(command)
 	success := []string{api.StatusCreated, api.StatusStarted, api.StatusStopped,
-		api.StatusRestarted, api.StatusKilled, api.StatusRemoved, api.StatusPulled, "Recreated"}
+		api.StatusRestarted, api.StatusKilled, api.StatusRemoved, api.StatusPulled, api.StatusBuilt, "Recreated"}
 	filtered := success[:0:len(success)]
 	for _, v := range success {
 		if !contains(final, v) {
@@ -454,7 +454,7 @@ func serviceStatusTag(s api.EventStatus, text string, command string) string {
 		final,
 		[]string{api.StatusCreating, api.StatusStarting, api.StatusStopping,
 			api.StatusRestarting, api.StatusKilling, api.StatusRemoving,
-			"Recreate", "Restart", api.StatusWaiting},
+			"Recreate", "Restart", api.StatusWaiting, api.StatusPulling, api.StatusBuilding},
 		filtered,
 	)
 }
@@ -475,6 +475,8 @@ func serviceFinalStatuses(command string) []string {
 		return []string{api.StatusRunning, api.StatusHealthy}
 	case "create":
 		return []string{api.StatusCreated}
+	case "pull":
+		return []string{api.StatusPulled, api.StatusBuilt}
 	default:
 		return []string{api.StatusRunning, api.StatusHealthy, api.StatusStarted, api.StatusCreated, "Recreated"}
 	}
