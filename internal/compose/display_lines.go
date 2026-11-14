@@ -123,8 +123,14 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 
 		appendLine(p.buildImageLine(imgName, img, layers, maxImgNameW, termW), img, timerImage)
 		appendError(img)
+		for _, line := range p.imageInfoLines(imgName, termW, showLayers) {
+			appendLine(line, nil, timerLayer)
+		}
 
 		if showLayers {
+			if len(layers) > 0 {
+				appendLine(p.layersLine(layers), nil, timerLayer)
+			}
 			layerLines, layerTasks := p.buildLayerLines(layers, maxImgNameW, termW)
 			for i, line := range layerLines {
 				appendLine(line, layerTasks[i], timerLayer)
@@ -530,7 +536,7 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 		badgeW = 2 + len(fmt.Sprintf("%d", groupNum)) // "(" + digits + ")"
 	}
 
-	// The status shares the main status column; the ID sits one step in under image:.
+	// The status shares the main status column; the ID sits one step in under layers:.
 	idCol := globalIndentW + iconW + spaceW + sectionStatusW + layerIDIndentW
 	idPad := max(imageSizesColBase+maxImgNameW-(idCol+idW+badgeW), 1)
 	barReset := ""
@@ -543,8 +549,8 @@ func (p *consoleEventProcessor) buildLayerLine(t *consoleTask, statusW int, maxI
 }
 
 // layerIDIndentW is how far a layer's ID sits past the status column: one step in from
-// its image's image: label.
-const layerIDIndentW = 3 * sectionChildIndentW
+// the layers: line under its image.
+const layerIDIndentW = 4 * sectionChildIndentW
 
 func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNameW int, termW int) ([]string, []*consoleTask) {
 	if len(layers) == 0 {
