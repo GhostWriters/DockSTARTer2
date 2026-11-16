@@ -904,7 +904,7 @@ func (m *MenuModel) calculateLayout() {
 	// Width = tag + spacing(2) + desc + margins(2) + buffer(4)
 	listWidth := maxTagLen + 2 + maxDescLen + 2 + 4
 	for _, item := range m.items {
-		if item.IsRadioButton || item.IsCheckbox {
+		if item.IsRadioButton || item.IsCheckbox || m.checkboxColumn {
 			// Reserve room for the "( ) "/"[ ] " glyph prefix, not counted above.
 			listWidth += lipgloss.Width(radioOffAscii) + 1
 			break

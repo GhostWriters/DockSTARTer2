@@ -140,8 +140,8 @@ func (m *MenuModel) renderVariableHeightList() string {
 	// Rows are reused by content while the list-wide settings below are
 	// unchanged; none are cached while an item shows a processing spinner.
 	savedTag := m.savedRadioTag()
-	// Any checkbox-like row gives every row a checkbox-width prefix.
-	hasAnyCheckboxes := false
+	// Any checkbox-like row, or SetCheckboxColumn, gives every row a checkbox-width prefix.
+	hasAnyCheckboxes := m.checkboxColumn
 	for _, it := range visibleItems {
 		if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
 			hasAnyCheckboxes = true
@@ -583,6 +583,9 @@ func (m *MenuModel) renderVariableHeightList() string {
 				}
 				prefixPadding = checkbox + space
 			}
+		} else if m.checkboxColumn && !isAppSelect {
+			// The checkbox and the space after it, as on a checkbox row.
+			prefixPadding = neutralStyle.Render(strutil.Repeat(" ", layout.CheckboxWidth()+1))
 		}
 		prefixWidth = lipgloss.Width(GetPlainText(prefixPadding))
 

@@ -607,6 +607,8 @@ func (m *MenuModel) SectionNaturalWidth(maxWidth int) int {
 	menuPrefixWidth := 0
 	if m.id == "app-select" {
 		menuPrefixWidth = aeRowPrefixWidth
+	} else if m.checkboxColumn {
+		menuPrefixWidth = layout.CheckboxWidth()
 	} else {
 		for _, it := range m.items {
 			if it.IsCheckbox || it.IsRadioButton || it.IsGroupHeader {
