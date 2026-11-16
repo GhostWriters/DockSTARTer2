@@ -44,6 +44,12 @@ const (
 )
 
 // Indent strings derived from layout constants.
+// Verbosity levels for the compose and prune displays (console.VerboseLevel).
+const (
+	VerboseDetails = 1 // -v: image details, and every dependency and health check line
+	VerboseLayers  = 2 // -vv: image layers too
+)
+
 var (
 	GlobalIndent       = strutil.Repeat(" ", GlobalIndentW)
 	SectionChildIndent = strutil.Repeat(" ", SectionChildIndentW)
@@ -103,6 +109,12 @@ func imageRefURL(name string) string {
 		return "https://hub.docker.com/r/" + bare
 	}
 	return "https://hub.docker.com/_/" + bare
+}
+
+// ImageTagURL returns imageTagURL's link for tag of image name, or "" when the registry
+// can't link one.
+func ImageTagURL(name, tag string) string {
+	return imageTagURL(name, tag)
 }
 
 // imageTagURL builds a browser URL for a specific tag of a Docker image

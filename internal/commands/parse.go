@@ -138,16 +138,25 @@ func Parse(args []string) ([]CommandGroup, error) {
 	}
 
 	IsModifier := func(s string) bool {
-		return modifiers[s]
+		_, isVerbose := ApplyVerbose(s, 0)
+		return modifiers[s] || isVerbose
 	}
 
 	// Pre-process args to expand combined short flags (e.g. -fc -> -f -c)
 	var expandedArgs []string
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && len(arg) > 2 {
-			chars := arg[1:]
-			for _, c := range chars {
-				expandedArgs = append(expandedArgs, fmt.Sprintf("-%c", c))
+			// A value after = or : belongs to the last flag in the group: -xv=2 -> -x -v=2.
+			chars, value := arg[1:], ""
+			if i := strings.IndexAny(chars, "=:"); i > 0 {
+				chars, value = chars[:i], chars[i:]
+			}
+			for j, c := range chars {
+				flag := fmt.Sprintf("-%c", c)
+				if j == len(chars)-1 {
+					flag += value
+				}
+				expandedArgs = append(expandedArgs, flag)
 			}
 		} else {
 			expandedArgs = append(expandedArgs, arg)
@@ -533,4 +542,25 @@ func Parse(args []string) ([]CommandGroup, error) {
 	}
 
 	return groups, nil
+}
+
+// ApplyVerbose reports whether flag is a verbose modifier and, if so, returns the
+// verbosity level after it: level+1 for -v or --verbose, N for -v=N or --verbose=N (or
+// with : for =). Flags apply left to right, so -v=2 -v is level 3 and -v -v=2 is 2.
+func ApplyVerbose(flag string, level int) (int, bool) {
+	name, value, hasValue := strings.Cut(flag, "=")
+	if !hasValue {
+		name, value, hasValue = strings.Cut(flag, ":")
+	}
+	if name != "-v" && name != "--verbose" {
+		return level, false
+	}
+	if !hasValue {
+		return level + 1, true
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return level, false
+	}
+	return n, true
 }

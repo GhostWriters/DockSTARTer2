@@ -10,8 +10,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
@@ -503,6 +501,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		}
 	}
 
+	defer routeSDKLogs(ctx)()
 	srv, err := composev5.NewComposeService(dockerCLI,
 		composev5.WithOutputStream(io.Discard),
 		composev5.WithErrorStream(io.Discard),
@@ -756,16 +755,16 @@ func reportUnhealthy(ctx context.Context, bus api.EventProcessor) {
 	if len(svcs) == 0 {
 		return
 	}
-	logger.Warn(ctx, "Compose finished with %d unhealthy %s", len(svcs), plural(len(svcs), "container", "containers"))
+	logger.Warn(ctx, "Compose finished with %d unhealthy %s:", len(svcs), plural(len(svcs), "container", "containers"))
 	for _, svc := range svcs {
 		logger.Warn(ctx, "  %s{{|DockerColon|}}:{{[-]}} health check failing", dockerlayout.StyleServiceName(svc))
 	}
 }
 
-// reportFailures logs every failed row of err's operation as one summary (err itself
-// when no row failed), then the rows compose gave up on, under each reason, and returns err
-// wrapped in ErrReported, so callers don't log it again. It returns err unchanged
-// when no row failed or was given up on.
+// reportFailures logs the rows compose gave up on as warnings, under each reason, then
+// every failed row of err's operation as errors (err itself when no row failed), and
+// returns err wrapped in ErrReported, so callers don't log it again. It returns err
+// unchanged when no row failed or was given up on.
 func reportFailures(ctx context.Context, bus api.EventProcessor, err error) error {
 	p, ok := bus.(*consoleEventProcessor)
 	if err == nil || !ok {
@@ -776,38 +775,58 @@ func reportFailures(ctx context.Context, bus api.EventProcessor, err error) erro
 	if len(fails) == 0 && len(interrupted) == 0 {
 		return err
 	}
+	// Each message goes under its name, indented and wrapped to the output width less
+	// the log line's "yyyy-mm-dd hh:mm:ss [LEVEL ] " prefix.
+	const logPrefixW = len("2006-01-02 15:04:05 [ERROR ] ")
+	wrapW := max(outputWidth()-logPrefixW-4, minDetailW)
+	// The rows compose gave up on come first, as warnings like in the display, under
+	// their own heading, so the errors end the output. Rows given up on for one reason
+	// share an entry: the reason, then their names.
 	covered := false
+	if len(interrupted) > 0 {
+		n := 0
+		for _, g := range interrupted {
+			n += len(g.labels)
+		}
+		logger.Warn(ctx, "Compose interrupted %d %s:", n, plural(n, "service", "services"))
+	}
+	for _, g := range interrupted {
+		reason := wrapStyled(p.styleReason(g.message), wrapW+2)
+		for i, line := range reason {
+			if i == len(reason)-1 {
+				line += "{{|DockerColon|}}:{{[-]}}"
+			}
+			logger.Warn(ctx, "  %s", line)
+		}
+		for _, line := range wrapStyled(strings.Join(g.labels, "{{|DockerColon|}},{{[-]}} "), wrapW) {
+			logger.Warn(ctx, "    %s", line)
+		}
+		covered = covered || strings.Contains(err.Error(), g.message)
+	}
 	if len(fails) == 0 {
 		// No row failed itself (a depends_on wait did, which has no row), so the
 		// operation's error is the failure.
 		logger.Error(ctx, "Compose failed:")
-		logger.Error(ctx, "  %v", err)
-		covered = true
-	} else {
-		logger.Error(ctx, "Compose failed: %d %s", len(fails), plural(len(fails), "error", "errors"))
+		for _, line := range wrapStyled(err.Error(), wrapW+2) {
+			logger.Error(ctx, "  %s", line)
+		}
+		return reportedError{err}
 	}
+	logger.Error(ctx, "Compose failed with %d %s:", len(fails), plural(len(fails), "error", "errors"))
 	for _, f := range fails {
-		logger.Error(ctx, "  %s{{|DockerColon|}}:{{[-]}} %s", f.label, f.message)
+		logger.Error(ctx, "  %s{{|DockerColon|}}:{{[-]}}", f.label)
+		for _, line := range wrapStyled(f.message, wrapW) {
+			logger.Error(ctx, "    %s", line)
+		}
 		covered = covered || strings.Contains(err.Error(), f.message)
 	}
-	for _, g := range interrupted {
-		logger.Error(ctx, "  %s{{|DockerColon|}}:{{[-]}}", p.styleReason(capitalize(g.message)))
-		logger.Error(ctx, "    %s", strings.Join(g.labels, "{{|DockerColon|}},{{[-]}} "))
-		covered = covered || strings.Contains(err.Error(), g.message)
-	}
-	if !covered {
-		logger.Error(ctx, "  %v", err)
+	// A condition failure's message covers compose's "dependency failed to start: …" error.
+	if !covered && !p.hasConditionErr() {
+		for _, line := range wrapStyled(err.Error(), wrapW+2) {
+			logger.Error(ctx, "  %s", line)
+		}
 	}
 	return reportedError{err}
-}
-
-// capitalize returns s with its first rune upper-cased and the rest unchanged.
-func capitalize(s string) string {
-	r, n := utf8.DecodeRuneInString(s)
-	if n == 0 {
-		return s
-	}
-	return string(unicode.ToUpper(r)) + s[n:]
 }
 
 // ErrReported marks a compose error whose failures ExecuteCompose already logged;

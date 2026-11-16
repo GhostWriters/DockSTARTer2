@@ -31,11 +31,14 @@ require (
 	github.com/gofrs/flock v0.13.2
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.31
+	github.com/moby/docker-image-spec v1.3.1
 	github.com/moby/moby/api v1.57.0
 	github.com/moby/moby/client v0.6.3
+	github.com/opencontainers/image-spec v1.1.1
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/rivo/uniseg v0.4.7
 	github.com/sergi/go-diff v1.4.0
+	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/pflag v1.1.0
 	go.yaml.in/yaml/v4 v4.0.0
 	golang.org/x/crypto v0.59.0
@@ -133,7 +136,6 @@ require (
 	github.com/mattn/go-shellwords v1.0.16 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/moby/buildkit v0.33.1 // indirect
-	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.3.3 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
@@ -151,7 +153,6 @@ require (
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/onsi/gomega v1.39.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/package-url/packageurl-go v0.1.7 // indirect
 	github.com/pires/go-proxyproto v0.15.0 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
@@ -166,7 +167,6 @@ require (
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
 	github.com/sigstore/sigstore v1.10.9 // indirect
 	github.com/sigstore/sigstore-go v1.3.0 // indirect
-	github.com/sirupsen/logrus v1.10.2 // indirect
 	github.com/skeema/knownhosts v1.3.3 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/tilt-dev/fsnotify v1.4.8-0.20220602155310-fff9c274a375 // indirect

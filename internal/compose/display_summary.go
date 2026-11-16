@@ -262,9 +262,12 @@ func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []row
 		listed[svc] = true
 		var msgs []string
 		for _, t := range rows {
-			if failed(t) && !contains(msgs, t.message) {
-				msgs = append(msgs, t.message)
-				out = append(out, rowFailure{svc, dockerlayout.StyleServiceName(svc), t.message})
+			if !failed(t) {
+				continue
+			}
+			if msg := shortMessage(t.message); !contains(msgs, msg) {
+				msgs = append(msgs, msg)
+				out = append(out, rowFailure{svc, dockerlayout.StyleServiceName(svc), msg})
 			}
 		}
 	}
@@ -318,17 +321,21 @@ func (p *consoleEventProcessor) logSummary() {
 	// maxLineWidth/maxTimerWidth accumulate from the live console render (wider terminal)
 	// and only grow. Reset them so the log's timer column aligns to the fixed log width
 	// rather than inheriting the console's, which would pad every line out far too wide.
+	// Final log always includes layer rows, regardless of the -v console flag. The
+	// lines are built under p.mtx, as every render is, and written after it's released.
+	p.mtx.Lock()
 	savedLineW, savedTimerW := p.maxLineWidth, p.maxTimerWidth
 	p.maxLineWidth, p.maxTimerWidth = 0, 0
-	defer func() { p.maxLineWidth, p.maxTimerWidth = savedLineW, savedTimerW }()
+	lines := p.buildLines(logWidth, dockerlayout.VerboseLayers)
+	p.maxLineWidth, p.maxTimerWidth = savedLineW, savedTimerW
+	p.mtx.Unlock()
 
-	// Final log always includes layer rows, regardless of the -v console flag.
 	// Passes the raw tag string, not pre-rendered ANSI -- logger.Notice defers
 	// rendering to its own writer handlers, each scoped to the right session's
 	// tint/profile; pre-rendering here would read semstyle's global profile
 	// unscoped to any session, racing against every other concurrently
 	// rendering one.
-	for _, line := range p.buildLines(logWidth, true) {
+	for _, line := range lines {
 		logger.Notice(ctx, pfx+line)
 	}
 }

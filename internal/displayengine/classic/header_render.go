@@ -1,6 +1,7 @@
 package classic
 
 import (
+	"fmt"
 	"os"
 	"sort"
 
@@ -59,7 +60,7 @@ func NewHeaderModel() *HeaderModel {
 
 	var flags []string
 	if console.Verbose() {
-		flags = append(flags, "VERBOSE")
+		flags = append(flags, verboseFlagLabel())
 	}
 	if console.Debug() {
 		flags = append(flags, "DEBUG")
@@ -114,7 +115,7 @@ func (m *HeaderModel) SetConnType(ct string) {
 func (m *HeaderModel) SyncFlags() {
 	var flags []string
 	if console.Verbose() {
-		flags = append(flags, "VERBOSE")
+		flags = append(flags, verboseFlagLabel())
 	}
 	if console.Debug() {
 		flags = append(flags, "DEBUG")
@@ -477,4 +478,13 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 	}
 
 	return regions
+}
+
+// verboseFlagLabel returns the header's VERBOSE flag, with its level when above 1:
+// VERBOSE(2) for -vv.
+func verboseFlagLabel() string {
+	if level := console.VerboseLevel(); level > 1 {
+		return fmt.Sprintf("VERBOSE(%d)", level)
+	}
+	return "VERBOSE"
 }

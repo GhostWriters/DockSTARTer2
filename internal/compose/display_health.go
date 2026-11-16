@@ -309,6 +309,9 @@ func (p *consoleEventProcessor) setHealth(svc, containerName, status string) {
 		p.health[svc] = make(map[string]string)
 	}
 	p.health[svc][containerName] = status
+	if t := p.tasks[svc]; t != nil {
+		p.settleHealthErr(t)
+	}
 }
 
 // serviceHealth returns a service's health across its containers: unhealthy if any
@@ -348,9 +351,13 @@ func (p *consoleEventProcessor) healthChecking(svc string) bool {
 }
 
 // serviceIcon returns a service row's icon for worst, with a warning for a container
-// that is unhealthy without having failed the operation.
+// that is unhealthy, or has a required dependency that failed, without having failed the
+// operation; in DockerMarkerCause when being unhealthy failed a dependent (causeIcon).
 func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatus) string {
-	if worst != api.Error && p.serviceHealth(t.id) == healthUnhealthy {
+	if cause := p.causeIcon(t); cause != "" && worst != api.Error {
+		return cause
+	}
+	if worst != api.Error && (p.serviceHealth(t.id) == healthUnhealthy || p.requiredDependencyFailed(t.id)) {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)
@@ -399,6 +406,8 @@ func (p *consoleEventProcessor) healthLine(svc string, termW int) string {
 		icon, word, style = "{{|DockerMarkerWarn|}}"+ic.warn+"{{[-]}}", "Unhealthy", "{{|DockerHealthUnhealthy|}}"
 		if t := p.tasks[svc]; t != nil && t.status == api.Error {
 			icon = "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}" // its check failed the run
+		} else if cause := p.causeIcon(t); cause != "" {
+			icon = cause // a dependent needed it healthy
 		}
 		for name, h := range p.health[svc] {
 			if out := p.healthOutput[name]; h == healthUnhealthy && out != "" {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,9 @@ type consoleTask struct {
 	// check; the row keeps its action, styled with prevStatus, the status before the error.
 	healthErr  bool
 	prevStatus api.EventStatus
+	// conditionErr marks a service row compose didn't start because one of its own
+	// required dependencies' conditions wasn't met; its needs lines say which.
+	conditionErr bool
 	// interrupted marks a row compose gave up on because another row failed; it shows
 	// as a warning, with its message.
 	interrupted bool
@@ -135,6 +139,7 @@ func (p *consoleEventProcessor) serviceForContainer(name string) string {
 const (
 	interruptedText = "Interrupted"
 	skippedText     = "Skipped"
+	notStartedText  = "Not Started"
 )
 
 // isInterruption reports whether an error message is compose giving up on a row
@@ -230,7 +235,7 @@ type consoleEventProcessor struct {
 	updateFn      func([]string) // called each render tick in noViewport mode instead of writing to out
 	lastSentLines []string       // last lines sent via updateFn; skip if unchanged
 	asciiMode     bool           // when true, use ASCII spinners, icons, and progress bar chars
-	verbose       bool           // when true, show individual layer rows under each image
+	verbosity     int            // verbosity level (dockerlayout.VerboseDetails, VerboseLayers)
 	staticOut     bool           // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
 	forceSummary  bool           // when true, prependSummary includes the header even if GlobalViewport still reports active -- set around the final pre-Deactivate render, whose whole point is baking the summary into the scrollback dump
 
@@ -278,7 +283,13 @@ type consoleEventProcessor struct {
 	// (the copy on disk) and the one after it (the image pulled).
 	imageMetaBefore map[string]imageMeta
 	imageMetaAfter  map[string]imageMeta
-	rawIDSeen       map[string]bool // imgRef+":"+rawID → already recorded in order
+
+	// Links for versions on the info lines, found by background checks: versionLinks
+	// [versionKey] is the link a check found; versionChecked marks the checks started.
+	versionLinks   map[string]string
+	versionChecked map[string]bool
+	linkWG         sync.WaitGroup
+	rawIDSeen      map[string]bool // imgRef+":"+rawID → already recorded in order
 
 	// Post-pull inspect (for images not already local at start, or to confirm).
 	inspectWG       sync.WaitGroup
@@ -289,7 +300,7 @@ type consoleEventProcessor struct {
 // imageServices maps image name (e.g. "lscr.io/linuxserver/plex:latest") to the list of
 // service names that use it, so service headers can be shown before lifecycle events arrive.
 // imageOrder is the stable key order for imageServices (caller must provide sorted/deterministic order).
-func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbose bool, staticOut bool, updateFn func([]string), dockerClient daemonClient) api.EventProcessor {
+func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command string, imageServices map[string][]string, imageOrder []string, containerToService map[string]string, projectName string, asciiMode bool, verbosity int, staticOut bool, updateFn func([]string), dockerClient daemonClient) api.EventProcessor {
 	return &consoleEventProcessor{
 		out:                out,
 		logCtx:             logCtx,
@@ -310,7 +321,7 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		noViewport:        updateFn != nil || console.IsTUIEnabled(),
 		updateFn:          updateFn,
 		asciiMode:         asciiMode,
-		verbose:           verbose,
+		verbosity:         verbosity,
 		staticOut:         staticOut,
 		startTime:         time.Now(),
 		dockerClient:      dockerClient,
@@ -321,6 +332,8 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		imagePullOrder:    make(map[string][]string),
 		imageMetaBefore:   make(map[string]imageMeta),
 		imageMetaAfter:    make(map[string]imageMeta),
+		versionLinks:      make(map[string]string),
+		versionChecked:    make(map[string]bool),
 		rawIDSeen:         make(map[string]bool),
 		health:            make(map[string]map[string]string),
 		healthChecked:     make(map[string]string),
@@ -371,7 +384,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 		}
 		vpActive := func() bool { vp := console.GlobalViewport; return vp != nil && vp.IsActive() }()
 		if !vpActive {
-			initialLines := p.buildLines(termW, p.verbose)
+			initialLines := p.buildLines(termW, p.verbosity)
 			if len(initialLines) > 0 {
 				for range initialLines {
 					fmt.Fprintln(p.out)
@@ -443,6 +456,7 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 	// inspects, then emit the fully rendered output once to out, plus the log summary.
 	if p.staticOut {
 		p.inspectWG.Wait()
+		p.waitVersionLinks()
 		p.waitForHealth()
 		p.stopHealthWatch()
 		p.mtx.Lock()
@@ -450,7 +464,7 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 		if termW <= 0 {
 			termW = 80
 		}
-		lines := p.buildLines(termW, p.verbose)
+		lines := p.buildLines(termW, p.verbosity)
 		p.mtx.Unlock()
 		for _, line := range lines {
 			fmt.Fprintln(p.out, semstyle.ToANSI(line))
@@ -474,6 +488,7 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 	// sha256 DiffIDs) to complete before the final render. inspectWG.Wait establishes a
 	// happens-before edge for their writes, so no extra lock barrier is needed here.
 	p.inspectWG.Wait()
+	p.waitVersionLinks()
 	p.stopHealthWatch()
 	p.render()
 
@@ -491,9 +506,13 @@ func (p *consoleEventProcessor) Done(_ string, failed bool) {
 			if termW <= 0 {
 				termW = 80
 			}
+			// Built under p.mtx, as every render is, so a late event can't change a row
+			// partway through and leave this last frame disagreeing with itself.
+			p.mtx.Lock()
 			p.forceSummary = true
-			rawLines := p.buildLines(termW, p.verbose)
+			rawLines := p.buildLines(termW, p.verbosity)
 			p.forceSummary = false
+			p.mtx.Unlock()
 			finalLines := make([]string, len(rawLines))
 			for i, l := range rawLines {
 				finalLines[i] = semstyle.ToANSI(l)
@@ -625,8 +644,11 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		t.message = stripControl(t.message)
 		status := e.Status
 		switch {
+		case isServiceEvent && p.ownConditionUnmet(id, t.message):
+			t.text, t.conditionErr = notStartedText, true
 		case isInterruption(t.message):
-			// Given up because another row failed: a warning, so the failure stands out.
+			// Given up because another row failed or compose stopped early (including a
+			// "not started: …" wait cut short): a warning, so the failure stands out.
 			t.text, t.interrupted, status = interruptedText, true, api.Warning
 		case t.healthErr:
 		case isServiceEvent && isHealthFailure(t.message) && t.text != "" && t.text != api.StatusError:
@@ -638,6 +660,10 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		}
 		t.status = status
 		t.markWork(status)
+		p.settleHealthErr(t)
+	} else if isServiceEvent && strings.HasPrefix(e.Text, skippedText+": optional dependency "+strconv.Quote(id)+" failed to start") {
+		// compose reports an optional dependency's failure on the dependency's own
+		// containers; this row stays as it was, and its dependents' needs lines show it.
 	} else if e.Text != "" {
 		t.text = e.Text
 		// A Skipped event carries its reason in its text (progress.Skipped); the row
@@ -674,6 +700,7 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 			p.waitDiskScan()
 			p.mtx.Lock()
 			p.imageMetaAfter[imgRef] = metaFromInspect(info.InspectResponse)
+			p.checkShownVersionLinks(imgRef)
 			p.applyInspectResult(imgRef, info.RootFS.Layers)
 			p.mtx.Unlock()
 		}(id)
@@ -693,6 +720,12 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 // content width (program box or console panel) when one is reporting, else the raw
 // terminal width. This keeps proportional bars inside the viewport instead of the tty.
 func (p *consoleEventProcessor) renderWidth() int {
+	return outputWidth()
+}
+
+// outputWidth returns the width compose output has: the TUI output pane's when there
+// is one, else the terminal's, else 80.
+func outputWidth() int {
 	if console.OutputContentWidthFn != nil {
 		if w := console.OutputContentWidthFn(); w > 0 {
 			return w
@@ -723,7 +756,7 @@ func (p *consoleEventProcessor) render() {
 	} else {
 		p.spinnerFrame = (p.spinnerFrame + 1) % len(spinnerFrames)
 	}
-	lines := p.buildLines(termW, p.verbose)
+	lines := p.buildLines(termW, p.verbosity)
 	if len(lines) == 0 {
 		return
 	}
@@ -835,6 +868,9 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 				p.diffIDImageCount[sha]++
 			}
 		}
+	}
+	for _, imgRef := range p.imageOrder {
+		p.checkShownVersionLinks(imgRef)
 	}
 	// Assign group numbers to shared DiffIDs in imageOrder × layer order.
 	nextGroup := 1

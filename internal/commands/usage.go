@@ -168,7 +168,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("-v", "--verbose") {
 		printStr(
 			"{{|UsageCommand|}}-v --verbose{{[-]}}",
-			"	Verbose",
+			"	Verbose. Give it again for more detail: {{|UsageCommand|}}-v{{[-]}} adds Docker image details and every dependency and health check line to compose output, {{|UsageCommand|}}-vv{{[-]}} adds image layers too. {{|UsageCommand|}}-v=N{{[-]}} or {{|UsageCommand|}}--verbose=N{{[-]}} (or {{|UsageCommand|}}:N{{[-]}}) sets the level to N, e.g. {{|UsageCommand|}}-v=2{{[-]}} is {{|UsageCommand|}}-vv{{[-]}} and {{|UsageCommand|}}-v=0{{[-]}} turns it off; a later {{|UsageCommand|}}-v{{[-]}} still adds one",
 		)
 	}
 	if match("-x", "--debug") {

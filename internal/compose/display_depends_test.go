@@ -105,12 +105,12 @@ func TestDependsLinesGroupByCondition(t *testing.T) {
 	p.setHealth("db", "db", healthUnhealthy)
 	p.setHealth("search", "search", healthUnhealthy)
 
-	lines := p.dependsLines("web", 160)
+	lines := p.dependsLines("web", 160, true)
 	got := plainLines(lines)
 	want := []string{
 		"✓ Ready                   needs started: cache",
-		"× Failed                  needs healthy: db (Unhealthy)",
-		"✓ Ready                   needs healthy (optional): search (Unhealthy)",
+		"× Unmet                   needs healthy: db (Unhealthy)",
+		"⚠ Unmet                   needs healthy (optional): search (Unhealthy)", // a warning: optional
 	}
 	for i := range want {
 		if i >= len(got) || strings.Join(strings.Fields(got[i]), " ") != strings.Join(strings.Fields(want[i]), " ") {
@@ -135,11 +135,11 @@ func TestDependsLinesWrapUnderTheFirstName(t *testing.T) {
 		dep("sonarr", types.ServiceConditionStarted, true),
 		dep("sonarr__4k", types.ServiceConditionStarted, true),
 	)
-	lines := plainLines(p.dependsLines("web", 70))
+	lines := plainLines(p.dependsLines("web", 70, true))
 	if len(lines) < 2 {
 		t.Fatalf("lines = %q, want the names wrapped", lines)
 	}
-	raw := p.dependsLines("web", 70)
+	raw := p.dependsLines("web", 70, true)
 	first := semstyle.ToPlain(raw[0])
 	second := semstyle.ToPlain(raw[1])
 	col := utf8.RuneCountInString(first[:strings.Index(first, "nginx")])
@@ -154,7 +154,7 @@ func TestDependsLinesWrapUnderTheFirstName(t *testing.T) {
 func TestDependsLinesOnlyWhenStarting(t *testing.T) {
 	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
 	p.command = "stop"
-	if lines := p.dependsLines("web", 160); lines != nil {
+	if lines := p.dependsLines("web", 160, true); lines != nil {
 		t.Errorf("stop shows %q, want no dependency lines", lines)
 	}
 }
@@ -181,11 +181,11 @@ func TestDependsLineNoResultIsAWarning(t *testing.T) {
 	p.On(containerEvent("web", api.StatusStarted, api.Done))
 	p.setHealth("db", "db", healthStarting)
 	p.finished = true
-	if lines := p.dependsLines("web", 160); len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
+	if lines := p.dependsLines("web", 160, true); len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
 		t.Errorf("lines = %q, want Waiting while the end-of-run wait runs", lines)
 	}
 	p.healthWaitDone = true
-	lines := p.dependsLines("web", 160)
+	lines := p.dependsLines("web", 160, true)
 	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusWarn|}}No Result") ||
 		!strings.Contains(lines[0], "{{|DockerDependsWaiting|}}db{{[-]}}{{|DockerDependsWaiting|}} (No Result)") {
 		t.Errorf("lines = %q, want a No Result warning with db in the waiting style", lines)
@@ -208,7 +208,7 @@ func newNeededByTestProcessor(command string) *consoleEventProcessor {
 func TestNeededByOnStop(t *testing.T) {
 	p := newNeededByTestProcessor("stop")
 	p.On(containerEvent("web", api.StatusStopping, api.Working))
-	lines := p.neededByLines("db", 160)
+	lines := p.neededByLines("db", 160, true)
 	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") ||
 		!strings.Contains(semstyle.ToPlain(lines[0]), "needed by: cache (Still Running), web") {
 		t.Fatalf("lines = %q, want web pending and cache, outside the run, still running", plainLines(lines))
@@ -216,12 +216,12 @@ func TestNeededByOnStop(t *testing.T) {
 
 	p.On(containerEvent("web", api.StatusStopped, api.Done))
 	p.preRun["cache"] = "stopped" // already down before the run
-	lines = p.neededByLines("db", 160)
+	lines = p.neededByLines("db", 160, true)
 	if !strings.Contains(lines[0], detailFinalTag+"Ready") ||
 		!strings.Contains(lines[0], "{{|DockerDependsMet|}}web") || !strings.Contains(lines[0], "{{|DockerDependsMet|}}cache") {
 		t.Errorf("lines = %q, want Ready with both stopped", lines)
 	}
-	if lines := p.dependsLines("web", 160); lines != nil {
+	if lines := p.dependsLines("web", 160, true); lines != nil {
 		t.Errorf("stop shows depends_on lines %q, want none", lines)
 	}
 }
@@ -232,18 +232,18 @@ func TestNeededByOnRestartOnlyRestartTrue(t *testing.T) {
 	if len(got) != 1 || got[0].name != "web" {
 		t.Fatalf("neededBy = %+v, want only web (restart: true)", got)
 	}
-	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
+	if lines := p.neededByLines("db", 160, true); !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
 		t.Errorf("lines = %q, want Waiting until web restarts", plainLines(lines))
 	}
 	p.On(containerEvent("web", api.StatusRestarted, api.Done))
-	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
+	if lines := p.neededByLines("db", 160, true); !strings.Contains(lines[0], detailFinalTag+"Ready") {
 		t.Errorf("lines = %q, want Ready once web restarted", plainLines(lines))
 	}
 }
 
 func TestNeededByNotOnUp(t *testing.T) {
 	p := newNeededByTestProcessor("up")
-	if lines := p.neededByLines("db", 160); lines != nil {
+	if lines := p.neededByLines("db", 160, true); lines != nil {
 		t.Errorf("up shows %q, want no needed-by lines", lines)
 	}
 }
@@ -252,7 +252,7 @@ func TestDependsLinePendingUntilContainers(t *testing.T) {
 	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
 
 	// web hasn't reached its containers: compose isn't waiting on db yet.
-	lines := p.dependsLines("web", 160)
+	lines := p.dependsLines("web", 160, true)
 	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusPending|}}Pending") {
 		t.Fatalf("lines = %q, want Pending before web's containers", plainLines(lines))
 	}
@@ -261,12 +261,12 @@ func TestDependsLinePendingUntilContainers(t *testing.T) {
 	}
 
 	p.On(containerEvent("web", api.StatusCreating, api.Working))
-	if lines := p.dependsLines("web", 160); !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
+	if lines := p.dependsLines("web", 160, true); !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") {
 		t.Errorf("lines = %q, want Waiting once web is creating", plainLines(lines))
 	}
 
 	p.On(containerEvent("db", api.StatusStarted, api.Done))
-	if lines := p.dependsLines("web", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
+	if lines := p.dependsLines("web", 160, true); !strings.Contains(lines[0], detailFinalTag+"Ready") {
 		t.Errorf("lines = %q, want Ready once db started", plainLines(lines))
 	}
 }
@@ -275,13 +275,35 @@ func TestNeededByPendingUntilReached(t *testing.T) {
 	// A full down: web and db are both in the run, and compose hasn't reached web yet.
 	p := newNeededByTestProcessor("down")
 	p.dependsOn = map[string][]serviceDep{"web": {{name: "db", condition: types.ServiceConditionStarted, required: true}}}
-	lines := p.neededByLines("db", 160)
+	lines := p.neededByLines("db", 160, true)
 	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") || strings.Contains(lines[0], "Still Running") {
 		t.Fatalf("lines = %q, want web pending, not still running", plainLines(lines))
 	}
 
 	p.On(containerEvent("web", api.StatusRemoved, api.Done))
-	if lines := p.neededByLines("db", 160); !strings.Contains(lines[0], detailFinalTag+"Ready") {
+	if lines := p.neededByLines("db", 160, true); !strings.Contains(lines[0], detailFinalTag+"Ready") {
 		t.Errorf("lines = %q, want Ready once web is removed", plainLines(lines))
+	}
+}
+
+func TestDetailLinesWithoutVerboseOnlyWhilePendingOrFailed(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+	if lines := p.dependsLines("web", 160, false); len(lines) != 1 {
+		t.Fatalf("lines = %q, want the Pending line shown without -v", plainLines(lines))
+	}
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	if lines := p.dependsLines("web", 160, false); lines != nil {
+		t.Errorf("lines = %q, want a Ready line hidden without -v", plainLines(lines))
+	}
+	if lines := p.dependsLines("web", 160, true); len(lines) != 1 {
+		t.Errorf("lines = %q, want the Ready line shown with -v", plainLines(lines))
+	}
+}
+
+func TestOptionalProblemShowsWithoutVerbose(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, false))
+	p.finished = true // db never started: a warning, since it's optional, with the problem
+	if lines := p.dependsLines("web", 160, false); len(lines) != 1 || !strings.Contains(semstyle.ToPlain(lines[0]), "Not Started") {
+		t.Errorf("lines = %q, want the optional dependency's problem shown without -v", plainLines(lines))
 	}
 }
