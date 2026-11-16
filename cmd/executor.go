@@ -529,6 +529,12 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 
 	// If no commands matched (or groups empty), launch TUI
 	if !ranCommand {
+		// A group of flags with no command (e.g. `ds2 -v`) took the cli tint above;
+		// the TUI's render loop takes the same lock, so release it first.
+		if cliTintRestore != nil {
+			cliTintRestore()
+			cliTintRestore = nil
+		}
 		logger.Notice(ctx, fmt.Sprintf("%s command: '{{|UserCommand|}}%s{{[-]}}'", version.ApplicationName, version.CommandName))
 		if err := tui.Start(ctx, ""); err != nil {
 			exitCode = 1
