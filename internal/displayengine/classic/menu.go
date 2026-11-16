@@ -301,6 +301,10 @@ type MenuModel struct {
 	// SetMinTagWidth).
 	minTagWidth int
 
+	// checkboxColumn keeps a blank checkbox-width column before the tag of rows
+	// without a checkbox (see SetCheckboxColumn).
+	checkboxColumn bool
+
 	// savedRadio is the saved radio row's index plus one, 0 for none (see
 	// SetSavedRadio).
 	savedRadio int
@@ -1598,6 +1602,16 @@ func (m *MenuModel) SetRowCache(enabled bool) {
 func (m *MenuModel) SetMinTagWidth(width int) {
 	if m.minTagWidth != width {
 		m.minTagWidth = width
+		m.InvalidateCache()
+	}
+}
+
+// SetCheckboxColumn keeps a blank checkbox-width column before the tag of every
+// row without a checkbox, so a list with no checkboxes lines its tags up with a
+// checkbox list next to it.
+func (m *MenuModel) SetCheckboxColumn(v bool) {
+	if m.checkboxColumn != v {
+		m.checkboxColumn = v
 		m.InvalidateCache()
 	}
 }

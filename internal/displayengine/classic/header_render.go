@@ -58,25 +58,12 @@ type HeaderModel struct {
 func NewHeaderModel() *HeaderModel {
 	hostname, _ := os.Hostname()
 
-	var flags []string
-	if console.Verbose() {
-		flags = append(flags, verboseFlagLabel())
-	}
-	if console.Debug() {
-		flags = append(flags, "DEBUG")
-	}
-	if console.Force() {
-		flags = append(flags, "FORCE")
-	}
-	if console.AssumeYes() {
-		flags = append(flags, "YES")
-	}
-
-	return &HeaderModel{
+	m := &HeaderModel{
 		hostname: hostname,
-		flags:    flags,
 		focus:    HeaderFocusNone,
 	}
+	m.SyncFlags()
+	return m
 }
 
 // Init implements tea.Model
@@ -111,7 +98,8 @@ func (m *HeaderModel) SetConnType(ct string) {
 	m.ConnType = ct
 }
 
-// SyncFlags re-reads the global console flags into the header's cache
+// SyncFlags re-reads the global console flags into the header's cache, in
+// alphabetical order (the flags dialog orders them by use instead).
 func (m *HeaderModel) SyncFlags() {
 	var flags []string
 	if console.Verbose() {
@@ -417,7 +405,7 @@ func (m *HeaderModel) GetHitRegions(offsetX, offsetY int) []HitRegion {
 		Help: &HelpContext{
 			ScreenName: "Global Flags",
 			PageTitle:  "Status",
-			PageText:   "Shows the currently active global flags (VERBOSE, DEBUG, FORCE, YES).",
+			PageText:   "Shows the currently active global flags (DEBUG, FORCE, VERBOSE, YES).",
 			ItemTitle:  "Global Flags",
 			ItemText:   "Click or press Enter to open the Global Flags toggle dialog.",
 		},

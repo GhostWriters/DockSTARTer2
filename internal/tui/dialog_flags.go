@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"sort"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -11,15 +9,21 @@ import (
 )
 
 // FlagsToggleDialog is the dialog for toggling global application flags.
-// Built as an outer container displayengine.MenuModel (title, buttons) with the flag
-// list as a single submenu-mode content section, matching the pattern used
-// by Main Menu/Config Menu/Options Menu/Config Apps Menu. The flags are checkboxes,
-// except VERBOSE, whose level is picked from a dropdown.
+// Built as an outer container displayengine.MenuModel (title, buttons) with
+// submenu-mode content sections, matching the pattern used by Main Menu/Config
+// Menu/Options Menu/Config Apps Menu. The on/off flags are checkboxes in one
+// section; VERBOSE, whose level is picked from a dropdown and is changed most
+// often, has its own section above them, its tag and value lined up with theirs.
 type FlagsToggleDialog struct {
 	outer     *displayengine.MenuModel
-	list      *displayengine.MenuModel
-	verbosity int // the VERBOSE level picked, applied on Done
+	list      *displayengine.MenuModel // the checkbox flags
+	levels    *displayengine.MenuModel // the VERBOSE row
+	verbosity int                      // the VERBOSE level picked, applied on Done
 }
+
+// flagsLevelsID is the VERBOSE section's id. Like displayengine.IDListPanel, it
+// must not be a substring of the outer's id, since MatchesID uses strings.Contains.
+const flagsLevelsID = "flags_level_panel"
 
 type TriggerApplyFlagsMsg struct{}
 
@@ -41,15 +45,16 @@ func verbosityName(level int) string {
 // NewFlagsToggleDialog creates a new FlagsToggleDialog
 func NewFlagsToggleDialog() *FlagsToggleDialog {
 	d := &FlagsToggleDialog{verbosity: console.VerboseLevel()}
+	// Most used first: YES, then FORCE (riskier), then DEBUG (troubleshooting).
 	items := []displayengine.MenuItem{
 		{
-			Tag:        "DEBUG",
-			Desc:       "Debug logging",
-			Help:       "Shows internal debugging information",
+			Tag:        "YES",
+			Desc:       "Answer yes",
+			Help:       "Automatically answers 'yes' to confirmation prompts",
 			IsCheckbox: true,
 			Selectable: true,
-			Checked:    console.Debug(),
-			Selected:   console.Debug(),
+			Checked:    console.AssumeYes(),
+			Selected:   console.AssumeYes(),
 		},
 		{
 			Tag:        "FORCE",
@@ -60,22 +65,16 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 			Checked:    console.Force(),
 			Selected:   console.Force(),
 		},
-		d.verbosityItem(),
 		{
-			Tag:        "YES",
-			Desc:       "Answer yes",
-			Help:       "Automatically answers 'yes' to confirmation prompts",
+			Tag:        "DEBUG",
+			Desc:       "Debug logging",
+			Help:       "Shows internal debugging information",
 			IsCheckbox: true,
 			Selectable: true,
-			Checked:    console.AssumeYes(),
-			Selected:   console.AssumeYes(),
+			Checked:    console.Debug(),
+			Selected:   console.Debug(),
 		},
 	}
-
-	// Sort items by Tag to ensure alphabetical order
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Tag < items[j].Tag
-	})
 
 	// displayengine.IDListPanel (not e.g. "global_flags") deliberately avoids being a
 	// substring of the outer's own id ("global_flags_outer") -- MatchesID
@@ -96,6 +95,23 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	// other migrated section-owning screen).
 	list.SetNoLeftMargin(true)
 
+	// The VERBOSE section keeps a blank checkbox column, and both sections share the
+	// widest tag, so its tag and value line up with the flags below. It's fixed
+	// height: two variable-height sections would split the rows evenly.
+	levels := displayengine.NewMenuModel(flagsLevelsID, "", "", []displayengine.MenuItem{d.verbosityItem()})
+	levels.SetSubMenuMode(true)
+	levels.SetIsDialog(false)
+	levels.SetButtons([]displayengine.ButtonDef{})
+	levels.SetMaximized(true)
+	levels.SetNoLeftMargin(true)
+	levels.SetCheckboxColumn(true)
+	tagWidth := 0
+	for _, it := range append(list.GetItems(), levels.GetItems()...) {
+		tagWidth = max(tagWidth, lipgloss.Width(it.Tag))
+	}
+	list.SetMinTagWidth(tagWidth)
+	levels.SetMinTagWidth(tagWidth)
+
 	outer := displayengine.NewMenuModel("global_flags_outer", "Application Flags", "", nil)
 	outer.SetMaximized(false) // Ensure it is NOT maximized -- grow to fit, matching original behavior
 	outer.SetIsDialog(true)   // Mark this menu as a modal dialog so it elevates ZOrder
@@ -107,9 +123,10 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	})
 	outer.SetEscAction(CloseDialog())
 	outer.AddContentSection(displayengine.NewPlainTextSection("global_flags_subtitle", "Toggle runtime flags"))
+	outer.AddContentSection(levels)
 	outer.AddContentSection(list)
 
-	d.outer, d.list = outer, list
+	d.outer, d.list, d.levels = outer, list, levels
 	return d
 }
 
@@ -166,13 +183,7 @@ func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case setVerbosityMsg:
 		d.verbosity = msg.level
-		items := d.list.GetItems()
-		for i, it := range items {
-			if it.Tag == "VERBOSE" {
-				items[i] = d.verbosityItem()
-			}
-		}
-		d.list.SetItems(items)
+		d.levels.SetItems([]displayengine.MenuItem{d.verbosityItem()})
 		return d, nil
 	case TriggerApplyFlagsMsg:
 		for _, it := range d.list.GetItems() {
@@ -199,12 +210,16 @@ func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if outer, ok := newOuter.(*displayengine.MenuModel); ok {
 		d.outer = outer
 	}
-	// Sync d.list from outer's content sections so GetItems() in
-	// TriggerApplyFlagsMsg above reflects the latest checkbox state.
-	secs := d.outer.GetContentSections()
-	if len(secs) >= 2 {
-		if mm, ok := secs[1].(*displayengine.MenuModel); ok {
-			d.list = mm
+	// Sync d.list and d.levels from outer's content sections so GetItems() in
+	// TriggerApplyFlagsMsg above reflects their latest state.
+	for _, sec := range d.outer.GetContentSections() {
+		if mm, ok := sec.(*displayengine.MenuModel); ok {
+			switch mm.ID() {
+			case displayengine.IDListPanel:
+				d.list = mm
+			case flagsLevelsID:
+				d.levels = mm
+			}
 		}
 	}
 
@@ -227,6 +242,13 @@ func (d *FlagsToggleDialog) SetSize(width, height int) {
 		width = 60
 	}
 	d.outer.SetSize(width, height)
+}
+
+// ClearProcessingState stops the spinner the VERBOSE row started when it opened its
+// dropdown; AppModel calls it as it hides this dialog behind the dropdown. The outer
+// menu clears its sections too.
+func (d *FlagsToggleDialog) ClearProcessingState() {
+	d.outer.ClearProcessingState()
 }
 
 // IsMaximized lets the AppModel know its size state
