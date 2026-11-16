@@ -75,8 +75,8 @@ const (
 )
 
 // LogPruneReport formats and outputs a structured prune report. Matches
-// compose's display_summary.go behavior: layer rows are gated by
-// console.GlobalVerbose for the console/TUI print, but the log file always
+// compose's display_summary.go behavior: layer rows show at -vv
+// (dockerlayout.VerboseLayers) in the console/TUI print, but the log file always
 // gets them regardless of -v, so log lines are built separately with
 // showLayers forced true rather than reusing the (possibly layer-less)
 // display lines for both.
@@ -90,7 +90,7 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	// across the write would deadlock this goroutine against the main loop.
 	var dispLines, errs []string
 	console.RenderWithSessionContext(ctx, func() {
-		dispLines, errs = buildPruneLines(r, imageServices, console.GlobalVerbose)
+		dispLines, errs = buildPruneLines(r, imageServices, console.VerboseLevel() >= dockerlayout.VerboseLayers)
 	})
 	if len(dispLines) == 0 && len(errs) == 0 {
 		return

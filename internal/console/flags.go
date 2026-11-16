@@ -5,7 +5,7 @@ var (
 	GlobalYes     bool
 	GlobalForce   bool
 	GlobalGUI     bool
-	GlobalVerbose bool
+	GlobalVerbose int // verbosity level, as the -v flags set it (commands.ApplyVerbose)
 	GlobalDebug   bool
 )
 
@@ -27,8 +27,14 @@ func AssumeYes() bool {
 	return GlobalYes
 }
 
-// Verbose returns true if the --verbose flag is set.
+// Verbose returns true if the --verbose flag is set at any level.
 func Verbose() bool {
+	return GlobalVerbose > 0
+}
+
+// VerboseLevel returns the verbosity level: 0 without --verbose, one more for each -v,
+// or N for -v=N.
+func VerboseLevel() int {
 	return GlobalVerbose
 }
 
@@ -52,9 +58,9 @@ func SetAssumeYes(v bool) {
 	GlobalYes = v
 }
 
-// SetVerbose sets the --verbose flag.
-func SetVerbose(v bool) {
-	GlobalVerbose = v
+// SetVerboseLevel sets the verbosity level (0 = off).
+func SetVerboseLevel(level int) {
+	GlobalVerbose = max(level, 0)
 }
 
 // SetDebug sets the --debug flag.

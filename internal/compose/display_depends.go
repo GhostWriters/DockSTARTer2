@@ -37,7 +37,7 @@ const (
 )
 
 // depEntry is one name on a detail line: its state, the problem to show after it, and
-// whether it is required (an optional one's failure leaves the line Ready).
+// whether it is required (an optional one's failure makes the line a warning, not a failure).
 type depEntry struct {
 	name     string
 	state    depState
@@ -157,8 +157,9 @@ func (p *consoleEventProcessor) depStatus(d serviceDep) (depState, string) {
 }
 
 // dependsLines returns the lines under svc's row listing its dependencies, one line
-// for each condition it uses, wrapped to fit termW.
-func (p *consoleEventProcessor) dependsLines(svc string, termW int) []string {
+// for each condition it uses, wrapped to fit termW; without all, only the lines still
+// pending or with a problem.
+func (p *consoleEventProcessor) dependsLines(svc string, termW int, all bool) []string {
 	deps := p.dependsOn[svc]
 	if len(deps) == 0 || !commandWatchesHealth(p.command) {
 		return nil
@@ -172,7 +173,7 @@ func (p *consoleEventProcessor) dependsLines(svc string, termW int) []string {
 				entries = append(entries, depEntry{d.name, state, problem, d.required})
 			}
 		}
-		lines = append(lines, p.detailNameLines(g.label, entries, p.reachedContainers(svc), termW)...)
+		lines = append(lines, p.detailNameLines(g.label, entries, p.reachedContainers(svc), all, termW)...)
 	}
 	return lines
 }
@@ -238,8 +239,9 @@ func (p *consoleEventProcessor) dependentStatus(d serviceDep) (depState, string)
 
 // neededByLines returns the line under svc's row listing what depends on it, on the
 // commands where that orders the run: stop and down, which stop those first, and
-// restart, which restarts its restart: true dependents after it.
-func (p *consoleEventProcessor) neededByLines(svc string, termW int) []string {
+// restart, which restarts its restart: true dependents after it. Without all, only while
+// still pending or with a problem.
+func (p *consoleEventProcessor) neededByLines(svc string, termW int, all bool) []string {
 	switch p.command {
 	case "stop", "down", "restart":
 	default:
@@ -250,7 +252,7 @@ func (p *consoleEventProcessor) neededByLines(svc string, termW int) []string {
 		state, problem := p.dependentStatus(d)
 		entries = append(entries, depEntry{d.name, state, problem, true})
 	}
-	return p.detailNameLines("needed by", entries, true, termW)
+	return p.detailNameLines("needed by", entries, true, all, termW)
 }
 
 // depRank orders states for a line's status: a failure, then work still pending, then a
@@ -284,15 +286,21 @@ func (p *consoleEventProcessor) reachedContainers(svc string) bool {
 // detailNameLines returns a detail line listing entries under label, wrapped to fit
 // termW with continuation lines under the first name, or nil when there are none. Each
 // name takes its state's style; the line's status is the worst of them. A line with a
-// name still pending reads Waiting when compose may be waiting on it, else Pending.
-func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry, waiting bool, termW int) []string {
+// name still pending reads Waiting when compose may be waiting on it, else Pending. A
+// line whose only problems are optional names reads Unmet as a warning.
+// Without all, a line that is Ready with no name showing a problem is left out.
+func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry, waiting, all bool, termW int) []string {
 	if len(entries) == 0 {
+		return nil
+	}
+	if !all && !slices.ContainsFunc(entries, func(e depEntry) bool { return e.state != depMet || e.problem != "" }) {
 		return nil
 	}
 	var names []string
 	var nameWs []int
 	worst := depMet
 	onlyNoResult := true
+	optionalProblem := false // an optional name failed or warned: the line is a warning
 	for _, e := range entries {
 		state := e.state
 		style := "DockerDependsWaiting"
@@ -304,6 +312,7 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 		}
 		if (state == depFailed || state == depWarning) && !e.required {
 			state = depMet // compose starts the service anyway; the name shows the problem
+			optionalProblem = true
 		}
 		if state == depWarning && e.problem != "No Result" {
 			onlyNoResult = false
@@ -326,7 +335,7 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 	switch worst {
 	case depFailed:
 		icon = "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
-		statusText, statusTag = "Failed", "{{|DockerStatusFail|}}Failed{{[-]}}"
+		statusText, statusTag = "Unmet", "{{|DockerStatusFail|}}Unmet{{[-]}}"
 	case depPending:
 		if waiting {
 			icon = p.activeSpinnerTag(ic.spinner)
@@ -342,6 +351,15 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 			statusText = "No Result"
 		}
 		statusTag = "{{|DockerStatusWarn|}}" + statusText + "{{[-]}}"
+	case depMet:
+		if !optionalProblem {
+			icon = "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
+			statusText, statusTag = "Ready", detailFinalTag+"Ready{{[-]}}"
+			break
+		}
+		// Unmet, but optional: a warning, since it doesn't stop the service starting.
+		icon = "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
+		statusText, statusTag = "Unmet", "{{|DockerStatusWarn|}}Unmet{{[-]}}"
 	default:
 		icon = "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
 		statusText, statusTag = "Ready", detailFinalTag+"Ready{{[-]}}"

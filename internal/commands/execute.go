@@ -20,7 +20,7 @@ type CmdState struct {
 	Force   bool
 	GUI     bool
 	Yes     bool
-	Verbose bool
+	Verbose int // verbosity level, as ApplyVerbose sets it from the -v flags
 	Debug   bool
 	Follow  bool
 	Deps    bool // -D: include the services the command affects
@@ -58,7 +58,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		console.GlobalYes = false
 		console.GlobalForce = false
 		console.GlobalGUI = false
-		console.GlobalVerbose = false
+		console.GlobalVerbose = 0
 		console.GlobalDebug = false
 		logger.SetLevel(logger.LevelNotice)
 	}()
@@ -106,7 +106,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		console.GlobalYes = false
 		console.GlobalForce = false
 		console.GlobalGUI = false
-		console.GlobalVerbose = false
+		console.GlobalVerbose = 0
 		console.GlobalDebug = false
 		logger.SetLevel(logger.LevelNotice)
 
@@ -118,15 +118,13 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		console.RestArgs = restArgs
 
 		for _, flag := range flags {
+			if level, ok := ApplyVerbose(flag, state.Verbose); ok {
+				state.Verbose = level
+				continue
+			}
 			switch flag {
-			case "-v", "--verbose":
-				state.Verbose = true
-				logger.SetLevel(logger.LevelInfo)
-				console.GlobalVerbose = true
 			case "-x", "--debug":
 				state.Debug = true
-				logger.SetLevel(logger.LevelDebug)
-				console.GlobalDebug = true
 			case "-f", "--force":
 				state.Force = true
 				console.GlobalForce = true
@@ -161,7 +159,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		// Sync logger level
 		if console.GlobalDebug {
 			logger.SetLevel(logger.LevelDebug)
-		} else if console.GlobalVerbose {
+		} else if console.GlobalVerbose > 0 {
 			logger.SetLevel(logger.LevelInfo)
 		} else {
 			logger.SetLevel(logger.LevelNotice)

@@ -8,19 +8,21 @@ import (
 	"unicode/utf8"
 
 	"github.com/GhostWriters/semstyle"
+	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
 	dockerclient "github.com/moby/moby/client"
 
 	"DockSTARTer2/internal/dockerlayout"
+	"DockSTARTer2/internal/strutil"
 )
 
 // newHealthTestProcessor returns an "up" processor for services web and db on one image.
 func newHealthTestProcessor() *consoleEventProcessor {
 	p := NewConsoleEventProcessor(context.Background(), nil, "up",
 		map[string][]string{testImg: {"db", "web"}}, []string{testImg},
-		map[string]string{}, "proj", false, false, true, nil, nil).(*consoleEventProcessor)
+		map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
 	return p
 }
 
@@ -136,7 +138,7 @@ func TestHealthLineSitsUnderItsService(t *testing.T) {
 	p.setHealth("db", "db", healthHealthy)
 
 	var plain []string
-	for _, line := range p.buildLines(160, false) {
+	for _, line := range p.buildLines(160, dockerlayout.VerboseDetails) {
 		plain = append(plain, semstyle.ToPlain(line))
 	}
 	col := func(name string) int {
@@ -176,14 +178,14 @@ func TestHealthFailureKeepsTheAction(t *testing.T) {
 	if text != "Recreated" {
 		t.Errorf("status = %q, want Recreated", text)
 	}
-	if line := p.healthLine("db", 160); !strings.Contains(line, "{{|DockerMarkerError|}}") {
-		t.Errorf("health line = %q, want an error icon: its check failed the run", line)
+	if line := p.healthLine("db", 160); !strings.Contains(line, "{{|DockerMarkerCause|}}"+p.icons().warn) {
+		t.Errorf("health line = %q, want a warning icon in the error color: it failed a dependent", line)
 	}
 	if !strings.HasPrefix(tag, serviceStatusTag(api.Done, "Recreated", "up")) {
 		t.Errorf("tag = %q, want the action styled as before the error", tag)
 	}
-	if fails := p.failures(); len(fails) != 1 || fails[0].name != "db" {
-		t.Errorf("failures = %v, want db's", fails)
+	if fails := p.failures(); len(fails) != 0 {
+		t.Errorf("failures = %v, want none: being unhealthy is a warning on its own", fails)
 	}
 }
 
@@ -203,7 +205,7 @@ func TestUnhealthyServicesIncludesFailures(t *testing.T) {
 func TestInterruptedRowsAreWarningsGroupedByReason(t *testing.T) {
 	p := NewConsoleEventProcessor(context.Background(), nil, "up",
 		map[string][]string{testImg: {"app", "cache", "db", "web"}}, []string{testImg},
-		map[string]string{}, "proj", false, false, true, nil, nil).(*consoleEventProcessor)
+		map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
 	const reason = "interrupted by the failure of Container db"
 	p.On(api.Resource{ID: "Container db", Status: api.Error, Text: "port is already allocated"})
 	p.On(api.Resource{ID: "Container app", Status: api.Error, Text: reason})
@@ -212,9 +214,9 @@ func TestInterruptedRowsAreWarningsGroupedByReason(t *testing.T) {
 
 	web := p.tasks["web"]
 	if web.text != interruptedText || web.status != api.Warning || !web.interrupted {
-		t.Errorf("web = %q/%v, want Interrupted as a warning", web.text, web.status)
+		t.Errorf("web = %q/%v, want Interrupted as a warning: compose stopped early", web.text, web.status)
 	}
-	if line := p.errorLine(web, 160); !strings.Contains(line, "{{|DockerStatusWarn|}}not started: "+reason) {
+	if line := p.errorLine(web); !strings.Contains(line, "{{|DockerStatusWarn|}}not started: "+reason) {
 		t.Errorf("message line = %q, want the reason in the warning style", line)
 	}
 
@@ -260,7 +262,7 @@ func TestSkippedRowShowsReasonUnderIt(t *testing.T) {
 	if db.text != skippedText || db.message != reason {
 		t.Errorf("db = %q / %q, want Skipped with the reason as its message", db.text, db.message)
 	}
-	if line := p.errorLine(db, 200); !strings.Contains(line, "{{|DockerStatusWarn|}}"+reason) {
+	if line := p.errorLine(db); !strings.Contains(line, "{{|DockerStatusWarn|}}"+reason) {
 		t.Errorf("message line = %q, want the reason in the warning style", line)
 	}
 }
@@ -398,5 +400,153 @@ func TestStopHealthWatchRefreshesTrackedContainers(t *testing.T) {
 	p.stopHealthWatch()
 	if got := p.serviceHealth("db"); got != healthUnhealthy {
 		t.Errorf("db = %q, want the refreshed unhealthy", got)
+	}
+}
+
+func TestHealthyLineHiddenWithoutVerbose(t *testing.T) {
+	p := newHealthTestProcessor()
+	p.On(containerEvent("db", "Recreated", api.Done))
+	p.setHealth("db", "db", healthStarting)
+	if lines := p.serviceDetailLines("db", 160, 0, false); len(lines) != 1 {
+		t.Fatalf("lines = %q, want the Checking line shown without -v", lines)
+	}
+	p.setHealth("db", "db", healthHealthy)
+	if lines := p.serviceDetailLines("db", 160, 0, false); lines != nil {
+		t.Errorf("lines = %q, want the Healthy line hidden without -v", lines)
+	}
+	if lines := p.serviceDetailLines("db", 160, dockerlayout.VerboseDetails, false); len(lines) != 1 {
+		t.Errorf("lines = %q, want the Healthy line shown with -v", lines)
+	}
+	p.setHealth("db", "db", healthUnhealthy)
+	if lines := p.serviceDetailLines("db", 160, 0, false); len(lines) != 1 {
+		t.Errorf("lines = %q, want the Unhealthy line shown without -v", lines)
+	}
+}
+
+func TestUnmetConditionIsTheDependentsError(t *testing.T) {
+	p := newHealthTestProcessor()
+	p.dependsOn = map[string][]serviceDep{
+		"web":   {{name: "db", condition: types.ServiceConditionHealthy, required: true}},
+		"cache": {{name: "db", condition: types.ServiceConditionHealthy, required: false}},
+	}
+	p.serviceIDs = append(p.serviceIDs, "cache")
+	p.On(containerEvent("db", "Recreated", api.Done))
+	p.On(api.Resource{ID: "Container db", Status: api.Error, Text: "dependency db failed to start"})
+	p.setHealth("db", "db", healthUnhealthy)
+	const unmet = `not started: condition "service_healthy" of service "db" not met`
+	p.On(api.Resource{ID: "Container web", Status: api.Error, Text: unmet})
+	p.On(api.Resource{ID: "Container cache", Status: api.Error, Text: unmet})
+
+	db, web, cache := p.tasks["db"], p.tasks["web"], p.tasks["cache"]
+	if db.status != api.Warning || p.serviceIcon(db, db.status) != "{{|DockerMarkerCause|}}"+p.icons().warn+"{{[-]}}" {
+		t.Errorf("db: status %v, icon %q; want a warning, its icon in the error color", db.status, p.serviceIcon(db, db.status))
+	}
+	if web.status != api.Error || web.text != notStartedText || !strings.Contains(p.errorLine(web), unmet) {
+		t.Errorf("web: %v %q, line %q; want Not Started as the error, with compose's message", web.status, web.text, p.errorLine(web))
+	}
+	if !cache.interrupted || cache.status != api.Warning || cache.text != interruptedText || cache.message != unmet {
+		t.Errorf("cache: %v %q %q; want Interrupted with compose's message: its dependency on db is optional, so compose stopped early", cache.status, cache.text, cache.message)
+	}
+	fails := p.failures()
+	if len(fails) != 1 || fails[0].name != "web" || fails[0].message != unmet {
+		t.Errorf("failures = %v, want only web, with compose's message", fails)
+	}
+}
+func TestErrorPlacement(t *testing.T) {
+	p := newHealthTestProcessor()
+	prefix := p.errorLinePrefixes()[0]
+	row := "   ✓ Started     web:"
+	wide := "   ✓ Cached        image: example/app:latest                                       [####]"
+	long := "failed to set up container networking: driver failed programming external connectivity on endpoint web: Bind for 0.0.0.0:8000 failed: port is already allocated"
+	lines, timers := p.placeErrorLines(
+		[]string{row, prefix + "Not Started{{[-]}}", wide, row, prefix + long + "{{[-]}}"},
+		make([]timerEntry, 5))
+	if len(lines) != len(timers) {
+		t.Fatalf("%d lines but %d timers", len(lines), len(timers))
+	}
+	if plain := semstyle.ToPlain(lines[0]); plain != "   ✓ Started     web:  Not Started" {
+		t.Errorf("row = %q, want the short message two spaces past the name", plain)
+	}
+	wrapped := lines[3:]
+	if len(wrapped) < 3 {
+		t.Fatalf("lines = %q, want the long message wrapped under its row", plainLines(lines))
+	}
+	var parts []string
+	for _, l := range wrapped {
+		if !strings.HasPrefix(l, prefix) {
+			t.Errorf("wrapped line %q, want it at the error indent", l)
+		}
+		if w := utf8.RuneCountInString(semstyle.ToPlain(l)); w > utf8.RuneCountInString(wide) {
+			t.Errorf("wrapped line %q is wider than the table", semstyle.ToPlain(l))
+		}
+		parts = append(parts, strings.TrimSpace(semstyle.ToPlain(l)))
+	}
+	if got := strings.Join(parts, " "); got != long {
+		t.Errorf("wrapped text = %q, want the whole message", got)
+	}
+}
+
+func TestWrapWordsCapsLines(t *testing.T) {
+	got := wrapWords(strutil.Repeat("word ", 40), 20, 6)
+	if len(got) != 6 || !strings.HasSuffix(got[5], "…") {
+		t.Errorf("wrapWords = %q, want 6 lines, the last ending in …", got)
+	}
+	for _, l := range got {
+		if utf8.RuneCountInString(l) > 20 {
+			t.Errorf("line %q is wider than 20", l)
+		}
+	}
+	if got := wrapWords("sha256:"+strutil.Repeat("a", 30), 20, 6); len(got) != 2 || got[0] != "sha256:"+strutil.Repeat("a", 13) {
+		t.Errorf("long word = %q, want it broken at 20", got)
+	}
+}
+
+func TestWrapStyledMeasuresWithoutTags(t *testing.T) {
+	name := dockerlayout.StyleServiceName("beets")
+	got := wrapStyled("unhealthy, and "+name+" needs it healthy", 16)
+	want := []string{"unhealthy, and", name + " needs it", "healthy"}
+	if !slices.Equal(got, want) {
+		t.Errorf("wrapStyled = %q, want %q", got, want)
+	}
+	if got := wrapStyled("abcdefghij", 4); !slices.Equal(got, []string{"abcd", "efgh", "ij"}) {
+		t.Errorf("long plain word = %q, want it broken at 4", got)
+	}
+}
+
+func TestInlineErrorsShareAColumn(t *testing.T) {
+	p := newHealthTestProcessor()
+	warn := p.errorLinePrefixes()[1]
+	wide := "   ✓ Cached        image: example/app:latest                                       [####]"
+	lines, _ := p.placeErrorLines([]string{
+		"   ⚠ Interrupted   web:", warn + "interrupted by db{{[-]}}",
+		"   ⚠ Interrupted   calibreweb:", warn + "interrupted by db{{[-]}}",
+		wide, warn + "too wide to share{{[-]}}",
+	}, make([]timerEntry, 6))
+	var cols []int
+	for _, l := range lines[:2] {
+		plain := semstyle.ToPlain(l)
+		cols = append(cols, utf8.RuneCountInString(plain[:strings.Index(plain, "interrupted by")]))
+	}
+	if len(cols) != 2 || cols[0] != cols[1] {
+		t.Errorf("messages start at %v, want one column: %q", cols, plainLines(lines))
+	}
+	if got := strings.TrimSpace(semstyle.ToPlain(lines[len(lines)-1])); got != "too wide to share" {
+		t.Errorf("last line = %q, want the wide row's message on its own line", got)
+	}
+}
+
+func TestOptionalDependencyFailureLeavesItsRow(t *testing.T) {
+	p := newHealthTestProcessor()
+	p.dependsOn = map[string][]serviceDep{"web": {{name: "db", condition: types.ServiceConditionHealthy, required: false}}}
+	p.On(containerEvent("db", api.StatusRunning, api.Done))
+	p.setHealth("db", "db", healthUnhealthy)
+	p.On(api.Resource{ID: "Container db", Status: api.Warning, Text: `Skipped: optional dependency "db" failed to start`})
+	p.On(containerEvent("web", api.StatusStarted, api.Done))
+
+	if db := p.tasks["db"]; db.text != api.StatusRunning || db.message != "" {
+		t.Errorf("db = %q %q, want it left Running: compose files its dependents' warning under it", db.text, db.message)
+	}
+	if lines := plainLines(p.dependsLines("web", 160, true)); len(lines) != 1 || !strings.Contains(lines[0], "⚠ Unmet") || !strings.Contains(lines[0], "db (Unhealthy)") {
+		t.Errorf("web's needs line = %q, want an optional Unmet naming db unhealthy", lines)
 	}
 }

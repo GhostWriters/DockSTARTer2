@@ -1316,8 +1316,11 @@ func GetNavArgs() []string {
 // the Global Flags dialog, not just how the process was started.
 func CmdLine(args ...string) string {
 	parts := []string{version.CommandName}
-	if console.Verbose() {
+	switch level := console.VerboseLevel(); {
+	case level == 1:
 		parts = append(parts, "--verbose")
+	case level > 1:
+		parts = append(parts, fmt.Sprintf("--verbose=%d", level))
 	}
 	if console.Debug() {
 		parts = append(parts, "--debug")

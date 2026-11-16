@@ -11,18 +11,36 @@ import (
 )
 
 // FlagsToggleDialog is the dialog for toggling global application flags.
-// Built as an outer container displayengine.MenuModel (title, buttons) with the checkbox
+// Built as an outer container displayengine.MenuModel (title, buttons) with the flag
 // list as a single submenu-mode content section, matching the pattern used
-// by Main Menu/Config Menu/Options Menu/Config Apps Menu.
+// by Main Menu/Config Menu/Options Menu/Config Apps Menu. The flags are checkboxes,
+// except VERBOSE, whose level is picked from a dropdown.
 type FlagsToggleDialog struct {
-	outer *displayengine.MenuModel
-	list  *displayengine.MenuModel
+	outer     *displayengine.MenuModel
+	list      *displayengine.MenuModel
+	verbosity int // the VERBOSE level picked, applied on Done
 }
 
 type TriggerApplyFlagsMsg struct{}
 
+// setVerbosityMsg carries the level picked in the VERBOSE dropdown back to the dialog.
+type setVerbosityMsg struct{ level int }
+
+// verbosityLevels names each verbosity level, for the VERBOSE dropdown.
+var verbosityLevels = []struct{ name, help string }{
+	{"Off", "Normal output"},
+	{"1 Details", "-v: also Docker image details, and every dependency and health check line"},
+	{"2 Layers", "-vv: also Docker image layers"},
+}
+
+// verbosityName returns level's name in the VERBOSE dropdown.
+func verbosityName(level int) string {
+	return verbosityLevels[min(max(level, 0), len(verbosityLevels)-1)].name
+}
+
 // NewFlagsToggleDialog creates a new FlagsToggleDialog
 func NewFlagsToggleDialog() *FlagsToggleDialog {
+	d := &FlagsToggleDialog{verbosity: console.VerboseLevel()}
 	items := []displayengine.MenuItem{
 		{
 			Tag:        "DEBUG",
@@ -42,15 +60,7 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 			Checked:    console.Force(),
 			Selected:   console.Force(),
 		},
-		{
-			Tag:        "VERBOSE",
-			Desc:       "Verbose logging",
-			Help:       "Shows more detailed progress information",
-			IsCheckbox: true,
-			Selectable: true,
-			Checked:    console.Verbose(),
-			Selected:   console.Verbose(),
-		},
+		d.verbosityItem(),
 		{
 			Tag:        "YES",
 			Desc:       "Answer yes",
@@ -75,7 +85,6 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	// switch as a result. Matches the id convention every other migrated
 	// section-owning screen already uses for its inner list.
 	list := displayengine.NewMenuModel(displayengine.IDListPanel, "", "", items)
-	list.SetCheckboxMode(true) // Use the standard checkbox mode like app_selection.go
 	list.SetSubMenuMode(true)
 	list.SetVariableHeight(true)
 	list.SetIsDialog(false)
@@ -100,7 +109,51 @@ func NewFlagsToggleDialog() *FlagsToggleDialog {
 	outer.AddContentSection(displayengine.NewPlainTextSection("global_flags_subtitle", "Toggle runtime flags"))
 	outer.AddContentSection(list)
 
-	return &FlagsToggleDialog{outer: outer, list: list}
+	d.outer, d.list = outer, list
+	return d
+}
+
+// verbosityItem returns the VERBOSE row: the level picked as a dropdown value, opening
+// the level list when selected.
+func (d *FlagsToggleDialog) verbosityItem() displayengine.MenuItem {
+	return displayengine.MenuItem{
+		Tag:        "VERBOSE",
+		Desc:       displayengine.DropdownValueMarkup(verbosityName(d.verbosity)),
+		Help:       "Shows more detailed output (Select/Enter for list)",
+		Selectable: true,
+		Action:     d.showVerbosityDropdown(),
+	}
+}
+
+// showVerbosityDropdown opens the list of verbosity levels over the dialog.
+func (d *FlagsToggleDialog) showVerbosityDropdown() tea.Cmd {
+	return func() tea.Msg {
+		items := make([]displayengine.MenuItem, len(verbosityLevels))
+		for i, l := range verbosityLevels {
+			items[i] = displayengine.MenuItem{
+				Tag:           l.name,
+				Help:          l.help,
+				IsRadioButton: true,
+				Selectable:    true,
+				Checked:       i == min(d.verbosity, len(verbosityLevels)-1),
+			}
+		}
+		menu := displayengine.NewMenuModel("verbosity_dropdown", "Verbose", "Select the verbosity level", items)
+		menu.SetUpdateInterceptor(RadioGroupInterceptor("verbosity_dropdown"))
+		menu.SetButtons([]displayengine.ButtonDef{
+			{Label: "Done", ZoneID: "btn-select", Help: "Confirm the marked level.", Action: func() tea.Msg {
+				for i, it := range menu.GetItems() {
+					if it.Checked {
+						return CloseDialogThen(func() tea.Msg { return setVerbosityMsg{i} })()
+					}
+				}
+				return displayengine.CloseDialogMsg{}
+			}},
+			{Label: "Cancel", ZoneID: "btn-cancel", Action: func() tea.Msg { return displayengine.CloseDialogMsg{} }, Help: "Cancel and close."},
+		})
+		menu.Select(min(d.verbosity, len(verbosityLevels)-1))
+		return displayengine.ShowDialogMsg{Dialog: menu}
+	}
 }
 
 // Init implements tea.Model
@@ -110,12 +163,20 @@ func (d *FlagsToggleDialog) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
+	switch msg := msg.(type) {
+	case setVerbosityMsg:
+		d.verbosity = msg.level
+		items := d.list.GetItems()
+		for i, it := range items {
+			if it.Tag == "VERBOSE" {
+				items[i] = d.verbosityItem()
+			}
+		}
+		d.list.SetItems(items)
+		return d, nil
 	case TriggerApplyFlagsMsg:
 		for _, it := range d.list.GetItems() {
 			switch it.Tag {
-			case "VERBOSE":
-				console.SetVerbose(it.Selected)
 			case "DEBUG":
 				console.SetDebug(it.Selected)
 			case "FORCE":
@@ -124,6 +185,7 @@ func (d *FlagsToggleDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				console.SetAssumeYes(it.Selected)
 			}
 		}
+		console.SetVerboseLevel(d.verbosity)
 		// Refresh header and close dialog
 		return d, tea.Batch(
 			func() tea.Msg { return displayengine.RefreshHeaderMsg{} },

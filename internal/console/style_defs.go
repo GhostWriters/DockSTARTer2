@@ -110,6 +110,7 @@ type AppColors struct {
 	DockerMarkerDone    string
 	DockerMarkerError   string
 	DockerMarkerWarn    string
+	DockerMarkerCause   string // a warning row that caused another row's failure
 	DockerColon         string
 	DockerImage         string
 	DockerTag           string
@@ -228,6 +229,7 @@ var Colors = AppColors{
 	DockerMarkerDone:  "{{[-]}}{{[green]}}",
 	DockerMarkerError: "{{[-]}}{{[red]}}",
 	DockerMarkerWarn:  "{{[-]}}{{[yellow]}}",
+	DockerMarkerCause: "{{[-]}}{{[red]}}",
 	DockerColon:       "{{[-]}}{{[gray::D]}}",
 	DockerImage:       "{{[-]}}{{[magenta]}}",
 	DockerTag:         "{{[-]}}{{[magenta::D]}}",

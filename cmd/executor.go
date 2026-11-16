@@ -165,7 +165,7 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		console.GlobalYes = false
 		console.GlobalForce = false
 		console.GlobalGUI = false
-		console.GlobalVerbose = false
+		console.GlobalVerbose = 0
 		console.GlobalDebug = false
 		logger.SetLevel(logger.LevelNotice)
 
@@ -180,15 +180,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 		// Apply Flags
 		// This logic handles setting state before the command executes.
 		for _, flag := range flags {
+			if level, ok := commands.ApplyVerbose(flag, state.Verbose); ok {
+				state.Verbose = level
+				continue
+			}
 			switch flag {
-			case "-v", "--verbose":
-				state.Verbose = true
-				logger.SetLevel(logger.LevelInfo)
-				console.GlobalVerbose = true
 			case "-x", "--debug":
 				state.Debug = true
-				logger.SetLevel(logger.LevelDebug)
-				console.GlobalDebug = true
 			case "-f", "--force":
 				state.Force = true
 				console.GlobalForce = true
@@ -205,6 +203,15 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 			case "--no-deps":
 				state.NoDeps = true
 			}
+		}
+		// Set the log level once all the flags are read, so -x wins over -v in any order.
+		console.GlobalVerbose = state.Verbose
+		console.GlobalDebug = state.Debug
+		switch {
+		case state.Debug:
+			logger.SetLevel(logger.LevelDebug)
+		case state.Verbose > 0:
+			logger.SetLevel(logger.LevelInfo)
 		}
 
 		// Logging

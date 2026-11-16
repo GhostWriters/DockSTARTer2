@@ -15,7 +15,7 @@ func NewFlagSet() *pflag.FlagSet {
 	// Modifiers
 	fs.BoolP("force", "f", false, "Force execution")
 	fs.BoolP("gui", "g", false, "Show GUI")
-	fs.BoolP("verbose", "v", false, "Verbose output")
+	fs.CountP("verbose", "v", "Verbose output (repeat for more, e.g. -vv, or -v=N)")
 	fs.BoolP("debug", "x", false, "Debug output")
 	fs.BoolP("yes", "y", false, "Assume yes")
 	fs.BoolP("help", "h", false, "Show help")

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhostWriters/semstyle"
 	"github.com/docker/compose/v5/pkg/api"
 
 	"DockSTARTer2/internal/dockerlayout"
@@ -20,13 +19,16 @@ func (p *consoleEventProcessor) isTeardownCommand() bool {
 	return false
 }
 
-// buildLines renders the full output. Layer rows are always processed; showLayers
-// controls whether they're included — the console passes p.verbose, the final log
-// passes true so layers always appear there regardless of the -v flag.
-func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string {
+// buildLines renders the full output at verbosity level: below
+// dockerlayout.VerboseDetails, a service's health and dependency lines show only while
+// pending or with a problem, and an image's info lines only what a pull changed; at
+// VerboseDetails, all of them; at VerboseLayers, the layers too. The console passes
+// p.verbosity, the final log VerboseLayers, so the log has everything regardless of -v.
+func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	if p.isTeardownCommand() {
-		return p.buildTeardownLines(termW)
+		return p.buildTeardownLines(termW, level)
 	}
+	showLayers := level >= dockerlayout.VerboseLayers
 
 	svcRollupIDs := append([]string{}, p.serviceIDs...)
 	svcImageMap := make(map[string]string)
@@ -48,7 +50,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		timers = append(timers, timerEntry{task: t, style: style})
 	}
 	appendError := func(t *consoleTask) {
-		if line := p.errorLine(t, termW); line != "" {
+		if line := p.errorLine(t); line != "" {
 			appendLine(line, nil, timerLayer)
 		}
 	}
@@ -111,10 +113,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
 			appendError(p.tasks[svc])
-			if line := p.healthLine(svc, termW); line != "" {
-				appendLine(line, nil, timerLayer)
-			}
-			for _, line := range p.dependsLines(svc, termW) {
+			for _, line := range p.serviceDetailLines(svc, termW, level, false) {
 				appendLine(line, nil, timerLayer)
 			}
 		}
@@ -123,7 +122,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 
 		appendLine(p.buildImageLine(imgName, img, layers, maxImgNameW, termW), img, timerImage)
 		appendError(img)
-		for _, line := range p.imageInfoLines(imgName, termW, showLayers) {
+		for _, line := range p.imageInfoLines(imgName, termW, level >= dockerlayout.VerboseDetails) {
 			appendLine(line, nil, timerLayer)
 		}
 
@@ -163,10 +162,7 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
 		appendError(p.tasks[svcID])
-		if line := p.healthLine(svcID, termW); line != "" {
-			appendLine(line, nil, timerLayer)
-		}
-		for _, line := range p.dependsLines(svcID, termW) {
+		for _, line := range p.serviceDetailLines(svcID, termW, level, false) {
 			appendLine(line, nil, timerLayer)
 		}
 	}
@@ -180,8 +176,24 @@ func (p *consoleEventProcessor) buildLines(termW int, showLayers bool) []string 
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
 
-	p.fitErrorLines(lines)
+	lines, timers = p.placeErrorLines(lines, timers)
 	return p.prependSummary(lines, timers)
+}
+
+// serviceDetailLines returns the lines under svc's row: its healthcheck line, its
+// dependency lines and, with neededBy, its needed-by line. Below
+// dockerlayout.VerboseDetails, only the ones still pending or with a problem.
+func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int, neededBy bool) []string {
+	all := level >= dockerlayout.VerboseDetails
+	var lines []string
+	if line := p.healthLine(svc, termW); line != "" && (all || p.serviceHealth(svc) != healthHealthy) {
+		lines = append(lines, line)
+	}
+	lines = append(lines, p.dependsLines(svc, termW, all)...)
+	if neededBy {
+		lines = append(lines, p.neededByLines(svc, termW, all)...)
+	}
+	return lines
 }
 
 // errorIndentW returns the column of a row's error message: two past the service name column.
@@ -189,54 +201,29 @@ func (p *consoleEventProcessor) errorIndentW() int {
 	return globalIndentW + iconW + spaceW + sectionStatusW + sectionChildIndentW + 2
 }
 
-// errorLinePrefixes start every line errorLine returns, so fitErrorLines can find
+// errorLinePrefixes start every line errorLine returns, so placeErrorLines can find
 // them: a failed row's message, then a warning row's (interrupted or skipped).
 func (p *consoleEventProcessor) errorLinePrefixes() []string {
 	indent := strutil.Repeat(" ", p.errorIndentW())
 	return []string{indent + "{{|DockerStatusFail|}}", indent + "{{|DockerStatusWarn|}}"}
 }
 
-// errorLine returns the line under a failed or warning row showing its message on one
-// line, without Docker's "Error response from daemon: " prefix (the row already shows
-// its status) and cut to fit termW, or "" when t has no message. fitErrorLines later cuts
-// it to the table's width.
-func (p *consoleEventProcessor) errorLine(t *consoleTask, termW int) string {
+// errorLine returns the line under a failed or warning row showing its whole message on
+// one line, without Docker's "Error response from daemon: " prefix (the row already
+// shows its status), or "" when t has no message. placeErrorLines later fits it to the
+// table.
+func (p *consoleEventProcessor) errorLine(t *consoleTask) string {
 	if t == nil || t.message == "" || t.status != api.Error && t.status != api.Warning {
 		return ""
+	}
+	if p.unhealthyHealthErr(t) {
+		return "" // its healthcheck line and its dependents' needs lines say it all
 	}
 	prefix := p.errorLinePrefixes()[0]
 	if t.status == api.Warning {
 		prefix = p.errorLinePrefixes()[1]
 	}
-	msg := strings.Join(strings.Fields(t.message), " ")
-	msg = strings.TrimPrefix(msg, "Error response from daemon: ")
-	return prefix + cutRunes(msg, termW-p.errorIndentW()-timerReserveW-summaryHeaderIndentW) + "{{[-]}}"
-}
-
-// fitErrorLines cuts the error lines in lines to the width of the other lines, so
-// a message never pushes the timer column right.
-func (p *consoleEventProcessor) fitErrorLines(lines []string) {
-	prefixes := p.errorLinePrefixes()
-	errorPrefix := func(line string) string {
-		for _, prefix := range prefixes {
-			if strings.HasPrefix(line, prefix) {
-				return prefix
-			}
-		}
-		return ""
-	}
-	width := 0
-	for _, line := range lines {
-		if errorPrefix(line) == "" {
-			width = max(width, utf8.RuneCountInString(semstyle.ToPlain(line)))
-		}
-	}
-	for i, line := range lines {
-		if prefix := errorPrefix(line); prefix != "" {
-			msg := strings.TrimSuffix(strings.TrimPrefix(line, prefix), "{{[-]}}")
-			lines[i] = prefix + cutRunes(msg, width-p.errorIndentW()) + "{{[-]}}"
-		}
-	}
+	return prefix + shortMessage(t.message) + "{{[-]}}"
 }
 
 // cutRunes returns s cut to at most maxW runes (at least 1), ending in "…" when cut.
@@ -440,7 +427,7 @@ func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerE
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
-		if line := p.errorLine(t, termW); line != "" {
+		if line := p.errorLine(t); line != "" {
 			lines = append(lines, line)
 			timers = append(timers, timerEntry{})
 		}
@@ -472,7 +459,7 @@ func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEn
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		lines = append(lines, globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
-		if line := p.errorLine(t, termW); line != "" {
+		if line := p.errorLine(t); line != "" {
 			lines = append(lines, line)
 			timers = append(timers, timerEntry{})
 		}
@@ -611,7 +598,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 	return out, outTasks
 }
 
-func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
+func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []string {
 	impliedText, impliedTag := p.impliedStatus()
 	ic := p.icons()
 	var impliedIcon string
@@ -641,7 +628,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		timers = append(timers, timerEntry{task: t, style: style})
 	}
 	appendError := func(t *consoleTask) {
-		if line := p.errorLine(t, termW); line != "" {
+		if line := p.errorLine(t); line != "" {
 			appendLine(line, nil, timerLayer)
 		}
 	}
@@ -666,13 +653,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
 			appendError(p.tasks[svc])
-			if line := p.healthLine(svc, termW); line != "" {
-				appendLine(line, nil, timerLayer)
-			}
-			for _, line := range p.dependsLines(svc, termW) {
-				appendLine(line, nil, timerLayer)
-			}
-			for _, line := range p.neededByLines(svc, termW) {
+			for _, line := range p.serviceDetailLines(svc, termW, level, true) {
 				appendLine(line, nil, timerLayer)
 			}
 		}
@@ -694,13 +675,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
 		appendError(p.tasks[svcID])
-		if line := p.healthLine(svcID, termW); line != "" {
-			appendLine(line, nil, timerLayer)
-		}
-		for _, line := range p.dependsLines(svcID, termW) {
-			appendLine(line, nil, timerLayer)
-		}
-		for _, line := range p.neededByLines(svcID, termW) {
+		for _, line := range p.serviceDetailLines(svcID, termW, level, true) {
 			appendLine(line, nil, timerLayer)
 		}
 	}
@@ -714,6 +689,6 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int) []string {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
 
-	p.fitErrorLines(lines)
+	lines, timers = p.placeErrorLines(lines, timers)
 	return p.prependSummary(lines, timers)
 }
