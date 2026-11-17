@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/GhostWriters/semstyle"
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
@@ -140,7 +141,13 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 
 	// Build nice names for display
 	var appNamesJoined string
-	if len(appNames) > 0 {
+	if command == "run" {
+		if err := checkJob(ctx, appNames[0]); err != nil {
+			logger.Error(ctx, "Can't run job {{|App|}}%s{{[-]}}: %v", appNames[0], err)
+			return reportedError{err}
+		}
+		appNamesJoined = strings.Join(appNames, ", ") // a job, not an app
+	} else if len(appNames) > 0 {
 		var niceNames []string
 		for _, appName := range appNames {
 			niceNames = append(niceNames, appenv.StyledInstanceName(ctx, appName))
@@ -283,6 +290,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			yesNotice = "Starting containers for all enabled services."
 			noNotice = "Not starting containers for all enabled services."
 		}
+	case "run":
+		question = fmt.Sprintf("Run job: {{|App|}}%s{{[-]}}?", appNamesJoined)
+		yesNotice = fmt.Sprintf("Running job: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		noNotice = fmt.Sprintf("Not running job: {{|App|}}%s{{[-]}}.", appNamesJoined)
 	case "generate", "merge":
 		composeFile := filepath.Join(conf.ComposeDir, constants.ComposeFileName)
 		question = "Merge enabled app templates to '" + console.FormatFilePath(composeFile) + "'?"
@@ -370,6 +381,15 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		project.Services[i] = s
 	}
 
+	// run: the job, made a service with its dependencies, as compose's run does.
+	var job *jobRun
+	if command == "run" {
+		if project, job, err = prepareJobRun(project, appNames[0]); err != nil {
+			logger.Error(ctx, "Can't run job {{|App|}}%s{{[-]}}: %v", appNames[0], err)
+			return reportedError{err}
+		}
+	}
+
 	// The full project, before the filter below: the dependency lines need every
 	// service's depends_on, -D finds the requested services' dependents in it, and
 	// restart hands it to compose so it can add their restart: true dependents.
@@ -379,7 +399,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	// Filter to requested services if specified, with the services the command brings:
 	// their dependencies for commands that bring services up (includesDependencies), or
 	// with -D on the others, the services that depend on them (includesDependents).
-	if len(appNames) > 0 {
+	if len(appNames) > 0 && job == nil {
 		if includesDependents(command, deps) {
 			project, err = fullProject.WithSelectedServices(withDependents(fullProject, appNames, false), types.IgnoreDependencies)
 		} else {
@@ -417,9 +437,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	}
 
 	// The themed event processor owns all output in every mode (TTY, TUI, and redirected),
-	// so the SDK's own CLI streams are always discarded.
-	cliOut := io.Discard
-	cliErr := io.Discard
+	// so the SDK's own CLI streams are discarded, except a run job's output, which goes
+	// to the display (jobOutput).
+	var cliOut, cliErr io.Writer = io.Discard, io.Discard
+	var jobOut *jobOutput
+	if job != nil {
+		jobOut = &jobOutput{name: job.name}
+		cliOut, cliErr = jobOut, jobOut
+	}
 
 	// Initialize Docker CLI
 	dockerCLI, err := dockercommand.NewDockerCli(
@@ -447,6 +472,9 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		imageServices := make(map[string][]string)
 		containerToService := make(map[string]string)
 		for name, svc := range displayProject.Services {
+			if job != nil && name == job.name {
+				continue // the job has its own row, with its image under it
+			}
 			if svc.Image != "" {
 				imageServices[svc.Image] = append(imageServices[svc.Image], name)
 			}
@@ -498,14 +526,27 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		if p, ok := bus.(*consoleEventProcessor); ok {
 			p.dependsOn = dependencies
 			p.preRun = preRun
+			p.jobs = jobDecls(project)
+			if job != nil {
+				p.runJob, p.runJobImage = job.name, job.image
+			}
 		}
 	}
 
 	defer routeSDKLogs(ctx)()
+	held := &heldDone{EventProcessor: bus}
+	var events api.EventProcessor = held
+	var display *lazyDisplay
+	if job != nil {
+		// RunJob opens no operation, so the display starts with its first event.
+		display = &lazyDisplay{p: bus.(*consoleEventProcessor)}
+		jobOut.display = display
+		events = display
+	}
 	srv, err := composev5.NewComposeService(dockerCLI,
-		composev5.WithOutputStream(io.Discard),
-		composev5.WithErrorStream(io.Discard),
-		composev5.WithEventProcessor(bus),
+		composev5.WithOutputStream(cliOut),
+		composev5.WithErrorStream(cliErr),
+		composev5.WithEventProcessor(events),
 		composev5.WithPrompt(confirmComposePrompt),
 	)
 	if err != nil {
@@ -531,6 +572,11 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	// Pause our spinner just before calling the SDK — it has its own progress display.
 	console.PauseSpinner()
 	defer console.ResumeSpinner()
+	if job != nil {
+		logRunning("run")
+		display.ctx = sdkCtx
+		return runJobCommand(ctx, sdkCtx, srv, project, job, display, jobOut, hasTUIWriter || console.IsTUIEnabled())
+	}
 	run := func() error {
 		switch command {
 		case "create":
@@ -631,8 +677,35 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		}
 	}
 	err = run()
+	held.release(err)
 	reportUnhealthy(ctx, bus)
 	return reportFailures(ctx, bus, err)
+}
+
+// heldDone passes compose's events on, holding back its Done, the call's last
+// event, until the SDK call returns: the display then gets the call's error
+// (setRunError) before Done draws its final frame.
+type heldDone struct {
+	api.EventProcessor
+	op      string
+	success bool
+	held    bool
+}
+
+// Done holds compose's Done for release.
+func (h *heldDone) Done(op string, success bool) {
+	h.op, h.success, h.held = op, success, true
+}
+
+// release hands err to the display and passes on the Done compose sent, if any.
+func (h *heldDone) release(err error) {
+	if !h.held {
+		return
+	}
+	if p, ok := h.EventProcessor.(*consoleEventProcessor); ok {
+		p.setRunError(err)
+	}
+	h.EventProcessor.Done(h.op, h.success)
 }
 
 // confirmComposePrompt answers the compose SDK's own confirmations yes, silently: DS2
@@ -810,6 +883,7 @@ func reportFailures(ctx context.Context, bus api.EventProcessor, err error) erro
 		for _, line := range wrapStyled(err.Error(), wrapW+2) {
 			logger.Error(ctx, "  %s", line)
 		}
+		reportJobsHint(ctx, err, wrapW+2)
 		return reportedError{err}
 	}
 	logger.Error(ctx, "Compose failed with %d %s:", len(fails), plural(len(fails), "error", "errors"))
@@ -818,7 +892,7 @@ func reportFailures(ctx context.Context, bus api.EventProcessor, err error) erro
 		for _, line := range wrapStyled(f.message, wrapW) {
 			logger.Error(ctx, "    %s", line)
 		}
-		covered = covered || strings.Contains(err.Error(), f.message)
+		covered = covered || strings.Contains(err.Error(), semstyle.ToPlain(f.message))
 	}
 	// A condition failure's message covers compose's "dependency failed to start: …" error.
 	if !covered && !p.hasConditionErr() {
@@ -826,6 +900,7 @@ func reportFailures(ctx context.Context, bus api.EventProcessor, err error) erro
 			logger.Error(ctx, "  %s", line)
 		}
 	}
+	reportJobsHint(ctx, err, wrapW+2)
 	return reportedError{err}
 }
 

@@ -62,6 +62,9 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	ids = append(ids, p.imageOrder...)
 	ids = append(ids, netIDs...)
 	ids = append(ids, p.volumeIDs...)
+	for _, name := range p.jobIDs {
+		ids = append(ids, jobTaskID(name))
+	}
 	state := p.rollupState(ids, nil)
 	if p.finished && !p.succeeded {
 		state = rollupError // the call failed, whatever its rows show
@@ -129,6 +132,8 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			if !t.completed() {
 				allDone = false
 			}
+		} else if p.refused {
+			anyWarning = true // compose refused the run before reaching it
 		} else if p.isTeardownCommand() {
 			anyStarted = true
 		} else if p.finished && p.succeeded && imageForID == nil && contains(p.imageOrder, id) {
@@ -358,6 +363,9 @@ func (p *consoleEventProcessor) spinnerIcon(t *consoleTask) string {
 
 // impliedStatus returns the status text and tag for a service that received no events.
 func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
+	if p.refused {
+		return notStartedText, "{{|DockerStatusWarn|}}"
+	}
 	switch p.command {
 	case "down":
 		return "Removed", serviceFinalTag
@@ -378,6 +386,18 @@ func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	default:
 		return "Pending", "{{|DockerStatusPending|}}"
 	}
+}
+
+// impliedIcon returns the icon for a row showing impliedStatus's tag.
+func (p *consoleEventProcessor) impliedIcon(tag string) string {
+	ic := p.icons()
+	switch tag {
+	case "{{|DockerStatusPending|}}":
+		return "{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}"
+	case "{{|DockerStatusWarn|}}":
+		return "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
+	}
+	return "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
 }
 
 // abbreviateStatus shortens verbose Docker layer/image status strings.

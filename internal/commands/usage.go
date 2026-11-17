@@ -222,6 +222,8 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}pull{{[-]}} | {{|UsageOption|}}up{{[-]}} | {{|UsageOption|}}down{{[-]}} | {{|UsageOption|}}stop{{[-]}} | {{|UsageOption|}}start{{[-]}} | {{|UsageOption|}}restart{{[-]}} | {{|UsageOption|}}create{{[-]}} | {{|UsageOption|}}rm{{[-]}} | {{|UsageOption|}}kill{{[-]}} | {{|UsageOption|}}pause{{[-]}} | {{|UsageOption|}}unpause{{[-]}} | {{|UsageOption|}}update{{[-]}} > [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Run docker compose commands. If no command is given, it does an '{{|UsageOption|}}update{{[-]}}'.",
 			"	The '{{|UsageOption|}}update{{[-]}}' command is the same as a '{{|UsageOption|}}pull{{[-]}}' followed by an '{{|UsageOption|}}up{{[-]}}'",
+			"{{|UsageCommand|}}-c --compose{{[-]}} {{|UsageOption|}}run{{[-]}} {{|UsageApp|}}<job>{{[-]}}",
+			"	Run a job from the compose files now, after starting its dependencies, and show its output",
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
 			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
 		)

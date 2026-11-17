@@ -460,7 +460,7 @@ func TestErrorPlacement(t *testing.T) {
 	long := "failed to set up container networking: driver failed programming external connectivity on endpoint web: Bind for 0.0.0.0:8000 failed: port is already allocated"
 	lines, timers := p.placeErrorLines(
 		[]string{row, prefix + "Not Started{{[-]}}", wide, row, prefix + long + "{{[-]}}"},
-		make([]timerEntry, 5))
+		make([]timerEntry, 5), 200)
 	if len(lines) != len(timers) {
 		t.Fatalf("%d lines but %d timers", len(lines), len(timers))
 	}
@@ -521,7 +521,7 @@ func TestInlineErrorsShareAColumn(t *testing.T) {
 		"   ⚠ Interrupted   web:", warn + "interrupted by db{{[-]}}",
 		"   ⚠ Interrupted   calibreweb:", warn + "interrupted by db{{[-]}}",
 		wide, warn + "too wide to share{{[-]}}",
-	}, make([]timerEntry, 6))
+	}, make([]timerEntry, 6), 200)
 	var cols []int
 	for _, l := range lines[:2] {
 		plain := semstyle.ToPlain(l)
