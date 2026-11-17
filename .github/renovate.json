@@ -15,5 +15,18 @@
   ],
   "baseBranchPatterns": [
     "$default"
+  ],
+  "packageRules": [
+    {
+      "description": "DS2's compose display depends on the SDK's event details, so compose updates need a review and a test run",
+      "matchPackageNames": [
+        "github.com/docker/compose/v5",
+        "github.com/compose-spec/compose-go/v2"
+      ],
+      "automerge": false,
+      "prBodyNotes": [
+        "Check the release notes for changes to compose's events, messages or `api.EventProcessor`, and test a pull and a failing `up` with a build of this branch before merging."
+      ]
+    }
   ]
 }
