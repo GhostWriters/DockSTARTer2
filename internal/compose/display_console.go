@@ -441,14 +441,14 @@ func (p *consoleEventProcessor) finalizeActiveTasks() {
 	}
 }
 
-// Done's second argument is named success in api.EventProcessor, but the SDK
-// passes err != nil (pkg/compose/progress.go Run), so it is true on failure.
-func (p *consoleEventProcessor) Done(_ string, failed bool) {
+// Done is called once the operation finishes; success is false when it failed or
+// was cancelled.
+func (p *consoleEventProcessor) Done(_ string, success bool) {
 	// Synthesize final status for any service still in an active state.
 	// Some SDK operations (e.g. restart) never emit a per-service Done event.
 	p.mtx.Lock()
 	p.finished = true
-	p.succeeded = !failed
+	p.succeeded = success
 	p.finalizeActiveTasks()
 	p.mtx.Unlock()
 
