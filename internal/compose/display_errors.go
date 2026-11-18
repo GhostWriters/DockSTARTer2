@@ -91,11 +91,18 @@ const errorWrapW = 100
 // most maxErrorLines, the last ending in … when more is cut. timers stays parallel
 // to lines.
 func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEntry, termW int) ([]string, []timerEntry) {
+	// An error line is its style tag after at least the error indent's spaces: more
+	// for a row nested under a group heading (nestLine).
 	prefixes := p.errorLinePrefixes()
 	errorPrefix := func(line string) string {
+		rest := strings.TrimLeft(line, " ")
+		indent := len(line) - len(rest)
+		if indent < p.errorIndentW() {
+			return ""
+		}
 		for _, prefix := range prefixes {
-			if strings.HasPrefix(line, prefix) {
-				return prefix
+			if style := strings.TrimLeft(prefix, " "); strings.HasPrefix(rest, style) {
+				return line[:indent] + style
 			}
 		}
 		return ""
@@ -149,7 +156,8 @@ func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEn
 			outLines[len(outLines)-1] = row + strutil.Repeat(" ", col-c.rowW+2) + style + msg + "{{[-]}}"
 			continue
 		}
-		for _, part := range wrapWords(msg, room, maxErrorLines) {
+		nested := len(prefix) - len(style) - p.errorIndentW() // a nested row's message starts that much further in
+		for _, part := range wrapWords(msg, room-nested, maxErrorLines) {
 			outLines = append(outLines, prefix+part+"{{[-]}}")
 			outTimers = append(outTimers, timerEntry{})
 		}

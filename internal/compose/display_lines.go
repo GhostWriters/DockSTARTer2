@@ -180,35 +180,63 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			place(block{svcs: []string{svcID}})
 		}
 	}
-	for _, b := range changed {
-		renderBlock(b)
-	}
-	for _, word := range groupOrder {
-		blocks := groups[word]
-		if len(blocks) == 0 {
-			continue
+	if grouped {
+		// A heading for the changed services and one for the rest, each with its rows'
+		// rolled-up state and its rows nested under it: the changed blocks, then the rest
+		// in groupOrder, each group one folded line of names, or with -v its blocks.
+		var unchanged []block
+		for _, word := range groupOrder {
+			unchanged = append(unchanged, groups[word]...)
 		}
-		var names []string
-		for _, b := range blocks {
-			names = append(names, b.svcs...)
-		}
-		slices.Sort(names)
-		notRunning := word != api.StatusRunning && word != cachedText
-		for _, line := range p.groupLines(word, notRunning, names, "service", "services", open, termW) {
-			appendLine(line, nil, timerLayer)
-		}
-		if open {
-			for _, b := range blocks {
-				renderBlock(b)
+		for _, set := range []struct {
+			adjective string
+			blocks    []block
+		}{{"changed", changed}, {"unchanged", unchanged}} {
+			if len(set.blocks) == 0 {
+				continue
+			}
+			var ids []string
+			for _, b := range set.blocks {
+				ids = append(ids, b.svcs...)
+			}
+			icon, statusTag, statusText, _ := p.sectionRollupWithPropagation(ids, func(id string) string { return svcImageMap[id] })
+			appendLine(groupHeading(icon, statusTag, statusText, len(ids), set.adjective, "service", "services"), p.serviceSectionTask(ids), timerSection)
+			start := len(lines)
+			if set.adjective == "changed" || open {
+				for _, b := range set.blocks {
+					renderBlock(b)
+				}
+			} else {
+				for _, word := range groupOrder {
+					var names []string
+					for _, b := range groups[word] {
+						names = append(names, b.svcs...)
+					}
+					if len(names) == 0 {
+						continue
+					}
+					slices.Sort(names)
+					notRunning := word != api.StatusRunning && word != cachedText
+					for _, line := range p.groupLines(word, notRunning, names, "service", "services", termW) {
+						appendLine(line, nil, timerLayer)
+					}
+				}
+			}
+			for i := start; i < len(lines); i++ {
+				lines[i] = nestLine(lines[i])
 			}
 		}
 	}
 
 	netLines, netTimers := p.buildNetworkLines(termW)
+	volLines, volTimers := p.buildVolumeLines(termW)
+	if p.groupsResources() {
+		netLines, netTimers = p.buildResourceLines(networkKind, p.networks, p.networkIDs, termW, level)
+		volLines, volTimers = p.buildResourceLines(volumeKind, p.volumes, p.volumeIDs, termW, level)
+	}
 	for i, line := range netLines {
 		appendLine(line, netTimers[i].task, netTimers[i].style)
 	}
-	volLines, volTimers := p.buildVolumeLines(termW)
 	for i, line := range volLines {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}

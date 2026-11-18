@@ -350,14 +350,21 @@ func (p *consoleEventProcessor) healthChecking(svc string) bool {
 	return p.serviceHealth(svc) == healthStarting && !p.healthWaitDone
 }
 
+// healthNoResult reports whether svc's first health check gave no result before the
+// run stopped waiting: a warning, as its healthcheck line's No Result shows.
+func (p *consoleEventProcessor) healthNoResult(svc string) bool {
+	return p.serviceHealth(svc) == healthStarting && p.healthWaitDone
+}
+
 // serviceIcon returns a service row's icon for worst, with a warning for a container
-// that is unhealthy, or has a required dependency that failed, without having failed the
-// operation; in DockerMarkerCause when being unhealthy failed a dependent (causeIcon).
+// that is unhealthy or gave no health check result, or has a required dependency that
+// failed, without having failed the operation; in DockerMarkerCause when being
+// unhealthy failed a dependent (causeIcon).
 func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatus) string {
 	if cause := p.causeIcon(t); cause != "" && worst != api.Error {
 		return cause
 	}
-	if worst != api.Error && (p.serviceHealth(t.id) == healthUnhealthy || p.requiredDependencyFailed(t.id)) {
+	if worst != api.Error && (p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.requiredDependencyFailed(t.id)) {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)

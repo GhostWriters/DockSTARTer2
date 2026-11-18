@@ -111,9 +111,9 @@ func TestHealthCheckKeepsRowAndSectionWorking(t *testing.T) {
 		t.Errorf("rollup = %v while checking, want processing", got)
 	}
 
-	p.healthWaitDone = true // No Result
-	if got := p.rollupState(ids, imageFor); got != rollupComplete {
-		t.Errorf("rollup = %v after the wait ran out, want complete", got)
+	p.healthWaitDone = true // No Result: a warning, as its healthcheck line shows
+	if got := p.rollupState(ids, imageFor); got != rollupWarning {
+		t.Errorf("rollup = %v after the wait ran out, want warning", got)
 	}
 
 	p.setHealth("db", "db", healthUnhealthy)

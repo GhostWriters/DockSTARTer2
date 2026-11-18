@@ -251,9 +251,10 @@ func (p *consoleEventProcessor) jobRollup() sectionRollupState {
 }
 
 // jobGroup returns job name's group when the display groups rows: one an earlier up
-// registered, left as it was, goes in the Scheduled group, and a scheduled job not
-// reported on yet in the Pending group; the rest (changed, failed, manual, the job
-// -c run runs) get their own rows.
+// registered, left as it was, goes in the Scheduled group, a scheduled job not
+// reported on yet in the Pending group, and a manual one (listed with -v), which up
+// leaves alone, with the unchanged too; the rest (changed, failed, the job -c run
+// runs) get their own rows.
 func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
 	t := p.tasks[jobTaskID(name)]
 	switch {
@@ -261,7 +262,9 @@ func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
 		return groupChanged
 	case t != nil && t.text == api.StatusRunning && t.status == api.Done:
 		return groupSettled
-	case t == nil && p.jobs[name].scheduled && !p.finished:
+	case t == nil && !p.jobs[name].scheduled:
+		return groupPending // manual: nothing happens to it
+	case t == nil && !p.finished:
 		return groupPending
 	}
 	return groupChanged
@@ -323,25 +326,49 @@ func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []tim
 		g := p.jobGroup(name)
 		buckets[g] = append(buckets[g], name)
 	}
-	for _, name := range buckets[groupChanged] {
-		renderJob(name)
-	}
-	open := level >= dockerlayout.VerboseDetails
-	for _, g := range []rowGroup{groupPending, groupSettled} {
-		if len(buckets[g]) == 0 {
-			continue
-		}
-		word := jobScheduledText
-		if g == groupPending {
-			word = "Pending"
-		}
-		for _, line := range p.groupLines(word, g == groupPending, buckets[g], "job", "jobs", open, termW) {
-			lines = append(lines, line)
-			timers = append(timers, timerEntry{})
-		}
-		if open {
-			for _, name := range buckets[g] {
-				renderJob(name)
+	if grouped {
+		// A heading for the changed jobs and one for the rest, each with its rows'
+		// rolled-up state and its rows nested under it: the rest as folded group lines,
+		// or with -v their own rows.
+		open := level >= dockerlayout.VerboseDetails
+		for _, set := range []struct {
+			adjective string
+			names     []string
+		}{{"changed", buckets[groupChanged]}, {"unchanged", append(slices.Clone(buckets[groupPending]), buckets[groupSettled]...)}} {
+			if len(set.names) == 0 {
+				continue
+			}
+			var ids []string
+			for _, name := range set.names {
+				if p.jobs[name].scheduled || p.tasks[jobTaskID(name)] != nil {
+					ids = append(ids, jobTaskID(name)) // a manual job, never reported on, doesn't count
+				}
+			}
+			icon, statusTag, statusText, _ := p.sectionRollupWithPropagation(ids, nil)
+			lines = append(lines, groupHeading(icon, statusTag, statusText, len(set.names), set.adjective, "job", "jobs"))
+			timers = append(timers, timerEntry{task: p.sectionTaskFor(ids), style: timerSection})
+			start := len(lines)
+			if set.adjective == "changed" || open {
+				for _, name := range set.names {
+					renderJob(name)
+				}
+			} else {
+				for _, g := range []rowGroup{groupPending, groupSettled} {
+					if len(buckets[g]) == 0 {
+						continue
+					}
+					word := jobScheduledText
+					if g == groupPending {
+						word = pendingText
+					}
+					for _, line := range p.groupLines(word, g == groupPending, buckets[g], "job", "jobs", termW) {
+						lines = append(lines, line)
+						timers = append(timers, timerEntry{})
+					}
+				}
+			}
+			for i := start; i < len(lines); i++ {
+				lines[i] = nestLine(lines[i])
 			}
 		}
 	}

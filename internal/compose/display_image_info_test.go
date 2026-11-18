@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/GhostWriters/semstyle"
+	"github.com/docker/compose/v5/pkg/api"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/moby/moby/api/types/image"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -94,11 +95,11 @@ func TestImageInfoLinesBuiltOnImageChange(t *testing.T) {
 	p := newHealthTestProcessor()
 	p.imageMetaBefore[testImg] = imageMeta{version: "2.1", built: "2026-11-01 10:00:00", digest: "sha256:aaa"}
 
-	// Rebuilt under the same version: only the build date, since the version didn't change.
+	// Rebuilt under the same version: one line, the version, the build date's change in brackets.
 	p.imageMetaAfter[testImg] = imageMeta{version: "2.1", built: "2026-11-13 21:28:03", digest: "sha256:bbb"}
 	lines := plainLines(p.imageInfoLines(testImg, 160, false))
-	if len(lines) != 1 || !strings.Contains(lines[0], "built: 2026-11-01 10:00:00 → 2026-11-13 21:28:03") {
-		t.Errorf("rebuilt: %q, want only the build date change", lines)
+	if len(lines) != 1 || !strings.HasSuffix(lines[0], "version: 2.1 (2026-11-01 10:00:00 → 2026-11-13 21:28:03)") {
+		t.Errorf("rebuilt: %q, want the version with the build date change", lines)
 	}
 
 	// A new version: both lines.
@@ -118,13 +119,53 @@ func TestImageInfoLinesBuiltOnImageChange(t *testing.T) {
 	}
 }
 
+func TestImageInfoLinesForAContainerBroughtUp(t *testing.T) {
+	newer := imageMeta{id: "sha256:new", version: "v1.6.2-ls373", built: "2026-11-18 02:57:51"}
+	older := imageMeta{id: "sha256:old", version: "v1.6.2-ls372", built: "2026-11-11 01:18:32"}
+
+	// Untouched: nothing without -v.
+	p := newHealthTestProcessor()
+	p.imageMetaBefore[testImg] = newer
+	if lines := p.imageInfoLines(testImg, 160, false); lines != nil {
+		t.Errorf("untouched: %q, want nothing", plainLines(lines))
+	}
+
+	// Started onto the same image: the version it runs, its build date in brackets.
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	if lines := plainLines(p.imageInfoLines(testImg, 160, false)); len(lines) != 1 || !strings.HasSuffix(lines[0], "version: v1.6.2-ls373 (2026-11-18 02:57:51)") {
+		t.Errorf("started: %q, want its version and build date on one line", lines)
+	}
+
+	// Recreated onto an image pulled since it started: old → new, its build date too.
+	p = newHealthTestProcessor()
+	p.imageMetaBefore[testImg] = newer
+	p.prevMeta = map[string]imageMeta{"db": older}
+	p.On(containerEvent("db", "Recreated", api.Done))
+	lines := plainLines(p.imageInfoLines(testImg, 160, false))
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], "version: v1.6.2-ls372 → v1.6.2-ls373") || !strings.Contains(lines[1], "2026-11-11 01:18:32 → 2026-11-18 02:57:51") {
+		t.Errorf("recreated onto a newer image: %q, want old → new", lines)
+	}
+	if lines := plainLines(p.imageInfoLines(testImg, 160, true)); !strings.Contains(strings.Join(lines, ""), "ls372 → v1.6.2-ls373") {
+		t.Errorf("recreated with -v: %q, want the arrow too", lines)
+	}
+
+	// Its old image gone: "→ new", as a first pull.
+	p = newHealthTestProcessor()
+	p.imageMetaBefore[testImg] = newer
+	p.prevGone = map[string]bool{"db": true}
+	p.On(containerEvent("db", "Recreated", api.Done))
+	if lines := plainLines(p.imageInfoLines(testImg, 160, false)); len(lines) != 1 || !strings.HasSuffix(lines[0], "version: → v1.6.2-ls373 (2026-11-18 02:57:51)") {
+		t.Errorf("old image gone: %q, want → new with its build date", lines)
+	}
+}
+
 func TestImageInfoLinesOnFirstPull(t *testing.T) {
 	p := newHealthTestProcessor()
 	// Not on disk before: a first pull shows what arrived, without -v, as "→ new".
 	p.imageMetaAfter[testImg] = imageMeta{version: "2.38.0", built: "2026-11-17 23:13:01", digest: "sha256:ccc"}
 	lines := plainLines(p.imageInfoLines(testImg, 160, false))
-	if len(lines) != 2 || !strings.HasSuffix(lines[0], "version: → 2.38.0") || !strings.HasSuffix(lines[1], "built:   → 2026-11-17 23:13:01") {
-		t.Errorf("first pull: %q, want its version and build date after an arrow", lines)
+	if len(lines) != 1 || !strings.HasSuffix(lines[0], "version: → 2.38.0 (2026-11-17 23:13:01)") {
+		t.Errorf("first pull: %q, want → version with its build date on one line", lines)
 	}
 	if got := strings.Join(lines, ""); strings.Contains(got, "digest") {
 		t.Errorf("first pull: %q, want no digest without -v", lines)
