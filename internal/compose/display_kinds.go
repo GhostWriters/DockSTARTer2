@@ -100,7 +100,7 @@ func (p *consoleEventProcessor) kindSection(k rowKind, termW, level int) ([]stri
 // their groups (k.group), each one folded line of names, or with -v their rows.
 func (p *consoleEventProcessor) kindGroups(k rowKind, termW, level int) kindGroups {
 	open := level >= dockerlayout.VerboseDetails
-	out := kindGroups{singular: k.singular, plural: k.plural, folded: !open}
+	out := kindGroups{singular: k.singular, plural: k.plural}
 	var changed []string
 	groups := map[string][]string{}
 	groupPending := map[string]bool{}

@@ -77,7 +77,7 @@ func TestModelSettingsChange(t *testing.T) {
 	got := renderPlain(p, 0)
 	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
 	llm := strings.Index(got, "Configured      llm:")
-	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "Existing      2 models: chat, embed") {
+	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "Existing        2 models: chat, embed") {
 		t.Errorf("display =\n%s\nwant llm Configured under changed:, chat and embed Existing under unchanged:", got)
 	}
 }
@@ -90,8 +90,8 @@ func TestFailedModelPullStaysFailed(t *testing.T) {
 	p.On(api.Resource{ID: "llm", Status: api.Error, Text: "exit status 1"})
 	p.On(api.Resource{ID: "llm", Status: api.Working, Text: api.StatusPulled})
 	p.finished = true
-	if got := renderPlain(p, 0); !strings.Contains(got, "× Error         llm:") || !strings.Contains(got, "× Error       models:") {
-		t.Errorf("display =\n%s\nwant llm and models failed", got)
+	if got := renderPlain(p, 0); !strings.Contains(got, "× Error           llm:") || !strings.Contains(got, "× Error         1 model:") {
+		t.Errorf("display =\n%s\nwant llm and its model heading failed", got)
 	}
 }
 
@@ -103,9 +103,11 @@ func TestFailModelsNamesTheCause(t *testing.T) {
 	p.failModels(problem)
 	p.finished = true
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "× Error         llm:") || !strings.Contains(got, problem) || !strings.Contains(got, "× Error           model: llm") ||
-		!strings.Contains(got, "⚠ Warning     services:") {
-		t.Errorf("display =\n%s\nwant llm failed with compose's message, web's model line Error, and services a warning", got)
+	// web keeps its row, its model line showing the failure; db, with nothing to show,
+	// folds as Interrupted.
+	if !strings.Contains(got, "× Error           llm:") || !strings.Contains(got, problem) || !strings.Contains(got, "× Error             model: llm") ||
+		!strings.Contains(got, "⚠ Interrupted     web:") || !strings.Contains(got, "⚠ Interrupted     1 service: db") {
+		t.Errorf("display =\n%s\nwant llm failed with compose's message, web's row with its model line Error, db folded", got)
 	}
 }
 
@@ -127,7 +129,7 @@ func TestModelsGroup(t *testing.T) {
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.models = map[string]string{"llm": "ai/smollm2", "embed": "ai/mxbai"}
-	if got := renderPlain(p, 0); !strings.Contains(got, "Pending       2 models: embed, llm") || !strings.Contains(got, ", 2 models") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Pending         2 models: embed, llm") || !strings.Contains(got, ", 2 models") {
 		t.Errorf("display before compose reports =\n%s\nwant both models Pending and counted in the summary", got)
 	}
 	// llm is pulled, then configured: a change, its model shown. embed is only configured,
@@ -147,7 +149,7 @@ func TestModelsGroup(t *testing.T) {
 	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
 	llm := strings.Index(got, "Pulled          llm:")
 	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "model: ai/smollm2") ||
-		!strings.Contains(got, "Existing      1 model: embed") || strings.Contains(got, "Unknown") {
+		!strings.Contains(got, "Existing        1 model: embed") || strings.Contains(got, "Unknown") {
 		t.Errorf("display =\n%s\nwant llm Pulled with its model under changed:, embed Existing under unchanged:", got)
 	}
 }

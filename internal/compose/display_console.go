@@ -289,6 +289,9 @@ type consoleEventProcessor struct {
 	portConflict *portConflict
 	predicted    map[string][]predictedConflict
 
+	// buildLevel is the verbosity level of the frame being built (buildLines).
+	buildLevel int
+
 	// preRunImage[svc] is the image ID svc's container ran before the run; prevMeta
 	// [svc] that image's details when it differs from the one on disk (which a
 	// recreate moves the container onto), and prevGone[svc] when that image is gone.

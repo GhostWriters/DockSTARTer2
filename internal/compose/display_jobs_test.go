@@ -55,8 +55,9 @@ func TestJobRowsOnUp(t *testing.T) {
 	p := newJobsTestProcessor("up")
 	// Below -v only the scheduled job, which up registers, is listed: under unchanged:,
 	// in the Pending group.
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[0], "unchanged:") || !strings.Contains(lines[1], "Pending") || !strings.Contains(lines[1], "1 job: backup") {
-		t.Fatalf("lines = %q, want unchanged: and backup in the Pending group", lines)
+	if lines := jobLines(p, 0); len(lines) != 3 || !strings.Contains(lines[0], "unchanged:") || !strings.Contains(lines[1], "1 job:") ||
+		!strings.Contains(lines[2], "Pending") || !strings.Contains(lines[2], "1 job: backup") {
+		t.Fatalf("lines = %q, want unchanged:, its 1 job: heading, and backup in the Pending group", lines)
 	}
 	// -v adds the manual job.
 	if lines := jobLines(p, dockerlayout.VerboseDetails); !strings.Contains(strings.Join(lines, "\n"), "Manual") {
@@ -70,8 +71,8 @@ func TestJobRowsOnUp(t *testing.T) {
 	}
 	// Already registered: in the Scheduled group, its schedule only with -v.
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning})
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], jobScheduledText) || !strings.Contains(lines[1], "1 job: backup") {
-		t.Errorf("lines = %q, want backup in the Scheduled group without its schedule", lines)
+	if lines := jobLines(p, 0); len(lines) != 3 || !strings.Contains(lines[1], "1 job:") || !strings.Contains(lines[2], jobScheduledText) || !strings.Contains(lines[2], "1 job: backup") {
+		t.Errorf("lines = %q, want backup in the Scheduled group, under its 1 job: heading, without its schedule", lines)
 	}
 	// -v: one heading for the unchanged jobs, backup (with its schedule) and the manual
 	// repair nested under it, the heading Complete.
@@ -170,8 +171,8 @@ func TestOtherErrorsLeaveJobsInterrupted(t *testing.T) {
 	if p.refused {
 		t.Fatal("a non-jobs error marked the run refused")
 	}
-	if lines := jobLines(p, 0); !strings.Contains(lines[1], interruptedText) {
-		t.Errorf("lines = %q, want backup Interrupted", lines)
+	if lines := jobLines(p, 0); !strings.Contains(strings.Join(lines, "\n"), interruptedText+"     1 job: backup") {
+		t.Errorf("lines = %q, want backup folded Interrupted", lines)
 	}
 }
 

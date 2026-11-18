@@ -47,7 +47,7 @@ func (p *consoleEventProcessor) groupsResources() bool {
 // names, with -v their own rows.
 func (p *consoleEventProcessor) resourceGroups(kind resourceKind, decl resourceDecl, eventIDs []string, termW, level int) kindGroups {
 	open := level >= dockerlayout.VerboseDetails
-	out := kindGroups{singular: kind.singular, plural: kind.plural, folded: !open}
+	out := kindGroups{singular: kind.singular, plural: kind.plural}
 	names := slices.Clone(decl.names)
 	for _, id := range eventIDs {
 		if !slices.Contains(names, id) {
