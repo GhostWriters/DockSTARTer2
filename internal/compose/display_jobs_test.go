@@ -47,9 +47,9 @@ func TestScheduleText(t *testing.T) {
 
 func TestJobRowsOnUp(t *testing.T) {
 	p := newJobsTestProcessor("up")
-	// Below -v only the scheduled job, which up registers, is listed.
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], "Pending") || !strings.Contains(lines[1], "backup:") {
-		t.Fatalf("lines = %q, want the jobs: header and backup Pending", lines)
+	// Below -v only the scheduled job, which up registers, is listed: in the Pending group.
+	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], "Pending") || !strings.Contains(lines[1], "1 job: backup") {
+		t.Fatalf("lines = %q, want the jobs: header and backup in the Pending group", lines)
 	}
 	// -v adds the manual job.
 	if lines := jobLines(p, dockerlayout.VerboseDetails); !strings.Contains(strings.Join(lines, "\n"), "Manual") {
@@ -61,10 +61,16 @@ func TestJobRowsOnUp(t *testing.T) {
 	if !strings.Contains(lines[1], jobScheduledText) || len(lines) != 3 || !strings.Contains(lines[2], "schedule: 0 3 * * * (Europe/London)") {
 		t.Errorf("lines = %q, want backup Scheduled with its schedule", lines)
 	}
-	// Already registered: Unchanged, its schedule only with -v.
+	// Already registered: in the Scheduled group, its schedule only with -v.
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning})
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], jobUnchangedText) {
-		t.Errorf("lines = %q, want backup Unchanged without its schedule", lines)
+	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], jobScheduledText) || !strings.Contains(lines[1], "1 job: backup") {
+		t.Errorf("lines = %q, want backup in the Scheduled group without its schedule", lines)
+	}
+	// -v opens the group: its line, then backup's row with its schedule.
+	lines = jobLines(p, dockerlayout.VerboseDetails)
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "1 job:") || !strings.Contains(joined, "backup:") || !strings.Contains(joined, "schedule:") {
+		t.Errorf("-v lines = %q, want the Scheduled group opened with backup's row", lines)
 	}
 }
 
@@ -247,8 +253,8 @@ func TestRunJobRowShowsItsOwnStatus(t *testing.T) {
 	p.runJob = "repair"
 	p.setJobRunStatus("repair", jobRunningText, api.Working, "")
 	lines := jobLines(p, 0)
-	if len(lines) != 2 || !strings.Contains(lines[1], jobRunningText) || strings.Contains(lines[1], jobUnchangedText) {
-		t.Errorf("lines = %q, want repair Running", lines)
+	if len(lines) != 2 || !strings.Contains(lines[1], jobRunningText) || !strings.Contains(lines[1], "repair:") {
+		t.Errorf("lines = %q, want repair's own row, Running", lines)
 	}
 	if got := semstyle.ToPlain(strings.Join(lines, "")); strings.Contains(got, "backup") {
 		t.Errorf("lines = %q: run listed a job it doesn't run", lines)

@@ -78,33 +78,27 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	}
 	maxImgNameW += maxCountW
 
-	coveredSvcs := make(map[string]bool)
-	fold := p.foldsUnchanged(level)
-	var unchanged []string // services folded into the section's Unchanged line
+	// Each image's block (its services, then the image) or service with no image goes
+	// to its own rows when something happened to it, first, or else to the group of its
+	// state, the groups following in groupOrder. Folded, a group is one line of names;
+	// open (-v), its line heads its blocks.
+	grouped := p.groupsRows()
+	open := level >= dockerlayout.VerboseDetails
+	type block struct {
+		img  string   // "" for a service with no image
+		svcs []string // its services
+	}
+	var changed []block
+	groups := map[string][]block{} // group word → its blocks
 
-	for _, imgName := range p.imageOrder {
-		svcs := p.serviceIDsForImage(imgName)
-		for _, s := range svcs {
-			coveredSvcs[s] = true
+	renderBlock := func(b block) {
+		if b.img == "" {
+			p.appendOrphanRow(b.svcs[0], termW, level, appendLine, appendError)
+			return
 		}
+		imgName := b.img
 		img := p.tasks[imgName]
-
-		// An image's block folds only when every service using it is unchanged.
-		if fold && len(svcs) > 0 {
-			all := true
-			for _, svc := range svcs {
-				if !p.serviceUnchanged(svc, imgName, termW, level) {
-					all = false
-					break
-				}
-			}
-			if all {
-				unchanged = append(unchanged, svcs...)
-				continue
-			}
-		}
-
-		for _, svc := range svcs {
+		for _, svc := range b.svcs {
 			t := p.tasks[svc]
 			nameTag := dockerlayout.StyleServiceName(svc)
 			var statusText, statusTag, icon string
@@ -155,38 +149,58 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		}
 	}
 
-	// Orphan services with no image group.
+	// A block moves only as a whole: to its own rows if any of its services has, else
+	// to the earliest group (in groupOrder) of its services'.
+	place := func(b block) {
+		if !grouped {
+			renderBlock(b) // every row in its place
+			return
+		}
+		best := len(groupOrder)
+		for _, svc := range b.svcs {
+			word := p.serviceGroupWord(svc, b.img, termW)
+			if word == "" {
+				changed = append(changed, b)
+				return
+			}
+			best = min(best, slices.Index(groupOrder, word))
+		}
+		groups[groupOrder[best]] = append(groups[groupOrder[best]], b)
+	}
+	coveredSvcs := make(map[string]bool)
+	for _, imgName := range p.imageOrder {
+		svcs := p.serviceIDsForImage(imgName)
+		for _, s := range svcs {
+			coveredSvcs[s] = true
+		}
+		place(block{img: imgName, svcs: svcs})
+	}
 	for _, svcID := range p.serviceIDs {
-		if coveredSvcs[svcID] || looksLikeImageName(svcID) || contains(p.imageIDs, svcID) {
-			continue
-		}
-		if fold && p.serviceUnchanged(svcID, "", termW, level) {
-			unchanged = append(unchanged, svcID)
-			continue
-		}
-		t := p.tasks[svcID]
-		nameTag := dockerlayout.StyleServiceName(svcID)
-		var statusText, statusTag, icon string
-		if t == nil {
-			impliedText, impliedTag := p.impliedStatus()
-			statusText = impliedText
-			statusTag = impliedTag + statusText + "{{[-]}}"
-			icon = p.impliedIcon(impliedTag)
-		} else {
-			statusText, statusTag = p.actionStatus(t)
-			icon = p.serviceIcon(t, t.status)
-		}
-		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
-		appendError(p.tasks[svcID])
-		for _, line := range p.serviceDetailLines(svcID, termW, level, false) {
-			appendLine(line, nil, timerLayer)
+		if !coveredSvcs[svcID] && !looksLikeImageName(svcID) && !contains(p.imageIDs, svcID) {
+			place(block{svcs: []string{svcID}})
 		}
 	}
-	if len(unchanged) > 0 {
-		slices.Sort(unchanged)
-		for _, line := range p.foldLines(unchanged, "service", "services", termW) {
+	for _, b := range changed {
+		renderBlock(b)
+	}
+	for _, word := range groupOrder {
+		blocks := groups[word]
+		if len(blocks) == 0 {
+			continue
+		}
+		var names []string
+		for _, b := range blocks {
+			names = append(names, b.svcs...)
+		}
+		slices.Sort(names)
+		notRunning := word != api.StatusRunning && word != cachedText
+		for _, line := range p.groupLines(word, notRunning, names, "service", "services", open, termW) {
 			appendLine(line, nil, timerLayer)
+		}
+		if open {
+			for _, b := range blocks {
+				renderBlock(b)
+			}
 		}
 	}
 
@@ -206,6 +220,29 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	lines, timers = p.placeErrorLines(lines, timers, termW)
 	out := p.prependSummary(lines, timers)
 	return append(out, p.jobOutputLines(len(out))...)
+}
+
+// appendOrphanRow adds the row of a service with no image block, its error and its
+// detail lines.
+func (p *consoleEventProcessor) appendOrphanRow(svcID string, termW, level int, appendLine func(string, *consoleTask, timerStyle), appendError func(*consoleTask)) {
+	t := p.tasks[svcID]
+	nameTag := dockerlayout.StyleServiceName(svcID)
+	var statusText, statusTag, icon string
+	if t == nil {
+		impliedText, impliedTag := p.impliedStatus()
+		statusText = impliedText
+		statusTag = impliedTag + statusText + "{{[-]}}"
+		icon = p.impliedIcon(impliedTag)
+	} else {
+		statusText, statusTag = p.actionStatus(t)
+		icon = p.serviceIcon(t, t.status)
+	}
+	statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
+	appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
+	appendError(t)
+	for _, line := range p.serviceDetailLines(svcID, termW, level, false) {
+		appendLine(line, nil, timerLayer)
+	}
 }
 
 // serviceDetailLines returns the lines under svc's row: its healthcheck line, its

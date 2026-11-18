@@ -72,7 +72,8 @@ type infoPart struct{ text, url string }
 // imageInfoLines returns the info lines under an image's row: with verbose its version,
 // build date, digest and source; without it, only once a pull changed the image (its
 // digest or version), its build date and, when that changed too, its version, each as
-// "old → new". A version links to its release or tag page when versionURL has one.
+// "old → new", or once a first pull brought it, its version and build date as "→ new".
+// A version links to its release or tag page when versionURL has one.
 func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbose bool) []string {
 	before, hadBefore := p.imageMetaBefore[imgName]
 	after, pulled := p.imageMetaAfter[imgName]
@@ -100,6 +101,16 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 	switch {
 	case verbose:
 		fields = append(fields, field{"digest", []infoPart{{current.digest, ""}}}, field{"source", []infoPart{{current.source, current.source}}})
+	case pulled && !hadBefore:
+		// A first pull: what arrived, its version and build date, an arrow before each
+		// to show the change, with nothing to compare.
+		arrived := func(v infoPart) []infoPart {
+			if v.text == "" {
+				return []infoPart{v} // nothing to show
+			}
+			return []infoPart{{"→ ", ""}, v}
+		}
+		fields = []field{{"version", arrived(version[0])}, {"built", arrived(built[0])}}
 	case !imageChanged:
 		return nil
 	case !versionChanged:

@@ -64,12 +64,12 @@ func (p *consoleEventProcessor) checkVersionLink(imgRef string, m imageMeta) {
 
 // checkShownVersionLinks starts link checks for the versions an image's info lines
 // show at the run's verbosity: with -v its current version, without it the old and
-// new versions once a pull changed them.
+// new versions once a pull changed them, or the version a first pull brought.
 func (p *consoleEventProcessor) checkShownVersionLinks(imgRef string) {
 	before, hadBefore := p.imageMetaBefore[imgRef]
 	after, pulled := p.imageMetaAfter[imgRef]
 	switch {
-	case p.verbosity >= dockerlayout.VerboseDetails && pulled:
+	case (p.verbosity >= dockerlayout.VerboseDetails || !hadBefore) && pulled:
 		p.checkVersionLink(imgRef, after)
 	case p.verbosity >= dockerlayout.VerboseDetails && hadBefore:
 		p.checkVersionLink(imgRef, before)
