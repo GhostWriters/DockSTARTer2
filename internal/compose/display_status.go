@@ -366,6 +366,10 @@ func (p *consoleEventProcessor) impliedStatus() (text, ansiTag string) {
 	if p.refused {
 		return notStartedText, "{{|DockerStatusWarn|}}"
 	}
+	if p.finished && !p.succeeded && !p.isTeardownCommand() {
+		// The run stopped at another row's failure before compose reached this one.
+		return interruptedText, "{{|DockerStatusWarn|}}"
+	}
 	switch p.command {
 	case "down":
 		return "Removed", serviceFinalTag

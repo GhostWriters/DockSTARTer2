@@ -21,29 +21,46 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 		svcCount += len(svcs)
 	}
 	imgCount := len(p.imageOrder)
-	netCount := len(p.visibleNetworkIDs()) // excludes in-use networks hidden on teardown
+	// The networks the project's services use, like its services and images, whether
+	// or not the run changed them, on the commands that bring services up; the others
+	// count those they acted on (a teardown, those it removed, excluding the in-use
+	// ones hidden there).
+	netCount := len(p.visibleNetworkIDs())
+	switch p.command {
+	case "up", "update", "create", "run":
+		netCount = max(netCount, p.projectNetworks)
+	}
 	volCount := len(p.volumeIDs)
 
 	layerCount := p.layerCount()
 
-	var parts []string
-	if svcCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", svcCount, plural(svcCount, "service", "services")))
-	}
+	// A count of something with its own section (services, networks, volumes, jobs)
+	// takes the section headings' style; images and layers, lines under the services,
+	// go in brackets after them in those lines' styles.
+	var imageParts []string
 	if imgCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", imgCount, plural(imgCount, "image", "images")))
+		imageParts = append(imageParts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", imgCount, plural(imgCount, "image", "images")))
 	}
 	if layerCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", layerCount, plural(layerCount, "layer", "layers")))
+		imageParts = append(imageParts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", layerCount, plural(layerCount, "layer", "layers")))
+	}
+	var parts []string
+	switch {
+	case svcCount > 0 && len(imageParts) > 0:
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}} (%s)", sectionFinalTag, svcCount, plural(svcCount, "service", "services"), strings.Join(imageParts, ", ")))
+	case svcCount > 0:
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, svcCount, plural(svcCount, "service", "services")))
+	default:
+		parts = append(parts, imageParts...) // images with no service, e.g. a pull of one
 	}
 	if netCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|IPAddress|}}%d %s{{[-]}}", netCount, plural(netCount, "network", "networks")))
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, netCount, plural(netCount, "network", "networks")))
 	}
 	if volCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|Folder|}}%d %s{{[-]}}", volCount, plural(volCount, "volume", "volumes")))
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, volCount, plural(volCount, "volume", "volumes")))
 	}
 	if jobCount := len(p.jobsActedOn()); jobCount > 0 {
-		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", jobCount, plural(jobCount, "job", "jobs")))
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, jobCount, plural(jobCount, "job", "jobs")))
 	}
 	// Command word is bold yellow (matching the summary line's overall duration); the
 	// colon uses DockerColon (matching the colons on the section/name lines below).

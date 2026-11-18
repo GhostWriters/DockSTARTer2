@@ -191,7 +191,7 @@ func (p *consoleEventProcessor) jobsActedOn() []string {
 }
 
 // jobStatus returns job name's row status: its last event's, Pending before it has
-// one, Skipped when the command ended without registering it, and Manual for a job
+// one, Interrupted when the command ended without registering it, and Manual for a job
 // with no schedule, which up leaves for -c run.
 func (p *consoleEventProcessor) jobStatus(name string) (text, tag, icon string) {
 	ic := p.icons()
@@ -201,7 +201,9 @@ func (p *consoleEventProcessor) jobStatus(name string) (text, tag, icon string) 
 		case !p.jobs[name].scheduled:
 			return jobManualText, "{{|DockerInfo|}}" + jobManualText + "{{[-]}}", "{{|DockerInfo|}}i{{[-]}}"
 		case p.finished:
-			return skippedText, "{{|DockerStatusWarn|}}" + skippedText + "{{[-]}}", "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
+			// The run stopped at a failure before compose registered it, as the
+			// services it never reached.
+			return interruptedText, "{{|DockerStatusWarn|}}" + interruptedText + "{{[-]}}", "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
 		default:
 			return "Pending", "{{|DockerStatusPending|}}Pending{{[-]}}", "{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}"
 		}
@@ -252,7 +254,8 @@ func (p *consoleEventProcessor) jobRollup() sectionRollupState {
 
 // buildJobLines returns the jobs: section, or nothing when the display lists no job:
 // each job's row, its error, the image of the job -c run runs, and its schedule, at
-// verbosity level always, below it only when the run registered it anew.
+// verbosity level always, below it only when the run registered it anew. Jobs
+// already registered fold into one Unchanged line when the display folds them.
 func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []timerEntry) {
 	names := p.jobRows(level)
 	if len(names) == 0 {
@@ -272,9 +275,14 @@ func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []tim
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
 		"{{|DockerSection|}}jobs{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(taskIDs), style: timerSection}}
+	var unchanged []string // jobs folded into the section's Unchanged line
 	for _, name := range names {
 		text, tag, icon := p.jobStatus(name)
 		t := p.tasks[jobTaskID(name)]
+		if text == jobUnchangedText && p.foldsUnchanged(level) {
+			unchanged = append(unchanged, name)
+			continue
+		}
 		lines = append(lines, globalIndent+icon+" "+tag+strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text))+
 			sectionChildIndent+dockerlayout.StyleServiceName(name)+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
@@ -290,6 +298,12 @@ func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []tim
 		}
 		if schedule := p.jobs[name].schedule; schedule != "" && (level >= dockerlayout.VerboseDetails || text == jobScheduledText) {
 			lines = append(lines, p.scheduleLine(schedule, termW))
+			timers = append(timers, timerEntry{})
+		}
+	}
+	if len(unchanged) > 0 {
+		for _, line := range p.foldLines(unchanged, "job", "jobs", termW) {
+			lines = append(lines, line)
 			timers = append(timers, timerEntry{})
 		}
 	}

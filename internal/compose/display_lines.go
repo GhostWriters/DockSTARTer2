@@ -2,6 +2,7 @@ package compose
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -78,6 +79,8 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	maxImgNameW += maxCountW
 
 	coveredSvcs := make(map[string]bool)
+	fold := p.foldsUnchanged(level)
+	var unchanged []string // services folded into the section's Unchanged line
 
 	for _, imgName := range p.imageOrder {
 		svcs := p.serviceIDsForImage(imgName)
@@ -85,6 +88,21 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			coveredSvcs[s] = true
 		}
 		img := p.tasks[imgName]
+
+		// An image's block folds only when every service using it is unchanged.
+		if fold && len(svcs) > 0 {
+			all := true
+			for _, svc := range svcs {
+				if !p.serviceUnchanged(svc, imgName, termW, level) {
+					all = false
+					break
+				}
+			}
+			if all {
+				unchanged = append(unchanged, svcs...)
+				continue
+			}
+		}
 
 		for _, svc := range svcs {
 			t := p.tasks[svc]
@@ -142,6 +160,10 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		if coveredSvcs[svcID] || looksLikeImageName(svcID) || contains(p.imageIDs, svcID) {
 			continue
 		}
+		if fold && p.serviceUnchanged(svcID, "", termW, level) {
+			unchanged = append(unchanged, svcID)
+			continue
+		}
 		t := p.tasks[svcID]
 		nameTag := dockerlayout.StyleServiceName(svcID)
 		var statusText, statusTag, icon string
@@ -158,6 +180,12 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
 		appendError(p.tasks[svcID])
 		for _, line := range p.serviceDetailLines(svcID, termW, level, false) {
+			appendLine(line, nil, timerLayer)
+		}
+	}
+	if len(unchanged) > 0 {
+		slices.Sort(unchanged)
+		for _, line := range p.foldLines(unchanged, "service", "services", termW) {
 			appendLine(line, nil, timerLayer)
 		}
 	}

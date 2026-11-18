@@ -217,6 +217,8 @@ type consoleEventProcessor struct {
 	// refused marks a run compose refused before doing anything, for its scheduled
 	// jobs (setRunError): the rows it never reached show Not Started
 	refused bool
+	// projectNetworks is how many networks the listed services use, for the header
+	projectNetworks int
 	// runJob and runJobImage are the job -c run runs and its image, "" otherwise
 	runJob, runJobImage string
 	// jobOutLines is the run job's output, cleaned (cleanOutputLine), and
@@ -437,8 +439,23 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 // finalizeActiveTasks synthesizes a Done event for any service task still in an
 // active (non-completed) state when the SDK call returns. Some commands (e.g.
 // restart) never emit a final status event per service, so without this they
-// would remain stuck showing "Restarting" in the final render.
+// would remain stuck showing "Restarting" in the final render. When the call
+// failed, every task still in progress, of any kind (e.g. a pull another row's
+// failure cut short), ends Interrupted instead.
 func (p *consoleEventProcessor) finalizeActiveTasks() {
+	if !p.succeeded {
+		now := time.Now()
+		for _, t := range p.tasks {
+			if !t.completed() {
+				t.text, t.status, t.interrupted = interruptedText, api.Warning, true
+				t.endTime = now
+				if t.working {
+					t.markWork(api.Warning)
+				}
+			}
+		}
+		return
+	}
 	finals := serviceFinalStatuses(p.command)
 	if len(finals) == 0 {
 		return

@@ -460,7 +460,7 @@ func TestErrorPlacement(t *testing.T) {
 	long := "failed to set up container networking: driver failed programming external connectivity on endpoint web: Bind for 0.0.0.0:8000 failed: port is already allocated"
 	lines, timers := p.placeErrorLines(
 		[]string{row, prefix + "Not Started{{[-]}}", wide, row, prefix + long + "{{[-]}}"},
-		make([]timerEntry, 5), 200)
+		make([]timerEntry, 5), 80) // a terminal with no room past the table
 	if len(lines) != len(timers) {
 		t.Fatalf("%d lines but %d timers", len(lines), len(timers))
 	}
@@ -483,6 +483,22 @@ func TestErrorPlacement(t *testing.T) {
 	}
 	if got := strings.Join(parts, " "); got != long {
 		t.Errorf("wrapped text = %q, want the whole message", got)
+	}
+}
+
+func TestErrorWrapUsesTheTerminalsRoom(t *testing.T) {
+	p := newHealthTestProcessor()
+	prefix := p.errorLinePrefixes()[0]
+	row := "   × Error       web:"
+	long := strutil.Repeat("word ", 30) // 149 runes
+	lines, _ := p.placeErrorLines([]string{row, prefix + long + "{{[-]}}"}, make([]timerEntry, 2), 200)
+	if len(lines) != 3 {
+		t.Fatalf("lines = %q, want the message in two lines of up to %d", plainLines(lines), errorWrapW)
+	}
+	for _, l := range lines[1:] {
+		if w := utf8.RuneCountInString(strings.TrimSpace(semstyle.ToPlain(l))); w > errorWrapW {
+			t.Errorf("line %q is %d wide, more than %d", semstyle.ToPlain(l), w, errorWrapW)
+		}
 	}
 }
 

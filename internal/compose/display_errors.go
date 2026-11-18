@@ -76,16 +76,20 @@ func (p *consoleEventProcessor) requiredDependencyFailed(svc string) bool {
 // whole.
 const maxErrorLines = 6
 
-// minErrorWrapW is the narrowest a wrapped error message's lines get, room permitting
-// in termW: a small table (a -c run of one job) would otherwise wrap it a few words a line.
-const minErrorWrapW = 60
+// errorWrapW is how wide a wrapped error message's lines get, room permitting in
+// termW, when the table is narrower: a small table (a -c run of one job, or a run
+// failed before any layer bars) would otherwise wrap it a few words a line. It's
+// capped so that one long message doesn't push every timer to a wide terminal's
+// edge.
+const errorWrapW = 100
 
-// placeErrorLines fits each error line to the table (the widest other line), widening
-// it only to wrap a message at minErrorWrapW. Messages that fit on the row above go
-// there, all starting at one shared column two spaces past the longest of those rows;
-// the column is the one that fits the most messages. The others wrap at word
-// boundaries onto lines under their row, at most maxErrorLines, the last ending in …
-// when more is cut. timers stays parallel to lines.
+// placeErrorLines fits each error line to the table (the widest other line),
+// widening it, and the timer column with it, to wrap a message at errorWrapW.
+// Messages that fit on the row above go there, all starting at one shared column
+// two spaces past the longest of those rows; the column is the one that fits the
+// most messages. The others wrap at word boundaries onto lines under their row, at
+// most maxErrorLines, the last ending in … when more is cut. timers stays parallel
+// to lines.
 func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEntry, termW int) ([]string, []timerEntry) {
 	prefixes := p.errorLinePrefixes()
 	errorPrefix := func(line string) string {
@@ -128,7 +132,7 @@ func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEn
 	}
 
 	termRoom := termW - timerReserveW - summaryHeaderIndentW - p.errorIndentW()
-	room := max(width-p.errorIndentW(), min(minErrorWrapW, termRoom), minDetailW)
+	room := max(width-p.errorIndentW(), min(errorWrapW, termRoom), minDetailW)
 	outLines := make([]string, 0, len(lines))
 	outTimers := make([]timerEntry, 0, len(timers))
 	for i, line := range lines {
