@@ -235,6 +235,10 @@ func HandleCompose(ctx context.Context, group *CommandGroup, state *CmdState) er
 	if operation == "" {
 		operation = "update"
 	}
+	if operation == "run" && len(appsList) != 1 {
+		logger.Error(ctx, "{{|UsageCommand|}}-c run{{[-]}} takes one job name.")
+		return errors.New("-c run takes one job name")
+	}
 
 	deps := compose.DepsDefault
 	switch {

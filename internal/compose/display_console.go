@@ -93,6 +93,7 @@ type consoleTask struct {
 	workEnd   time.Time // latest finishing event after workStart
 	working   bool      // the latest event was Working
 	message   string    // an Error event's message, shown under the row and in the failure summary
+	summary   string    // the failure summary's message where it differs from message (styled, or not shown under the row)
 	// healthErr marks a service row whose error is compose's report of its failed health
 	// check; the row keeps its action, styled with prevStatus, the status before the error.
 	healthErr  bool
@@ -209,6 +210,21 @@ type consoleEventProcessor struct {
 	networkIDs []string
 	// volumeIDs: top-level tasks that represent volume lifecycle (created/removed)
 	volumeIDs []string
+	// jobIDs: the jobs compose reported on, by name, their tasks under jobTaskID
+	jobIDs []string
+	// jobs is what the project declares about each job, by name (see jobDecls)
+	jobs map[string]jobDecl
+	// refused marks a run compose refused before doing anything, for its scheduled
+	// jobs (setRunError): the rows it never reached show Not Started
+	refused bool
+	// runJob and runJobImage are the job -c run runs and its image, "" otherwise
+	runJob, runJobImage string
+	// jobOutLines is the run job's output, cleaned (cleanOutputLine), and
+	// jobOutPartial its last line until the newline ending it arrives
+	jobOutLines   []string
+	jobOutPartial string
+	// forLog marks a render for the log file, whose job output loses its colours
+	forLog bool
 
 	// command is the ds2 command name (e.g. "up", "update") used for the summary header.
 	command string
@@ -537,6 +553,10 @@ func (p *consoleEventProcessor) On(events ...api.Resource) {
 }
 
 func (p *consoleEventProcessor) upsert(e api.Resource) {
+	if name, ok := strings.CutPrefix(e.ID, jobEventPrefix); ok {
+		p.upsertJob(name, e)
+		return
+	}
 	// Normalise SDK-prefixed IDs so they match project service/image names
 	isNetwork := strings.HasPrefix(e.ID, "Network ")
 	isVolume := strings.HasPrefix(e.ID, "Volume ")
@@ -550,6 +570,12 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	parentID = strings.TrimPrefix(parentID, "Volume ")
 
 	containerName := id // a container event's ID before it becomes a service name
+	if p.runJob != "" && strings.HasPrefix(containerName, p.projectName+api.Separator+p.runJob+api.Separator+"run"+api.Separator) {
+		return // the one-off container a job runs in on an engine without jobs: the job's row shows it
+	}
+	if strings.HasPrefix(containerName, "job-"+p.projectName+".") {
+		return // a job's run container, named by the engine: its job's row covers it
+	}
 	id = p.serviceForContainer(id)
 
 	isServiceEvent := parentID == "" && !isNetwork && !isVolume && p.isKnownServiceName(id)

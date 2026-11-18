@@ -56,7 +56,10 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	}
 
 	// ── services: section ──────────────────────────────────────────────────
-	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+	// A job -c run runs with no service dependencies has none to show.
+	if len(svcRollupIDs) > 0 || p.runJob == "" {
+		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+	}
 
 	maxImgNameW := 0
 	for _, imgName := range p.imageOrder {
@@ -101,11 +104,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 					impliedText, impliedTag := p.impliedStatus()
 					statusText = impliedText
 					statusTag = impliedTag + statusText + "{{[-]}}"
-					if impliedTag == "{{|DockerStatusPending|}}" {
-						icon = "{{|DockerStatusPending|}}" + p.icons().pending + "{{[-]}}"
-					} else {
-						icon = "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}}"
-					}
+					icon = p.impliedIcon(impliedTag)
 				}
 			} else {
 				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
@@ -150,11 +149,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			impliedText, impliedTag := p.impliedStatus()
 			statusText = impliedText
 			statusTag = impliedTag + statusText + "{{[-]}}"
-			if impliedTag == "{{|DockerStatusPending|}}" {
-				icon = "{{|DockerStatusPending|}}·{{[-]}}"
-			} else {
-				icon = "{{|DockerMarkerDone|}}✓{{[-]}}"
-			}
+			icon = p.impliedIcon(impliedTag)
 		} else {
 			statusText, statusTag = p.actionStatus(t)
 			icon = p.serviceIcon(t, t.status)
@@ -175,9 +170,14 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	for i, line := range volLines {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
+	jobLines, jobTimers := p.buildJobLines(termW, level)
+	for i, line := range jobLines {
+		appendLine(line, jobTimers[i].task, jobTimers[i].style)
+	}
 
-	lines, timers = p.placeErrorLines(lines, timers)
-	return p.prependSummary(lines, timers)
+	lines, timers = p.placeErrorLines(lines, timers, termW)
+	out := p.prependSummary(lines, timers)
+	return append(out, p.jobOutputLines(len(out))...)
 }
 
 // serviceDetailLines returns the lines under svc's row: its healthcheck line, its
@@ -600,13 +600,7 @@ func (p *consoleEventProcessor) buildLayerLines(layers []*consoleTask, maxImgNam
 
 func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []string {
 	impliedText, impliedTag := p.impliedStatus()
-	ic := p.icons()
-	var impliedIcon string
-	if impliedTag == "{{|DockerStatusPending|}}" {
-		impliedIcon = "{{|DockerStatusPending|}}" + ic.pending + "{{[-]}}"
-	} else {
-		impliedIcon = "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
-	}
+	impliedIcon := p.impliedIcon(impliedTag)
 
 	svcRollupIDs := append([]string{}, p.serviceIDs...)
 	svcImageMap := make(map[string]string)
@@ -688,7 +682,11 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 	for i, line := range volLines {
 		appendLine(line, volTimers[i].task, volTimers[i].style)
 	}
+	jobLines, jobTimers := p.buildJobLines(termW, level)
+	for i, line := range jobLines {
+		appendLine(line, jobTimers[i].task, jobTimers[i].style)
+	}
 
-	lines, timers = p.placeErrorLines(lines, timers)
+	lines, timers = p.placeErrorLines(lines, timers, termW)
 	return p.prependSummary(lines, timers)
 }

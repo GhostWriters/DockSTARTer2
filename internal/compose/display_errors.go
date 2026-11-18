@@ -76,12 +76,17 @@ func (p *consoleEventProcessor) requiredDependencyFailed(svc string) bool {
 // whole.
 const maxErrorLines = 6
 
-// placeErrorLines fits each error line to the table, never widening it (the widest
-// other line). Messages that fit on the row above go there, all starting at one shared
-// column two spaces past the longest of those rows; the column is the one that fits the
-// most messages. The others wrap at word boundaries onto lines under their row, at most
-// maxErrorLines, the last ending in … when more is cut. timers stays parallel to lines.
-func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEntry) ([]string, []timerEntry) {
+// minErrorWrapW is the narrowest a wrapped error message's lines get, room permitting
+// in termW: a small table (a -c run of one job) would otherwise wrap it a few words a line.
+const minErrorWrapW = 60
+
+// placeErrorLines fits each error line to the table (the widest other line), widening
+// it only to wrap a message at minErrorWrapW. Messages that fit on the row above go
+// there, all starting at one shared column two spaces past the longest of those rows;
+// the column is the one that fits the most messages. The others wrap at word
+// boundaries onto lines under their row, at most maxErrorLines, the last ending in …
+// when more is cut. timers stays parallel to lines.
+func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEntry, termW int) ([]string, []timerEntry) {
 	prefixes := p.errorLinePrefixes()
 	errorPrefix := func(line string) string {
 		for _, prefix := range prefixes {
@@ -122,7 +127,8 @@ func (p *consoleEventProcessor) placeErrorLines(lines []string, timers []timerEn
 		}
 	}
 
-	room := max(width-p.errorIndentW(), minDetailW)
+	termRoom := termW - timerReserveW - summaryHeaderIndentW - p.errorIndentW()
+	room := max(width-p.errorIndentW(), min(minErrorWrapW, termRoom), minDetailW)
 	outLines := make([]string, 0, len(lines))
 	outTimers := make([]timerEntry, 0, len(timers))
 	for i, line := range lines {

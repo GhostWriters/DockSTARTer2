@@ -42,6 +42,9 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	if volCount > 0 {
 		parts = append(parts, fmt.Sprintf("{{|Folder|}}%d %s{{[-]}}", volCount, plural(volCount, "volume", "volumes")))
 	}
+	if jobCount := len(p.jobsActedOn()); jobCount > 0 {
+		parts = append(parts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", jobCount, plural(jobCount, "job", "jobs")))
+	}
 	// Command word is bold yellow (matching the summary line's overall duration); the
 	// colon uses DockerColon (matching the colons on the section/name lines below).
 	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", p.command, strings.Join(parts, ", "))
@@ -252,7 +255,13 @@ func (p *consoleEventProcessor) styleReason(reason string) string {
 func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []rowFailure {
 	var out []rowFailure
 	failed := func(t *consoleTask) bool {
-		return t != nil && t.message != "" && match(t)
+		return t != nil && (t.message != "" || t.summary != "") && match(t)
+	}
+	summaryOf := func(t *consoleTask) string {
+		if t.summary != "" {
+			return t.summary
+		}
+		return t.message
 	}
 	listed := make(map[string]bool)
 	addService := func(svc string, rows ...*consoleTask) {
@@ -297,6 +306,11 @@ func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []row
 			out = append(out, rowFailure{"volume " + id, "volume {{|Folder|}}" + id + "{{[-]}}", p.tasks[id].message})
 		}
 	}
+	for _, name := range p.jobIDs {
+		if t := p.tasks[jobTaskID(name)]; failed(t) {
+			out = append(out, rowFailure{"job " + name, "job " + dockerlayout.StyleServiceName(name), summaryOf(t)})
+		}
+	}
 	return out
 }
 
@@ -326,7 +340,9 @@ func (p *consoleEventProcessor) logSummary() {
 	p.mtx.Lock()
 	savedLineW, savedTimerW := p.maxLineWidth, p.maxTimerWidth
 	p.maxLineWidth, p.maxTimerWidth = 0, 0
+	p.forLog = true
 	lines := p.buildLines(logWidth, dockerlayout.VerboseLayers)
+	p.forLog = false
 	p.maxLineWidth, p.maxTimerWidth = savedLineW, savedTimerW
 	p.mtx.Unlock()
 
