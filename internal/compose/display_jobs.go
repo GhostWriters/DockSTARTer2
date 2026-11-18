@@ -160,10 +160,22 @@ func (p *consoleEventProcessor) jobRows(level int) []string {
 	return names
 }
 
+// jobChangedText is the message of a job the engine has with a different spec.
+const jobChangedText = "Registered with different settings"
+
 // setRunError gives the processor the SDK call's error before Done draws the final
-// frame: when it is compose refusing the scheduled jobs, each of them fails with it.
+// frame: when it is compose refusing the scheduled jobs, each of them fails with it;
+// when it is a job the engine has with a different spec, that job does.
 // Callers hold no lock.
 func (p *consoleEventProcessor) setRunError(err error) {
+	if name, ok := changedJobName(err); ok {
+		p.mtx.Lock()
+		defer p.mtx.Unlock()
+		if _, declared := p.jobs[name]; declared {
+			p.upsertJob(name, api.Resource{ID: jobTaskID(name), Status: api.Error, Text: jobChangedText})
+		}
+		return
+	}
 	if !isJobsRefusal(err) {
 		return
 	}
@@ -220,6 +232,8 @@ func (p *consoleEventProcessor) jobStatus(name string) (text, tag, icon string) 
 		}
 	case t.status == api.Error:
 		return api.StatusError, "{{|DockerStatusFail|}}" + api.StatusError + "{{[-]}}", "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
+	case t.status == api.Warning:
+		return text, "{{|DockerStatusWarn|}}" + text + "{{[-]}}", "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
 	case text == api.StatusCreating:
 		text = jobSchedulingText
 	case text == api.StatusCreated, text == api.StatusRunning:

@@ -368,6 +368,12 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		logger.Error(ctx, "Failed to load merged compose file for execution: %v", err)
 		return fmt.Errorf("failed to load compose file: %w", err)
 	}
+	// The loader leaves the file list empty; the CLI fills it, and compose labels each
+	// container and job with it. The engine refuses a job whose spec, labels included,
+	// differs from the one registered, so it must match what the CLI sends.
+	for _, f := range configFiles {
+		project.ComposeFiles = append(project.ComposeFiles, f.Filename)
+	}
 
 	// Add infrastructure labels required by the compose SDK
 	for i, s := range project.Services {
@@ -744,6 +750,17 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	err = run()
 	held.release(err)
 	reportUnhealthy(ctx, bus)
+	// A job the engine has with a different spec: remove it and run again to register it.
+	if name, ok := changedJobName(err); ok && registersJobs(command) {
+		again, rerr := reregisterChangedJobs(ctx, yes, dockerCLI, project, name, command)
+		if again {
+			return ExecuteCompose(context.WithValue(ctx, jobsReregisteredKey{}, true), true, force, deps, command, appNames...)
+		}
+		if rerr != nil {
+			logger.Error(ctx, "Can't remove the jobs registered with different settings: %v", rerr)
+			return reportedError{rerr}
+		}
+	}
 	return reportFailures(ctx, bus, err)
 }
 

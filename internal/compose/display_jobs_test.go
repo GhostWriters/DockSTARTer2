@@ -126,6 +126,43 @@ func TestJobsRefusalFailsTheJobsNotTheServices(t *testing.T) {
 	}
 }
 
+func TestChangedJobName(t *testing.T) {
+	err := errors.New("job \"ds2-tick\" has changed: run `docker compose down` to remove it, then `up` again")
+	if name, ok := changedJobName(err); !ok || name != "ds2-tick" {
+		t.Errorf("changedJobName = %q, %v; want ds2-tick", name, ok)
+	}
+	for _, other := range []error{nil, errors.New("port is already allocated"), errors.New(`job "x" not found`)} {
+		if name, ok := changedJobName(other); ok {
+			t.Errorf("changedJobName(%v) = %q, want no match", other, name)
+		}
+	}
+}
+
+func TestChangedJobFailsItsRow(t *testing.T) {
+	p := newJobsTestProcessor("up")
+	p.On(api.Resource{ID: "Job backup", Status: api.Working, Text: api.StatusCreating})
+	p.setRunError(errors.New("job \"backup\" has changed: run `docker compose down` to remove it, then `up` again"))
+	p.finished, p.succeeded = true, false // what Done sets
+	got := strings.Join(jobLines(p, 0), "\n")
+	if !strings.Contains(got, "× Error") || !strings.Contains(got, jobChangedText) {
+		t.Errorf("lines =\n%s\nwant backup failed as registered with different settings", got)
+	}
+	if fails := p.failures(); len(fails) != 1 || fails[0].name != "job backup" {
+		t.Errorf("failures = %+v, want backup's, not the services'", fails)
+	}
+}
+
+func TestInterruptedJobIsAWarning(t *testing.T) {
+	p := newJobsTestProcessor("up")
+	p.On(api.Resource{ID: "Job backup", Status: api.Working, Text: api.StatusCreating})
+	p.setRunError(errors.New("port is already allocated"))
+	p.finished, p.succeeded = true, false
+	p.finalizeActiveTasks()
+	if text, _, icon := p.jobStatus("backup"); text != interruptedText || !strings.Contains(icon, "DockerMarkerWarn") {
+		t.Errorf("jobStatus = %q, %q; want Interrupted with the warning mark", text, icon)
+	}
+}
+
 func TestOtherErrorsLeaveJobsInterrupted(t *testing.T) {
 	p := newJobsTestProcessor("up")
 	p.setRunError(errors.New("port is already allocated"))
