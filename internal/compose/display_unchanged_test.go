@@ -3,6 +3,7 @@ package compose
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -284,6 +285,75 @@ func TestTeardownGroups(t *testing.T) {
 	q.On(api.Resource{ID: "Container db", Status: api.Error, Text: "permission denied"})
 	if got := renderPlain(q, 0); !strings.Contains(got, "services:") || strings.Contains(got, "changed:") {
 		t.Errorf("failed stop display =\n%s\nwant the services: section, ungrouped", got)
+	}
+}
+
+func TestTeardownTargets(t *testing.T) {
+	preRun := map[string]string{"a": "running", "b": preRunPaused, "c": "stopped", "d": healthHealthy}
+	names := []string{"a", "b", "c", "d", "e"} // e has no container
+	for _, tc := range []struct {
+		command string
+		want    []string
+	}{
+		{"pause", []string{"a", "d"}},
+		{"unpause", []string{"b"}},
+		{"kill", []string{"a", "b", "d"}},
+	} {
+		if got, ok := teardownTargets(tc.command, names, preRun); !ok || !slices.Equal(got, tc.want) {
+			t.Errorf("teardownTargets(%s) = %v, %v; want %v", tc.command, got, ok, tc.want)
+		}
+	}
+	if got, ok := teardownTargets("stop", names, preRun); ok || got != nil {
+		t.Errorf("teardownTargets(stop) = %v, %v; want every service left to compose", got, ok)
+	}
+	if got, ok := teardownTargets("kill", []string{"c", "e"}, preRun); !ok || len(got) != 0 {
+		t.Errorf("teardownTargets(kill) of stopped services = %v, %v; want none to act on", got, ok)
+	}
+}
+
+func TestTeardownLeavesStatesAlone(t *testing.T) {
+	// pause: web, already paused, is left in the Paused group; db is paused.
+	p := newGroupsTestProcessor("pause")
+	p.preRun["web"] = preRunPaused
+	p.On(containerEvent("db", pausedText, api.Done))
+	p.finished, p.succeeded = true, true
+	if got := renderPlain(p, 0); !strings.Contains(got, "Paused          db:") || !strings.Contains(got, "Paused        1 service: web") {
+		t.Errorf("pause display =\n%s\nwant db Paused under changed: and web in the Paused group", got)
+	}
+
+	// unpause with nothing paused: both left Running, nothing changed.
+	q := newGroupsTestProcessor("unpause")
+	q.finished, q.succeeded = true, true
+	if got := renderPlain(q, 0); !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, " changed:") {
+		t.Errorf("unpause display =\n%s\nwant both Running under unchanged:", got)
+	}
+
+	// kill: web, stopped, is Not Running, not Killed.
+	r := newGroupsTestProcessor("kill")
+	r.preRun["web"] = "stopped"
+	r.On(containerEvent("db", api.StatusKilled, api.Done))
+	r.finished, r.succeeded = true, true
+	if got := renderPlain(r, 0); !strings.Contains(got, "Killed          db:") || !strings.Contains(got, "Not Running   1 service: web") {
+		t.Errorf("kill display =\n%s\nwant db Killed and web Not Running", got)
+	}
+
+	// stop of a paused service stops it: a change, not Not Running.
+	s := newGroupsTestProcessor("stop")
+	s.preRun["web"] = preRunPaused
+	s.On(containerEvent("db", api.StatusStopped, api.Done))
+	s.On(containerEvent("web", api.StatusStopped, api.Done))
+	s.finished, s.succeeded = true, true
+	if got := renderPlain(s, 0); !strings.Contains(got, "Stopped         web:") {
+		t.Errorf("stop display =\n%s\nwant paused web Stopped under changed:", got)
+	}
+
+	// restart of a paused service is a restart, not a start.
+	u := newGroupsTestProcessor("restart")
+	u.preRun["web"] = preRunPaused
+	u.On(containerEvent("web", api.StatusRestarted, api.Done))
+	u.finished, u.succeeded = true, true
+	if got := renderPlain(u, 0); !strings.Contains(got, "Restarted       web:") {
+		t.Errorf("restart display =\n%s\nwant paused web Restarted", got)
 	}
 }
 

@@ -805,7 +805,11 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 	} else {
 		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 		for _, svc := range svcs {
-			renderRow(svc, "", false)
+			word := "" // a service the command left alone keeps its state's word
+			if state, seen := p.preRun[svc]; p.tasks[svc] == nil {
+				word = teardownSkip(p.command, state, seen)
+			}
+			renderRow(svc, word, false)
 		}
 		netLines, netTimers := p.buildNetworkLines(termW)
 		volLines, volTimers := p.buildVolumeLines(termW)
@@ -825,7 +829,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 }
 
 // teardownOrder is the order of a teardown's unchanged groups.
-var teardownOrder = []string{api.StatusRunning, notRunningText, notCreatedText}
+var teardownOrder = []string{api.StatusRunning, pausedText, notRunningText, notCreatedText}
 
 // teardownGroupedLines returns a teardown's rows under changed: and unchanged:: the
 // services compose acted on, and the networks, volumes and jobs it removed, changed;
