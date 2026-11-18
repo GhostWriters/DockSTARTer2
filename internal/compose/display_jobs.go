@@ -164,10 +164,12 @@ func (p *consoleEventProcessor) jobRows(level int) []string {
 const jobChangedText = "Registered with different settings"
 
 // setRunError gives the processor the SDK call's error before Done draws the final
-// frame: when it is compose refusing the scheduled jobs, each of them fails with it;
+// frame: when it is Docker refusing a published port, the ports lines name what holds
+// it; when it is compose refusing the scheduled jobs, each of them fails with it;
 // when it is a job the engine has with a different spec, that job does.
 // Callers hold no lock.
 func (p *consoleEventProcessor) setRunError(err error) {
+	p.findPortConflict(err)
 	if name, ok := changedJobName(err); ok {
 		p.mtx.Lock()
 		defer p.mtx.Unlock()

@@ -12,6 +12,7 @@ import (
 
 	"github.com/GhostWriters/semstyle"
 	"github.com/buger/goterm"
+	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
 	dockerclient "github.com/moby/moby/client"
 
@@ -20,14 +21,15 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// daemonClient is the subset of the Docker client API used for layer inspection and
-// container health.
+// daemonClient is the subset of the Docker client API used for layer inspection,
+// container health and port conflicts.
 type daemonClient interface {
 	ImageInspect(ctx context.Context, imageID string, opts ...dockerclient.ImageInspectOption) (dockerclient.ImageInspectResult, error)
 	ImageList(ctx context.Context, options dockerclient.ImageListOptions) (dockerclient.ImageListResult, error)
 	Info(ctx context.Context, options dockerclient.InfoOptions) (dockerclient.SystemInfoResult, error)
 	ContainerInspect(ctx context.Context, containerID string, options dockerclient.ContainerInspectOptions) (dockerclient.ContainerInspectResult, error)
 	Events(ctx context.Context, options dockerclient.EventsListOptions) dockerclient.EventsResult
+	ContainerList(ctx context.Context, options dockerclient.ContainerListOptions) (dockerclient.ContainerListResult, error)
 }
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
@@ -279,6 +281,11 @@ type consoleEventProcessor struct {
 	dependsOn        map[string][]serviceDep
 	containerStarted map[string]bool
 	preRun           map[string]string
+
+	// servicePorts[svc] is each project service's published ports; portConflict the
+	// port a service couldn't bind when the run failed on one, for the ports lines.
+	servicePorts map[string][]types.ServicePortConfig
+	portConflict *portConflict
 
 	// preRunImage[svc] is the image ID svc's container ran before the run; prevMeta
 	// [svc] that image's details when it differs from the one on disk (which a

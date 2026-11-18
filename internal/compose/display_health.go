@@ -357,14 +357,19 @@ func (p *consoleEventProcessor) healthNoResult(svc string) bool {
 }
 
 // serviceIcon returns a service row's icon for worst, with a warning for a container
-// that is unhealthy or gave no health check result, or has a required dependency that
-// failed, without having failed the operation; in DockerMarkerCause when being
-// unhealthy failed a dependent (causeIcon).
+// that is unhealthy or gave no health check result, has a required dependency that
+// failed, or isn't running but publishes a port another service couldn't bind, without
+// having failed the operation; in DockerMarkerCause when being unhealthy failed a
+// dependent (causeIcon), or when it holds that port.
 func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatus) string {
 	if cause := p.causeIcon(t); cause != "" && worst != api.Error {
 		return cause
 	}
-	if worst != api.Error && (p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.requiredDependencyFailed(t.id)) {
+	holder, wanter := p.portRole(t.id)
+	if holder && worst != api.Error {
+		return "{{|DockerMarkerCause|}}" + p.icons().warn + "{{[-]}}"
+	}
+	if worst != api.Error && (wanter || p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.requiredDependencyFailed(t.id)) {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)
