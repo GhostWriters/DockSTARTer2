@@ -60,6 +60,91 @@ func TestFindVersionLink(t *testing.T) {
 	}
 }
 
+// withHubTagsServer points the checks at a local server listing tags for
+// sportarr/sportarr in two pages, newest first, the release's tags on the second, and
+// answering 404 to every other request.
+func withHubTagsServer(t *testing.T) {
+	t.Helper()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/repositories/sportarr/sportarr/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = w.Write([]byte(`{"next":"","results":[
+				{"name":"4","digest":"sha256:rel"},{"name":"4.1","digest":"sha256:rel"},
+				{"name":"4.1.12.1122","digest":"sha256:rel"},{"name":"latest","digest":"sha256:rel"},
+				{"name":"4.1.11.885-dev","digest":"sha256:old"}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"next":"` + srv.URL + `/v2/repositories/sportarr/sportarr/tags?page=2","results":[
+			{"name":"4.1.12.900-dev","digest":"sha256:dev"},{"name":"dev","digest":"sha256:dev"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	oldGitHub, oldGHCR, oldHub := githubBaseURL, ghcrBaseURL, dockerHubBaseURL
+	githubBaseURL, ghcrBaseURL, dockerHubBaseURL = srv.URL, srv.URL, srv.URL
+	t.Cleanup(func() { githubBaseURL, ghcrBaseURL, dockerHubBaseURL = oldGitHub, oldGHCR, oldHub })
+}
+
+func TestHubTagsForDigest(t *testing.T) {
+	withHubTagsServer(t)
+	ctx := context.Background()
+	if got := strings.Join(hubTagsForDigest(ctx, "sportarr/sportarr", "sha256:rel"), ","); got != "4,4.1,4.1.12.1122,latest" {
+		t.Errorf("release digest's tags = %q, want the second page's four", got)
+	}
+	if got := hubTagsForDigest(ctx, "sportarr/sportarr", "sha256:gone"); got != nil {
+		t.Errorf("unknown digest's tags = %v, want none", got)
+	}
+	if got := hubTagsForDigest(ctx, "acme/missing", "sha256:rel"); got != nil {
+		t.Errorf("missing repo's tags = %v, want none", got)
+	}
+}
+
+func TestVersionFromTags(t *testing.T) {
+	for _, tc := range []struct {
+		tags []string
+		want string
+	}{
+		{[]string{"4", "4.1", "4.1.12.1122", "latest"}, "4.1.12.1122"},
+		{[]string{"latest", "v2", "v2.3"}, "v2.3"},
+		{[]string{"v1.14.1-alpine", "v1.14.1", "v1.14", "v1", "latest-alpine", "latest"}, "v1.14.1"},
+		{[]string{"latest", "dev", "main"}, ""},
+		{nil, ""},
+	} {
+		if got := versionFromTags(tc.tags); got != tc.want {
+			t.Errorf("versionFromTags(%v) = %q, want %q", tc.tags, got, tc.want)
+		}
+	}
+}
+
+func TestDigestLookupWhenVersionHasNoTag(t *testing.T) {
+	withHubTagsServer(t)
+	const img = "sportarr/sportarr:latest"
+	p := newHealthTestProcessor()
+	before := imageMeta{version: "24.04", digest: "sha256:old", source: "https://github.com/Sportarr/Sportarr"}
+	after := imageMeta{version: "24.04", digest: "sha256:rel", source: "https://github.com/Sportarr/Sportarr"}
+	p.checkVersionLink(img, after)
+	p.checkVersionLink(img, imageMeta{digest: "sha256:none"}) // no label, no tag
+	p.waitVersionLinks()
+	if got := p.digestVersions["sha256:rel"]; got != "4.1.12.1122" {
+		t.Fatalf("looked-up version = %q, want 4.1.12.1122", got)
+	}
+	if _, ok := p.digestVersions["sha256:none"]; ok {
+		t.Errorf("a digest no tag shares got a version")
+	}
+	oldMeta, newMeta := p.tagVersions(before, after)
+	if newMeta.version != "4.1.12.1122" || oldMeta.version != "" {
+		t.Errorf("versions = %q → %q, want unknown → 4.1.12.1122 (same base label)", oldMeta.version, newMeta.version)
+	}
+	if got := p.versionURL(img, newMeta); got != "https://hub.docker.com/layers/sportarr/sportarr/4.1.12.1122" {
+		t.Errorf("looked-up version's link = %q", got)
+	}
+	if oldMeta, _ = p.tagVersions(imageMeta{version: "4.0", digest: "sha256:x"}, after); oldMeta.version != "4.0" {
+		t.Errorf("old image's own label = %q, want 4.0 kept", oldMeta.version)
+	}
+}
+
 func TestVersionLinkCheckedOnlyWhenShown(t *testing.T) {
 	withVersionCheckServer(t, "/owner/app/releases/tag/1.1")
 	p := newHealthTestProcessor()

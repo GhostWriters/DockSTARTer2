@@ -313,9 +313,12 @@ type consoleEventProcessor struct {
 	imageMetaAfter  map[string]imageMeta
 
 	// Links for versions on the info lines, found by background checks: versionLinks
-	// [versionKey] is the link a check found; versionChecked marks the checks started.
+	// [versionKey] is the link a check found; versionChecked marks the checks started;
+	// digestVersions[digest] is the version a Docker Hub tag sharing the digest gives an
+	// image whose labels gave no version, or one with no release or tag.
 	versionLinks   map[string]string
 	versionChecked map[string]bool
+	digestVersions map[string]string
 	linkWG         sync.WaitGroup
 	rawIDSeen      map[string]bool // imgRef+":"+rawID → already recorded in order
 
@@ -362,6 +365,7 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		imageMetaAfter:    make(map[string]imageMeta),
 		versionLinks:      make(map[string]string),
 		versionChecked:    make(map[string]bool),
+		digestVersions:    make(map[string]string),
 		rawIDSeen:         make(map[string]bool),
 		health:            make(map[string]map[string]string),
 		healthChecked:     make(map[string]string),
