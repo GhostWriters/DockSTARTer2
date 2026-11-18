@@ -65,6 +65,12 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	for _, name := range p.jobIDs {
 		ids = append(ids, jobTaskID(name))
 	}
+	for _, name := range p.modelIDs {
+		ids = append(ids, modelTaskID(name))
+	}
+	for _, name := range p.orphanIDs {
+		ids = append(ids, orphanTaskID(name))
+	}
 	state := p.rollupState(ids, nil)
 	if p.finished && !p.succeeded {
 		state = rollupError // the call failed, whatever its rows show
@@ -143,6 +149,8 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 		} else if imageForID != nil && p.command == "pull" && p.imageFetched(imageForID(id)) {
 			// A pull has no container work, so a service is done once its image is.
 			anyStarted = true
+		} else if imageForID != nil && p.finished && !p.succeeded {
+			anyWarning = true // the run failed before reaching the service: its row shows Interrupted
 		} else {
 			allDone = false
 			if imageForID != nil {
@@ -462,6 +470,22 @@ func applyStatusTag(s api.EventStatus, text, finalTag string, finalTexts, active
 	}
 }
 
+// restartWord returns compose's Restarting or Restarted for svc as Starting or Started
+// when svc's container wasn't running before a restart: restarting it starts it.
+// Any other text, or command, it returns as given.
+func (p *consoleEventProcessor) restartWord(svc, text string) string {
+	if state, seen := p.preRun[svc]; p.command != "restart" || !seen || state != "stopped" {
+		return text
+	}
+	switch text {
+	case api.StatusRestarting:
+		return api.StatusStarting
+	case api.StatusRestarted:
+		return api.StatusStarted
+	}
+	return text
+}
+
 // serviceStatusTag styles a service (container lifecycle) status.
 func serviceStatusTag(s api.EventStatus, text string, command string) string {
 	// Killed during an explicit kill command is expected but forceful — show as warn, not final.
@@ -493,7 +517,7 @@ func serviceFinalStatuses(command string) []string {
 	case "stop":
 		return []string{api.StatusStopped}
 	case "restart":
-		return []string{api.StatusRestarted}
+		return []string{api.StatusRestarted, api.StatusStarted} // Started: restartWord
 	case "kill":
 		return []string{api.StatusKilled}
 	case "pause":

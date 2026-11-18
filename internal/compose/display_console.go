@@ -316,6 +316,19 @@ type consoleEventProcessor struct {
 	// [versionKey] is the link a check found; versionChecked marks the checks started;
 	// digestVersions[digest] is the version a Docker Hub tag sharing the digest gives an
 	// image whose labels gave no version, or one with no release or tag.
+	// The project's models (models[name] is the model it runs, modelSettings[name] the
+	// settings it gives it, modelSettingsBefore[name] those the runner held before the
+	// run, when read), the models each service uses, the ones compose reported on, in
+	// order, and which of them it pulled; the orphan containers it stopped or removed,
+	// by name.
+	models              map[string]string
+	modelSettings       map[string]modelSettings
+	modelSettingsBefore map[string]modelSettings
+	serviceModels       map[string][]serviceModel
+	modelIDs            []string
+	modelPulled         map[string]bool
+	orphanIDs           []string
+
 	versionLinks   map[string]string
 	versionChecked map[string]bool
 	digestVersions map[string]string
@@ -363,6 +376,7 @@ func NewConsoleEventProcessor(logCtx context.Context, out io.Writer, command str
 		imagePullOrder:    make(map[string][]string),
 		imageMetaBefore:   make(map[string]imageMeta),
 		imageMetaAfter:    make(map[string]imageMeta),
+		modelPulled:       make(map[string]bool),
 		versionLinks:      make(map[string]string),
 		versionChecked:    make(map[string]bool),
 		digestVersions:    make(map[string]string),
@@ -478,7 +492,7 @@ func (p *consoleEventProcessor) finalizeActiveTasks() {
 	for _, id := range p.serviceIDs {
 		t := p.tasks[id]
 		if t != nil && !t.completed() && t.status != api.Error && t.status != api.Warning {
-			t.text = finalText
+			t.text = p.restartWord(id, finalText)
 			t.status = api.Done
 			t.endTime = time.Now()
 			if t.working {
@@ -588,6 +602,10 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		p.upsertJob(name, e)
 		return
 	}
+	if _, ok := p.models[e.ID]; ok && e.ParentID == "" {
+		p.upsertModel(e.ID, e) // a model's events carry its name alone
+		return
+	}
 	// Normalise SDK-prefixed IDs so they match project service/image names
 	isNetwork := strings.HasPrefix(e.ID, "Network ")
 	isVolume := strings.HasPrefix(e.ID, "Volume ")
@@ -608,6 +626,10 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		return // a job's run container, named by the engine: its job's row covers it
 	}
 	id = p.serviceForContainer(id)
+	if strings.HasPrefix(e.ID, "Container ") && parentID == "" && !p.isKnownServiceName(id) && !contains(p.imageIDs, id) && isOrphanEvent(e) {
+		p.upsertKindRow(orphanTaskID(containerName), containerName, &p.orphanIDs, e)
+		return
+	}
 
 	isServiceEvent := parentID == "" && !isNetwork && !isVolume && p.isKnownServiceName(id)
 	if isServiceEvent && startsContainer(e.Text) {
@@ -733,6 +755,9 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		// containers; this row stays as it was, and its dependents' needs lines show it.
 	} else if e.Text != "" {
 		t.text = e.Text
+		if isServiceEvent {
+			t.text = p.restartWord(id, e.Text)
+		}
 		// A Skipped event carries its reason in its text (progress.Skipped); the row
 		// shows Skipped and the reason goes under it.
 		if reason, ok := strings.CutPrefix(e.Text, skippedText+": "); ok {

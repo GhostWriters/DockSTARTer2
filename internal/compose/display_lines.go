@@ -57,8 +57,10 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	}
 
 	// ── services: section ──────────────────────────────────────────────────
-	// A job -c run runs with no service dependencies has none to show.
-	if len(svcRollupIDs) > 0 || p.runJob == "" {
+	// A job -c run runs with no service dependencies has none to show. Grouped, the
+	// changed: and unchanged: headings take the sections' place.
+	grouped := p.groupsRows()
+	if !grouped && (len(svcRollupIDs) > 0 || p.runJob == "") {
 		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 	}
 
@@ -79,10 +81,9 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	maxImgNameW += maxCountW
 
 	// Each image's block (its services, then the image) or service with no image goes
-	// to its own rows when something happened to it, first, or else to the group of its
+	// to the changed rows when something happened to it, or else to the group of its
 	// state, the groups following in groupOrder. Folded, a group is one line of names;
-	// open (-v), its line heads its blocks.
-	grouped := p.groupsRows()
+	// open (-v), its blocks.
 	open := level >= dockerlayout.VerboseDetails
 	type block struct {
 		img  string   // "" for a service with no image
@@ -181,32 +182,47 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		}
 	}
 	if grouped {
-		// A heading for the changed services and one for the rest, each with its rows'
-		// rolled-up state and its rows nested under it: the changed blocks, then the rest
-		// in groupOrder, each group one folded line of names, or with -v its blocks.
+		// The services' changed set: the changed blocks; their unchanged set: the rest in
+		// groupOrder, each group one folded line of names, or with -v their blocks.
 		var unchanged []block
 		for _, word := range groupOrder {
 			unchanged = append(unchanged, groups[word]...)
 		}
-		for _, set := range []struct {
-			adjective string
-			blocks    []block
-		}{{"changed", changed}, {"unchanged", unchanged}} {
-			if len(set.blocks) == 0 {
-				continue
-			}
+		// capture returns the lines f appends, taking them back off.
+		capture := func(f func()) ([]string, []timerEntry) {
+			start := len(lines)
+			f()
+			l, t := slices.Clone(lines[start:]), slices.Clone(timers[start:])
+			lines, timers = lines[:start], timers[:start]
+			return l, t
+		}
+		svcSet := func(blocks []block, render func()) groupSet {
 			var ids []string
-			for _, b := range set.blocks {
+			for _, b := range blocks {
 				ids = append(ids, b.svcs...)
 			}
-			icon, statusTag, statusText, _ := p.sectionRollupWithPropagation(ids, func(id string) string { return svcImageMap[id] })
-			appendLine(groupHeading(icon, statusTag, statusText, len(ids), set.adjective, "service", "services"), p.serviceSectionTask(ids), timerSection)
-			start := len(lines)
-			if set.adjective == "changed" || open {
-				for _, b := range set.blocks {
+			set := groupSet{count: len(ids)}
+			if len(ids) == 0 {
+				return set
+			}
+			set.state = p.rollupState(ids, func(id string) string { return svcImageMap[id] })
+			set.timer = p.serviceSectionTask(ids)
+			set.lines, set.timers = capture(render)
+			return set
+		}
+		renderAll := func(blocks []block) func() {
+			return func() {
+				for _, b := range blocks {
 					renderBlock(b)
 				}
-			} else {
+			}
+		}
+		services := kindGroups{singular: "service", plural: "services", folded: !open}
+		services.changed = svcSet(changed, renderAll(changed))
+		if open {
+			services.unchanged = svcSet(unchanged, renderAll(unchanged))
+		} else {
+			services.unchanged = svcSet(unchanged, func() {
 				for _, word := range groupOrder {
 					var names []string
 					for _, b := range groups[word] {
@@ -221,28 +237,40 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 						appendLine(line, nil, timerLayer)
 					}
 				}
-			}
-			for i := start; i < len(lines); i++ {
-				lines[i] = nestLine(lines[i])
-			}
+			})
+		}
+		kinds := []kindGroups{services}
+		if p.groupsResources() {
+			kinds = append(kinds,
+				p.resourceGroups(networkKind, p.networks, p.networkIDs, termW, level),
+				p.resourceGroups(volumeKind, p.volumes, p.volumeIDs, termW, level))
+		}
+		kinds = append(kinds, p.kindGroups(p.modelKind(), termW, level), p.jobGroups(termW, level), p.kindGroups(p.orphanKind(), termW, level))
+		groupLines, groupTimers := p.groupedLines(kinds)
+		for i, line := range groupLines {
+			appendLine(line, groupTimers[i].task, groupTimers[i].style)
 		}
 	}
 
-	netLines, netTimers := p.buildNetworkLines(termW)
-	volLines, volTimers := p.buildVolumeLines(termW)
-	if p.groupsResources() {
-		netLines, netTimers = p.buildResourceLines(networkKind, p.networks, p.networkIDs, termW, level)
-		volLines, volTimers = p.buildResourceLines(volumeKind, p.volumes, p.volumeIDs, termW, level)
+	var sections [][]string
+	var sectionTimers [][]timerEntry
+	if !p.groupsResources() {
+		netLines, netTimers := p.buildNetworkLines(termW)
+		volLines, volTimers := p.buildVolumeLines(termW)
+		sections = append(sections, netLines, volLines)
+		sectionTimers = append(sectionTimers, netTimers, volTimers)
 	}
-	for i, line := range netLines {
-		appendLine(line, netTimers[i].task, netTimers[i].style)
+	if !grouped {
+		modelLines, modelTimers := p.kindSection(p.modelKind(), termW, level)
+		jobLines, jobTimers := p.buildJobLines(termW, level)
+		orphanLines, orphanTimers := p.kindSection(p.orphanKind(), termW, level)
+		sections = append(sections, modelLines, jobLines, orphanLines)
+		sectionTimers = append(sectionTimers, modelTimers, jobTimers, orphanTimers)
 	}
-	for i, line := range volLines {
-		appendLine(line, volTimers[i].task, volTimers[i].style)
-	}
-	jobLines, jobTimers := p.buildJobLines(termW, level)
-	for i, line := range jobLines {
-		appendLine(line, jobTimers[i].task, jobTimers[i].style)
+	for s, section := range sections {
+		for i, line := range section {
+			appendLine(line, sectionTimers[s][i].task, sectionTimers[s][i].style)
+		}
 	}
 
 	lines, timers = p.placeErrorLines(lines, timers, termW)
@@ -273,10 +301,16 @@ func (p *consoleEventProcessor) appendOrphanRow(svcID string, termW, level int, 
 	}
 }
 
-// serviceDetailLines returns the lines under svc's row: its healthcheck line, its
-// dependency lines and, with neededBy, its needed-by line. Below
-// dockerlayout.VerboseDetails, only the ones still pending or with a problem.
+// serviceDetailLines returns the lines under svc's row: its condition lines, then its
+// model lines, each model's variables only at dockerlayout.VerboseDetails.
 func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int, neededBy bool) []string {
+	return append(p.serviceConditionLines(svc, termW, level, neededBy), p.modelLines(svc, termW, level >= dockerlayout.VerboseDetails)...)
+}
+
+// serviceConditionLines returns svc's healthcheck line, its dependency lines and, with
+// neededBy, its needed-by line. Below dockerlayout.VerboseDetails, only the ones still
+// pending or with a problem.
+func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level int, neededBy bool) []string {
 	all := level >= dockerlayout.VerboseDetails
 	var lines []string
 	if line := p.healthLine(svc, termW); line != "" && (all || p.serviceHealth(svc) != healthHealthy) {
@@ -720,66 +754,146 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 		}
 	}
 
-	appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
-
+	// The services in display order: by image, then those with none.
+	var svcs []string
 	seenSvcs := make(map[string]bool)
 	for _, imgName := range p.imageOrder {
 		for _, svc := range p.serviceIDsForImage(imgName) {
-			if seenSvcs[svc] {
-				continue
-			}
-			seenSvcs[svc] = true
-			t := p.tasks[svc]
-			nameTag := dockerlayout.StyleServiceName(svc)
-			var icon, statusText, statusTag string
-			if t == nil {
-				icon, statusTag, statusText = impliedIcon, impliedTag+impliedText+"{{[-]}}", impliedText
-			} else {
-				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
-			}
-			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
-			appendError(p.tasks[svc])
-			for _, line := range p.serviceDetailLines(svc, termW, level, true) {
-				appendLine(line, nil, timerLayer)
+			if !seenSvcs[svc] {
+				seenSvcs[svc] = true
+				svcs = append(svcs, svc)
 			}
 		}
 	}
 	for _, svcID := range p.serviceIDs {
-		if seenSvcs[svcID] {
-			continue
+		if !seenSvcs[svcID] {
+			seenSvcs[svcID] = true
+			svcs = append(svcs, svcID)
 		}
-		seenSvcs[svcID] = true
-		t := p.tasks[svcID]
-		nameTag := dockerlayout.StyleServiceName(svcID)
+	}
+
+	// renderRow adds svc's row, its error and its detail lines; word, when not "", is
+	// the status of a row left unchanged, its group's: still to be acted on when pending.
+	renderRow := func(svc, word string, pending bool) {
+		t := p.tasks[svc]
+		imgName := svcImageMap[svc]
+		nameTag := dockerlayout.StyleServiceName(svc)
 		var icon, statusText, statusTag string
-		if t == nil {
+		switch {
+		case word != "" && pending:
+			icon, statusTag, statusText = "{{|DockerStatusPending|}}"+p.icons().pending+"{{[-]}}", "{{|DockerStatusPending|}}"+word+"{{[-]}}", word
+		case word != "":
+			icon, statusTag, statusText = "{{|DockerMarkerDone|}}"+p.icons().done+"{{[-]}}", serviceFinalTag+word+"{{[-]}}", word
+		case t == nil:
 			icon, statusTag, statusText = impliedIcon, impliedTag+impliedText+"{{[-]}}", impliedText
-		} else {
+		case imgName != "":
+			statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
+		default:
 			statusText, statusTag = p.actionStatus(t)
 			icon = p.serviceIcon(t, t.status)
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svcID), timerService)
-		appendError(p.tasks[svcID])
-		for _, line := range p.serviceDetailLines(svcID, termW, level, true) {
+		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
+		appendError(t)
+		for _, line := range p.serviceDetailLines(svc, termW, level, true) {
 			appendLine(line, nil, timerLayer)
 		}
 	}
 
-	netLines, netTimers := p.buildNetworkLines(termW)
-	for i, line := range netLines {
-		appendLine(line, netTimers[i].task, netTimers[i].style)
-	}
-	volLines, volTimers := p.buildVolumeLines(termW)
-	for i, line := range volLines {
-		appendLine(line, volTimers[i].task, volTimers[i].style)
-	}
-	jobLines, jobTimers := p.buildJobLines(termW, level)
-	for i, line := range jobLines {
-		appendLine(line, jobTimers[i].task, jobTimers[i].style)
+	if p.groupsRows() {
+		lines, timers = p.teardownGroupedLines(svcs, svcImageMap, renderRow, &lines, &timers, termW, level)
+	} else {
+		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+		for _, svc := range svcs {
+			renderRow(svc, "", false)
+		}
+		netLines, netTimers := p.buildNetworkLines(termW)
+		volLines, volTimers := p.buildVolumeLines(termW)
+		modelLines, modelTimers := p.kindSection(p.modelKind(), termW, level)
+		jobLines, jobTimers := p.buildJobLines(termW, level)
+		orphanLines, orphanTimers := p.kindSection(p.orphanKind(), termW, level)
+		for s, section := range [][]string{netLines, volLines, modelLines, jobLines, orphanLines} {
+			sectionTimers := [][]timerEntry{netTimers, volTimers, modelTimers, jobTimers, orphanTimers}[s]
+			for i, line := range section {
+				appendLine(line, sectionTimers[i].task, sectionTimers[i].style)
+			}
+		}
 	}
 
 	lines, timers = p.placeErrorLines(lines, timers, termW)
 	return p.prependSummary(lines, timers)
+}
+
+// teardownOrder is the order of a teardown's unchanged groups.
+var teardownOrder = []string{api.StatusRunning, notRunningText, notCreatedText}
+
+// teardownGroupedLines returns a teardown's rows under changed: and unchanged:: the
+// services compose acted on, and the networks, volumes and jobs it removed, changed;
+// the services it left (teardownGroupWord) unchanged, each group one folded line of
+// names, or with -v their rows. renderRow appends a service's rows to *lines and
+// *timers, which start empty.
+func (p *consoleEventProcessor) teardownGroupedLines(svcs []string, svcImageMap map[string]string, renderRow func(svc, word string, pending bool), lines *[]string, timers *[]timerEntry, termW, level int) ([]string, []timerEntry) {
+	open := level >= dockerlayout.VerboseDetails
+	var changed, unchanged []string
+	groups := map[string][]string{}
+	groupPending := map[string]bool{}
+	anyPending := false
+	for _, svc := range svcs {
+		word, pending := p.teardownGroupWord(svc)
+		if word == "" {
+			changed = append(changed, svc)
+			continue
+		}
+		groups[word] = append(groups[word], svc)
+		groupPending[word] = groupPending[word] || pending
+		anyPending = anyPending || pending
+	}
+	for _, word := range teardownOrder {
+		unchanged = append(unchanged, groups[word]...)
+	}
+	// take returns the lines appended so far, starting over.
+	take := func() ([]string, []timerEntry) {
+		l, t := *lines, *timers
+		*lines, *timers = nil, nil
+		return l, t
+	}
+
+	services := kindGroups{singular: "service", plural: "services", folded: !open}
+	for _, svc := range changed {
+		renderRow(svc, "", false)
+	}
+	services.changed = groupSet{count: len(changed), state: p.rollupState(changed, func(id string) string { return svcImageMap[id] }), timer: p.serviceSectionTask(changed)}
+	services.changed.lines, services.changed.timers = take()
+
+	services.unchanged = groupSet{count: len(unchanged), state: rollupComplete}
+	if anyPending {
+		services.unchanged.state = rollupPending
+	}
+	for _, word := range teardownOrder {
+		if len(groups[word]) == 0 {
+			continue
+		}
+		if open {
+			for _, svc := range groups[word] {
+				_, pending := p.teardownGroupWord(svc)
+				renderRow(svc, word, pending)
+			}
+			continue
+		}
+		names := slices.Sorted(slices.Values(groups[word]))
+		for _, line := range p.groupLines(word, groupPending[word], names, "service", "services", termW) {
+			*lines = append(*lines, line)
+			*timers = append(*timers, timerEntry{})
+		}
+	}
+	services.unchanged.lines, services.unchanged.timers = take()
+
+	return p.groupedLines([]kindGroups{
+		services,
+		p.resourceGroups(networkKind, resourceDecl{}, p.visibleNetworkIDs(), termW, level),
+		p.resourceGroups(volumeKind, resourceDecl{}, p.volumeIDs, termW, level),
+		p.kindGroups(p.modelKind(), termW, level),
+		p.jobGroups(termW, level),
+		p.kindGroups(p.orphanKind(), termW, level),
+	})
 }

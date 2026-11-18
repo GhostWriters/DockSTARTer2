@@ -18,19 +18,20 @@ import (
 const (
 	pendingText    = "Pending"
 	notCreatedText = "Not Created"
-	stoppedText    = "Stopped"
+	notRunningText = "Not Running"
 	notPulledText  = "Not Pulled"
 	cachedText     = "Cached"
 )
 
-var groupOrder = []string{pendingText, notPulledText, notCreatedText, stoppedText, api.StatusRunning, cachedText}
+var groupOrder = []string{pendingText, notPulledText, notCreatedText, notRunningText, api.StatusRunning, cachedText}
 
-// rowGroup is where a row goes in its section: its own line for a change, or into
-// the group of its state, nothing having happened to it yet or for good.
+// rowGroup is where a row goes: its own line under changed: for a change, or into
+// the group of its state under unchanged:, nothing having happened to it yet or for
+// good.
 type rowGroup int
 
 const (
-	groupChanged rowGroup = iota // something happened to it: its own row, first
+	groupChanged rowGroup = iota // something happened to it: its own row, under changed:
 	groupPending                 // nothing has happened to it yet: the group of its state before the run
 	groupSettled                 // confirmed left as it was: Running (Cached for a pull; Scheduled for a job)
 )
@@ -39,7 +40,7 @@ const (
 // none), or "" for its own row: something happened to it, or the call has returned
 // and it isn't settled. Until something happens to it, a service sits in the group of
 // what's next for it: Not Pulled when its image isn't on disk, else for a pull Cached,
-// otherwise its container's state before the run (Running, Stopped, Not Created;
+// otherwise its container's state before the run (Running, Not Running, Not Created;
 // unhealthy is a problem, its own row).
 func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int) string {
 	switch p.serviceGroup(svc, imgName, termW) {
@@ -63,16 +64,17 @@ func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int)
 	case !seen:
 		return notCreatedText
 	case state == "stopped":
-		return stoppedText
+		return notRunningText
 	case state == healthUnhealthy:
 		return ""
 	}
 	return api.StatusRunning
 }
 
-// groupsRows reports whether the display groups its rows: on the commands where
-// most rows of a running stack are left as they were, while nothing has failed. A
-// failure shows every row in its place, the rows around it being context.
+// groupsRows reports whether the display groups its rows under changed: and
+// unchanged:, while nothing has failed: on the commands that bring services up or
+// pull them, and on teardown commands. A failure shows every row in its place, the
+// rows around it being context.
 func (p *consoleEventProcessor) groupsRows() bool {
 	if p.finished && !p.succeeded || p.anyRowFailed() {
 		return false
@@ -81,7 +83,28 @@ func (p *consoleEventProcessor) groupsRows() bool {
 	case "up", "update", "run", "pull":
 		return true
 	}
-	return false
+	return p.isTeardownCommand()
+}
+
+// teardownGroupWord returns the group a teardown leaves svc in, or "" for its own row
+// under changed:, and whether the group's rows are still to be acted on. A service
+// with no container is Not Created, and for stop one already stopped is Not Running,
+// though compose still reports stopping it; until compose reports on the rest, they
+// sit in the group of their state before the run, Running or Not Running.
+func (p *consoleEventProcessor) teardownGroupWord(svc string) (word string, pending bool) {
+	t := p.tasks[svc]
+	state, seen := p.preRun[svc]
+	switch {
+	case !seen && t == nil:
+		return notCreatedText, false
+	case p.command == "stop" && seen && state == "stopped":
+		return notRunningText, false
+	case t != nil || p.finished:
+		return "", false
+	case state == "stopped":
+		return notRunningText, true
+	}
+	return api.StatusRunning, true
 }
 
 // settledWord returns the state the command leaves a service it didn't change in,
@@ -110,7 +133,7 @@ func (p *consoleEventProcessor) serviceGroup(svc, imgName string, termW int) row
 
 // serviceSettled reports whether svc is final and left as it was: for a pull, its
 // image needed no download and no container was touched; otherwise its container
-// is untouched (Running) with no message, a healthy or no health check and no detail
+// is untouched (Running) with no message, a healthy or no health check and no condition
 // line pending or with a problem, and its image, if any, unchanged.
 func (p *consoleEventProcessor) serviceSettled(svc, imgName string, termW int) bool {
 	t := p.tasks[svc]
@@ -124,7 +147,7 @@ func (p *consoleEventProcessor) serviceSettled(svc, imgName string, termW int) b
 	if h := p.serviceHealth(svc); h != "" && h != healthHealthy {
 		return false
 	}
-	if len(p.serviceDetailLines(svc, termW, 0, false)) > 0 {
+	if len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
 		return false
 	}
 	return imgName == "" || p.imageUnchanged(imgName, termW)
@@ -137,7 +160,7 @@ func (p *consoleEventProcessor) serviceChanged(svc, imgName string, termW int) b
 		t.message != "" || t.healthErr || t.conditionErr || t.interrupted) {
 		return true
 	}
-	if p.serviceHealth(svc) == healthUnhealthy || len(p.serviceDetailLines(svc, termW, 0, false)) > 0 {
+	if p.serviceHealth(svc) == healthUnhealthy || len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
 		return true
 	}
 	if imgName == "" {
@@ -172,8 +195,8 @@ func (p *consoleEventProcessor) imageUnchanged(imgName string, termW int) bool {
 }
 
 // groupLines returns a folded group's lines: its state word, how many rows of noun it
-// holds, and all their names, wrapped to termW under the first. pending styles it as
-// a group of rows not running (yet).
+// holds, styled as a section heading, and all their names, wrapped to termW under the
+// first. pending styles it as a group of rows not running (yet).
 func (p *consoleEventProcessor) groupLines(word string, pending bool, names []string, singular, plural string, termW int) []string {
 	noun := singular
 	if len(names) != 1 {
@@ -186,7 +209,7 @@ func (p *consoleEventProcessor) groupLines(word string, pending bool, names []st
 	}
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) + sectionChildIndent +
-		"{{|DockerDetailLabel|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
+		"{{|DockerSection|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
 	if len(names) == 0 {
 		return []string{prefix}
 	}

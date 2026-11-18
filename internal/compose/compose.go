@@ -530,6 +530,16 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			p.preRun = preRun
 			p.preRunImage = preRunImage
 			p.jobs = jobDecls(project)
+			p.models = modelDecls(project)
+			p.serviceModels = serviceModelDecls(project)
+			p.modelSettings = modelSettingsDecls(project)
+			if len(p.models) > 0 && ensuresModels(command) {
+				if path, problem := modelPlugin(dockerCLI); problem != "" {
+					p.failModels(problem)
+				} else {
+					p.modelSettingsBefore = readModelSettings(ctx, path, p.models)
+				}
+			}
 			p.projectNetworks = len(displayProject.Networks)
 			// The networks and volumes the listed services use, and which of them exist
 			// before the run, for their sections' groups.

@@ -40,18 +40,18 @@ func TestServicesStartInTheGroupOfTheirState(t *testing.T) {
 	p := newGroupsTestProcessor("up")
 	p.preRun = map[string]string{"db": "running", "web": "stopped"}
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Stopped         1 service: web") || !strings.Contains(got, "Running         1 service: db") || strings.Contains(got, "db:") {
-		t.Errorf("display =\n%s\nwant web in Stopped and db in Running, without rows", got)
+	if !strings.Contains(got, "Not Running   1 service: web") || !strings.Contains(got, "Running       1 service: db") || strings.Contains(got, "db:") {
+		t.Errorf("display =\n%s\nwant web in Not Running and db in Running, without rows", got)
 	}
-	if strings.Index(got, "Stopped") > strings.Index(got, "Running") {
-		t.Errorf("display =\n%s\nwant Stopped before Running", got)
+	if strings.Index(got, "Not Running") > strings.Index(got, "Running") {
+		t.Errorf("display =\n%s\nwant Not Running before Running", got)
 	}
 	delete(p.preRun, "web") // no container yet
-	if got := renderPlain(p, 0); !strings.Contains(got, "Not Created     1 service: web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Not Created   1 service: web") {
 		t.Errorf("display =\n%s\nwant web in Not Created", got)
 	}
 	delete(p.imageMetaBefore, webImg) // nor its image: pulling it comes first
-	if got := renderPlain(p, 0); !strings.Contains(got, "Not Pulled      1 service: web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Not Pulled    1 service: web") {
 		t.Errorf("display =\n%s\nwant web in Not Pulled", got)
 	}
 }
@@ -60,7 +60,7 @@ func TestPullStartsByWhatsOnDisk(t *testing.T) {
 	p := newGroupsTestProcessor("pull")
 	delete(p.imageMetaBefore, webImg) // web's image isn't on disk
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Not Pulled      1 service: web") || !strings.Contains(got, "Cached          1 service: db") {
+	if !strings.Contains(got, "Not Pulled    1 service: web") || !strings.Contains(got, "Cached        1 service: db") {
 		t.Errorf("display =\n%s\nwant web in Not Pulled and db in Cached", got)
 	}
 }
@@ -70,7 +70,7 @@ func TestUntouchedServicesSettleInTheRunningGroup(t *testing.T) {
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Running         2 services: db, web") || strings.Contains(got, "image:") {
+	if !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, "image:") {
 		t.Errorf("display =\n%s\nwant db and web in the Running group, their images with them", got)
 	}
 }
@@ -80,7 +80,7 @@ func TestAChangedServiceLeavesItsGroup(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	got := renderPlain(p, 0)
 	// db has its own row, first; web stays in Running, the group's count down to 1.
-	if !strings.Contains(got, "Recreated       db:") || !strings.Contains(got, "Running         1 service: web") {
+	if !strings.Contains(got, "Recreated       db:") || !strings.Contains(got, "Running       1 service: web") {
 		t.Errorf("display =\n%s\nwant db's own row and only web in Running", got)
 	}
 	if strings.Index(got, "db:") > strings.Index(got, "1 service: web") {
@@ -115,36 +115,70 @@ func TestVerboseNestsRowsUnderHeadings(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, dockerlayout.VerboseDetails)
-	changed, unchanged := strings.Index(got, "Complete      1 changed service:"), strings.Index(got, "Complete      1 unchanged service:")
-	if changed < 0 || unchanged < changed {
-		t.Fatalf("-v display =\n%s\nwant a changed heading, then an unchanged one, both Complete", got)
+	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
+	if changed < 0 || unchanged < changed || strings.Count(got, "Complete      1 service:") != 2 {
+		t.Fatalf("-v display =\n%s\nwant changed:, then unchanged:, each with a 1 service: heading, all Complete", got)
 	}
-	// Each heading's rows sit nestW further in than the heading's count, the status
-	// column staying put: "Recreated" and "Running" start where the headings' status does.
+	// Each kind heading's rows sit nestW further in than its count, the status column
+	// staying put: "Recreated" and "Running" start where the headings' status does.
 	if db := strings.Index(got, "Recreated       db:"); db < changed || db > unchanged {
-		t.Errorf("-v display =\n%s\nwant db nested under the changed heading", got)
+		t.Errorf("-v display =\n%s\nwant db nested under changed:", got)
 	}
 	if web := strings.Index(got, "Running         web:"); web < unchanged {
-		t.Errorf("-v display =\n%s\nwant web nested under the unchanged heading", got)
+		t.Errorf("-v display =\n%s\nwant web nested under unchanged:", got)
 	}
 }
 
 func TestNetworksGroupLikeServices(t *testing.T) {
 	p := newGroupsTestProcessor("up")
 	p.networks = resourceDecl{names: []string{"proj_default", "proj_backend"}, exists: map[string]bool{"proj_default": true}}
-	lines, _ := p.buildResourceLines(networkKind, p.networks, p.networkIDs, 160, 0)
-	got := strings.Join(plainLines(lines), "\n")
+	got := renderPlain(p, 0)
 	// Before the run reaches them: one exists, one isn't created yet; both unchanged so far.
-	if !strings.Contains(got, "2 unchanged networks:") || !strings.Contains(got, "Not Created     1 network: proj_backend") || !strings.Contains(got, "Existing        1 network: proj_default") {
-		t.Errorf("networks =\n%s\nwant proj_backend Not Created and proj_default Existing, under the unchanged heading", got)
+	if strings.Contains(got, " changed:") || !strings.Contains(got, "Not Created   1 network: proj_backend") || !strings.Contains(got, "Existing      1 network: proj_default") {
+		t.Errorf("display =\n%s\nwant proj_backend Not Created and proj_default Existing, both unchanged", got)
 	}
-	// compose creates proj_backend: it gets its own row under the changed heading.
+	// compose creates proj_backend: it gets its own row under changed:.
 	p.On(api.Resource{ID: "Network proj_backend", Status: api.Done, Text: api.StatusCreated})
+	p.On(containerEvent("db", api.StatusRunning, api.Done))
+	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.finished, p.succeeded = true, true
-	lines, _ = p.buildResourceLines(networkKind, p.networks, p.networkIDs, 160, 0)
-	got = strings.Join(plainLines(lines), "\n")
-	if !strings.Contains(got, "Complete    networks:") || !strings.Contains(got, "1 changed network:") || !strings.Contains(got, "Created         proj_backend:") || !strings.Contains(got, "1 network: proj_default") {
-		t.Errorf("networks =\n%s\nwant proj_backend Created under changed, proj_default still Existing", got)
+	got = renderPlain(p, 0)
+	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
+	if changed < 0 || unchanged < changed || !strings.Contains(got, "Complete      1 network:") || !strings.Contains(got, "Created         proj_backend:") || !strings.Contains(got, "Existing      1 network: proj_default") {
+		t.Errorf("display =\n%s\nwant proj_backend Created under changed:, proj_default still Existing under unchanged:", got)
+	}
+}
+
+func TestChangedHoldsEachKindThatChanged(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.networks = resourceDecl{names: []string{"proj_default"}, exists: map[string]bool{}}
+	p.On(api.Resource{ID: "Network proj_default", Status: api.Done, Text: api.StatusCreated})
+	p.On(containerEvent("db", api.StatusCreated, api.Done))
+	p.On(containerEvent("web", api.StatusRunning, api.Done))
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	changed, svcs, nets, unchanged := strings.Index(got, "changed:"), strings.Index(got, "1 service:\n"),
+		strings.Index(got, "1 network:"), strings.Index(got, "unchanged:")
+	if strings.Count(got, " changed:") != 1 || changed > svcs || svcs > nets || nets > unchanged ||
+		!strings.Contains(got, "Running       1 service: web") || strings.Contains(got, "services:") {
+		t.Errorf("display =\n%s\nwant one changed: holding 1 service: then 1 network:, web under unchanged:, no section headings", got)
+	}
+}
+
+func TestCombineStates(t *testing.T) {
+	for _, tc := range []struct {
+		in   []sectionRollupState
+		want sectionRollupState
+	}{
+		{[]sectionRollupState{rollupComplete, rollupComplete}, rollupComplete},
+		{[]sectionRollupState{rollupPending, rollupPending}, rollupPending},
+		{[]sectionRollupState{rollupPending, rollupComplete}, rollupProcessing},
+		{[]sectionRollupState{rollupComplete, rollupWarning, rollupProcessing}, rollupWarning},
+		{[]sectionRollupState{rollupWarning, rollupError}, rollupError},
+	} {
+		if got := combineStates(tc.in); got != tc.want {
+			t.Errorf("combineStates(%v) = %v, want %v", tc.in, got, tc.want)
+		}
 	}
 }
 
@@ -176,7 +210,7 @@ func TestNestLineKeepsTheStatusColumn(t *testing.T) {
 func TestPullGroupsCachedImages(t *testing.T) {
 	p := newGroupsTestProcessor("pull")
 	p.finished, p.succeeded = true, true // both checks found nothing to pull
-	if got := renderPlain(p, 0); !strings.Contains(got, "Cached          2 services: db, web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Cached        2 services: db, web") {
 		t.Errorf("display =\n%s\nwant db and web in the Cached group", got)
 	}
 }
@@ -211,10 +245,45 @@ func TestAFailureShowsEveryRow(t *testing.T) {
 	}
 }
 
-func TestTeardownDoesntGroup(t *testing.T) {
+func TestTeardownGroups(t *testing.T) {
+	// down: db removed under changed:; web, with no container, Not Created under unchanged:.
 	p := newGroupsTestProcessor("down")
-	if p.groupsRows() {
-		t.Error("down groups rows; every row it lists changed")
+	delete(p.preRun, "web")
+	if got := renderPlain(p, 0); !strings.Contains(got, "Running       1 service: db") || !strings.Contains(got, "Not Created   1 service: web") || strings.Contains(got, " changed:") {
+		t.Errorf("down display before any event =\n%s\nwant db Running (to be removed) and web Not Created, nothing changed yet", got)
+	}
+	p.On(containerEvent("db", api.StatusRemoved, api.Done))
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
+	if changed < 0 || unchanged < changed || !strings.Contains(got, "Removed         db:") || !strings.Contains(got, "Not Created   1 service: web") || strings.Contains(got, "services:") {
+		t.Errorf("down display =\n%s\nwant db Removed under changed:, web Not Created under unchanged:, no services: section", got)
+	}
+
+	// stop: web, already stopped, stays unchanged though compose reports stopping it.
+	q := newGroupsTestProcessor("stop")
+	q.preRun["web"] = "stopped"
+	q.On(containerEvent("db", api.StatusStopped, api.Done))
+	q.On(containerEvent("web", api.StatusStopped, api.Done))
+	q.finished, q.succeeded = true, true
+	if got := renderPlain(q, 0); !strings.Contains(got, "Stopped         db:") || !strings.Contains(got, "Not Running   1 service: web") {
+		t.Errorf("stop display =\n%s\nwant db Stopped under changed: and web in the Not Running group", got)
+	}
+
+	// restart: web, not running before, is started rather than restarted.
+	r := newGroupsTestProcessor("restart")
+	r.preRun["web"] = "stopped"
+	r.On(containerEvent("db", api.StatusRestarted, api.Done))
+	r.On(containerEvent("web", api.StatusRestarted, api.Done))
+	r.finished, r.succeeded = true, true
+	if got := renderPlain(r, 0); !strings.Contains(got, "Restarted       db:") || !strings.Contains(got, "Started         web:") {
+		t.Errorf("restart display =\n%s\nwant db Restarted and web Started", got)
+	}
+
+	// A failed teardown shows every row under the services: section.
+	q.On(api.Resource{ID: "Container db", Status: api.Error, Text: "permission denied"})
+	if got := renderPlain(q, 0); !strings.Contains(got, "services:") || strings.Contains(got, "changed:") {
+		t.Errorf("failed stop display =\n%s\nwant the services: section, ungrouped", got)
 	}
 }
 
@@ -226,9 +295,8 @@ func TestScheduledJobsGroup(t *testing.T) {
 	}})
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning}) // registered by an earlier up
 	p.On(api.Resource{ID: "Job report", Status: api.Done, Text: api.StatusCreated}) // registered now
-	lines, _ := p.buildJobLines(160, 0)
-	got := strings.Join(plainLines(lines), "\n")
-	if !strings.Contains(got, "Scheduled       report:") || !strings.Contains(got, "Scheduled       1 job: backup") {
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "Scheduled       report:") || !strings.Contains(got, "Scheduled     1 job: backup") {
 		t.Errorf("jobs =\n%s\nwant report's own row and backup in the Scheduled group", got)
 	}
 }
