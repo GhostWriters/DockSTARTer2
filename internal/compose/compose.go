@@ -527,6 +527,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			p.dependsOn = dependencies
 			p.preRun = preRun
 			p.jobs = jobDecls(project)
+			p.projectNetworks = len(displayProject.Networks)
 			if job != nil {
 				p.runJob, p.runJobImage = job.name, job.image
 			}

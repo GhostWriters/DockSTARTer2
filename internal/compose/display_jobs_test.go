@@ -111,15 +111,15 @@ func TestJobsRefusalFailsTheJobsNotTheServices(t *testing.T) {
 	}
 }
 
-func TestOtherErrorsLeaveJobsSkipped(t *testing.T) {
+func TestOtherErrorsLeaveJobsInterrupted(t *testing.T) {
 	p := newJobsTestProcessor("up")
 	p.setRunError(errors.New("port is already allocated"))
 	p.finished, p.succeeded = true, false // what Done sets
 	if p.refused {
 		t.Fatal("a non-jobs error marked the run refused")
 	}
-	if lines := jobLines(p, 0); !strings.Contains(lines[1], skippedText) {
-		t.Errorf("lines = %q, want backup Skipped", lines)
+	if lines := jobLines(p, 0); !strings.Contains(lines[1], interruptedText) {
+		t.Errorf("lines = %q, want backup Interrupted", lines)
 	}
 }
 
