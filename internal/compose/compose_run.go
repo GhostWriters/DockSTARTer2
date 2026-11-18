@@ -201,7 +201,7 @@ func cleanOutputLine(line string) string {
 		last = m[1]
 	}
 	b.WriteString(stripControl(line[last:]))
-	out := strings.ReplaceAll(strings.ReplaceAll(b.String(), "\n", ""), "{{", "{⁠{")
+	out := strings.ReplaceAll(strings.ReplaceAll(b.String(), "\n", ""), "{{", "{\u2060{")
 	if coloured {
 		out += "\x1b[0m"
 	}

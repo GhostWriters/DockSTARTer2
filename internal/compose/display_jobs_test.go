@@ -204,11 +204,11 @@ func TestRunRefusal(t *testing.T) {
 func TestCleanOutputLine(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
 		{"plain text", "plain text"},
-		{"\x1b[31mred\x1b[0m", "\x1b[31mred\x1b[0m\x1b[0m"}, // colours stay, reset added
-		{"\x1b[2J\x1b[Hcleared", "cleared"},                 // cursor and screen moves go
-		{"10%\r50%\r100%", "100%"},                          // a progress line shows its last state
-		{"done\r", "done"},                                  // a CRLF line ending
-		{"{{|Error|}}not a tag", "{⁠{|Error|}}not a tag"},   // braces semstyle can't read
+		{"\x1b[31mred\x1b[0m", "\x1b[31mred\x1b[0m\x1b[0m"},    // colours stay, reset added
+		{"\x1b[2J\x1b[Hcleared", "cleared"},                    // cursor and screen moves go
+		{"10%\r50%\r100%", "100%"},                             // a progress line shows its last state
+		{"done\r", "done"},                                     // a CRLF line ending
+		{"{{|Error|}}not a tag", "{\u2060{|Error|}}not a tag"}, // braces semstyle can't read
 		{"bell\x07 here", "bell here"},
 	} {
 		if got := cleanOutputLine(tc.in); got != tc.want {

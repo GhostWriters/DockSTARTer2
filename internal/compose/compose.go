@@ -439,7 +439,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	// The themed event processor owns all output in every mode (TTY, TUI, and redirected),
 	// so the SDK's own CLI streams are discarded, except a run job's output, which goes
 	// to the display (jobOutput).
-	var cliOut, cliErr io.Writer = io.Discard, io.Discard
+	cliOut, cliErr := io.Discard, io.Discard
 	var jobOut *jobOutput
 	if job != nil {
 		jobOut = &jobOutput{name: job.name}
