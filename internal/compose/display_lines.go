@@ -26,6 +26,7 @@ func (p *consoleEventProcessor) isTeardownCommand() bool {
 // VerboseDetails, all of them; at VerboseLayers, the layers too. The console passes
 // p.verbosity, the final log VerboseLayers, so the log has everything regardless of -v.
 func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
+	p.buildLevel = level
 	if p.isTeardownCommand() {
 		return p.buildTeardownLines(termW, level)
 	}
@@ -99,9 +100,10 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		}
 		imgName := b.img
 		img := p.tasks[imgName]
+		// Each service's row: its status, then its error and detail lines.
+		var rows []serviceRow
 		for _, svc := range b.svcs {
 			t := p.tasks[svc]
-			nameTag := dockerlayout.StyleServiceName(svc)
 			var statusText, statusTag, icon string
 			if t == nil {
 				if img != nil && p.allLayersAlreadyExist(imgName) {
@@ -122,13 +124,14 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			} else {
 				statusText, statusTag, icon = p.serviceRowStatus(svc, imgName, t)
 			}
-			statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-			appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
-			appendError(p.tasks[svc])
-			for _, line := range p.serviceDetailLines(svc, termW, level, false) {
-				appendLine(line, nil, timerLayer)
+			var lines []string
+			if line := p.errorLine(t); line != "" {
+				lines = append(lines, line)
 			}
+			lines = append(lines, p.serviceDetailLines(svc, termW, level, false)...)
+			rows = append(rows, serviceRow{svc: svc, statusText: statusText, statusTag: statusTag, icon: icon, lines: lines})
 		}
+		p.appendServiceRows(rows, level, termW, appendLine)
 
 		layers := p.layersForImage(imgName)
 
@@ -217,7 +220,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 				}
 			}
 		}
-		services := kindGroups{singular: "service", plural: "services", folded: !open}
+		services := kindGroups{singular: "service", plural: "services"}
 		services.changed = svcSet(changed, renderAll(changed))
 		if open {
 			services.unchanged = svcSet(unchanged, renderAll(unchanged))
@@ -791,11 +794,9 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 
 	// renderRow adds svc's row, its error and its detail lines; word, when not "", is
 	// the status of a row left unchanged, its group's: still to be acted on when pending.
-	renderRow := func(svc, word string, pending bool) {
+	rowStatus := func(svc, word string, pending bool) (icon, statusTag, statusText string) {
 		t := p.tasks[svc]
 		imgName := svcImageMap[svc]
-		nameTag := dockerlayout.StyleServiceName(svc)
-		var icon, statusText, statusTag string
 		switch {
 		case word != "" && pending:
 			icon, statusTag, statusText = "{{|DockerStatusPending|}}"+p.icons().pending+"{{[-]}}", "{{|DockerStatusPending|}}"+word+"{{[-]}}", word
@@ -809,16 +810,35 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 			statusText, statusTag = p.actionStatus(t)
 			icon = p.serviceIcon(t, t.status)
 		}
+		return icon, statusTag, statusText
+	}
+	renderRow := func(svc, word string, pending bool) {
+		icon, statusTag, statusText := rowStatus(svc, word, pending)
 		statusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(statusText))
-		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+nameTag+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
-		appendError(t)
+		appendLine(globalIndent+icon+" "+statusTag+"{{[-]}}"+statusPad+sectionChildIndent+dockerlayout.StyleServiceName(svc)+"{{|DockerColon|}}:{{[-]}}", p.serviceTimerTask(svc), timerService)
+		appendError(p.tasks[svc])
 		for _, line := range p.serviceDetailLines(svc, termW, level, true) {
 			appendLine(line, nil, timerLayer)
 		}
 	}
+	// renderChanged draws the changed rows, folding those that show the same thing
+	// (appendServiceRows).
+	renderChanged := func(svcs []string) {
+		rows := make([]serviceRow, 0, len(svcs))
+		for _, svc := range svcs {
+			icon, statusTag, statusText := rowStatus(svc, "", false)
+			var lines []string
+			if line := p.errorLine(p.tasks[svc]); line != "" {
+				lines = append(lines, line)
+			}
+			lines = append(lines, p.serviceDetailLines(svc, termW, level, true)...)
+			rows = append(rows, serviceRow{svc, icon, statusTag, statusText, lines})
+		}
+		p.appendServiceRows(rows, level, termW, appendLine)
+	}
 
 	if p.groupsRows() {
-		lines, timers = p.teardownGroupedLines(svcs, svcImageMap, renderRow, &lines, &timers, termW, level)
+		lines, timers = p.teardownGroupedLines(svcs, svcImageMap, renderRow, renderChanged, &lines, &timers, termW, level)
 	} else {
 		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 		for _, svc := range svcs {
@@ -852,8 +872,9 @@ var teardownOrder = []string{api.StatusRunning, pausedText, notRunningText, notC
 // services compose acted on, and the networks, volumes and jobs it removed, changed;
 // the services it left (teardownGroupWord) unchanged, each group one folded line of
 // names, or with -v their rows. renderRow appends a service's rows to *lines and
-// *timers, which start empty.
-func (p *consoleEventProcessor) teardownGroupedLines(svcs []string, svcImageMap map[string]string, renderRow func(svc, word string, pending bool), lines *[]string, timers *[]timerEntry, termW, level int) ([]string, []timerEntry) {
+// *timers, which start empty, and renderChanged the changed services' rows, folding
+// those that show the same thing.
+func (p *consoleEventProcessor) teardownGroupedLines(svcs []string, svcImageMap map[string]string, renderRow func(svc, word string, pending bool), renderChanged func(svcs []string), lines *[]string, timers *[]timerEntry, termW, level int) ([]string, []timerEntry) {
 	open := level >= dockerlayout.VerboseDetails
 	var changed, unchanged []string
 	groups := map[string][]string{}
@@ -879,10 +900,8 @@ func (p *consoleEventProcessor) teardownGroupedLines(svcs []string, svcImageMap 
 		return l, t
 	}
 
-	services := kindGroups{singular: "service", plural: "services", folded: !open}
-	for _, svc := range changed {
-		renderRow(svc, "", false)
-	}
+	services := kindGroups{singular: "service", plural: "services"}
+	renderChanged(changed)
 	services.changed = groupSet{count: len(changed), state: p.rollupState(changed, func(id string) string { return svcImageMap[id] }), timer: p.serviceSectionTask(changed)}
 	services.changed.lines, services.changed.timers = take()
 

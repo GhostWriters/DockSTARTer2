@@ -62,7 +62,8 @@ func (p *consoleEventProcessor) stateLine(state sectionRollupState) (icon, tag, 
 
 // groupSet is one kind's rows under changed: or unchanged:: how many, their rolled-up
 // state and timer, and their lines: its rows, or for a folded unchanged set its
-// group lines (one per state, each naming its kind).
+// group lines (one per state, or per set of possible port conflicts within one, each
+// naming its kind).
 type groupSet struct {
 	count  int
 	state  sectionRollupState
@@ -71,27 +72,36 @@ type groupSet struct {
 	timers []timerEntry
 }
 
-// kindGroups is one kind's (services, networks, volumes, jobs) changed and unchanged
-// rows; folded marks its unchanged set as group lines rather than rows.
+// kindGroups is one kind's (services, networks, volumes, models, jobs, orphans)
+// changed and unchanged rows.
 type kindGroups struct {
 	singular, plural   string
 	changed, unchanged groupSet
-	folded             bool
 }
 
 // groupedLines returns the changed: heading, then the unchanged: one, each with
 // its kinds' rolled-up state and timer, leaving out one with no rows. Under each, a
-// kind with rows gets a heading (N services:) and its rows nested under it; folded
-// unchanged group lines, which name their kind, go directly under unchanged:.
+// kind with rows gets a heading (N services:) and its rows, or folded group lines,
+// nested under it, so a line keeps its indent as rows fold and unfold.
 func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []timerEntry) {
 	var lines []string
 	var timers []timerEntry
+	// After a failed run nothing is still pending: what never got going was cut short,
+	// a warning. Nothing under unchanged: failed, so it is a warning at most.
+	settle := func(adjective string, s sectionRollupState) sectionRollupState {
+		if p.finished && !p.succeeded {
+			if s == rollupPending || s == rollupProcessing || adjective == "unchanged" && s == rollupError {
+				return rollupWarning
+			}
+		}
+		return s
+	}
 	for _, adjective := range []string{"changed", "unchanged"} {
 		var states []sectionRollupState
 		var tasks []*consoleTask
 		for _, k := range kinds {
 			if set := k.set(adjective); set.count > 0 {
-				states = append(states, set.state)
+				states = append(states, settle(adjective, set.state))
 				tasks = append(tasks, set.timer)
 			}
 		}
@@ -107,12 +117,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 			if set.count == 0 {
 				continue
 			}
-			if adjective == "unchanged" && k.folded {
-				lines = append(lines, set.lines...)
-				timers = append(timers, set.timers...)
-				continue
-			}
-			icon, tag, text := p.stateLine(set.state)
+			icon, tag, text := p.stateLine(settle(adjective, set.state))
 			lines = append(lines, groupHeading(icon, tag, text, set.count, k.singular, k.plural))
 			timers = append(timers, timerEntry{task: set.timer, style: timerSection})
 			for _, line := range set.lines {

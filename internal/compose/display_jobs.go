@@ -268,9 +268,10 @@ func (p *consoleEventProcessor) jobRollup() sectionRollupState {
 
 // jobGroup returns job name's group when the display groups rows: one an earlier up
 // registered, left as it was, goes in the Scheduled group, a scheduled job not
-// reported on yet in the Pending group, and a manual one (listed with -v), which up
-// leaves alone, with the unchanged too; the rest (changed, failed, the job -c run
-// runs) get their own rows.
+// reported on yet in the Pending group, one a failed run never got to in the
+// Interrupted group, and a manual one (listed with -v), which up leaves alone, with
+// the unchanged too; the rest (changed, failed, the job -c run runs) get their own
+// rows.
 func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
 	t := p.tasks[jobTaskID(name)]
 	switch {
@@ -282,6 +283,8 @@ func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
 		return groupPending // manual: nothing happens to it
 	case t == nil && !p.finished:
 		return groupPending
+	case p.finished && !p.succeeded && (t == nil || t.interrupted):
+		return groupInterrupted
 	}
 	return groupChanged
 }
@@ -337,12 +340,13 @@ func (p *consoleEventProcessor) jobRowLines(name string, termW, level int) ([]st
 }
 
 // jobGroups returns the jobs' changed and unchanged sets: changed jobs' rows, and the
-// Pending and Scheduled groups, each one folded line of names, or with -v their rows.
+// Interrupted, Pending and Scheduled groups, each one folded line of names, or with
+// -v their rows.
 // A manual job, never reported on, doesn't count in its set's state or timer.
 func (p *consoleEventProcessor) jobGroups(termW, level int) kindGroups {
 	open := level >= dockerlayout.VerboseDetails
-	out := kindGroups{singular: "job", plural: "jobs", folded: !open}
-	var buckets [groupSettled + 1][]string
+	out := kindGroups{singular: "job", plural: "jobs"}
+	var buckets [groupInterrupted + 1][]string
 	for _, name := range p.jobRows(level) {
 		g := p.jobGroup(name)
 		buckets[g] = append(buckets[g], name)
@@ -367,13 +371,16 @@ func (p *consoleEventProcessor) jobGroups(termW, level int) kindGroups {
 			}
 			return s
 		}
-		for _, g := range []rowGroup{groupPending, groupSettled} {
+		for _, g := range []rowGroup{groupInterrupted, groupPending, groupSettled} {
 			if len(buckets[g]) == 0 {
 				continue
 			}
 			word := jobScheduledText
-			if g == groupPending {
+			switch g {
+			case groupPending:
 				word = pendingText
+			case groupInterrupted:
+				word = interruptedText
 			}
 			for _, line := range p.groupLines(word, g == groupPending, buckets[g], "job", "jobs", termW) {
 				s.lines = append(s.lines, line)
@@ -383,7 +390,7 @@ func (p *consoleEventProcessor) jobGroups(termW, level int) kindGroups {
 		return s
 	}
 	out.changed = set(buckets[groupChanged], false)
-	out.unchanged = set(append(slices.Clone(buckets[groupPending]), buckets[groupSettled]...), !open)
+	out.unchanged = set(slices.Concat(buckets[groupInterrupted], buckets[groupPending], buckets[groupSettled]), !open)
 	return out
 }
 

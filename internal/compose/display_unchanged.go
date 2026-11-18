@@ -14,18 +14,20 @@ import (
 
 // Group words for the services nothing has happened to yet, by their state before the
 // run, and groupOrder the order the groups follow the changed rows in, a service's
-// life from pulled to running. Running holds both those running before and those
-// confirmed untouched (and Cached, a pull's).
+// life from pulled to running. Processing holds those whose image compose is checking
+// (whether it needs pulling); Running both those running before and those confirmed
+// untouched (and Cached, a pull's).
 const (
 	pendingText    = "Pending"
 	notCreatedText = "Not Created"
 	notRunningText = "Not Running"
 	pausedText     = "Paused"
+	processingText = "Processing"
 	notPulledText  = "Not Pulled"
 	cachedText     = "Cached"
 )
 
-var groupOrder = []string{pendingText, notPulledText, notCreatedText, notRunningText, pausedText, api.StatusRunning, cachedText}
+var groupOrder = []string{pendingText, processingText, interruptedText, notPulledText, notCreatedText, notRunningText, pausedText, api.StatusRunning, cachedText}
 
 // rowGroup is where a row goes: its own line under changed: for a change, or into
 // the group of its state under unchanged:, nothing having happened to it yet or for
@@ -33,23 +35,31 @@ var groupOrder = []string{pendingText, notPulledText, notCreatedText, notRunning
 type rowGroup int
 
 const (
-	groupChanged rowGroup = iota // something happened to it: its own row, under changed:
-	groupPending                 // nothing has happened to it yet: the group of its state before the run
-	groupSettled                 // confirmed left as it was: Running (Cached for a pull; Scheduled for a job)
+	groupChanged     rowGroup = iota // something happened to it: its own row, under changed:
+	groupPending                     // nothing has happened to it yet: the group of its state before the run
+	groupSettled                     // confirmed left as it was: Running (Cached for a pull; Scheduled for a job)
+	groupInterrupted                 // a failed run never got to it, with nothing else to show
 )
 
 // serviceGroupWord returns the group svc goes in, imgName being its image ("" for
 // none), or "" for its own row: something happened to it, or the call has returned
 // and it isn't settled. Until something happens to it, a service sits in the group of
-// what's next for it: Not Pulled when its image isn't on disk, else for a pull Cached,
-// otherwise its container's state before the run (Running, Paused, Not Running, Not
-// Created; unhealthy is a problem, its own row).
+// what's next for it: Processing while compose checks its image, Not Pulled when its
+// image isn't on disk, else for a pull Cached, otherwise its container's state before
+// the run (Running, Paused, Not Running, Not Created; unhealthy is a problem, its own
+// row). A failed run's services with nothing to show are Interrupted.
 func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int) string {
+	if p.interruptedOnly(svc, imgName, termW) {
+		return interruptedText
+	}
 	switch p.serviceGroup(svc, imgName, termW) {
 	case groupSettled:
 		return p.settledWord()
 	case groupChanged:
 		return ""
+	}
+	if img := p.tasks[imgName]; imgName != "" && img != nil && !img.completed() {
+		return processingText // compose is seeing whether its image needs pulling
 	}
 	if imgName != "" {
 		if _, onDisk := p.imageMetaBefore[imgName]; !onDisk {
@@ -75,12 +85,41 @@ func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int)
 	return api.StatusRunning
 }
 
+// interruptedOnly reports whether svc, after a failed run, has nothing to show but
+// being interrupted: compose stopped before reaching it, or gave it up, with no line
+// under its row (no confirmed port conflict, health or dependency line, failed model)
+// and its image, if any, unchanged. Such services fold into the Interrupted group; one
+// with a possible port conflict folds apart with its line, as any group's.
+func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) bool {
+	if !p.finished || p.succeeded {
+		return false
+	}
+	if t := p.tasks[svc]; t != nil && !t.interrupted {
+		return false
+	}
+	if p.portConflict != nil && p.portConflict.involves(svc) || len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
+		return false
+	}
+	for _, m := range p.serviceModels[svc] {
+		if t := p.tasks[modelTaskID(m.name)]; t != nil && t.status == api.Error {
+			return false // its model line shows the failure
+		}
+	}
+	return imgName == "" || p.imageUnchanged(imgName, termW)
+}
+
 // groupsRows reports whether the display groups its rows under changed: and
-// unchanged:, while nothing has failed: on the commands that bring services up or
-// pull them, and on teardown commands. A failure shows every row in its place, the
-// rows around it being context.
+// unchanged:: on the commands that bring services up or pull them, and on teardown
+// commands. After a failure only the commands that bring services up still group,
+// and only below dockerlayout.VerboseDetails (buildLevel): rows showing the same
+// thing fold (an interrupted service with nothing to show), and -v, like the log,
+// shows every row in its place. A failed teardown shows every row.
 func (p *consoleEventProcessor) groupsRows() bool {
 	if p.finished && !p.succeeded || p.anyRowFailed() {
+		switch p.command {
+		case "up", "update", "run":
+			return p.buildLevel < dockerlayout.VerboseDetails
+		}
 		return false
 	}
 	switch p.command {
@@ -254,21 +293,40 @@ func (p *consoleEventProcessor) imageUnchanged(imgName string, termW int) bool {
 }
 
 // groupLines returns a folded group's lines: its state word, how many rows of noun it
-// holds, styled as a section heading, and all their names, wrapped to termW under the
-// first. pending styles it as a group of rows not running (yet).
+// holds, in DockerNamesLabel, and all their names, wrapped to termW under the
+// first. pending styles it as a group of rows not running (yet); Processing, rows
+// whose image compose is checking, with a spinner; Interrupted, the rows a failed run
+// never got to, as a warning.
 func (p *consoleEventProcessor) groupLines(word string, pending bool, names []string, singular, plural string, termW int) []string {
 	noun := singular
 	if len(names) != 1 {
 		noun = plural
 	}
-	label := strconv.Itoa(len(names)) + " " + noun
 	icon, style := "{{|DockerMarkerDone|}}"+p.icons().done+"{{[-]}}", serviceFinalTag
-	if pending {
+	switch {
+	case word == processingText:
+		icon, style = p.activeSpinnerTag(p.icons().spinner), "{{|DockerStatusActive|}}"
+	case word == interruptedText:
+		icon, style = "{{|DockerMarkerWarn|}}"+p.icons().warn+"{{[-]}}", "{{|DockerStatusWarn|}}"
+	case pending:
 		icon, style = "{{|DockerStatusPending|}}"+p.icons().pending+"{{[-]}}", "{{|DockerStatusPending|}}"
 	}
-	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
+	return p.namesLines(icon, style+word+"{{[-]}}", word, len(names), noun, names, termW)
+}
+
+// foldedRowLines returns the line of service rows that show the same thing, folded:
+// their marker and status, how many, and their names.
+func (p *consoleEventProcessor) foldedRowLines(icon, statusTag, statusText string, names []string, termW int) []string {
+	return p.namesLines(icon, statusTag, statusText, len(names), "services", names, termW)
+}
+
+// namesLines returns a line of icon, statusTag (whose visible text is word), count noun
+// in DockerNamesLabel, and names, wrapped to termW under the first.
+func (p *consoleEventProcessor) namesLines(icon, statusTag, word string, count int, noun string, names []string, termW int) []string {
+	label := strconv.Itoa(count) + " " + noun
+	prefix := globalIndent + icon + " " + statusTag +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) + sectionChildIndent +
-		"{{|DockerSection|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
+		"{{|DockerNamesLabel|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
 	if len(names) == 0 {
 		return []string{prefix}
 	}
