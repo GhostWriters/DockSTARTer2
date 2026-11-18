@@ -307,9 +307,9 @@ func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int,
 	return append(p.serviceConditionLines(svc, termW, level, neededBy), p.modelLines(svc, termW, level >= dockerlayout.VerboseDetails)...)
 }
 
-// serviceConditionLines returns svc's healthcheck line, its dependency lines and, with
-// neededBy, its needed-by line. Below dockerlayout.VerboseDetails, only the ones still
-// pending or with a problem.
+// serviceConditionLines returns svc's healthcheck line, its dependency lines, its ports
+// line in a port conflict and, with neededBy, its needed-by line. Below
+// dockerlayout.VerboseDetails, only the ones still pending or with a problem.
 func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level int, neededBy bool) []string {
 	all := level >= dockerlayout.VerboseDetails
 	var lines []string
@@ -317,6 +317,7 @@ func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level i
 		lines = append(lines, line)
 	}
 	lines = append(lines, p.dependsLines(svc, termW, all)...)
+	lines = append(lines, p.portsLines(svc, termW)...)
 	if neededBy {
 		lines = append(lines, p.neededByLines(svc, termW, all)...)
 	}
