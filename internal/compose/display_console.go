@@ -283,9 +283,11 @@ type consoleEventProcessor struct {
 	preRun           map[string]string
 
 	// servicePorts[svc] is each project service's published ports; portConflict the
-	// port a service couldn't bind when the run failed on one, for the ports lines.
+	// port a service couldn't bind when the run failed on one, and predicted[svc] the
+	// conflicts found for svc before the run, for the ports lines.
 	servicePorts map[string][]types.ServicePortConfig
 	portConflict *portConflict
+	predicted    map[string][]predictedConflict
 
 	// preRunImage[svc] is the image ID svc's container ran before the run; prevMeta
 	// [svc] that image's details when it differs from the one on disk (which a

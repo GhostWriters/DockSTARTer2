@@ -283,11 +283,10 @@ func (p *consoleEventProcessor) containerClaimName(ctr container.Summary) (strin
 // portsLines returns the ports line under svc's row in a port conflict: the service
 // that couldn't bind the port, with what holds it, as a failure; the service holding
 // it, marked as the cause, or one not running that publishes it too, as a warning.
-// None otherwise. A claim
-// from a range of ports names the range, which is where the port comes from.
+// A claim from a range of ports names the range, which is where the port comes from.
 func (p *consoleEventProcessor) portsLines(svc string, termW int) []string {
 	c := p.portConflict
-	if c == nil {
+	if c == nil || !c.involves(svc) {
 		return nil
 	}
 	ic := p.icons()
@@ -351,14 +350,26 @@ func (p *consoleEventProcessor) portRole(svc string) (holder, wanter bool) {
 	return false, slices.ContainsFunc(c.wanters, func(w portClaim) bool { return w.service && w.name == svc })
 }
 
+// involves reports whether svc is the service that couldn't bind the port, the one
+// holding it, or one not running that publishes it too.
+func (c *portConflict) involves(svc string) bool {
+	return svc == c.failed.name || c.holder != nil && c.holder.service && c.holder.name == svc ||
+		slices.ContainsFunc(c.wanters, func(w portClaim) bool { return w.service && w.name == svc })
+}
+
 // portConflictText is the status of a ports line.
 const portConflictText = "Conflict"
 
-// portsLine returns a ports line: icon, Conflict in style, then value dim, wrapped to
-// termW under its first word.
+// portsLine returns a ports line with Conflict as its status (portsLineAs).
 func (p *consoleEventProcessor) portsLine(icon, style, value string, termW int) []string {
-	prefix := globalIndent + icon + " " + style + portConflictText + "{{[-]}}" +
-		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(portConflictText)) +
+	return p.portsLineAs(portConflictText, icon, style, value, termW)
+}
+
+// portsLineAs returns a ports line: icon, word in style, then value dim, wrapped to
+// termW under its first word.
+func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, termW int) []string {
+	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
+		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
 		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerDetailLabel|}}ports{{[-]}}{{|DockerColon|}}:{{[-]}} "
 	prefixW := utf8.RuneCountInString(semstyle.ToPlain(prefix))
 	room := max(termW-timerReserveW-summaryHeaderIndentW-prefixW, minDetailW)
@@ -371,4 +382,310 @@ func (p *consoleEventProcessor) portsLine(icon, style, value string, termW int) 
 		lines = append(lines, lead+"{{[::D]}}"+part+"{{[-]}}")
 	}
 	return lines
+}
+
+// ── Predicted conflicts, before the run ────────────────────────────────────
+
+// predictedConflict is a run of host ports a service of the run publishes that
+// something else claims too: a running container outside the run, which holds them,
+// or another service of the run, which wants them too. target is the service's
+// container port for a single port.
+type predictedConflict struct {
+	lo, hi uint16
+	proto  string
+	target uint32
+	other  string
+	inRun  bool
+}
+
+// portSpec is one host port a service or container publishes.
+type portSpec struct {
+	ip     string
+	port   uint16
+	proto  string
+	target uint32
+}
+
+// serviceSpecs returns the host ports ports publish, a range expanded to each port.
+func serviceSpecs(ports []types.ServicePortConfig) []portSpec {
+	var out []portSpec
+	for _, p := range ports {
+		proto := p.Protocol
+		if proto == "" {
+			proto = "tcp"
+		}
+		lo, hi, isRange := strings.Cut(p.Published, "-")
+		first, err := strconv.ParseUint(lo, 10, 16)
+		if err != nil {
+			continue
+		}
+		last := first
+		if isRange {
+			if last, err = strconv.ParseUint(hi, 10, 16); err != nil {
+				continue
+			}
+		}
+		for n := first; n <= last; n++ {
+			out = append(out, portSpec{ip: p.HostIP, port: uint16(n), proto: proto, target: p.Target + uint32(n-first)})
+		}
+	}
+	return out
+}
+
+// hostIPsOverlap reports whether two host addresses a port is published on can
+// clash: the same address, or either one unspecified, which binds them all.
+func hostIPsOverlap(a, b string) bool {
+	wild := func(s string) bool { return s == "" || s == "0.0.0.0" || s == "::" }
+	return wild(a) || wild(b) || a == b
+}
+
+// predictPortConflicts finds, before the run, the host ports each service of run
+// publishes that a running container outside the run holds, or another service of
+// run publishes too, for the unconfirmed ports lines. A service's own container, and
+// those of the other services in run, aren't holders: compose recreates or keeps them.
+func (p *consoleEventProcessor) predictPortConflicts(ctx context.Context, run []string) {
+	if p.dockerClient == nil {
+		return
+	}
+	inRun := make(map[string]bool, len(run))
+	for _, svc := range run {
+		inRun[svc] = true
+	}
+	type claimant struct {
+		name  string
+		inRun bool
+		specs []portSpec
+	}
+	var others []claimant
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if res, err := p.dockerClient.ContainerList(ctx, dockerclient.ContainerListOptions{}); err == nil {
+		for _, ctr := range res.Items {
+			name, isSvc := p.containerClaimName(ctr)
+			if isSvc && inRun[name] {
+				continue
+			}
+			var specs []portSpec
+			for _, pt := range ctr.Ports {
+				if pt.PublicPort == 0 {
+					continue
+				}
+				ip := ""
+				if pt.IP.IsValid() {
+					ip = pt.IP.String()
+				}
+				specs = append(specs, portSpec{ip: ip, port: pt.PublicPort, proto: pt.Type, target: uint32(pt.PrivatePort)})
+			}
+			if len(specs) > 0 {
+				others = append(others, claimant{name: name, specs: specs})
+			}
+		}
+	}
+	for _, svc := range slices.Sorted(slices.Values(run)) {
+		others = append(others, claimant{name: svc, inRun: true, specs: serviceSpecs(p.servicePorts[svc])})
+	}
+
+	predicted := map[string][]predictedConflict{}
+	for _, svc := range run {
+		mine := serviceSpecs(p.servicePorts[svc])
+		if len(mine) == 0 {
+			continue
+		}
+		for _, o := range others {
+			if o.inRun && o.name == svc {
+				continue
+			}
+			for _, proto := range []string{"tcp", "udp", "sctp"} {
+				shared := map[uint16]bool{}
+				targets := map[uint16]uint32{}
+				for _, m := range mine {
+					if m.proto != proto {
+						continue
+					}
+					for _, s := range o.specs {
+						if s.proto == proto && s.port == m.port && hostIPsOverlap(m.ip, s.ip) {
+							shared[m.port], targets[m.port] = true, m.target
+						}
+					}
+				}
+				for _, port := range slices.Sorted(maps.Keys(shared)) {
+					if shared[port-1] && port > 0 {
+						continue // inside a run already started
+					}
+					lo, hi := portRun(shared, port)
+					predicted[svc] = append(predicted[svc], predictedConflict{lo: lo, hi: hi, proto: proto, target: targets[lo], other: o.name, inRun: o.inRun})
+				}
+			}
+		}
+	}
+	for _, list := range predicted {
+		slices.SortFunc(list, func(a, b predictedConflict) int {
+			if a.lo != b.lo {
+				return int(a.lo) - int(b.lo)
+			}
+			return strings.Compare(a.other, b.other)
+		})
+	}
+	p.mtx.Lock()
+	p.predicted = predicted
+	p.mtx.Unlock()
+}
+
+// predictedLines returns svc's unconfirmed ports line: its predicted conflicts, until
+// compose reports its container running (a false alarm, gone) or the conflict
+// confirmed (portsLines' own line instead). One the run never reached stays.
+func (p *consoleEventProcessor) predictedLines(svc string, termW int) []string {
+	conflicts := p.predicted[svc]
+	if len(conflicts) == 0 || p.containerStarted[svc] || p.portConflict != nil && p.portConflict.involves(svc) {
+		return nil
+	}
+	// One entry per run of ports, naming everything that claims it.
+	type entry struct {
+		ports          string
+		held, wantedBy []string
+	}
+	var entries []*entry
+	byPorts := map[string]*entry{}
+	for _, c := range conflicts {
+		ports := fmt.Sprintf("%d:%d/%s", c.lo, c.target, c.proto)
+		if c.lo != c.hi {
+			ports = fmt.Sprintf("%d-%d/%s", c.lo, c.hi, c.proto)
+		}
+		e := byPorts[ports]
+		if e == nil {
+			e = &entry{ports: ports}
+			byPorts[ports] = e
+			entries = append(entries, e)
+		}
+		if c.inRun {
+			e.wantedBy = append(e.wantedBy, c.other)
+		} else {
+			e.held = append(e.held, c.other)
+		}
+	}
+	var parts []string
+	for _, e := range entries {
+		var how []string
+		if len(e.held) > 0 {
+			how = append(how, "held by "+strings.Join(e.held, ", "))
+		}
+		if len(e.wantedBy) > 0 {
+			how = append(how, "also wanted by "+strings.Join(e.wantedBy, ", "))
+		}
+		parts = append(parts, e.ports+" ("+strings.Join(how, "; ")+")")
+	}
+	return p.portsLineAs(portPossibleText, "{{|DockerMarkerWarn|}}"+p.icons().unsure+"{{[-]}}", "{{|DockerStatusWarn|}}", strings.Join(parts, ", "), termW)
+}
+
+// portPossibleText is the status of a predicted conflict's ports line; its unsure
+// marker tells it apart from a confirmed one.
+const portPossibleText = portConflictText
+
+// possibleGroup is a set of services in one folded group with identical possible
+// port conflicts: their ports, and the unconfirmed line's text.
+type possibleGroup struct {
+	members []string
+	text    string
+}
+
+// splitPossible splits a folded group's services names by their possible port
+// conflicts: those with none, then one group per identical set of conflicts. Two
+// services' conflicts are identical when they claim the same runs of host ports with
+// the same containers outside the run holding them; other services of the run wanting
+// them too are named only when they aren't in the group. A service whose container
+// compose reports running, or that a confirmed conflict involves, has none.
+func (p *consoleEventProcessor) splitPossible(names []string) (plain []string, groups []possibleGroup) {
+	type portEntry struct {
+		ports string
+		held  []string
+	}
+	signature := func(svc string) []portEntry {
+		if p.containerStarted[svc] || p.portConflict != nil && p.portConflict.involves(svc) {
+			return nil
+		}
+		var out []portEntry
+		index := map[string]int{}
+		for _, c := range p.predicted[svc] {
+			ports := fmt.Sprintf("%d/%s", c.lo, c.proto)
+			if c.lo != c.hi {
+				ports = fmt.Sprintf("%d-%d/%s", c.lo, c.hi, c.proto)
+			}
+			i, ok := index[ports]
+			if !ok {
+				i = len(out)
+				index[ports] = i
+				out = append(out, portEntry{ports: ports})
+			}
+			if !c.inRun && !slices.Contains(out[i].held, c.other) {
+				out[i].held = append(out[i].held, c.other)
+			}
+		}
+		for i := range out {
+			slices.Sort(out[i].held)
+		}
+		return out
+	}
+	key := func(sig []portEntry) string {
+		var b strings.Builder
+		for _, e := range sig {
+			b.WriteString(e.ports + "|" + strings.Join(e.held, ",") + ";")
+		}
+		return b.String()
+	}
+	byKey := map[string]int{}
+	var sigs [][]portEntry
+	for _, svc := range names {
+		sig := signature(svc)
+		if len(sig) == 0 {
+			plain = append(plain, svc)
+			continue
+		}
+		k := key(sig)
+		i, ok := byKey[k]
+		if !ok {
+			i = len(groups)
+			byKey[k] = i
+			groups = append(groups, possibleGroup{})
+			sigs = append(sigs, sig)
+		}
+		groups[i].members = append(groups[i].members, svc)
+	}
+	for i := range groups {
+		var parts []string
+		for _, e := range sigs[i] {
+			var how []string
+			if len(e.held) > 0 {
+				how = append(how, "held by "+strings.Join(e.held, ", "))
+			}
+			// Other services of the run wanting these ports, outside the group.
+			var wanted []string
+			for _, svc := range groups[i].members {
+				for _, c := range p.predicted[svc] {
+					ports := fmt.Sprintf("%d/%s", c.lo, c.proto)
+					if c.lo != c.hi {
+						ports = fmt.Sprintf("%d-%d/%s", c.lo, c.hi, c.proto)
+					}
+					if ports == e.ports && c.inRun && !slices.Contains(groups[i].members, c.other) && !slices.Contains(wanted, c.other) {
+						wanted = append(wanted, c.other)
+					}
+				}
+			}
+			if len(wanted) > 0 {
+				slices.Sort(wanted)
+				how = append(how, "also wanted by "+strings.Join(wanted, ", "))
+			}
+			part := e.ports
+			if len(how) > 0 {
+				part += " (" + strings.Join(how, "; ") + ")"
+			}
+			parts = append(parts, part)
+		}
+		groups[i].text = strings.Join(parts, ", ")
+	}
+	return plain, groups
+}
+
+// possibleGroupLine returns a possible group's unconfirmed ports line.
+func (p *consoleEventProcessor) possibleGroupLine(g possibleGroup, termW int) []string {
+	return p.portsLineAs(portPossibleText, "{{|DockerMarkerWarn|}}"+p.icons().unsure+"{{[-]}}", "{{|DockerStatusWarn|}}", g.text, termW)
 }
