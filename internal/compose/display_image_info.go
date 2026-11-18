@@ -43,6 +43,8 @@ func metaFromInspect(r image.InspectResponse) imageMeta {
 		m.version = labels["org.opencontainers.image.version"]
 	case buildVersionRE.MatchString(labels["build_version"]):
 		m.version = buildVersionRE.FindStringSubmatch(labels["build_version"])[1]
+	case labels["org.label-schema.version"] != "":
+		m.version = labels["org.label-schema.version"]
 	default:
 		m.version = labels["version"]
 	}
@@ -136,10 +138,15 @@ type infoPart struct{ text, url string }
 // A container this run brought up shows the version it now runs, as "old → new" (and
 // its build date) when it ran a different image before, e.g. one pulled by an earlier
 // pull, with verbose too. A version links to its release or tag page when versionURL
-// has one.
+// has one; a version a Docker Hub tag gave its digest (tagVersions) replaces its labels'.
 func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbose bool) []string {
 	before, hadBefore := p.imageMetaBefore[imgName]
 	after, pulled := p.imageMetaAfter[imgName]
+	labelled := before // the current image's details as its labels give them
+	if pulled {
+		labelled = after
+	}
+	before, after = p.tagVersions(before, after)
 	current := before
 	if pulled {
 		current = after
@@ -160,6 +167,9 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 	// A container brought up onto a different image than it ran before: old → new,
 	// when this run's own pull doesn't already show a change.
 	prev, hadPrev, prevGone, brought := p.containerChange(imgName)
+	if hadPrev {
+		prev, _ = p.tagVersions(prev, labelled)
+	}
 	moved := hadPrev && !imageChanged
 	movedVersion := moved && prev.version != "" && current.version != "" && prev.version != current.version
 	movedBuilt := moved && prev.built != "" && current.built != "" && prev.built != current.built

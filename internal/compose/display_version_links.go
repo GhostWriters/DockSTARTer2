@@ -18,9 +18,16 @@ var (
 	dockerHubBaseURL = "https://hub.docker.com"
 )
 
-// versionCheckTimeout caps each version link check, and the wait for unfinished ones
-// at the end of a run.
+// versionCheckTimeout caps each version link check.
 const versionCheckTimeout = 3 * time.Second
+
+// digestLookupTimeout caps the search of an image's Docker Hub tags for its digest,
+// after its version's link check found nothing; digestLookupPages caps the pages of
+// tags searched, newest first.
+const (
+	digestLookupTimeout = 4 * time.Second
+	digestLookupPages   = 5
+)
 
 var versionCheckClient = &http.Client{Timeout: versionCheckTimeout}
 
@@ -38,33 +45,144 @@ func (p *consoleEventProcessor) versionURL(imgRef string, m imageMeta) string {
 	return p.versionLinks[versionKey(imgRef, m.version)]
 }
 
+// tagVersions returns an old and a new image's details with the version a Docker Hub
+// tag gave each one's digest in place of its labels', when a lookup found one. When
+// only one was found and their labels gave the same version (a base image's, say),
+// the other's version is unknown: it's left empty rather than shown as old → new.
+// Callers hold p.mtx.
+func (p *consoleEventProcessor) tagVersions(old, cur imageMeta) (imageMeta, imageMeta) {
+	oldTag, curTag := p.digestVersions[old.digest], p.digestVersions[cur.digest]
+	if old.digest == "" {
+		oldTag = ""
+	}
+	if cur.digest == "" {
+		curTag = ""
+	}
+	sameLabel := old.version == cur.version
+	switch {
+	case oldTag != "":
+		old.version = oldTag
+	case curTag != "" && sameLabel:
+		old.version = ""
+	}
+	switch {
+	case curTag != "":
+		cur.version = curTag
+	case oldTag != "" && sameLabel:
+		cur.version = ""
+	}
+	return old, cur
+}
+
 // checkVersionLink starts a background check for a link for an image's version, unless
-// it needs none (no version, or a LinuxServer release) or one already ran. Run with p.mtx
-// held or before rendering starts.
+// it needs none (a LinuxServer release) or one already ran. When its version has no
+// release or tag, or it has no version, the image's digest is looked up among its
+// Docker Hub tags: a tag sharing it gives the version (tagVersions) and its link. Run
+// with p.mtx held or before rendering starts.
 func (p *consoleEventProcessor) checkVersionLink(imgRef string, m imageMeta) {
-	key := versionKey(imgRef, m.version)
-	if m.version == "" || releaseURL(m) != "" || p.versionChecked[key] {
+	key := versionKey(imgRef, m.version) + "\x00" + m.digest
+	if m.version == "" && m.digest == "" || releaseURL(m) != "" || p.versionChecked[key] {
 		return
 	}
 	p.versionChecked[key] = true
 	p.linkWG.Add(1)
 	go func() {
 		defer p.linkWG.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
+		if m.version != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
+			link := findVersionLink(ctx, imgRef, m)
+			cancel()
+			if link != "" {
+				p.mtx.Lock()
+				p.versionLinks[versionKey(imgRef, m.version)] = link
+				p.mtx.Unlock()
+				return
+			}
+		}
+		name := imageName(imgRef)
+		repo := dockerHubRepo(name)
+		if m.digest == "" || repo == "" {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), digestLookupTimeout)
 		defer cancel()
-		link := findVersionLink(ctx, imgRef, m)
-		if link == "" {
+		version := versionFromTags(hubTagsForDigest(ctx, repo, m.digest))
+		if version == "" {
 			return
 		}
 		p.mtx.Lock()
-		p.versionLinks[key] = link
+		p.digestVersions[m.digest] = version
+		p.versionLinks[versionKey(imgRef, version)] = dockerlayout.ImageTagURL(name, version)
 		p.mtx.Unlock()
 	}()
 }
 
+// hubTagsForDigest returns the tags of a Docker Hub repo (namespace/repo) that point
+// at digest, searching its tags newest first, at most digestLookupPages pages, and
+// stopping at the end of the first page that has any: tags pushed together sit
+// together. It returns nil when none match or the search fails.
+func hubTagsForDigest(ctx context.Context, repo, digest string) []string {
+	next := dockerHubBaseURL + "/v2/repositories/" + repo + "/tags?page_size=100&ordering=last_updated"
+	for range digestLookupPages {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, next, nil)
+		if err != nil {
+			return nil
+		}
+		req.Header.Set("User-Agent", "DockSTARTer2")
+		resp, err := versionCheckClient.Do(req)
+		if err != nil {
+			return nil
+		}
+		var page struct {
+			Next    string `json:"next"`
+			Results []struct {
+				Name   string `json:"name"`
+				Digest string `json:"digest"`
+			} `json:"results"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&page)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || err != nil {
+			return nil
+		}
+		var tags []string
+		for _, r := range page.Results {
+			if r.Digest == digest {
+				tags = append(tags, r.Name)
+			}
+		}
+		if len(tags) > 0 || page.Next == "" {
+			return tags
+		}
+		next = page.Next
+	}
+	return nil
+}
+
+// versionFromTags returns the most specific version among an image's tags: of those
+// starting with a digit, or v and a digit, the one with the most dot-separated parts,
+// e.g. 4.1.12.1122 over 4.1 and 4, the shortest on a tie, e.g. v1.14.1 over its
+// variant v1.14.1-alpine. Tags such as latest or dev name no version; "" when only
+// those are left.
+func versionFromTags(tags []string) string {
+	best := ""
+	for _, tag := range tags {
+		digits := strings.TrimPrefix(tag, "v")
+		if digits == "" || digits[0] < '0' || digits[0] > '9' {
+			continue
+		}
+		parts, bestParts := strings.Count(tag, "."), strings.Count(best, ".")
+		if best == "" || parts > bestParts || parts == bestParts && len(tag) < len(best) {
+			best = tag
+		}
+	}
+	return best
+}
+
 // checkShownVersionLinks starts link checks for the versions an image's info lines
 // show at the run's verbosity: with -v its current version, without it the old and
-// new versions once a pull changed them, or the version a first pull brought.
+// new versions once a pull changed the image (its digest lookups may tell the
+// versions apart when the labels don't), or the version a first pull brought.
 func (p *consoleEventProcessor) checkShownVersionLinks(imgRef string) {
 	before, hadBefore := p.imageMetaBefore[imgRef]
 	after, pulled := p.imageMetaAfter[imgRef]
@@ -74,14 +192,14 @@ func (p *consoleEventProcessor) checkShownVersionLinks(imgRef string) {
 	case p.verbosity >= dockerlayout.VerboseDetails && hadBefore:
 		p.checkVersionLink(imgRef, before)
 	}
-	if hadBefore && pulled && before.version != "" && after.version != "" && before.version != after.version {
+	if hadBefore && pulled && (before.version != after.version || before.digest != after.digest) {
 		p.checkVersionLink(imgRef, before)
 		p.checkVersionLink(imgRef, after)
 	}
 }
 
-// waitVersionLinks waits for unfinished version link checks, at most
-// versionCheckTimeout, so the final render can include their links.
+// waitVersionLinks waits for unfinished version link checks, at most as long as one
+// check and its digest lookup take, so the final render can include their links.
 func (p *consoleEventProcessor) waitVersionLinks() {
 	done := make(chan struct{})
 	go func() {
@@ -90,7 +208,7 @@ func (p *consoleEventProcessor) waitVersionLinks() {
 	}()
 	select {
 	case <-done:
-	case <-time.After(versionCheckTimeout):
+	case <-time.After(versionCheckTimeout + digestLookupTimeout):
 	}
 }
 
@@ -107,10 +225,7 @@ func findVersionLink(ctx context.Context, imgRef string, m imageMeta) string {
 			}
 		}
 	}
-	name, _, _ := strings.Cut(strings.TrimPrefix(imgRef, "docker.io/"), "@")
-	if i := strings.LastIndex(name, ":"); i > strings.LastIndex(name, "/") {
-		name = name[:i]
-	}
+	name := imageName(imgRef)
 	if repo, ok := strings.CutPrefix(name, "ghcr.io/"); ok && ghcrTagExists(ctx, repo, m.version) {
 		return dockerlayout.ImageTagURL(name, m.version)
 	}
@@ -119,6 +234,15 @@ func findVersionLink(ctx context.Context, imgRef string, m imageMeta) string {
 		return dockerlayout.ImageTagURL(name, m.version)
 	}
 	return ""
+}
+
+// imageName returns an image reference without its docker.io/ prefix, tag or digest.
+func imageName(imgRef string) string {
+	name, _, _ := strings.Cut(strings.TrimPrefix(imgRef, "docker.io/"), "@")
+	if i := strings.LastIndex(name, ":"); i > strings.LastIndex(name, "/") {
+		name = name[:i]
+	}
+	return name
 }
 
 // githubRepo returns the owner/repo a source label's github.com URL names, or "".
