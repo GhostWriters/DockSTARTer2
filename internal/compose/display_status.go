@@ -159,10 +159,10 @@ func (p *consoleEventProcessor) rollupState(ids []string, imageForID func(string
 			anyWarning = true
 		}
 		// A service's health counts like its row's: still working while on its first
-		// check, a warning once unhealthy.
+		// check, a warning once unhealthy or when that check gave no result in time.
 		if p.healthChecking(id) {
 			allDone = false
-		} else if p.serviceHealth(id) == healthUnhealthy {
+		} else if p.serviceHealth(id) == healthUnhealthy || p.healthNoResult(id) {
 			anyWarning = true
 		}
 	}

@@ -219,6 +219,9 @@ type consoleEventProcessor struct {
 	refused bool
 	// projectNetworks is how many networks the listed services use, for the header
 	projectNetworks int
+	// networks and volumes are the ones the listed services use and which of them
+	// exist before the run (resourceDecl), for their sections' groups
+	networks, volumes resourceDecl
 	// runJob and runJobImage are the job -c run runs and its image, "" otherwise
 	runJob, runJobImage string
 	// jobOutLines is the run job's output, cleaned (cleanOutputLine), and
@@ -276,6 +279,13 @@ type consoleEventProcessor struct {
 	dependsOn        map[string][]serviceDep
 	containerStarted map[string]bool
 	preRun           map[string]string
+
+	// preRunImage[svc] is the image ID svc's container ran before the run; prevMeta
+	// [svc] that image's details when it differs from the one on disk (which a
+	// recreate moves the container onto), and prevGone[svc] when that image is gone.
+	preRunImage map[string]string
+	prevMeta    map[string]imageMeta
+	prevGone    map[string]bool
 
 	// Pre-flight layer data (populated before pull starts via ImageInspect on local images).
 	// imageLayerDiffIDs[imgRef] = ordered RootFS.Layers sha256s from pre-flight inspect.
@@ -600,6 +610,16 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		p.containerStarted[id] = true
 		p.checkHealth(id, containerName)
 	}
+	if isServiceEvent && e.Status == api.Done && (e.Text == api.StatusCreated || e.Text == api.StatusStarted || e.Text == "Recreated") {
+		// Brought up: its info lines show the version it now runs, so check its link.
+		if img := p.imageForService(id); img != "" {
+			if m, ok := p.imageMetaAfter[img]; ok {
+				p.checkVersionLink(img, m)
+			} else if m, ok := p.imageMetaBefore[img]; ok {
+				p.checkVersionLink(img, m)
+			}
+		}
+	}
 
 	// Compose's Waiting and Healthy come from waiting on a dependency, and its Healthy
 	// also covers a running container with no healthcheck. Health shows on the row's
@@ -912,6 +932,7 @@ func (p *consoleEventProcessor) preflight(ctx context.Context) {
 			}
 		}
 	}
+	p.inspectPreviousImages(ctx)
 	for _, imgRef := range p.imageOrder {
 		p.checkShownVersionLinks(imgRef)
 	}

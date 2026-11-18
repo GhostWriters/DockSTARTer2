@@ -40,18 +40,18 @@ func TestServicesStartInTheGroupOfTheirState(t *testing.T) {
 	p := newGroupsTestProcessor("up")
 	p.preRun = map[string]string{"db": "running", "web": "stopped"}
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Stopped       1 service: web") || !strings.Contains(got, "Running       1 service: db") || strings.Contains(got, "db:") {
+	if !strings.Contains(got, "Stopped         1 service: web") || !strings.Contains(got, "Running         1 service: db") || strings.Contains(got, "db:") {
 		t.Errorf("display =\n%s\nwant web in Stopped and db in Running, without rows", got)
 	}
 	if strings.Index(got, "Stopped") > strings.Index(got, "Running") {
 		t.Errorf("display =\n%s\nwant Stopped before Running", got)
 	}
 	delete(p.preRun, "web") // no container yet
-	if got := renderPlain(p, 0); !strings.Contains(got, "Not Created   1 service: web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Not Created     1 service: web") {
 		t.Errorf("display =\n%s\nwant web in Not Created", got)
 	}
 	delete(p.imageMetaBefore, webImg) // nor its image: pulling it comes first
-	if got := renderPlain(p, 0); !strings.Contains(got, "Not Pulled    1 service: web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Not Pulled      1 service: web") {
 		t.Errorf("display =\n%s\nwant web in Not Pulled", got)
 	}
 }
@@ -60,7 +60,7 @@ func TestPullStartsByWhatsOnDisk(t *testing.T) {
 	p := newGroupsTestProcessor("pull")
 	delete(p.imageMetaBefore, webImg) // web's image isn't on disk
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Not Pulled    1 service: web") || !strings.Contains(got, "Cached        1 service: db") {
+	if !strings.Contains(got, "Not Pulled      1 service: web") || !strings.Contains(got, "Cached          1 service: db") {
 		t.Errorf("display =\n%s\nwant web in Not Pulled and db in Cached", got)
 	}
 }
@@ -70,7 +70,7 @@ func TestUntouchedServicesSettleInTheRunningGroup(t *testing.T) {
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, "image:") {
+	if !strings.Contains(got, "Running         2 services: db, web") || strings.Contains(got, "image:") {
 		t.Errorf("display =\n%s\nwant db and web in the Running group, their images with them", got)
 	}
 }
@@ -80,7 +80,7 @@ func TestAChangedServiceLeavesItsGroup(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	got := renderPlain(p, 0)
 	// db has its own row, first; web stays in Running, the group's count down to 1.
-	if !strings.Contains(got, "Recreated     db:") || !strings.Contains(got, "Running       1 service: web") {
+	if !strings.Contains(got, "Recreated       db:") || !strings.Contains(got, "Running         1 service: web") {
 		t.Errorf("display =\n%s\nwant db's own row and only web in Running", got)
 	}
 	if strings.Index(got, "db:") > strings.Index(got, "1 service: web") {
@@ -110,21 +110,73 @@ func TestUnhealthyServiceGetsItsOwnRow(t *testing.T) {
 	}
 }
 
-func TestVerboseOpensTheGroups(t *testing.T) {
+func TestVerboseNestsRowsUnderHeadings(t *testing.T) {
 	p := newGroupsTestProcessor("up")
-	p.On(containerEvent("db", api.StatusRunning, api.Done))
+	p.On(containerEvent("db", "Recreated", api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, dockerlayout.VerboseDetails)
-	line := strings.Index(got, "2 services:")
-	if line < 0 || strings.Contains(got, "2 services: db") || strings.Index(got, "db:") < line || strings.Index(got, "web:") < line {
-		t.Errorf("-v display =\n%s\nwant the Running group's line heading db's and web's rows", got)
+	changed, unchanged := strings.Index(got, "Complete      1 changed service:"), strings.Index(got, "Complete      1 unchanged service:")
+	if changed < 0 || unchanged < changed {
+		t.Fatalf("-v display =\n%s\nwant a changed heading, then an unchanged one, both Complete", got)
+	}
+	// Each heading's rows sit nestW further in than the heading's count, the status
+	// column staying put: "Recreated" and "Running" start where the headings' status does.
+	if db := strings.Index(got, "Recreated       db:"); db < changed || db > unchanged {
+		t.Errorf("-v display =\n%s\nwant db nested under the changed heading", got)
+	}
+	if web := strings.Index(got, "Running         web:"); web < unchanged {
+		t.Errorf("-v display =\n%s\nwant web nested under the unchanged heading", got)
+	}
+}
+
+func TestNetworksGroupLikeServices(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.networks = resourceDecl{names: []string{"proj_default", "proj_backend"}, exists: map[string]bool{"proj_default": true}}
+	lines, _ := p.buildResourceLines(networkKind, p.networks, p.networkIDs, 160, 0)
+	got := strings.Join(plainLines(lines), "\n")
+	// Before the run reaches them: one exists, one isn't created yet; both unchanged so far.
+	if !strings.Contains(got, "2 unchanged networks:") || !strings.Contains(got, "Not Created     1 network: proj_backend") || !strings.Contains(got, "Existing        1 network: proj_default") {
+		t.Errorf("networks =\n%s\nwant proj_backend Not Created and proj_default Existing, under the unchanged heading", got)
+	}
+	// compose creates proj_backend: it gets its own row under the changed heading.
+	p.On(api.Resource{ID: "Network proj_backend", Status: api.Done, Text: api.StatusCreated})
+	p.finished, p.succeeded = true, true
+	lines, _ = p.buildResourceLines(networkKind, p.networks, p.networkIDs, 160, 0)
+	got = strings.Join(plainLines(lines), "\n")
+	if !strings.Contains(got, "Complete    networks:") || !strings.Contains(got, "1 changed network:") || !strings.Contains(got, "Created         proj_backend:") || !strings.Contains(got, "1 network: proj_default") {
+		t.Errorf("networks =\n%s\nwant proj_backend Created under changed, proj_default still Existing", got)
+	}
+}
+
+func TestHealthNoResultIsAWarning(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	p.setHealth("db", "db", healthStarting)
+	if p.healthNoResult("db") {
+		t.Fatal("no result while the run still waits for the first check")
+	}
+	p.healthWaitDone = true // the wait ran out with no result
+	if icon := semstyle.ToPlain(p.serviceIcon(p.tasks["db"], api.Done)); icon != p.icons().warn {
+		t.Errorf("db's icon = %q, want a warning", icon)
+	}
+	if state := p.rollupState([]string{"db"}, nil); state != rollupWarning {
+		t.Errorf("rollup = %v, want a warning", state)
+	}
+}
+
+func TestNestLineKeepsTheStatusColumn(t *testing.T) {
+	pad := strings.Repeat(" ", sectionStatusW-len("Running"))
+	line := globalIndent + "{{|DockerMarkerDone|}}✓{{[-]}} {{|App|}}Running{{[-]}}" + pad + sectionChildIndent + "{{|App|}}db{{[-]}}:"
+	got := strings.Join(plainLines([]string{nestLine(line)}), "")
+	if want := "✓ Running" + pad + sectionChildIndent + strings.Repeat(" ", nestW) + "db:"; got != want {
+		t.Errorf("nestLine = %q, want %q", got, want)
 	}
 }
 
 func TestPullGroupsCachedImages(t *testing.T) {
 	p := newGroupsTestProcessor("pull")
 	p.finished, p.succeeded = true, true // both checks found nothing to pull
-	if got := renderPlain(p, 0); !strings.Contains(got, "Cached        2 services: db, web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Cached          2 services: db, web") {
 		t.Errorf("display =\n%s\nwant db and web in the Cached group", got)
 	}
 }
@@ -176,7 +228,7 @@ func TestScheduledJobsGroup(t *testing.T) {
 	p.On(api.Resource{ID: "Job report", Status: api.Done, Text: api.StatusCreated}) // registered now
 	lines, _ := p.buildJobLines(160, 0)
 	got := strings.Join(plainLines(lines), "\n")
-	if !strings.Contains(got, "Scheduled     report:") || !strings.Contains(got, "Scheduled     1 job: backup") {
+	if !strings.Contains(got, "Scheduled       report:") || !strings.Contains(got, "Scheduled       1 job: backup") {
 		t.Errorf("jobs =\n%s\nwant report's own row and backup in the Scheduled group", got)
 	}
 }
@@ -201,7 +253,7 @@ func TestGroupLinesWrapAllNames(t *testing.T) {
 	for i := range 30 {
 		names = append(names, fmt.Sprintf("service%02d", i))
 	}
-	lines := p.groupLines("Running", false, names, "service", "services", false, 100)
+	lines := p.groupLines("Running", false, names, "service", "services", 100)
 	if len(lines) < 2 {
 		t.Fatalf("lines = %q, want the names wrapped", plainLines(lines))
 	}

@@ -47,30 +47,33 @@ func TestScheduleText(t *testing.T) {
 
 func TestJobRowsOnUp(t *testing.T) {
 	p := newJobsTestProcessor("up")
-	// Below -v only the scheduled job, which up registers, is listed: in the Pending group.
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], "Pending") || !strings.Contains(lines[1], "1 job: backup") {
-		t.Fatalf("lines = %q, want the jobs: header and backup in the Pending group", lines)
+	// Below -v only the scheduled job, which up registers, is listed: under the unchanged
+	// heading, in the Pending group.
+	if lines := jobLines(p, 0); len(lines) != 3 || !strings.Contains(lines[1], "1 unchanged job:") || !strings.Contains(lines[2], "Pending") || !strings.Contains(lines[2], "1 job: backup") {
+		t.Fatalf("lines = %q, want the jobs: header, the unchanged heading and backup in the Pending group", lines)
 	}
 	// -v adds the manual job.
 	if lines := jobLines(p, dockerlayout.VerboseDetails); !strings.Contains(strings.Join(lines, "\n"), "Manual") {
 		t.Errorf("lines = %q, want repair as Manual with -v", lines)
 	}
-	// Scheduled anew: the schedule shows without -v.
+	// Scheduled anew: under the changed heading, the schedule shows without -v.
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusCreated})
 	lines := jobLines(p, 0)
-	if !strings.Contains(lines[1], jobScheduledText) || len(lines) != 3 || !strings.Contains(lines[2], "schedule: 0 3 * * * (Europe/London)") {
-		t.Errorf("lines = %q, want backup Scheduled with its schedule", lines)
+	if len(lines) != 4 || !strings.Contains(lines[1], "1 changed job:") || !strings.Contains(lines[2], jobScheduledText) || !strings.Contains(lines[3], "schedule: 0 3 * * * (Europe/London)") {
+		t.Errorf("lines = %q, want backup Scheduled with its schedule under the changed heading", lines)
 	}
 	// Already registered: in the Scheduled group, its schedule only with -v.
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning})
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[1], jobScheduledText) || !strings.Contains(lines[1], "1 job: backup") {
+	if lines := jobLines(p, 0); len(lines) != 3 || !strings.Contains(lines[2], jobScheduledText) || !strings.Contains(lines[2], "1 job: backup") {
 		t.Errorf("lines = %q, want backup in the Scheduled group without its schedule", lines)
 	}
-	// -v opens the group: its line, then backup's row with its schedule.
+	// -v: one heading for the unchanged jobs, backup (with its schedule) and the manual
+	// repair nested under it, the heading Complete.
 	lines = jobLines(p, dockerlayout.VerboseDetails)
 	joined := strings.Join(lines, "\n")
-	if !strings.Contains(joined, "1 job:") || !strings.Contains(joined, "backup:") || !strings.Contains(joined, "schedule:") {
-		t.Errorf("-v lines = %q, want the Scheduled group opened with backup's row", lines)
+	if !strings.Contains(joined, "Complete      2 unchanged jobs:") || strings.Contains(joined, "changed job:") ||
+		!strings.Contains(joined, "    backup:") || !strings.Contains(joined, "    repair:") || !strings.Contains(joined, "schedule:") {
+		t.Errorf("-v lines = %q, want backup and repair nested under one Complete unchanged heading", lines)
 	}
 }
 
@@ -80,8 +83,8 @@ func TestJobEventsDontBecomeServiceRows(t *testing.T) {
 	if len(p.serviceIDs) != 0 || len(p.unknownContainers) != 0 {
 		t.Errorf("serviceIDs = %q, unknown = %v: a job event made a service row", p.serviceIDs, p.unknownContainers)
 	}
-	if lines := jobLines(p, 0); !strings.Contains(lines[1], jobSchedulingText) {
-		t.Errorf("lines = %q, want backup Scheduling", lines)
+	if lines := jobLines(p, 0); len(lines) != 3 || !strings.Contains(lines[2], jobSchedulingText) || !strings.Contains(lines[2], "backup:") {
+		t.Errorf("lines = %q, want backup's own row, Scheduling", lines)
 	}
 }
 
@@ -253,8 +256,8 @@ func TestRunJobRowShowsItsOwnStatus(t *testing.T) {
 	p.runJob = "repair"
 	p.setJobRunStatus("repair", jobRunningText, api.Working, "")
 	lines := jobLines(p, 0)
-	if len(lines) != 2 || !strings.Contains(lines[1], jobRunningText) || !strings.Contains(lines[1], "repair:") {
-		t.Errorf("lines = %q, want repair's own row, Running", lines)
+	if len(lines) != 3 || !strings.Contains(lines[1], "1 changed job:") || !strings.Contains(lines[2], jobRunningText) || !strings.Contains(lines[2], "repair:") {
+		t.Errorf("lines = %q, want repair's own row, Running, under the changed heading", lines)
 	}
 	if got := semstyle.ToPlain(strings.Join(lines, "")); strings.Contains(got, "backup") {
 		t.Errorf("lines = %q: run listed a job it doesn't run", lines)

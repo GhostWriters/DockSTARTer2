@@ -483,7 +483,8 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 				containerToService[svc.ContainerName] = name
 			}
 		}
-		preRun := make(map[string]string) // service → container state before the run, for the dependency lines
+		preRun := make(map[string]string)      // service → container state before the run, for the dependency lines
+		preRunImage := make(map[string]string) // service → the image ID its container ran
 		// Also query running containers to map their actual names (which may include
 		// random suffixes like "<project>-<service>-<random>") to service names via label.
 		f := mobyclient.Filters{}
@@ -498,6 +499,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 					continue
 				}
 				preRun[svcName] = preRunState(ctr)
+				preRunImage[svcName] = ctr.ImageID
 				for _, rawName := range ctr.Names {
 					cname := strings.TrimPrefix(rawName, "/")
 					if cname != svcName {
@@ -526,8 +528,29 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		if p, ok := bus.(*consoleEventProcessor); ok {
 			p.dependsOn = dependencies
 			p.preRun = preRun
+			p.preRunImage = preRunImage
 			p.jobs = jobDecls(project)
 			p.projectNetworks = len(displayProject.Networks)
+			// The networks and volumes the listed services use, and which of them exist
+			// before the run, for their sections' groups.
+			p.networks = resourceDecl{exists: map[string]bool{}}
+			for _, n := range displayProject.Networks {
+				p.networks.names = append(p.networks.names, n.Name)
+			}
+			if res, err := dockerCLI.Client().NetworkList(ctx, mobyclient.NetworkListOptions{}); err == nil {
+				for _, n := range res.Items {
+					p.networks.exists[n.Name] = true
+				}
+			}
+			p.volumes = resourceDecl{exists: map[string]bool{}}
+			for _, v := range displayProject.Volumes {
+				p.volumes.names = append(p.volumes.names, v.Name)
+			}
+			if res, err := dockerCLI.Client().VolumeList(ctx, mobyclient.VolumeListOptions{}); err == nil {
+				for _, v := range res.Items {
+					p.volumes.exists[v.Name] = true
+				}
+			}
 			if job != nil {
 				p.runJob, p.runJobImage = job.name, job.image
 			}

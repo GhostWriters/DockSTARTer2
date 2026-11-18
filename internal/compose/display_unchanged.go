@@ -171,11 +171,10 @@ func (p *consoleEventProcessor) imageUnchanged(imgName string, termW int) bool {
 	return len(p.imageInfoLines(imgName, termW, false)) == 0
 }
 
-// groupLines returns a group's line: its state word, how many rows of noun it holds,
-// and, folded, all their names, wrapped to termW under the first; open (-v), the
-// line ends at the count, its rows listed under it. pending styles it as a group
-// of rows not running (yet).
-func (p *consoleEventProcessor) groupLines(word string, pending bool, names []string, singular, plural string, open bool, termW int) []string {
+// groupLines returns a folded group's lines: its state word, how many rows of noun it
+// holds, and all their names, wrapped to termW under the first. pending styles it as
+// a group of rows not running (yet).
+func (p *consoleEventProcessor) groupLines(word string, pending bool, names []string, singular, plural string, termW int) []string {
 	noun := singular
 	if len(names) != 1 {
 		noun = plural
@@ -188,7 +187,7 @@ func (p *consoleEventProcessor) groupLines(word string, pending bool, names []st
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) + sectionChildIndent +
 		"{{|DockerDetailLabel|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
-	if open || len(names) == 0 {
+	if len(names) == 0 {
 		return []string{prefix}
 	}
 	indentW := globalIndentW + iconW + spaceW + sectionStatusW + sectionChildIndentW + len(label) + 2
