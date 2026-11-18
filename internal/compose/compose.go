@@ -93,7 +93,7 @@ func YesNotice(command, appNamesJoined string) string {
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Unpausing: %s.", appNamesJoined)
 		}
-		return "Unpausing all running containers."
+		return "Unpausing all paused containers."
 	case "up":
 		if appNamesJoined != "" {
 			return fmt.Sprintf("Starting: %s.", appNamesJoined)
@@ -266,9 +266,9 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			yesNotice = fmt.Sprintf("Unpausing: {{|App|}}%s{{[-]}}.", appNamesJoined)
 			noNotice = fmt.Sprintf("Not unpausing: {{|App|}}%s{{[-]}}.", appNamesJoined)
 		} else {
-			question = "Unpause all running containers?"
-			yesNotice = "Unpausing all running containers."
-			noNotice = "Not unpausing all running containers."
+			question = "Unpause all paused containers?"
+			yesNotice = "Unpausing all paused containers."
+			noNotice = "Not unpausing all paused containers."
 		}
 	case "update":
 		if appNamesJoined != "" {
@@ -418,6 +418,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	for name := range project.Services {
 		serviceNames = append(serviceNames, name)
 	}
+	// targets are the services pause, unpause and kill act on, from their containers'
+	// states (filtered); without those, compose picks them itself.
+	var targets []string
+	filtered := false
 
 	// outStream is where the themed processor writes its final output (real stdout, or the
 	// TUI writer in GUI mode). The processor owns all output, so the SDK streams below are
@@ -507,6 +511,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 					}
 				}
 			}
+			targets, filtered = teardownTargets(command, serviceNames, preRun)
 		}
 		imageOrder := make([]string, 0, len(imageServices))
 		for img, svcs := range imageServices {
@@ -587,10 +592,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		return fmt.Errorf("failed to create compose service: %w", err)
 	}
 
+	logNames := appNames
+	if filtered {
+		logNames = targets
+	}
 	logRunning := func(opArgs ...string) {
 		fullCmd := []string{"docker", "compose", "--project-directory", conf.ComposeDir + "/"}
 		fullCmd = append(fullCmd, opArgs...)
-		fullCmd = append(fullCmd, appNames...)
+		fullCmd = append(fullCmd, logNames...)
 		logger.Notice(ctx, "Running: {{|RunningCommand|}}%s{{[-]}}", strings.Join(fullCmd, " "))
 	}
 
@@ -600,6 +609,13 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	sdkCtx := ctx
 	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 		sdkCtx = logger.WithSuppressWriter(ctx, w)
+	}
+	// nothingToDo opens and closes operation op on the display, as compose would, for a
+	// command left with no service to act on: the display shows each in its group.
+	nothingToDo := func(op string) error {
+		events.Start(sdkCtx, op)
+		events.Done(op, true)
+		return nil
 	}
 
 	// Execute the operation via SDK.
@@ -621,9 +637,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			}
 			return srv.Create(sdkCtx, project, createOpts)
 		case "kill":
+			if filtered && len(targets) == 0 {
+				return nothingToDo("kill")
+			}
 			logRunning("kill")
 			killOpts := api.KillOptions{Project: project}
-			if len(appNames) > 0 {
+			if filtered {
+				killOpts.Services = targets
+			} else if len(appNames) > 0 {
 				killOpts.Services = serviceNames
 			}
 			return srv.Kill(sdkCtx, project.Name, killOpts)
@@ -657,9 +678,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			}
 			return srv.Down(sdkCtx, project.Name, downOpts)
 		case "pause":
+			if filtered && len(targets) == 0 {
+				return nothingToDo("pause")
+			}
 			logRunning("pause")
 			pauseOpts := api.PauseOptions{}
-			if len(appNames) > 0 {
+			if filtered {
+				pauseOpts.Services = targets
+			} else if len(appNames) > 0 {
 				pauseOpts.Services = serviceNames
 			}
 			return srv.Pause(sdkCtx, project.Name, pauseOpts)
@@ -681,9 +707,14 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			}
 			return srv.Stop(sdkCtx, project.Name, stopOpts)
 		case "unpause":
+			if filtered && len(targets) == 0 {
+				return nothingToDo("unpause")
+			}
 			logRunning("unpause")
 			unpauseOpts := api.PauseOptions{}
-			if len(appNames) > 0 {
+			if filtered {
+				unpauseOpts.Services = targets
+			} else if len(appNames) > 0 {
 				unpauseOpts.Services = serviceNames
 			}
 			return srv.UnPause(sdkCtx, project.Name, unpauseOpts)

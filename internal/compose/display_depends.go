@@ -76,9 +76,15 @@ func projectDependencies(project *types.Project) map[string][]serviceDep {
 	return out
 }
 
-// preRunState returns a container's state before the run for the dependency lines:
-// its health when it has a healthcheck, else running or stopped.
+// preRunPaused is the state before the run of a paused container.
+const preRunPaused = "paused"
+
+// preRunState returns a container's state before the run: paused, else its health
+// when it has a healthcheck, else running or stopped.
 func preRunState(ctr container.Summary) string {
+	if ctr.State == container.StatePaused {
+		return preRunPaused
+	}
 	if ctr.State != container.StateRunning {
 		return "stopped"
 	}
@@ -117,7 +123,7 @@ func (p *consoleEventProcessor) depStatus(d serviceDep) (depState, string) {
 	started := p.containerStarted[d.name]
 	if t == nil && !started {
 		switch s := p.preRun[d.name]; s {
-		case "stopped", "":
+		case "stopped", preRunPaused, "": // a paused dependency isn't serving
 			started = false
 		default:
 			started = true

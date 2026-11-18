@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -19,11 +20,12 @@ const (
 	pendingText    = "Pending"
 	notCreatedText = "Not Created"
 	notRunningText = "Not Running"
+	pausedText     = "Paused"
 	notPulledText  = "Not Pulled"
 	cachedText     = "Cached"
 )
 
-var groupOrder = []string{pendingText, notPulledText, notCreatedText, notRunningText, api.StatusRunning, cachedText}
+var groupOrder = []string{pendingText, notPulledText, notCreatedText, notRunningText, pausedText, api.StatusRunning, cachedText}
 
 // rowGroup is where a row goes: its own line under changed: for a change, or into
 // the group of its state under unchanged:, nothing having happened to it yet or for
@@ -40,8 +42,8 @@ const (
 // none), or "" for its own row: something happened to it, or the call has returned
 // and it isn't settled. Until something happens to it, a service sits in the group of
 // what's next for it: Not Pulled when its image isn't on disk, else for a pull Cached,
-// otherwise its container's state before the run (Running, Not Running, Not Created;
-// unhealthy is a problem, its own row).
+// otherwise its container's state before the run (Running, Paused, Not Running, Not
+// Created; unhealthy is a problem, its own row).
 func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int) string {
 	switch p.serviceGroup(svc, imgName, termW) {
 	case groupSettled:
@@ -65,6 +67,8 @@ func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int)
 		return notCreatedText
 	case state == "stopped":
 		return notRunningText
+	case state == preRunPaused:
+		return pausedText
 	case state == healthUnhealthy:
 		return ""
 	}
@@ -88,12 +92,16 @@ func (p *consoleEventProcessor) groupsRows() bool {
 
 // teardownGroupWord returns the group a teardown leaves svc in, or "" for its own row
 // under changed:, and whether the group's rows are still to be acted on. A service
-// with no container is Not Created, and for stop one already stopped is Not Running,
-// though compose still reports stopping it; until compose reports on the rest, they
-// sit in the group of their state before the run, Running or Not Running.
+// with no container is Not Created, one the command leaves alone is in the group of
+// its state (teardownSkip), and for stop one already stopped is Not Running, though
+// compose still reports stopping it; until compose reports on the rest, they sit in
+// the group of their state before the run, Running, Paused or Not Running.
 func (p *consoleEventProcessor) teardownGroupWord(svc string) (word string, pending bool) {
 	t := p.tasks[svc]
 	state, seen := p.preRun[svc]
+	if word := teardownSkip(p.command, state, seen); word != "" && t == nil {
+		return word, false
+	}
 	switch {
 	case !seen && t == nil:
 		return notCreatedText, false
@@ -103,8 +111,59 @@ func (p *consoleEventProcessor) teardownGroupWord(svc string) (word string, pend
 		return "", false
 	case state == "stopped":
 		return notRunningText, true
+	case state == preRunPaused:
+		return pausedText, true
 	}
 	return api.StatusRunning, true
+}
+
+// teardownTargets returns the services of names that command acts on, sorted, by
+// their containers' states before the run (preRun), and true; false for a command
+// that takes every service it's given.
+func teardownTargets(command string, names []string, preRun map[string]string) ([]string, bool) {
+	if !skipsByState(command) {
+		return nil, false
+	}
+	out := []string{}
+	for _, name := range names {
+		if state, seen := preRun[name]; teardownSkip(command, state, seen) == "" {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out, true
+}
+
+// skipsByState reports whether command leaves out services by their state: pause,
+// unpause and kill.
+func skipsByState(command string) bool {
+	switch command {
+	case "pause", "unpause", "kill":
+		return true
+	}
+	return false
+}
+
+// teardownSkip returns the group of a service command leaves alone, by its container's
+// state before the run (seen: it has one), or "" when compose acts on it: pause takes
+// running containers, unpause paused ones, and kill either. Compose fails a whole run
+// on a container already paused (pause) or not paused (unpause), and kill on finding
+// none to kill, so DS2 passes it only the others.
+func teardownSkip(command, state string, seen bool) string {
+	if !skipsByState(command) {
+		return ""
+	}
+	switch {
+	case !seen:
+		return notCreatedText
+	case state == "stopped":
+		return notRunningText
+	case command == "pause" && state == preRunPaused:
+		return pausedText
+	case command == "unpause" && state != preRunPaused:
+		return api.StatusRunning
+	}
+	return ""
 }
 
 // settledWord returns the state the command leaves a service it didn't change in,
