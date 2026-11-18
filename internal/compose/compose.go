@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -541,6 +542,9 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			p.servicePorts = make(map[string][]types.ServicePortConfig, len(fullProject.Services))
 			for name, svc := range fullProject.Services {
 				p.servicePorts[name] = svc.Ports
+			}
+			if command == "up" || command == "update" {
+				p.predictPortConflicts(ctx, slices.Collect(maps.Keys(displayProject.Services)))
 			}
 			p.preRun = preRun
 			p.preRunImage = preRunImage

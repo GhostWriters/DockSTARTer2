@@ -156,3 +156,104 @@ func TestPortConflictShowsInTheDisplay(t *testing.T) {
 		t.Errorf("display =\n%s\nwant web's ports line naming portainer", got)
 	}
 }
+
+func TestServiceSpecsAndHostIPs(t *testing.T) {
+	specs := serviceSpecs([]types.ServicePortConfig{
+		{Target: 80, Published: "8080"},
+		{Target: 8400, Published: "8400-8402", Protocol: "udp", HostIP: "127.0.0.1"},
+	})
+	if len(specs) != 4 || specs[0] != (portSpec{port: 8080, proto: "tcp", target: 80}) ||
+		specs[3] != (portSpec{ip: "127.0.0.1", port: 8402, proto: "udp", target: 8402}) {
+		t.Errorf("serviceSpecs = %+v", specs)
+	}
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"", "127.0.0.1", true},
+		{"0.0.0.0", "192.168.1.5", true},
+		{"::", "127.0.0.1", true},
+		{"127.0.0.1", "127.0.0.1", true},
+		{"127.0.0.1", "192.168.1.5", false},
+	} {
+		if got := hostIPsOverlap(tc.a, tc.b); got != tc.want {
+			t.Errorf("hostIPsOverlap(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+func TestPossibleConflictResolves(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.predicted = map[string][]predictedConflict{
+		"web": {{lo: 80, hi: 80, proto: "tcp", target: 80, other: "azuracast"}},
+		"db":  {{lo: 8100, hi: 8110, proto: "tcp", other: "web", inRun: true}},
+	}
+	if got := strings.Join(plainLines(p.predictedLines("web", 160)), "\n"); !strings.Contains(got, "? Conflict ") || !strings.Contains(got, "ports: 80:80/tcp (held by azuracast)") {
+		t.Errorf("web before compose reports = %q, want an unconfirmed ports line", got)
+	}
+	if got := strings.Join(plainLines(p.predictedLines("db", 160)), "\n"); !strings.Contains(got, "8100-8110/tcp (also wanted by web)") {
+		t.Errorf("db's line = %q, want the range another service of the run wants", got)
+	}
+
+	// db starts fine: a false alarm, its line goes.
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	if lines := p.predictedLines("db", 160); lines != nil {
+		t.Errorf("db after starting = %q, want no line", lines)
+	}
+
+	// web fails on the port: the confirmed conflict's line replaces the possible one.
+	p.On(api.Resource{ID: "Container web", Status: api.Error, Text: "Bind for 0.0.0.0:80 failed: port is already allocated"})
+	p.portConflict = &portConflict{failed: portClaim{name: "web", service: true, target: 80}, port: 80, proto: "tcp", holder: &portClaim{name: "azuracast", target: 80}}
+	got := strings.Join(plainLines(p.portsLines("web", 160)), "\n")
+	if !strings.Contains(got, "× Conflict") || strings.Contains(got, "? Conflict") {
+		t.Errorf("web after failing = %q, want only the confirmed Conflict line", got)
+	}
+}
+
+func TestPossibleConflictsGroupByPort(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.predicted = map[string][]predictedConflict{"swag": {
+		{lo: 80, hi: 80, proto: "tcp", target: 80, other: "porthog"},
+		{lo: 80, hi: 80, proto: "tcp", target: 80, other: "azuracast", inRun: true},
+		{lo: 80, hi: 80, proto: "tcp", target: 80, other: "nginx", inRun: true},
+		{lo: 443, hi: 443, proto: "tcp", target: 443, other: "nginx", inRun: true},
+	}}
+	got := strings.Join(plainLines(p.predictedLines("swag", 200)), "\n")
+	if !strings.Contains(got, "80:80/tcp (held by porthog; also wanted by azuracast, nginx), 443:443/tcp (also wanted by nginx)") {
+		t.Errorf("swag's line = %q, want one entry per port naming every claimant", got)
+	}
+}
+
+func TestPossibleConflictStaysWhenNotReached(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.predicted = map[string][]predictedConflict{"web": {{lo: 443, hi: 443, proto: "tcp", target: 443, other: "swag"}}}
+	p.finished = true // the run stopped before compose reached web
+	if got := strings.Join(plainLines(p.predictedLines("web", 160)), "\n"); !strings.Contains(got, "? Conflict ") {
+		t.Errorf("web not reached = %q, want its unconfirmed line kept", got)
+	}
+}
+
+func TestPossibleConflictsFoldApart(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.preRun = map[string]string{"db": "running", "web": "running", "cache": "running"}
+	p.imageServices["example/cache:1"] = []string{"cache"}
+	p.imageOrder = append(p.imageOrder, "example/cache:1")
+	p.imageMetaBefore["example/cache:1"] = imageMeta{}
+	p.predicted = map[string][]predictedConflict{
+		"web":   {{lo: 80, hi: 80, proto: "tcp", target: 80, other: "cache", inRun: true}},
+		"cache": {{lo: 80, hi: 80, proto: "tcp", target: 80, other: "web", inRun: true}},
+	}
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "1 service: db") || !strings.Contains(got, "2 services: cache, web") ||
+		!strings.Contains(got, "? Conflict        ports: 80/tcp") || strings.Contains(got, "web:") {
+		t.Errorf("display before compose reports =\n%s\nwant db folded alone, cache and web folded together with one unconfirmed line", got)
+	}
+	// All start fine: the unconfirmed line goes and they fold together.
+	for _, svc := range []string{"db", "web", "cache"} {
+		p.On(containerEvent(svc, api.StatusRunning, api.Done))
+	}
+	p.finished, p.succeeded = true, true
+	if got := renderPlain(p, 0); !strings.Contains(got, "3 services: cache, db, web") || strings.Contains(got, "? Conflict") {
+		t.Errorf("display after all run =\n%s\nwant all three folded, no unconfirmed line", got)
+	}
+}

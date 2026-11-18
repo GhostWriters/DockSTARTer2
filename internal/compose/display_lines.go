@@ -233,8 +233,21 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 					}
 					slices.Sort(names)
 					notRunning := word != api.StatusRunning && word != cachedText
-					for _, line := range p.groupLines(word, notRunning, names, "service", "services", termW) {
-						appendLine(line, nil, timerLayer)
+					// Services with possible port conflicts fold apart, one group per
+					// identical set of them, each with its unconfirmed ports line.
+					plain, possible := p.splitPossible(names)
+					if len(plain) > 0 {
+						for _, line := range p.groupLines(word, notRunning, plain, "service", "services", termW) {
+							appendLine(line, nil, timerLayer)
+						}
+					}
+					for _, g := range possible {
+						for _, line := range p.groupLines(word, notRunning, g.members, "service", "services", termW) {
+							appendLine(line, nil, timerLayer)
+						}
+						for _, line := range p.possibleGroupLine(g, termW) {
+							appendLine(line, nil, timerLayer)
+						}
 					}
 				}
 			})
@@ -301,10 +314,13 @@ func (p *consoleEventProcessor) appendOrphanRow(svcID string, termW, level int, 
 	}
 }
 
-// serviceDetailLines returns the lines under svc's row: its condition lines, then its
-// model lines, each model's variables only at dockerlayout.VerboseDetails.
+// serviceDetailLines returns the lines under svc's row: its condition lines, its
+// possible port conflicts (which, unlike a condition line, don't make the row a
+// change), then its model lines, each model's variables only at
+// dockerlayout.VerboseDetails.
 func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int, neededBy bool) []string {
-	return append(p.serviceConditionLines(svc, termW, level, neededBy), p.modelLines(svc, termW, level >= dockerlayout.VerboseDetails)...)
+	lines := append(p.serviceConditionLines(svc, termW, level, neededBy), p.predictedLines(svc, termW)...)
+	return append(lines, p.modelLines(svc, termW, level >= dockerlayout.VerboseDetails)...)
 }
 
 // serviceConditionLines returns svc's healthcheck line, its dependency lines, its ports
