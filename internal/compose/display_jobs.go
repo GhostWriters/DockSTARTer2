@@ -271,116 +271,118 @@ func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
 }
 
 // buildJobLines returns the jobs: section, or nothing when the display lists no job:
-// each job's row, its error, the image of the job -c run runs, and its schedule, at
-// verbosity level always, below it only when the run registered it anew. When the
-// display groups rows, changed jobs come first, then the Pending and Scheduled groups,
-// each one line of names, or with -v a line heading its jobs' rows.
+// each job's rows (jobRowLines). Used when the display doesn't group rows; jobGroups
+// when it does.
 func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []timerEntry) {
 	names := p.jobRows(level)
 	if len(names) == 0 {
 		return nil, nil
 	}
-	state := p.jobRollup()
-	text, stTag, iconTag := sectionStatusText(state)
-	icon := iconTag + p.sectionRollupIcon(state) + "{{[-]}}"
-	if state == rollupProcessing {
-		icon = p.activeSpinnerTag(p.icons().spinner)
-	}
+	icon, tag, text := p.stateLine(p.jobRollup())
 	var taskIDs []string
 	for _, name := range p.jobsActedOn() {
 		taskIDs = append(taskIDs, jobTaskID(name))
 	}
-	lines := []string{globalIndent + icon + " " + stTag + text + "{{[-]}}" +
-		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
+	lines := []string{globalIndent + icon + " " + tag + strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
 		"{{|DockerSection|}}jobs{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(taskIDs), style: timerSection}}
-	renderJob := func(name string) {
-		text, tag, icon := p.jobStatus(name)
-		t := p.tasks[jobTaskID(name)]
-		lines = append(lines, globalIndent+icon+" "+tag+strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text))+
-			sectionChildIndent+dockerlayout.StyleServiceName(name)+"{{|DockerColon|}}:{{[-]}}")
-		timers = append(timers, timerEntry{task: t, style: timerService})
-		if line := p.errorLine(t); line != "" {
-			lines = append(lines, line)
-			timers = append(timers, timerEntry{})
-		}
-		if name == p.runJob && p.runJobImage != "" {
-			img := p.runJobImage
-			layers := p.layersForImage(img)
-			lines = append(lines, p.buildImageLine(img, p.tasks[img], layers, utf8.RuneCountInString(img)+p.layerCountWidth(img), termW))
-			timers = append(timers, timerEntry{task: p.tasks[img], style: timerImage})
-		}
-		newlyScheduled := t != nil && t.text == api.StatusCreated
-		if schedule := p.jobs[name].schedule; schedule != "" && (level >= dockerlayout.VerboseDetails || newlyScheduled) {
-			lines = append(lines, p.scheduleLine(schedule, termW))
-			timers = append(timers, timerEntry{})
-		}
-	}
-	grouped := p.groupsRows()
-	var buckets [groupSettled + 1][]string
 	for _, name := range names {
-		if !grouped {
-			renderJob(name)
-			continue
-		}
-		g := p.jobGroup(name)
-		buckets[g] = append(buckets[g], name)
-	}
-	if grouped {
-		// A heading for the changed jobs and one for the rest, each with its rows'
-		// rolled-up state and its rows nested under it: the rest as folded group lines,
-		// or with -v their own rows.
-		open := level >= dockerlayout.VerboseDetails
-		for _, set := range []struct {
-			adjective string
-			names     []string
-		}{{"changed", buckets[groupChanged]}, {"unchanged", append(slices.Clone(buckets[groupPending]), buckets[groupSettled]...)}} {
-			if len(set.names) == 0 {
-				continue
-			}
-			var ids []string
-			for _, name := range set.names {
-				if p.jobs[name].scheduled || p.tasks[jobTaskID(name)] != nil {
-					ids = append(ids, jobTaskID(name)) // a manual job, never reported on, doesn't count
-				}
-			}
-			icon, statusTag, statusText, _ := p.sectionRollupWithPropagation(ids, nil)
-			lines = append(lines, groupHeading(icon, statusTag, statusText, len(set.names), set.adjective, "job", "jobs"))
-			timers = append(timers, timerEntry{task: p.sectionTaskFor(ids), style: timerSection})
-			start := len(lines)
-			if set.adjective == "changed" || open {
-				for _, name := range set.names {
-					renderJob(name)
-				}
-			} else {
-				for _, g := range []rowGroup{groupPending, groupSettled} {
-					if len(buckets[g]) == 0 {
-						continue
-					}
-					word := jobScheduledText
-					if g == groupPending {
-						word = pendingText
-					}
-					for _, line := range p.groupLines(word, g == groupPending, buckets[g], "job", "jobs", termW) {
-						lines = append(lines, line)
-						timers = append(timers, timerEntry{})
-					}
-				}
-			}
-			for i := start; i < len(lines); i++ {
-				lines[i] = nestLine(lines[i])
-			}
-		}
+		l, t := p.jobRowLines(name, termW, level)
+		lines, timers = append(lines, l...), append(timers, t...)
 	}
 	return lines, timers
 }
 
+// jobRowLines returns job name's row, its error, the image of the job -c run runs, and
+// its schedule, at verbosity level always, below it only when the run registered it
+// anew.
+func (p *consoleEventProcessor) jobRowLines(name string, termW, level int) ([]string, []timerEntry) {
+	text, tag, icon := p.jobStatus(name)
+	t := p.tasks[jobTaskID(name)]
+	lines := []string{globalIndent + icon + " " + tag + strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
+		sectionChildIndent + dockerlayout.StyleServiceName(name) + "{{|DockerColon|}}:{{[-]}}"}
+	timers := []timerEntry{{task: t, style: timerService}}
+	if line := p.errorLine(t); line != "" {
+		lines = append(lines, line)
+		timers = append(timers, timerEntry{})
+	}
+	if name == p.runJob && p.runJobImage != "" {
+		img := p.runJobImage
+		layers := p.layersForImage(img)
+		lines = append(lines, p.buildImageLine(img, p.tasks[img], layers, utf8.RuneCountInString(img)+p.layerCountWidth(img), termW))
+		timers = append(timers, timerEntry{task: p.tasks[img], style: timerImage})
+	}
+	newlyScheduled := t != nil && t.text == api.StatusCreated
+	if schedule := p.jobs[name].schedule; schedule != "" && (level >= dockerlayout.VerboseDetails || newlyScheduled) {
+		lines = append(lines, p.scheduleLine(schedule, termW))
+		timers = append(timers, timerEntry{})
+	}
+	return lines, timers
+}
+
+// jobGroups returns the jobs' changed and unchanged sets: changed jobs' rows, and the
+// Pending and Scheduled groups, each one folded line of names, or with -v their rows.
+// A manual job, never reported on, doesn't count in its set's state or timer.
+func (p *consoleEventProcessor) jobGroups(termW, level int) kindGroups {
+	open := level >= dockerlayout.VerboseDetails
+	out := kindGroups{singular: "job", plural: "jobs", folded: !open}
+	var buckets [groupSettled + 1][]string
+	for _, name := range p.jobRows(level) {
+		g := p.jobGroup(name)
+		buckets[g] = append(buckets[g], name)
+	}
+	set := func(names []string, folded bool) groupSet {
+		s := groupSet{count: len(names)}
+		var ids []string
+		for _, name := range names {
+			if p.jobs[name].scheduled || p.tasks[jobTaskID(name)] != nil {
+				ids = append(ids, jobTaskID(name))
+			}
+		}
+		s.state = p.rollupState(ids, nil)
+		if len(ids) == 0 {
+			s.state = rollupComplete // only manual jobs, which nothing happens to
+		}
+		s.timer = p.sectionTaskFor(ids)
+		if !folded {
+			for _, name := range names {
+				l, t := p.jobRowLines(name, termW, level)
+				s.lines, s.timers = append(s.lines, l...), append(s.timers, t...)
+			}
+			return s
+		}
+		for _, g := range []rowGroup{groupPending, groupSettled} {
+			if len(buckets[g]) == 0 {
+				continue
+			}
+			word := jobScheduledText
+			if g == groupPending {
+				word = pendingText
+			}
+			for _, line := range p.groupLines(word, g == groupPending, buckets[g], "job", "jobs", termW) {
+				s.lines = append(s.lines, line)
+				s.timers = append(s.timers, timerEntry{})
+			}
+		}
+		return s
+	}
+	out.changed = set(buckets[groupChanged], false)
+	out.unchanged = set(append(slices.Clone(buckets[groupPending]), buckets[groupSettled]...), !open)
+	return out
+}
+
 // scheduleLine returns the line under a job's row showing its schedule.
 func (p *consoleEventProcessor) scheduleLine(schedule string, termW int) string {
-	const icon, word, label = "i", "Info", "schedule"
+	return p.infoDetailLine("schedule", schedule, termW)
+}
+
+// infoDetailLine returns an Info line under a simple row (a job, a model): label:
+// value one step in under the row's name, the value dim and cut to termW.
+func (p *consoleEventProcessor) infoDetailLine(label, value string, termW int) string {
+	const icon, word = "i", "Info"
 	prefix := globalIndent + "{{|DockerInfo|}}" + icon + "{{[-]}} {{|DockerInfo|}}" + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
 		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerInfo|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}} "
 	room := max(termW-timerReserveW-summaryHeaderIndentW-utf8.RuneCountInString(semstyle.ToPlain(prefix)), minDetailW)
-	return prefix + "{{[::D]}}" + cutRunes(stripControl(schedule), room) + "{{[-]}}"
+	return prefix + "{{[::D]}}" + cutRunes(stripControl(value), room) + "{{[-]}}"
 }

@@ -117,7 +117,8 @@ type AppColors struct {
 	DockerSpinner       string
 	DockerBar           string
 	DockerSharedLayer   string
-	DockerSection       string // section headers (services:, networks:, volumes:), their timers and final status
+	DockerSection       string // section headers (services:, networks:, volumes:, jobs:, and the N services: lines under changed: and unchanged:), their timers and final status
+	DockerGroupHeading  string // the changed: and unchanged: headings
 	DockerInfo          string // an image's info lines: their marker, Info status and label
 	DockerStatusSuccess string
 	DockerStatusFail    string
@@ -226,18 +227,19 @@ var Colors = AppColors{
 	ConsoleBox: "{{[-]}}{{[white:black]}}",
 
 	// Docker Compose progress colors — markers
-	DockerMarkerDone:  "{{[-]}}{{[green]}}",
-	DockerMarkerError: "{{[-]}}{{[red]}}",
-	DockerMarkerWarn:  "{{[-]}}{{[yellow]}}",
-	DockerMarkerCause: "{{[-]}}{{[red]}}",
-	DockerColon:       "{{[-]}}{{[gray::D]}}",
-	DockerImage:       "{{[-]}}{{[magenta]}}",
-	DockerTag:         "{{[-]}}{{[magenta::D]}}",
-	DockerSpinner:     "{{[-]}}{{[yellow]}}",
-	DockerBar:         "{{[-]}}{{[cyan]}}",
-	DockerSharedLayer: "{{[-]}}{{[yellow]}}",
-	DockerSection:     "{{[-]}}{{[white::B]}}",
-	DockerInfo:        "{{[-]}}{{[bright-blue]}}",
+	DockerMarkerDone:   "{{[-]}}{{[green]}}",
+	DockerMarkerError:  "{{[-]}}{{[red]}}",
+	DockerMarkerWarn:   "{{[-]}}{{[yellow]}}",
+	DockerMarkerCause:  "{{[-]}}{{[red]}}",
+	DockerColon:        "{{[-]}}{{[gray::D]}}",
+	DockerImage:        "{{[-]}}{{[magenta]}}",
+	DockerTag:          "{{[-]}}{{[magenta::D]}}",
+	DockerSpinner:      "{{[-]}}{{[yellow]}}",
+	DockerBar:          "{{[-]}}{{[cyan]}}",
+	DockerSharedLayer:  "{{[-]}}{{[yellow]}}",
+	DockerSection:      "{{[-]}}{{[white::B]}}",
+	DockerGroupHeading: "{{[-]}}{{[white::BU]}}",
+	DockerInfo:         "{{[-]}}{{[bright-blue]}}",
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
 	DockerStatusFail:    "{{[-]}}{{[red]}}",

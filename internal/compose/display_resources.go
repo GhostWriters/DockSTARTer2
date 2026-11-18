@@ -11,8 +11,8 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// existingText is the group of networks and volumes that already exist, which the
-// run left as they were.
+// existingText is the group of networks, volumes and models that already exist, which
+// the run left as they were (a model's routine configure aside).
 const existingText = "Existing"
 
 // resourceDecl is the networks or volumes the listed services use, by name, and
@@ -22,38 +22,37 @@ type resourceDecl struct {
 	exists map[string]bool
 }
 
-// resourceKind is what a networks: or volumes: section shows its rows with.
+// resourceKind is what networks' or volumes' rows show.
 type resourceKind struct {
-	section, singular, plural string
-	nameTag                   string // the style of a name, e.g. {{|IPAddress|}}
-	statusTag                 func(api.EventStatus, string, string) string
+	singular, plural string
+	nameTag          string // the style of a name, e.g. {{|IPAddress|}}
+	statusTag        func(api.EventStatus, string, string) string
 }
 
 var (
-	networkKind = resourceKind{"networks", "network", "networks", "{{|IPAddress|}}", networkStatusTag}
-	volumeKind  = resourceKind{"volumes", "volume", "volumes", "{{|Folder|}}", volumeStatusTag}
+	networkKind = resourceKind{"network", "networks", "{{|IPAddress|}}", networkStatusTag}
+	volumeKind  = resourceKind{"volume", "volumes", "{{|Folder|}}", volumeStatusTag}
 )
 
-// groupsResources reports whether the networks: and volumes: sections group their
-// rows like the services: section, listing every one the services use: on the
-// commands that bring services up, while nothing has failed.
+// groupsResources reports whether networks and volumes are grouped like services,
+// listing every one the services use: on the commands that bring services up, while
+// nothing has failed. A teardown groups only the ones compose removes.
 func (p *consoleEventProcessor) groupsResources() bool {
-	return p.groupsRows() && p.command != "pull"
+	return p.groupsRows() && p.command != "pull" && !p.isTeardownCommand()
 }
 
-// buildResourceLines returns a networks: or volumes: section grouped like services:
-// the ones the run created or removed (eventIDs) under a changed heading, the rest
-// under an unchanged one, grouped Not Created (until compose creates them) and
-// Existing; folded, a group is a line of names, with -v their own rows.
-func (p *consoleEventProcessor) buildResourceLines(kind resourceKind, decl resourceDecl, eventIDs []string, termW, level int) ([]string, []timerEntry) {
+// resourceGroups returns networks' or volumes' changed and unchanged sets: the ones
+// the run created or removed (eventIDs) changed, the rest unchanged, grouped Not
+// Created (until compose creates them) and Existing; folded, a group is a line of
+// names, with -v their own rows.
+func (p *consoleEventProcessor) resourceGroups(kind resourceKind, decl resourceDecl, eventIDs []string, termW, level int) kindGroups {
+	open := level >= dockerlayout.VerboseDetails
+	out := kindGroups{singular: kind.singular, plural: kind.plural, folded: !open}
 	names := slices.Clone(decl.names)
 	for _, id := range eventIDs {
 		if !slices.Contains(names, id) {
 			names = append(names, id)
 		}
-	}
-	if len(names) == 0 {
-		return nil, nil
 	}
 	slices.Sort(names)
 	var changed []string
@@ -71,37 +70,23 @@ func (p *consoleEventProcessor) buildResourceLines(kind resourceKind, decl resou
 		}
 	}
 
-	// The section's and each heading's state: the changed rows' rollup, and for the rest
-	// Complete, or Pending while some aren't created yet.
+	// Each set's state: the changed rows' rollup, and for the rest Complete, or Pending
+	// while some aren't created yet.
 	unchangedState := rollupComplete
 	if len(groups[notCreatedText]) > 0 {
 		unchangedState = rollupPending
 	}
-	changedState := p.rollupState(changed, nil)
-	sectionState := unchangedState
-	switch {
-	case len(changed) == 0:
-	case changedState != rollupComplete || unchangedState == rollupComplete:
-		sectionState = changedState
-	default:
-		sectionState = rollupProcessing // some created, others still to come
-	}
-	stateLine := func(state sectionRollupState) (icon, tag, text string) {
-		text, stTag, iconTag := sectionStatusText(state)
-		icon = iconTag + p.sectionRollupIcon(state) + "{{[-]}}"
-		if state == rollupProcessing {
-			icon = p.activeSpinnerTag(p.icons().spinner)
-		}
-		return icon, stTag + text + "{{[-]}}", text
-	}
-
-	icon, tag, text := stateLine(sectionState)
-	lines := []string{globalIndent + icon + " " + tag + strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
-		"{{|DockerSection|}}" + kind.section + "{{[-]}}{{|DockerColon|}}:{{[-]}}"}
-	timers := []timerEntry{{task: p.sectionTaskFor(changed), style: timerSection}}
+	var lines []string
+	var timers []timerEntry
 	add := func(line string, t *consoleTask, style timerStyle) {
 		lines = append(lines, line)
 		timers = append(timers, timerEntry{task: t, style: style})
+	}
+	// take returns the lines added so far, starting over.
+	take := func() ([]string, []timerEntry) {
+		l, t := lines, timers
+		lines, timers = nil, nil
+		return l, t
 	}
 	row := func(name string) {
 		t := p.tasks[name]
@@ -121,38 +106,30 @@ func (p *consoleEventProcessor) buildResourceLines(kind resourceKind, decl resou
 		}
 	}
 
-	open := level >= dockerlayout.VerboseDetails
+	for _, name := range changed {
+		row(name)
+	}
+	out.changed = groupSet{count: len(changed), state: p.rollupState(changed, nil), timer: p.sectionTaskFor(changed)}
+	out.changed.lines, out.changed.timers = take()
+
 	unchanged := append(slices.Clone(groups[notCreatedText]), groups[existingText]...)
-	for _, set := range []struct {
-		adjective string
-		names     []string
-		state     sectionRollupState
-	}{{"changed", changed, changedState}, {"unchanged", unchanged, unchangedState}} {
-		if len(set.names) == 0 {
-			continue
+	if open {
+		for _, name := range unchanged {
+			row(name)
 		}
-		icon, tag, text := stateLine(set.state)
-		add(groupHeading(icon, tag, text, len(set.names), set.adjective, kind.singular, kind.plural), nil, timerSection)
-		start := len(lines)
-		if set.adjective == "changed" || open {
-			for _, name := range set.names {
-				row(name)
+	} else {
+		for _, word := range []string{notCreatedText, existingText} {
+			if len(groups[word]) == 0 {
+				continue
 			}
-		} else {
-			for _, word := range []string{notCreatedText, existingText} {
-				if len(groups[word]) == 0 {
-					continue
-				}
-				for _, line := range p.resourceGroupLines(kind, word, groups[word], termW) {
-					add(line, nil, timerLayer)
-				}
+			for _, line := range p.resourceGroupLines(kind, word, groups[word], termW) {
+				add(line, nil, timerLayer)
 			}
-		}
-		for i := start; i < len(lines); i++ {
-			lines[i] = nestLine(lines[i])
 		}
 	}
-	return lines, timers
+	out.unchanged = groupSet{count: len(unchanged), state: unchangedState}
+	out.unchanged.lines, out.unchanged.timers = take()
+	return out
 }
 
 // resourceGroupLines returns a folded network or volume group: groupLines' layout,

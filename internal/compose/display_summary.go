@@ -34,8 +34,8 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 
 	layerCount := p.layerCount()
 
-	// A count of something with its own section (services, networks, volumes, jobs)
-	// takes the section headings' style; images and layers, lines under the services,
+	// A count of a kind of row (services, networks, volumes, models, jobs, orphans) takes the section
+	// headings' style; images and layers, lines under the services,
 	// go in brackets after them in those lines' styles.
 	var imageParts []string
 	if imgCount > 0 {
@@ -59,8 +59,14 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	if volCount > 0 {
 		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, volCount, plural(volCount, "volume", "volumes")))
 	}
+	if modelCount := len(p.modelRows()); modelCount > 0 {
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, modelCount, plural(modelCount, "model", "models")))
+	}
 	if jobCount := len(p.jobsActedOn()); jobCount > 0 {
 		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, jobCount, plural(jobCount, "job", "jobs")))
+	}
+	if orphanCount := len(p.orphanIDs); orphanCount > 0 {
+		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, orphanCount, plural(orphanCount, "orphan", "orphans")))
 	}
 	// Command word is bold yellow (matching the summary line's overall duration); the
 	// colon uses DockerColon (matching the colons on the section/name lines below).
@@ -326,6 +332,16 @@ func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []row
 	for _, name := range p.jobIDs {
 		if t := p.tasks[jobTaskID(name)]; failed(t) {
 			out = append(out, rowFailure{"job " + name, "job " + dockerlayout.StyleServiceName(name), summaryOf(t)})
+		}
+	}
+	for _, name := range p.modelIDs {
+		if t := p.tasks[modelTaskID(name)]; failed(t) {
+			out = append(out, rowFailure{"model " + name, "model " + dockerlayout.StyleServiceName(name), summaryOf(t)})
+		}
+	}
+	for _, name := range p.orphanIDs {
+		if t := p.tasks[orphanTaskID(name)]; failed(t) {
+			out = append(out, rowFailure{"orphan " + name, "orphan " + dockerlayout.StyleServiceName(name), summaryOf(t)})
 		}
 	}
 	return out
