@@ -21,12 +21,12 @@ import (
 const jobEventPrefix = "Job "
 
 // Job row statuses: compose's Creating, Created and Running for a job registered
-// with the engine read as Scheduling, Scheduled and Unchanged, by what they mean for
-// it: it now runs on its schedule, or already did and is the same as before.
+// with the engine read as Scheduling and Scheduled, what they mean for it: it runs
+// on its schedule. Running is one an earlier up registered, left as it was, which
+// the Scheduled group holds.
 const (
 	jobSchedulingText = "Scheduling"
 	jobScheduledText  = "Scheduled"
-	jobUnchangedText  = "Unchanged"
 	jobManualText     = "Manual"
 )
 
@@ -222,10 +222,8 @@ func (p *consoleEventProcessor) jobStatus(name string) (text, tag, icon string) 
 		return api.StatusError, "{{|DockerStatusFail|}}" + api.StatusError + "{{[-]}}", "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
 	case text == api.StatusCreating:
 		text = jobSchedulingText
-	case text == api.StatusCreated:
+	case text == api.StatusCreated, text == api.StatusRunning:
 		text = jobScheduledText
-	case text == api.StatusRunning:
-		text = jobUnchangedText
 	}
 	if t.completed() {
 		return text, serviceFinalTag + text + "{{[-]}}", "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
@@ -252,10 +250,28 @@ func (p *consoleEventProcessor) jobRollup() sectionRollupState {
 	return state
 }
 
+// jobGroup returns job name's group when the display groups rows: one an earlier up
+// registered, left as it was, goes in the Scheduled group, and a scheduled job not
+// reported on yet in the Pending group; the rest (changed, failed, manual, the job
+// -c run runs) get their own rows.
+func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
+	t := p.tasks[jobTaskID(name)]
+	switch {
+	case name == p.runJob:
+		return groupChanged
+	case t != nil && t.text == api.StatusRunning && t.status == api.Done:
+		return groupSettled
+	case t == nil && p.jobs[name].scheduled && !p.finished:
+		return groupPending
+	}
+	return groupChanged
+}
+
 // buildJobLines returns the jobs: section, or nothing when the display lists no job:
 // each job's row, its error, the image of the job -c run runs, and its schedule, at
-// verbosity level always, below it only when the run registered it anew. Jobs
-// already registered fold into one Unchanged line when the display folds them.
+// verbosity level always, below it only when the run registered it anew. When the
+// display groups rows, changed jobs come first, then the Pending and Scheduled groups,
+// each one line of names, or with -v a line heading its jobs' rows.
 func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []timerEntry) {
 	names := p.jobRows(level)
 	if len(names) == 0 {
@@ -275,14 +291,9 @@ func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []tim
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
 		"{{|DockerSection|}}jobs{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(taskIDs), style: timerSection}}
-	var unchanged []string // jobs folded into the section's Unchanged line
-	for _, name := range names {
+	renderJob := func(name string) {
 		text, tag, icon := p.jobStatus(name)
 		t := p.tasks[jobTaskID(name)]
-		if text == jobUnchangedText && p.foldsUnchanged(level) {
-			unchanged = append(unchanged, name)
-			continue
-		}
 		lines = append(lines, globalIndent+icon+" "+tag+strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text))+
 			sectionChildIndent+dockerlayout.StyleServiceName(name)+"{{|DockerColon|}}:{{[-]}}")
 		timers = append(timers, timerEntry{task: t, style: timerService})
@@ -296,15 +307,42 @@ func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []tim
 			lines = append(lines, p.buildImageLine(img, p.tasks[img], layers, utf8.RuneCountInString(img)+p.layerCountWidth(img), termW))
 			timers = append(timers, timerEntry{task: p.tasks[img], style: timerImage})
 		}
-		if schedule := p.jobs[name].schedule; schedule != "" && (level >= dockerlayout.VerboseDetails || text == jobScheduledText) {
+		newlyScheduled := t != nil && t.text == api.StatusCreated
+		if schedule := p.jobs[name].schedule; schedule != "" && (level >= dockerlayout.VerboseDetails || newlyScheduled) {
 			lines = append(lines, p.scheduleLine(schedule, termW))
 			timers = append(timers, timerEntry{})
 		}
 	}
-	if len(unchanged) > 0 {
-		for _, line := range p.foldLines(unchanged, "job", "jobs", termW) {
+	grouped := p.groupsRows()
+	var buckets [groupSettled + 1][]string
+	for _, name := range names {
+		if !grouped {
+			renderJob(name)
+			continue
+		}
+		g := p.jobGroup(name)
+		buckets[g] = append(buckets[g], name)
+	}
+	for _, name := range buckets[groupChanged] {
+		renderJob(name)
+	}
+	open := level >= dockerlayout.VerboseDetails
+	for _, g := range []rowGroup{groupPending, groupSettled} {
+		if len(buckets[g]) == 0 {
+			continue
+		}
+		word := jobScheduledText
+		if g == groupPending {
+			word = "Pending"
+		}
+		for _, line := range p.groupLines(word, g == groupPending, buckets[g], "job", "jobs", open, termW) {
 			lines = append(lines, line)
 			timers = append(timers, timerEntry{})
+		}
+		if open {
+			for _, name := range buckets[g] {
+				renderJob(name)
+			}
 		}
 	}
 	return lines, timers

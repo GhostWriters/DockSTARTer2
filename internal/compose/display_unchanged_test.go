@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,84 +13,144 @@ import (
 	"DockSTARTer2/internal/dockerlayout"
 )
 
+// Two images, one service each, so one can change while the other stays in its group.
+const (
+	dbImg  = "example/db:1"
+	webImg = "example/web:1"
+)
+
+// newGroupsTestProcessor returns a processor for db and web, both running before the
+// run, their images on disk.
+func newGroupsTestProcessor(command string) *consoleEventProcessor {
+	p := NewConsoleEventProcessor(context.Background(), nil, command,
+		map[string][]string{dbImg: {"db"}, webImg: {"web"}}, []string{dbImg, webImg},
+		map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.preRun = map[string]string{"db": "running", "web": "running"}
+	p.imageMetaBefore[dbImg] = imageMeta{}
+	p.imageMetaBefore[webImg] = imageMeta{}
+	return p
+}
+
 // renderPlain returns the processor's lines, plain, at level.
 func renderPlain(p *consoleEventProcessor, level int) string {
 	return strings.Join(plainLines(p.buildLines(160, level)), "\n")
 }
 
-func TestUnchangedServicesFoldOnUp(t *testing.T) {
-	p := newHealthTestProcessor() // up; db and web share testImg
+func TestServicesStartInTheGroupOfTheirState(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.preRun = map[string]string{"db": "running", "web": "stopped"}
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "Stopped       1 service: web") || !strings.Contains(got, "Running       1 service: db") || strings.Contains(got, "db:") {
+		t.Errorf("display =\n%s\nwant web in Stopped and db in Running, without rows", got)
+	}
+	if strings.Index(got, "Stopped") > strings.Index(got, "Running") {
+		t.Errorf("display =\n%s\nwant Stopped before Running", got)
+	}
+	delete(p.preRun, "web") // no container yet
+	if got := renderPlain(p, 0); !strings.Contains(got, "Not Created   1 service: web") {
+		t.Errorf("display =\n%s\nwant web in Not Created", got)
+	}
+	delete(p.imageMetaBefore, webImg) // nor its image: pulling it comes first
+	if got := renderPlain(p, 0); !strings.Contains(got, "Not Pulled    1 service: web") {
+		t.Errorf("display =\n%s\nwant web in Not Pulled", got)
+	}
+}
+
+func TestPullStartsByWhatsOnDisk(t *testing.T) {
+	p := newGroupsTestProcessor("pull")
+	delete(p.imageMetaBefore, webImg) // web's image isn't on disk
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "Not Pulled    1 service: web") || !strings.Contains(got, "Cached        1 service: db") {
+		t.Errorf("display =\n%s\nwant web in Not Pulled and db in Cached", got)
+	}
+}
+
+func TestUntouchedServicesSettleInTheRunningGroup(t *testing.T) {
+	p := newGroupsTestProcessor("up")
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, unchangedText) || !strings.Contains(got, "2 services: db, web") {
-		t.Errorf("display =\n%s\nwant db and web folded into one Unchanged line", got)
-	}
-	if strings.Contains(got, "image:") {
-		t.Errorf("display =\n%s\nwant their image folded with them", got)
-	}
-	// -v lists every row.
-	if got := renderPlain(p, dockerlayout.VerboseDetails); strings.Contains(got, unchangedText+"   ") || !strings.Contains(got, "db:") {
-		t.Errorf("-v display =\n%s\nwant every row", got)
+	if !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, "image:") {
+		t.Errorf("display =\n%s\nwant db and web in the Running group, their images with them", got)
 	}
 }
 
-func TestAChangedServiceKeepsItsImageBlock(t *testing.T) {
-	p := newHealthTestProcessor()
+func TestAChangedServiceLeavesItsGroup(t *testing.T) {
+	p := newGroupsTestProcessor("up")
 	p.On(containerEvent("db", "Recreated", api.Done))
-	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, 0)
-	if strings.Contains(got, unchangedText+"   ") || !strings.Contains(got, "web:") || !strings.Contains(got, "image:") {
-		t.Errorf("display =\n%s\nwant the block shown whole, web with it, since db changed", got)
+	// db has its own row, first; web stays in Running, the group's count down to 1.
+	if !strings.Contains(got, "Recreated     db:") || !strings.Contains(got, "Running       1 service: web") {
+		t.Errorf("display =\n%s\nwant db's own row and only web in Running", got)
+	}
+	if strings.Index(got, "db:") > strings.Index(got, "1 service: web") {
+		t.Errorf("display =\n%s\nwant the changed row before the groups", got)
 	}
 }
 
-func TestUnhealthyServiceIsntFolded(t *testing.T) {
-	p := newHealthTestProcessor()
+func TestAnImageCheckAloneDoesntChangeAService(t *testing.T) {
+	p := newGroupsTestProcessor("update")
+	p.On(api.Resource{ID: dbImg, Status: api.Working, Text: api.StatusPulling}) // update checks every image
+	if got := renderPlain(p, 0); !strings.Contains(got, "2 services: db, web") {
+		t.Errorf("display =\n%s\nwant db still pending while its image is only checked", got)
+	}
+	p.On(api.Resource{ID: "layer1", ParentID: dbImg, Status: api.Working, Text: api.StatusDownloading})
+	if got := renderPlain(p, 0); !strings.Contains(got, "db:") || !strings.Contains(got, "1 service: web") {
+		t.Errorf("display =\n%s\nwant db's own row once a layer downloads", got)
+	}
+}
+
+func TestUnhealthyServiceGetsItsOwnRow(t *testing.T) {
+	p := newGroupsTestProcessor("up")
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.setHealth("web", "web", healthUnhealthy)
-	if got := renderPlain(p, 0); strings.Contains(got, unchangedText+"   ") {
-		t.Errorf("display =\n%s\nwant nothing folded while web is unhealthy", got)
+	if got := renderPlain(p, 0); !strings.Contains(got, "web:") || !strings.Contains(got, "1 service: db") {
+		t.Errorf("display =\n%s\nwant web's own row and db in the Running group", got)
 	}
 }
 
-func TestUpdateFoldsOnlyOnceTheImageCheckEnds(t *testing.T) {
-	p := newHealthTestProcessor()
-	p.command = "update"
+func TestVerboseOpensTheGroups(t *testing.T) {
+	p := newGroupsTestProcessor("up")
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
-	if got := renderPlain(p, 0); strings.Contains(got, unchangedText+"   ") {
-		t.Errorf("display =\n%s\nwant nothing folded before update's image check reports", got)
+	got := renderPlain(p, dockerlayout.VerboseDetails)
+	line := strings.Index(got, "2 services:")
+	if line < 0 || strings.Contains(got, "2 services: db") || strings.Index(got, "db:") < line || strings.Index(got, "web:") < line {
+		t.Errorf("-v display =\n%s\nwant the Running group's line heading db's and web's rows", got)
 	}
-	p.finished, p.succeeded = true, true // the check reported nothing to pull
-	if got := renderPlain(p, 0); !strings.Contains(got, "2 services: db, web") {
-		t.Errorf("display =\n%s\nwant db and web folded once update ended", got)
+}
+
+func TestPullGroupsCachedImages(t *testing.T) {
+	p := newGroupsTestProcessor("pull")
+	p.finished, p.succeeded = true, true // both checks found nothing to pull
+	if got := renderPlain(p, 0); !strings.Contains(got, "Cached        2 services: db, web") {
+		t.Errorf("display =\n%s\nwant db and web in the Cached group", got)
 	}
 }
 
 func TestAFailureShowsEveryRow(t *testing.T) {
-	p := newHealthTestProcessor()
+	p := newGroupsTestProcessor("up")
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
-	if !p.foldsUnchanged(0) {
-		t.Fatal("nothing failed, yet the rows don't fold")
+	if !p.groupsRows() {
+		t.Fatal("nothing failed, yet the rows aren't grouped")
 	}
 	p.On(api.Resource{ID: "Container web", Status: api.Error, Text: "port is already allocated"})
-	if p.foldsUnchanged(0) {
-		t.Error("a row failed, yet the rows still fold")
+	if p.groupsRows() {
+		t.Error("a row failed, yet the rows are still grouped")
 	}
-	q := newHealthTestProcessor()
-	q.finished, q.succeeded = true, false // failed with no row of its own, e.g. a pull refused early
-	if q.foldsUnchanged(0) {
-		t.Error("the run failed, yet the rows still fold")
+	q := newGroupsTestProcessor("up")
+	q.finished, q.succeeded = true, false // failed with no row of its own, e.g. a pull that failed first
+	if q.groupsRows() {
+		t.Error("the run failed, yet the rows are still grouped")
 	}
 	// A pull still going when the run fails ends Interrupted, not stuck Pulling.
-	r := newHealthTestProcessor()
-	r.On(api.Resource{ID: testImg, Status: api.Working, Text: api.StatusPulling})
+	r := newGroupsTestProcessor("up")
+	r.On(api.Resource{ID: dbImg, Status: api.Working, Text: api.StatusPulling})
 	r.succeeded = false
 	r.finalizeActiveTasks()
-	if img := r.tasks[testImg]; img.text != interruptedText || img.status != api.Warning {
+	if img := r.tasks[dbImg]; img.text != interruptedText || img.status != api.Warning {
 		t.Errorf("image = %q %v, want Interrupted", img.text, img.status)
 	}
 	// The rows the failed run never reached show Interrupted, not Pending.
@@ -98,25 +159,25 @@ func TestAFailureShowsEveryRow(t *testing.T) {
 	}
 }
 
-func TestTeardownDoesntFold(t *testing.T) {
-	p := newHealthTestProcessor()
-	p.command = "down"
-	if p.foldsUnchanged(0) {
-		t.Error("down folds rows; every row it lists changed")
+func TestTeardownDoesntGroup(t *testing.T) {
+	p := newGroupsTestProcessor("down")
+	if p.groupsRows() {
+		t.Error("down groups rows; every row it lists changed")
 	}
 }
 
-func TestUnchangedJobsFold(t *testing.T) {
-	p := newHealthTestProcessor()
-	p.jobs = jobDecls(&types.Project{Jobs: types.Jobs{"backup": scheduledJob("0 3 * * *", "")}})
-	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning}) // already registered
+func TestScheduledJobsGroup(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.jobs = jobDecls(&types.Project{Jobs: types.Jobs{
+		"backup": scheduledJob("0 3 * * *", ""),
+		"report": scheduledJob("0 4 * * *", ""),
+	}})
+	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning}) // registered by an earlier up
+	p.On(api.Resource{ID: "Job report", Status: api.Done, Text: api.StatusCreated}) // registered now
 	lines, _ := p.buildJobLines(160, 0)
-	if got := strings.Join(plainLines(lines), "\n"); !strings.Contains(got, unchangedText) || !strings.Contains(got, "1 job: backup") {
-		t.Errorf("jobs =\n%s\nwant backup folded", got)
-	}
-	lines, _ = p.buildJobLines(160, dockerlayout.VerboseDetails)
-	if got := strings.Join(plainLines(lines), "\n"); !strings.Contains(got, "backup:") {
-		t.Errorf("-v jobs =\n%s\nwant backup's own row", got)
+	got := strings.Join(plainLines(lines), "\n")
+	if !strings.Contains(got, "Scheduled     report:") || !strings.Contains(got, "Scheduled     1 job: backup") {
+		t.Errorf("jobs =\n%s\nwant report's own row and backup in the Scheduled group", got)
 	}
 }
 
@@ -134,13 +195,13 @@ func TestSummaryLine(t *testing.T) {
 	}
 }
 
-func TestFoldLinesWrapAllNames(t *testing.T) {
+func TestGroupLinesWrapAllNames(t *testing.T) {
 	p := newHealthTestProcessor()
 	var names []string
 	for i := range 30 {
 		names = append(names, fmt.Sprintf("service%02d", i))
 	}
-	lines := p.foldLines(names, "service", "services", 100)
+	lines := p.groupLines("Running", false, names, "service", "services", false, 100)
 	if len(lines) < 2 {
 		t.Fatalf("lines = %q, want the names wrapped", plainLines(lines))
 	}

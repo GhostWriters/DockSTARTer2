@@ -118,6 +118,24 @@ func TestImageInfoLinesBuiltOnImageChange(t *testing.T) {
 	}
 }
 
+func TestImageInfoLinesOnFirstPull(t *testing.T) {
+	p := newHealthTestProcessor()
+	// Not on disk before: a first pull shows what arrived, without -v, as "→ new".
+	p.imageMetaAfter[testImg] = imageMeta{version: "2.38.0", built: "2026-11-17 23:13:01", digest: "sha256:ccc"}
+	lines := plainLines(p.imageInfoLines(testImg, 160, false))
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], "version: → 2.38.0") || !strings.HasSuffix(lines[1], "built:   → 2026-11-17 23:13:01") {
+		t.Errorf("first pull: %q, want its version and build date after an arrow", lines)
+	}
+	if got := strings.Join(lines, ""); strings.Contains(got, "digest") {
+		t.Errorf("first pull: %q, want no digest without -v", lines)
+	}
+	// An image with no version label: only its build date.
+	p.imageMetaAfter[testImg] = imageMeta{built: "2026-11-17 23:13:01"}
+	if lines := plainLines(p.imageInfoLines(testImg, 160, false)); len(lines) != 1 || !strings.HasSuffix(lines[0], "built: → 2026-11-17 23:13:01") {
+		t.Errorf("first pull without a version: %q, want only the build date", lines)
+	}
+}
+
 func TestInfoValuesLineUp(t *testing.T) {
 	p := newHealthTestProcessor()
 	p.imageMetaBefore[testImg] = imageMeta{version: "2.1", built: "2026-11-01 10:00:00", digest: "sha256:aaa", source: "https://example.com/app"}
