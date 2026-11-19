@@ -110,14 +110,15 @@ func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) 
 
 // groupsRows reports whether the display groups its rows under changed: and
 // unchanged:: on the commands that bring services up or pull them, and on teardown
-// commands. After a failure only the commands that bring services up still group,
-// and only below dockerlayout.VerboseDetails (buildLevel): rows showing the same
-// thing fold (an interrupted service with nothing to show), and -v, like the log,
-// shows every row in its place. A failed teardown shows every row.
+// commands. After a failure only the commands that bring services up, and docker
+// start, stop or restart by container name, still group, and only below
+// dockerlayout.VerboseDetails (buildLevel): rows showing the same thing fold (an
+// interrupted service with nothing to show), and -v, like the log, shows every row in
+// its place. A failed compose teardown shows every row.
 func (p *consoleEventProcessor) groupsRows() bool {
 	if p.finished && !p.succeeded || p.anyRowFailed() {
-		switch p.command {
-		case "up", "update", "run":
+		switch {
+		case p.command == "up", p.command == "update", p.command == "run", p.containerVerb != "":
 			return p.buildLevel < dockerlayout.VerboseDetails
 		}
 		return false
@@ -132,20 +133,21 @@ func (p *consoleEventProcessor) groupsRows() bool {
 // teardownGroupWord returns the group a teardown leaves svc in, or "" for its own row
 // under changed:, and whether the group's rows are still to be acted on. A service
 // with no container is Not Created, one the command leaves alone is in the group of
-// its state (teardownSkip), and for stop one already stopped is Not Running, though
-// compose still reports stopping it; until compose reports on the rest, they sit in
-// the group of their state before the run, Running, Paused or Not Running.
+// its state (teardownSkip, verbLeavesAlone: stop of one already stopped is Not Running
+// though compose still reports stopping it); until compose reports on the rest, they
+// sit in the group of their state before the run, Running, Paused or Not Running.
 func (p *consoleEventProcessor) teardownGroupWord(svc string) (word string, pending bool) {
 	t := p.tasks[svc]
 	state, seen := p.preRun[svc]
 	if word := teardownSkip(p.command, state, seen); word != "" && t == nil {
 		return word, false
 	}
+	if word := verbLeavesAlone(p.command, state, seen); word != "" {
+		return word, false
+	}
 	switch {
 	case !seen && t == nil:
 		return notCreatedText, false
-	case p.command == "stop" && seen && state == "stopped":
-		return notRunningText, false
 	case t != nil || p.finished:
 		return "", false
 	case state == "stopped":
@@ -154,6 +156,22 @@ func (p *consoleEventProcessor) teardownGroupWord(svc string) (word string, pend
 		return pausedText, true
 	}
 	return api.StatusRunning, true
+}
+
+// verbLeavesAlone returns the group of a container command leaves as it was, by its
+// state before the run (seen: it has a container), though docker accepts the command:
+// stop of one stopped is Not Running, and start (docker start, by container name)
+// of one running is Running. "" when the command changes it.
+func verbLeavesAlone(command, state string, seen bool) string {
+	switch {
+	case !seen:
+		return ""
+	case command == "stop" && state == "stopped":
+		return notRunningText
+	case command == "start" && state != "stopped" && state != preRunPaused:
+		return api.StatusRunning
+	}
+	return ""
 }
 
 // teardownTargets returns the services of names that command acts on, sorted, by
@@ -331,10 +349,10 @@ func (p *consoleEventProcessor) groupLines(word string, pending bool, names []st
 	return p.namesLines(icon, style+word+"{{[-]}}", word, len(names), noun, names, termW)
 }
 
-// foldedRowLines returns the line of service rows that show the same thing, folded:
-// their marker and status, how many, and their names.
-func (p *consoleEventProcessor) foldedRowLines(icon, statusTag, statusText string, names []string, termW int) []string {
-	return p.namesLines(icon, statusTag, statusText, len(names), "services", names, termW)
+// foldedRowLines returns the line of rows of noun (services, containers) that show the
+// same thing, folded: their marker and status, how many, and their names.
+func (p *consoleEventProcessor) foldedRowLines(icon, statusTag, statusText string, names []string, noun string, termW int) []string {
+	return p.namesLines(icon, statusTag, statusText, len(names), noun, names, termW)
 }
 
 // namesLines returns a line of icon, statusTag (whose visible text is word), count noun

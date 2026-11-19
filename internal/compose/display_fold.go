@@ -34,7 +34,7 @@ func (p *consoleEventProcessor) appendServiceRows(rows []serviceRow, level, term
 				continue
 			}
 			drawn[key(r)] = true
-			for i, line := range p.foldedRowLines(r.icon, r.statusTag+"{{[-]}}", r.statusText, names, termW) {
+			for i, line := range p.foldedRowLines(r.icon, r.statusTag+"{{[-]}}", r.statusText, names, "services", termW) {
 				var timer *consoleTask
 				if i == 0 {
 					timer = p.foldedTimer(names)

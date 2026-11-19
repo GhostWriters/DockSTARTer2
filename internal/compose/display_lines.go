@@ -13,6 +13,9 @@ import (
 )
 
 func (p *consoleEventProcessor) isTeardownCommand() bool {
+	if p.containerVerb != "" {
+		return true // docker start, stop or restart: containers acted on, nothing pulled
+	}
 	switch p.command {
 	case "down", "stop", "kill", "pause", "unpause", "restart":
 		return true
@@ -850,7 +853,9 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 	if p.groupsRows() {
 		lines, timers = p.teardownGroupedLines(svcs, svcImageMap, renderRow, renderChanged, &lines, &timers, termW, level)
 	} else {
-		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+		if p.containerVerb == "" { // container mode has only containers
+			appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+		}
 		for _, svc := range svcs {
 			word := "" // a service the command left alone keeps its state's word
 			if state, seen := p.preRun[svc]; p.tasks[svc] == nil {
@@ -863,8 +868,9 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 		modelLines, modelTimers := p.kindSection(p.modelKind(), termW, level)
 		jobLines, jobTimers := p.buildJobLines(termW, level)
 		orphanLines, orphanTimers := p.kindSection(p.orphanKind(), termW, level)
-		for s, section := range [][]string{netLines, volLines, modelLines, jobLines, orphanLines} {
-			sectionTimers := [][]timerEntry{netTimers, volTimers, modelTimers, jobTimers, orphanTimers}[s]
+		ctrLines, ctrTimers := p.kindSection(p.containerKind(), termW, level)
+		for s, section := range [][]string{netLines, volLines, modelLines, jobLines, orphanLines, ctrLines} {
+			sectionTimers := [][]timerEntry{netTimers, volTimers, modelTimers, jobTimers, orphanTimers, ctrTimers}[s]
 			for i, line := range section {
 				appendLine(line, sectionTimers[i].task, sectionTimers[i].style)
 			}
@@ -945,5 +951,6 @@ func (p *consoleEventProcessor) teardownGroupedLines(svcs []string, svcImageMap 
 		p.kindGroups(p.modelKind(), termW, level),
 		p.jobGroups(termW, level),
 		p.kindGroups(p.orphanKind(), termW, level),
+		p.kindGroups(p.containerKind(), termW, level),
 	})
 }

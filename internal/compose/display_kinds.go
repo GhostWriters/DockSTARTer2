@@ -23,11 +23,12 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// Event ID prefixes of the task IDs that keep a model or an orphan apart from a service
-// of the same name.
+// Event ID prefixes of the task IDs that keep a model, an orphan or a container outside
+// the project apart from a service of the same name.
 const (
-	modelTaskPrefix  = "Model "
-	orphanTaskPrefix = "Orphan "
+	modelTaskPrefix     = "Model "
+	orphanTaskPrefix    = "Orphan "
+	containerTaskPrefix = "Container task "
 )
 
 // modelPulledText is the status of a model the run pulled, once configured: the change.
@@ -44,6 +45,10 @@ type rowKind struct {
 	group                     func(name string) (word string, pending bool) // its unchanged group, "" for changed
 	order                     []string                                      // the unchanged groups' order
 	rowLines                  func(name string, termW, level int) ([]string, []timerEntry)
+	// rowStatus and rowDetail, when set, split a row into its marker and status and the
+	// lines under it, so rows that show the same thing fold (kindRows).
+	rowStatus func(name string) (icon, tag, text string)
+	rowDetail func(name string, termW, level int) []string
 }
 
 // taskIDs returns the task IDs of names.
@@ -89,9 +94,56 @@ func (p *consoleEventProcessor) kindSection(k rowKind, termW, level int) ([]stri
 	lines := []string{globalIndent + icon + " " + tag + strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
 		"{{|DockerSection|}}" + k.section + "{{[-]}}{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(k.taskIDs(k.names)), style: timerSection}}
-	for _, name := range k.names {
-		l, t := k.rowLines(name, termW, level)
-		lines, timers = append(lines, l...), append(timers, t...)
+	l, t := p.kindRows(k, k.names, termW, level)
+	return append(lines, l...), append(timers, t...)
+}
+
+// kindRows returns k's rows names, in order. Below -v, when k splits its rows
+// (rowStatus, rowDetail), rows that show the same thing fold into one line naming them,
+// their lines once and their timers merged, as appendServiceRows does for services.
+func (p *consoleEventProcessor) kindRows(k rowKind, names []string, termW, level int) ([]string, []timerEntry) {
+	var lines []string
+	var timers []timerEntry
+	fold := k.rowStatus != nil && k.rowDetail != nil && level < dockerlayout.VerboseDetails
+	key := func(name string) string {
+		icon, tag, _ := k.rowStatus(name)
+		return icon + tag + "\x00" + strings.Join(k.rowDetail(name, termW, level), "\n")
+	}
+	folded := map[string][]string{}
+	if fold {
+		for _, name := range names {
+			folded[key(name)] = append(folded[key(name)], name)
+		}
+	}
+	drawn := map[string]bool{}
+	for _, name := range names {
+		if !fold || len(folded[key(name)]) < 2 {
+			l, t := k.rowLines(name, termW, level)
+			lines, timers = append(lines, l...), append(timers, t...)
+			continue
+		}
+		if drawn[key(name)] {
+			continue
+		}
+		drawn[key(name)] = true
+		group := folded[key(name)]
+		icon, tag, text := k.rowStatus(name)
+		tasks := make([]*consoleTask, 0, len(group))
+		for _, n := range group {
+			if t := p.tasks[k.taskID(n)]; t != nil {
+				tasks = append(tasks, t)
+			}
+		}
+		for i, line := range p.foldedRowLines(icon, tag, text, group, k.plural, termW) {
+			timer := timerEntry{}
+			if i == 0 && len(tasks) > 0 {
+				timer = timerEntry{task: mergeTimers(tasks), style: timerService}
+			}
+			lines, timers = append(lines, line), append(timers, timer)
+		}
+		for _, line := range k.rowDetail(name, termW, level) {
+			lines, timers = append(lines, line), append(timers, timerEntry{})
+		}
 	}
 	return lines, timers
 }
@@ -114,10 +166,7 @@ func (p *consoleEventProcessor) kindGroups(k rowKind, termW, level int) kindGrou
 		groupPending[word] = groupPending[word] || pending
 	}
 	out.changed = groupSet{count: len(changed), state: p.kindState(k, changed), timer: p.sectionTaskFor(k.taskIDs(changed))}
-	for _, name := range changed {
-		l, t := k.rowLines(name, termW, level)
-		out.changed.lines, out.changed.timers = append(out.changed.lines, l...), append(out.changed.timers, t...)
-	}
+	out.changed.lines, out.changed.timers = p.kindRows(k, changed, termW, level)
 	var unchanged []string
 	for _, word := range k.order {
 		unchanged = append(unchanged, groups[word]...)
@@ -128,10 +177,8 @@ func (p *consoleEventProcessor) kindGroups(k rowKind, termW, level int) kindGrou
 			continue
 		}
 		if open {
-			for _, name := range groups[word] {
-				l, t := k.rowLines(name, termW, level)
-				out.unchanged.lines, out.unchanged.timers = append(out.unchanged.lines, l...), append(out.unchanged.timers, t...)
-			}
+			l, t := p.kindRows(k, groups[word], termW, level)
+			out.unchanged.lines, out.unchanged.timers = append(out.unchanged.lines, l...), append(out.unchanged.timers, t...)
 			continue
 		}
 		for _, line := range p.groupLines(word, groupPending[word], groups[word], k.singular, k.plural, termW) {
@@ -463,6 +510,79 @@ func (p *consoleEventProcessor) orphanKind() rowKind {
 			lines := []string{kindRowLine(p.spinnerIcon(t), serviceStatusTag(t.status, t.text, "down"), abbreviateStatus(t.text), name)}
 			timers := []timerEntry{{task: t, style: timerService}}
 			if line := p.errorLine(t); line != "" {
+				lines, timers = append(lines, line), append(timers, timerEntry{})
+			}
+			return lines, timers
+		},
+	}
+}
+
+// ── Containers (docker start, stop or restart) ──────────────────────────────
+
+func containerTaskID(name string) string { return containerTaskPrefix + name }
+
+// containerStateWord returns the group of a container by its state before the run.
+func containerStateWord(state string) string {
+	switch state {
+	case "":
+		return notCreatedText
+	case "stopped":
+		return notRunningText
+	case preRunPaused:
+		return pausedText
+	}
+	return api.StatusRunning
+}
+
+// containerKind returns the containers a docker start, stop or restart acts on, by
+// name, as a simple row kind: one the command leaves as it was in the group of its
+// state (verbLeavesAlone), one not reported on yet in the group of its state before the
+// run, the rest changed. Rows that show the same thing fold. With -v, a row names what
+// runs the container: its service, or another project.
+func (p *consoleEventProcessor) containerKind() rowKind {
+	status := func(name string) (icon, tag, text string) {
+		t := p.tasks[containerTaskID(name)]
+		if t == nil {
+			word := containerStateWord(p.containerPreRun[name])
+			return "{{|DockerStatusPending|}}" + p.icons().pending + "{{[-]}}", "{{|DockerStatusPending|}}" + word + "{{[-]}}", word
+		}
+		return p.spinnerIcon(t), serviceStatusTag(t.status, t.text, p.command), abbreviateStatus(t.text)
+	}
+	detail := func(name string, termW, level int) []string {
+		var lines []string
+		if line := p.errorLine(p.tasks[containerTaskID(name)]); line != "" {
+			lines = append(lines, line)
+		}
+		if d := p.containerDetail[name]; d[0] != "" && level >= dockerlayout.VerboseDetails {
+			lines = append(lines, p.infoDetailLine(d[0], d[1], termW))
+		}
+		return lines
+	}
+	return rowKind{
+		section: "containers", singular: "container", plural: "containers",
+		names:  p.containers,
+		taskID: containerTaskID,
+		order:  teardownOrder,
+		group: func(name string) (string, bool) {
+			state := p.containerPreRun[name]
+			if word := verbLeavesAlone(p.command, state, state != ""); word != "" {
+				return word, false
+			}
+			if p.tasks[containerTaskID(name)] != nil || p.finished {
+				return "", false
+			}
+			return containerStateWord(state), true
+		},
+		rowStatus: status,
+		rowDetail: detail,
+		rowLines: func(name string, termW, level int) ([]string, []timerEntry) {
+			icon, tag, text := status(name)
+			timer := timerEntry{}
+			if t := p.tasks[containerTaskID(name)]; t != nil {
+				timer = timerEntry{task: t, style: timerService}
+			}
+			lines, timers := []string{kindRowLine(icon, tag, text, name)}, []timerEntry{timer}
+			for _, line := range detail(name, termW, level) {
 				lines, timers = append(lines, line), append(timers, timerEntry{})
 			}
 			return lines, timers
