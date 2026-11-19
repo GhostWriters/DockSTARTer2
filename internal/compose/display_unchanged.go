@@ -105,7 +105,7 @@ func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) 
 			return false // its model line shows the failure
 		}
 	}
-	return imgName == "" || p.imageUnchanged(imgName, termW)
+	return imgName == "" || p.imageUnchanged(imgName)
 }
 
 // groupsRows reports whether the display groups its rows under changed: and
@@ -236,7 +236,7 @@ func (p *consoleEventProcessor) serviceGroup(svc, imgName string, termW int) row
 func (p *consoleEventProcessor) serviceSettled(svc, imgName string, termW int) bool {
 	t := p.tasks[svc]
 	if p.command == "pull" {
-		return t == nil && imgName != "" && p.imageUnchanged(imgName, termW)
+		return t == nil && imgName != "" && p.imageUnchanged(imgName)
 	}
 	if t == nil || t.text != api.StatusRunning || t.status != api.Done || t.message != "" ||
 		t.healthErr || t.conditionErr || t.interrupted {
@@ -248,7 +248,7 @@ func (p *consoleEventProcessor) serviceSettled(svc, imgName string, termW int) b
 	if len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
 		return false
 	}
-	return imgName == "" || p.imageUnchanged(imgName, termW)
+	return imgName == "" || p.imageUnchanged(imgName)
 }
 
 // serviceChanged reports whether something happened to svc: a container action, an
@@ -272,14 +272,31 @@ func (p *consoleEventProcessor) serviceChanged(svc, imgName string, termW int) b
 			return true // a layer being or been downloaded
 		}
 	}
-	return len(p.imageInfoLines(imgName, termW, false)) > 0
+	return p.imagePullChanged(imgName)
+}
+
+// imagePullChanged reports whether this run's pull changed imgName: a first pull, or a
+// new digest or version. A service of the image brought up, which shows the version it
+// now runs under the image, doesn't count: that is the service's change, not its
+// siblings'.
+func (p *consoleEventProcessor) imagePullChanged(imgName string) bool {
+	before, hadBefore := p.imageMetaBefore[imgName]
+	after, pulled := p.imageMetaAfter[imgName]
+	switch {
+	case !pulled:
+		return false
+	case !hadBefore:
+		return true
+	}
+	differs := func(a, b string) bool { return a != "" && b != "" && a != b }
+	return differs(before.digest, after.digest) || differs(before.version, after.version)
 }
 
 // imageUnchanged reports whether imgName is final and needed no download: for a
 // pull of missing images only (up, run), one with no events is on disk already;
 // update and pull check every image, so theirs is unchanged once its check ends with
-// every layer already there, and the version lines a changed image gets are absent.
-func (p *consoleEventProcessor) imageUnchanged(imgName string, termW int) bool {
+// every layer already there and its pull didn't change it (imagePullChanged).
+func (p *consoleEventProcessor) imageUnchanged(imgName string) bool {
 	t := p.tasks[imgName]
 	switch {
 	case t == nil:
@@ -289,7 +306,7 @@ func (p *consoleEventProcessor) imageUnchanged(imgName string, termW int) bool {
 	case !t.completed() || p.worstImageStatus(imgName) != api.Done || !p.allLayersAlreadyExist(imgName):
 		return false
 	}
-	return len(p.imageInfoLines(imgName, termW, false)) == 0
+	return !p.imagePullChanged(imgName)
 }
 
 // groupLines returns a folded group's lines: its state word, how many rows of noun it

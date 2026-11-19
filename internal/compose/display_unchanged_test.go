@@ -496,3 +496,29 @@ func TestImageCheckShowsAsProcessing(t *testing.T) {
 		t.Errorf("display after the check =\n%s\nwant no Processing group", got)
 	}
 }
+
+func TestSharedImageSplitsBetweenChangedAndUnchanged(t *testing.T) {
+	const img = "example/sonarr:1"
+	svcs := []string{"sonarr", "sonarr__4k", "sonarr__alt", "sonarr__alt4k"}
+	p := NewConsoleEventProcessor(context.Background(), nil, "update",
+		map[string][]string{img: svcs}, []string{img},
+		map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.preRun = map[string]string{"sonarr": "stopped", "sonarr__4k": "stopped", "sonarr__alt": "running", "sonarr__alt4k": "running"}
+	// The image is unchanged, but the two brought up show the version they now run
+	// under it: that is their change, not their siblings'.
+	p.imageMetaBefore[img] = imageMeta{version: "5.0.0", digest: "sha256:aaa"}
+	p.imageMetaAfter[img] = imageMeta{version: "5.0.0", digest: "sha256:aaa"}
+	// The two stopped are started; the two running are left as they were.
+	p.On(containerEvent("sonarr", api.StatusStarted, api.Done))
+	p.On(containerEvent("sonarr__4k", api.StatusStarted, api.Done))
+	p.On(containerEvent("sonarr__alt", api.StatusRunning, api.Done))
+	p.On(containerEvent("sonarr__alt4k", api.StatusRunning, api.Done))
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
+	started := strings.Index(got, "Started         2 services: sonarr, sonarr__4k")
+	running := strings.Index(got, "Running         2 services: sonarr__alt, sonarr__alt4k")
+	if changed < 0 || started < changed || started > unchanged || running < unchanged {
+		t.Errorf("display =\n%s\nwant the two started under changed:, the two left running under unchanged:", got)
+	}
+}
