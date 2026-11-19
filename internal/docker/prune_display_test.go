@@ -24,7 +24,7 @@ func TestPruneUnusedImagesListAsImages(t *testing.T) {
 		{Untagged: "sha256:cf4fe1"}, {Deleted: "sha256:l3"},
 	}, SpaceReclaimed: 1 << 20}
 	got := prunePlain(r, nil, false)
-	for _, want := range []string{"✓ Complete    changed:", "✓ Complete      2 unused images:", "✓ Untagged        image: sha256:067bd9 [2]",
+	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Complete    changed:", "✓ Complete      2 unused images:", "✓ Untagged        image: sha256:067bd9 [2]",
 		"✓ Untagged        image: sha256:cf4fe1 [1]", "Total reclaimed space:"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
