@@ -292,6 +292,17 @@ type consoleEventProcessor struct {
 	// buildLevel is the verbosity level of the frame being built (buildLines).
 	buildLevel int
 
+	// Container mode, for docker start, stop or restart by container name
+	// (ContainerVerbDisplay): containerVerb is the docker command the heading names;
+	// containers the containers it acts on, by name, with containerPreRun[name] one's
+	// state before the run and containerDetail[name] the -v line naming what runs it
+	// (its service, or another project); containerSeen those reported on.
+	containerVerb   string
+	containers      []string
+	containerPreRun map[string]string
+	containerDetail map[string][2]string
+	containerSeen   []string
+
 	// preRunImage[svc] is the image ID svc's container ran before the run; prevMeta
 	// [svc] that image's details when it differs from the one on disk (which a
 	// recreate moves the container onto), and prevGone[svc] when that image is gone.
@@ -638,6 +649,10 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 		return // a job's run container, named by the engine: its job's row covers it
 	}
 	id = p.serviceForContainer(id)
+	if p.containerVerb != "" && strings.HasPrefix(e.ID, "Container ") && parentID == "" && !p.isKnownServiceName(id) {
+		p.upsertKindRow(containerTaskID(containerName), containerName, &p.containerSeen, e)
+		return
+	}
 	if strings.HasPrefix(e.ID, "Container ") && parentID == "" && !p.isKnownServiceName(id) && !contains(p.imageIDs, id) && isOrphanEvent(e) {
 		p.upsertKindRow(orphanTaskID(containerName), containerName, &p.orphanIDs, e)
 		return

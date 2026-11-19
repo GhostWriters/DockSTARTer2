@@ -16,6 +16,12 @@ import (
 )
 
 func (p *consoleEventProcessor) buildSummaryLine() string {
+	if p.containerVerb != "" {
+		// docker start, stop or restart acts on containers, whichever service they run.
+		n := len(p.containers)
+		return globalIndent + p.overallRollupIcon() + " " + fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s%d %s{{[-]}}",
+			p.containerVerb, sectionFinalTag, n, plural(n, "container", "containers"))
+	}
 	svcCount := 0
 	for _, svcs := range p.imageServices {
 		svcCount += len(svcs)

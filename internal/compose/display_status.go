@@ -71,6 +71,9 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	for _, name := range p.orphanIDs {
 		ids = append(ids, orphanTaskID(name))
 	}
+	for _, name := range p.containerSeen {
+		ids = append(ids, containerTaskID(name))
+	}
 	state := p.rollupState(ids, nil)
 	if p.finished && !p.succeeded {
 		state = rollupError // the call failed, whatever its rows show

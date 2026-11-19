@@ -11,6 +11,7 @@ import (
 
 	"github.com/moby/moby/api/pkg/stdcopy"
 
+	"DockSTARTer2/internal/compose"
 	"DockSTARTer2/internal/console"
 	"DockSTARTer2/internal/docker"
 	"DockSTARTer2/internal/dockercheck"
@@ -71,7 +72,9 @@ func HandleContainerRestartStarted(ctx context.Context, group *CommandGroup, sta
 // group.Args. Runs all containers' SDK calls concurrently (one goroutine
 // each) rather than one at a time -- the Engine API has no batch endpoint,
 // so this mirrors how docker/cli itself fans out a multi-name `docker stop
-// c1 c2 c3` invocation.
+// c1 c2 c3` invocation. Each call reports to a live display
+// (compose.ContainerVerbDisplay) as it starts and returns; the display reads
+// each container's state and labels only to group its row and name what runs it.
 func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdState, nameSource func(context.Context) ([]string, error), verb, imperative, presentParticiple string, action func(context.Context, string) error) error {
 	if err := dockercheck.Require(ctx); err != nil {
 		return err
@@ -111,30 +114,39 @@ func handleContainerVerb(ctx context.Context, group *CommandGroup, state *CmdSta
 	// multi-name support is the same per-container-goroutine shape).
 	logger.Notice(ctx, "Running: {{|RunningCommand|}}docker %s %s{{[-]}}", verb, strings.Join(names, " "))
 
+	// Each container's call reports to the live display as it starts and returns. The
+	// display owns the output while it runs, so failures are logged once it's done.
+	console.PauseSpinner()
+	display := compose.NewContainerVerbDisplay(ctx, verb, names)
 	var (
 		wg       sync.WaitGroup
 		mu       sync.Mutex
+		failures []string
 		firstErr error
 	)
 	for _, name := range names {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			if err := action(ctx, name); err != nil {
-				logger.Error(ctx, "Failed to %s '{{|App|}}%s{{[-]}}': %v", verb, name, err)
+			display.Starting(name)
+			err := action(ctx, name)
+			display.Finished(name, err)
+			if err != nil {
 				mu.Lock()
+				failures = append(failures, fmt.Sprintf("Failed to %s '{{|App|}}%s{{[-]}}': %v", verb, name, err))
 				if firstErr == nil {
 					firstErr = err
 				}
 				mu.Unlock()
-				return
 			}
-			// Same tab-indented, tool-prefixed Notice convention used for git
-			// output in update_templates.go.
-			logger.Notice(ctx, "\t{{|RunningCommand|}}docker:{{[-]}} %s", name)
 		}(name)
 	}
 	wg.Wait()
+	display.Done(firstErr == nil)
+	console.ResumeSpinner()
+	for _, f := range failures {
+		logger.Error(ctx, "%s", f)
+	}
 	return firstErr
 }
 

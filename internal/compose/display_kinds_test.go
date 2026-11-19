@@ -1,11 +1,14 @@
 package compose
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
+
+	"DockSTARTer2/internal/dockerlayout"
 )
 
 func TestModelDecls(t *testing.T) {
@@ -165,5 +168,69 @@ func TestOrphansGroup(t *testing.T) {
 	if !strings.Contains(got, "1 orphan:") || !strings.Contains(got, "Removed         autobrr:") ||
 		strings.Contains(got, "Unknown") || !strings.Contains(got, ", 1 orphan") || !strings.Contains(got, "2 services: db, web") {
 		t.Errorf("display =\n%s\nwant autobrr Removed under changed: as 1 orphan, not a service", got)
+	}
+}
+
+// newContainerVerbProcessor returns a processor in container mode for docker verb on
+// names, each in its state before the run (preRun), as NewContainerVerbDisplay sets it up.
+func newContainerVerbProcessor(verb string, names []string, preRun map[string]string, detail map[string][2]string) *consoleEventProcessor {
+	p := NewConsoleEventProcessor(context.Background(), nil, verb, map[string][]string{}, nil, map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.containerVerb = "docker " + verb
+	p.containers = names
+	p.containerPreRun = preRun
+	p.containerDetail = detail
+	return p
+}
+
+func TestContainerVerbRestartFolds(t *testing.T) {
+	names := []string{"portainer", "radarr", "sonarr"}
+	p := newContainerVerbProcessor("restart", names, map[string]string{"portainer": "running", "radarr": "running", "sonarr": "running"}, nil)
+	for _, n := range names {
+		p.On(api.Resource{ID: "Container " + n, Status: api.Working, Text: api.StatusRestarting})
+	}
+	if got := renderPlain(p, 0); !strings.Contains(got, "Restarting      3 containers: portainer, radarr, sonarr") {
+		t.Errorf("display while restarting =\n%s\nwant all three on one Restarting line", got)
+	}
+	p.On(api.Resource{ID: "Container radarr", Status: api.Done, Text: api.StatusRestarted})
+	p.On(api.Resource{ID: "Container sonarr", Status: api.Done, Text: api.StatusRestarted})
+	if got := renderPlain(p, 0); !strings.Contains(got, "Restarted       2 containers: radarr, sonarr") || !strings.Contains(got, "portainer:") {
+		t.Errorf("display with two done =\n%s\nwant radarr and sonarr folded Restarted, portainer still on its own row", got)
+	}
+	p.On(api.Resource{ID: "Container portainer", Status: api.Done, Text: api.StatusRestarted})
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "docker restart: 3 containers") || !strings.Contains(got, "Restarted       3 containers: portainer, radarr, sonarr") ||
+		strings.Contains(got, "orphan") {
+		t.Errorf("display =\n%s\nwant the docker restart heading and all three folded Restarted", got)
+	}
+}
+
+func TestContainerVerbStopLeavesStoppedAlone(t *testing.T) {
+	p := newContainerVerbProcessor("stop", []string{"radarr", "wizarr"}, map[string]string{"radarr": "running", "wizarr": "stopped"}, nil)
+	p.On(api.Resource{ID: "Container radarr", Status: api.Working, Text: api.StatusStopping})
+	p.On(api.Resource{ID: "Container wizarr", Status: api.Working, Text: api.StatusStopping})
+	p.On(api.Resource{ID: "Container radarr", Status: api.Done, Text: api.StatusStopped})
+	p.On(api.Resource{ID: "Container wizarr", Status: api.Done, Text: api.StatusStopped})
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
+	stopped, notRunning := strings.Index(got, "Stopped         radarr:"), strings.Index(got, "Not Running     1 container: wizarr")
+	if changed < 0 || stopped < changed || stopped > unchanged || notRunning < unchanged {
+		t.Errorf("display =\n%s\nwant radarr Stopped under changed:, wizarr Not Running under unchanged:", got)
+	}
+}
+
+func TestContainerVerbFailureAndDetail(t *testing.T) {
+	detail := map[string][2]string{"radarr": {"service", "radarr"}, "portainer": {"project", "tools"}}
+	p := newContainerVerbProcessor("restart", []string{"portainer", "radarr"}, map[string]string{"portainer": "running", "radarr": "running"}, detail)
+	p.On(api.Resource{ID: "Container radarr", Status: api.Done, Text: api.StatusRestarted})
+	p.On(api.Resource{ID: "Container portainer", Status: api.Error, Text: "No such container: portainer"})
+	p.finished, p.succeeded = true, false
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "Error           portainer:") || !strings.Contains(got, "No such container: portainer") {
+		t.Errorf("display =\n%s\nwant portainer failed with its message", got)
+	}
+	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "service: radarr") || !strings.Contains(got, "project: tools") {
+		t.Errorf("-v display =\n%s\nwant each row naming what runs it", got)
 	}
 }
