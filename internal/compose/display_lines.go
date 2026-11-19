@@ -153,23 +153,33 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		}
 	}
 
-	// A block moves only as a whole: to its own rows if any of its services has, else
-	// to the earliest group (in groupOrder) of its services'.
+	// Each service of a block goes where it belongs on its own: those something
+	// happened to, with their image, to their own rows; the rest to the group of their
+	// state, also with the image. So a changed instance doesn't take its unchanged
+	// siblings along, and with -v each part shows the image they share.
 	place := func(b block) {
 		if !grouped {
 			renderBlock(b) // every row in its place
 			return
 		}
-		best := len(groupOrder)
+		var moved []string
+		byWord := map[string][]string{}
 		for _, svc := range b.svcs {
 			word := p.serviceGroupWord(svc, b.img, termW)
 			if word == "" {
-				changed = append(changed, b)
-				return
+				moved = append(moved, svc)
+				continue
 			}
-			best = min(best, slices.Index(groupOrder, word))
+			byWord[word] = append(byWord[word], svc)
 		}
-		groups[groupOrder[best]] = append(groups[groupOrder[best]], b)
+		if len(moved) > 0 {
+			changed = append(changed, block{img: b.img, svcs: moved})
+		}
+		for _, word := range groupOrder {
+			if svcs := byWord[word]; len(svcs) > 0 {
+				groups[word] = append(groups[word], block{img: b.img, svcs: svcs})
+			}
+		}
 	}
 	coveredSvcs := make(map[string]bool)
 	for _, imgName := range p.imageOrder {
