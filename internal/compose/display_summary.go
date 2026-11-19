@@ -68,12 +68,22 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	if orphanCount := len(p.orphanIDs); orphanCount > 0 {
 		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, orphanCount, plural(orphanCount, "orphan", "orphans")))
 	}
-	// Command word is bold yellow (matching the summary line's overall duration); the
-	// colon uses DockerColon (matching the colons on the section/name lines below).
-	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", p.command, strings.Join(parts, ", "))
+	// The docker command is bold yellow (matching the summary line's overall duration);
+	// the colon uses DockerColon (matching the colons on the section/name lines below).
+	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", composeHeading(p.command), strings.Join(parts, ", "))
 	// Prepend an overall spinner/marker (icon + space) so the summary reads as the
 	// top-level rollup header, shifting the whole block 3 chars right to align under it.
 	return globalIndent + p.overallRollupIcon() + " " + summaryFmt
+}
+
+// composeHeading returns the docker command DS2 ran for command, as the summary
+// heading names it: update is up --pull always, the one flag that sets it apart (the
+// flags DS2 always passes are in the Running: line above).
+func composeHeading(command string) string {
+	if command == "update" {
+		return "docker compose up --pull always"
+	}
+	return "docker compose " + command
 }
 
 // layerCount returns the number of layer rows across all images: each sha256 DiffID once

@@ -301,12 +301,13 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	if len(headerParts) > 0 {
 		// Overall marker: error if any category failed, else success. Prune is rendered
 		// after completion, so there's no spinner — just the final marker (icon + space),
-		// matching the compose summary header. Command word is bold yellow; colon DockerColon.
+		// matching the compose summary header. The docker command is bold yellow; colon
+		// DockerColon.
 		marker := doneIconANSI
 		if r.hasErrors() {
 			marker = errorIconANSI
 		}
-		header := semstyle.ToANSI(fmt.Sprintf("{{[yellow::B]}}prune{{[-]}}{{|DockerColon|}}:{{[-]}} %s", strings.Join(headerParts, ", ")))
+		header := semstyle.ToANSI(fmt.Sprintf("{{[yellow::B]}}docker system prune{{[-]}}{{|DockerColon|}}:{{[-]}} %s", strings.Join(headerParts, ", ")))
 		add(GlobalIndent + marker + " " + header)
 	}
 	// All lines after the header nest under it (indent by icon + space), matching compose.

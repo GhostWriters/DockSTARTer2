@@ -522,3 +522,18 @@ func TestSharedImageSplitsBetweenChangedAndUnchanged(t *testing.T) {
 		t.Errorf("display =\n%s\nwant the two started under changed:, the two left running under unchanged:", got)
 	}
 }
+
+func TestComposeHeading(t *testing.T) {
+	for command, want := range map[string]string{
+		"up": "docker compose up", "update": "docker compose up --pull always",
+		"restart": "docker compose restart", "run": "docker compose run",
+	} {
+		if got := composeHeading(command); got != want {
+			t.Errorf("composeHeading(%q) = %q, want %q", command, got, want)
+		}
+	}
+	p := newGroupsTestProcessor("update")
+	if got := renderPlain(p, 0); !strings.Contains(got, "docker compose up --pull always: 2 services") {
+		t.Errorf("display =\n%s\nwant the docker command in the heading", got)
+	}
+}
