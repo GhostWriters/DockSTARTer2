@@ -166,3 +166,26 @@ func TestVersionLinkCheckedOnlyWhenShown(t *testing.T) {
 		t.Errorf("old version's link = %q, want none (no such release)", got)
 	}
 }
+
+func TestHubTagsForDigestStaysOnTheHubHost(t *testing.T) {
+	var elsewhereHits int
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhereHits++
+		_, _ = w.Write([]byte(`{"next":"","results":[{"name":"9.9.9","digest":"sha256:rel"}]}`))
+	}))
+	t.Cleanup(elsewhere.Close)
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The first page names another host as the next: the search must not follow it.
+		_, _ = w.Write([]byte(`{"next":"` + elsewhere.URL + `/tags?page=2","results":[{"name":"dev","digest":"sha256:dev"}]}`))
+	}))
+	t.Cleanup(hub.Close)
+	old := dockerHubBaseURL
+	dockerHubBaseURL = hub.URL
+	t.Cleanup(func() { dockerHubBaseURL = old })
+	if got := hubTagsForDigest(context.Background(), "acme/app", "sha256:rel"); got != nil || elsewhereHits != 0 {
+		t.Errorf("tags = %v, other host hit %d times; want none and 0", got, elsewhereHits)
+	}
+	if !sameHost("https://hub.docker.com/v2/x", "https://hub.docker.com") || sameHost("https://evil.example/v2", "https://hub.docker.com") || sameHost("http://hub.docker.com/v2", "https://hub.docker.com") {
+		t.Error("sameHost wrong: want the same scheme and host only")
+	}
+}

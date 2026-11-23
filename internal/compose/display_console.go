@@ -152,9 +152,12 @@ func isInterruption(msg string) bool {
 }
 
 // stripControl removes control characters other than newline and tab from s, so
-// text from the daemon or a registry can't send escape sequences to the terminal.
+// text from the daemon or a registry can't send escape sequences to the terminal, and
+// breaks the {{[ and {{| that open a style or a link in styled output, with a word
+// joiner as cleanOutputLine does: a label or a message from outside must not forge
+// either. Other braces stay as they were.
 func stripControl(s string) string {
-	return strings.Map(func(r rune) rune {
+	s = strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\t' {
 			return r
 		}
@@ -163,6 +166,7 @@ func stripControl(s string) string {
 		}
 		return r
 	}, s)
+	return strings.NewReplacer("{{[", "{\u2060{[", "{{|", "{\u2060{|").Replace(s)
 }
 
 // markWork records an event's effect on the task's work span.

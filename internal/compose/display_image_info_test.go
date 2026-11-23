@@ -224,3 +224,30 @@ func TestInfoDetailLineValueIsInTheVersionStyle(t *testing.T) {
 		t.Errorf("source line = %q, want the URL style", line)
 	}
 }
+
+func TestImageLabelsCantForgeStyleOrLinkMarkup(t *testing.T) {
+	// A label from an image is text: its style and link openers are broken, other braces
+	// and the rest stay.
+	got := stripControl("v1 {{|URL::::https://evil.example|}}click{{[-]}} {{[red]}} {{.Names}}")
+	if strings.Contains(got, "{{|") || strings.Contains(got, "{{[") || !strings.Contains(got, "{{.Names}}") {
+		t.Errorf("stripControl = %q, want the openers broken and {{.Names}} kept", got)
+	}
+	p := newHealthTestProcessor()
+	line := p.infoLine("version", len("version"), []infoPart{{"{{|URL::::https://evil.example|}}x", ""}}, 160)
+	if strings.Contains(line, "{{|URL::::https://evil.example|}}") {
+		t.Errorf("line = %q, want the forged link not to survive", line)
+	}
+	// A link target is a plain http(s) URL, encoded, or none.
+	for raw, want := range map[string]string{
+		"https://github.com/acme/app": "https://github.com/acme/app",
+		"https://x.example/a|}}b":     "https://x.example/a%7C%7D%7Db",
+		"javascript:alert(1)":         "",
+		"file:///etc/passwd":          "",
+		"":                            "",
+		"https:///nohost":             "",
+	} {
+		if got := safeURL(raw); got != want {
+			t.Errorf("safeURL(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
