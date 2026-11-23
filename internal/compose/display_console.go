@@ -273,14 +273,16 @@ type consoleEventProcessor struct {
 	// Docker's state (starting/healthy/unhealthy), absent until known and for a container
 	// with no healthcheck; serviceHealth combines a service's containers.
 	health         map[string]map[string]string
-	healthChecked  map[string]string  // container → its service, for containers this run tracks
-	healthWG       sync.WaitGroup     // pending health inspects
-	healthStop     func()             // ends the health event watch; nil when none runs
-	healthWaitDone bool               // the end-of-run wait for first check results ran out
-	healthCmd      map[string]string  // svc → its healthcheck's command, shown on its healthcheck line
-	healthOutput   map[string]string  // container → its last health check's output, shown while unhealthy
-	depsSettled    bool               // the run and its end-of-run checks are over: the dependency lines collapse to the ones with a problem
-	depLogs        map[string]*depLog // service → state and log lines of a dependency that failed its condition or went down after meeting it
+	healthChecked  map[string]string   // container → its service, for containers this run tracks
+	healthWG       sync.WaitGroup      // pending health inspects
+	healthStop     func()              // ends the health event watch; nil when none runs
+	healthWaitDone bool                // the end-of-run wait for first check results ran out
+	healthCmd      map[string]string   // svc → its healthcheck's command, shown on its healthcheck line
+	healthOutput   map[string]string   // container → its last health check's output, shown while unhealthy
+	lastStart      time.Time           // when the run last started a container, for the wait before looking for crashes
+	crashStop      func()              // ends the watch for containers restarting; nil when none runs
+	depsSettled    bool                // the run and its end-of-run checks are over: the dependency lines collapse to the ones with a problem
+	downLogs       map[string]*downLog // service → state and log lines of a container that went down, or a dependency that failed its condition
 
 	// Dependencies, listed under each service row. dependsOn[svc] is its depends_on
 	// entries; containerStarted[svc] marks a container this run reported running; preRun
@@ -473,6 +475,7 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 
 	// The health watch writes under p.mtx, so it starts after the unlocked first render.
 	p.startHealthWatch(ctx)
+	p.startCrashWatch(ctx)
 
 	tickInterval := time.Duration(console.SpinnerSpeedFor(console.ConnTypeFromContext(ctx))) * time.Millisecond
 	if tickInterval <= 0 {
@@ -549,7 +552,8 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 		p.inspectWG.Wait()
 		p.waitVersionLinks()
 		p.waitForHealth()
-		p.fetchDependencyLogs()
+		p.waitForStartedToSettle()
+		p.checkServicesDown()
 		p.settleDependencies()
 		p.stopHealthWatch()
 		p.mtx.Lock()
@@ -568,10 +572,19 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 
 	// Wait for first health check results while the display still updates.
 	p.waitForHealth()
-	p.fetchDependencyLogs()
+	// Wait for all post-pull ImageInspect goroutines (which remap layer task IDs to their
+	// sha256 DiffIDs) and the version links to complete before the final render.
+	// inspectWG.Wait establishes a happens-before edge for their writes, so no extra lock
+	// barrier is needed. They come before the wait for started containers to settle, whose
+	// clock runs from the last start, so the two overlap.
+	p.inspectWG.Wait()
+	p.waitVersionLinks()
+	p.waitForStartedToSettle()
+	p.stopCrashWatch() // the final check below drops what is no longer down
+	p.checkServicesDown()
 	p.settleDependencies()
 
-	// Stop the ticker goroutine first.
+	// Stop the ticker goroutine.
 	p.doneCh <- struct{}{}
 	p.mtx.Lock()
 	if p.ticker != nil {
@@ -579,11 +592,6 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 	}
 	p.mtx.Unlock()
 
-	// Wait for all post-pull ImageInspect goroutines (which remap layer task IDs to their
-	// sha256 DiffIDs) to complete before the final render. inspectWG.Wait establishes a
-	// happens-before edge for their writes, so no extra lock barrier is needed here.
-	p.inspectWG.Wait()
-	p.waitVersionLinks()
 	p.stopHealthWatch()
 	p.render()
 
@@ -673,6 +681,9 @@ func (p *consoleEventProcessor) upsert(e api.Resource) {
 	if isServiceEvent && startsContainer(e.Text) {
 		p.containerStarted[id] = true
 		p.checkHealth(id, containerName)
+	}
+	if isServiceEvent && e.Status == api.Done && (e.Text == api.StatusStarted || e.Text == api.StatusRestarted || e.Text == "Recreated") {
+		p.lastStart = time.Now() // a container this run started: it may yet crash
 	}
 	if isServiceEvent && e.Status == api.Done && (e.Text == api.StatusCreated || e.Text == api.StatusStarted || e.Text == "Recreated") {
 		// Brought up: its info lines show the version it now runs, so check its link.

@@ -58,14 +58,14 @@ func shortMessage(msg string) string {
 	return strings.TrimPrefix(strings.Join(strings.Fields(msg), " "), "Error response from daemon: ")
 }
 
-// requiredDependencyFailed reports whether one of svc's required dependencies failed,
-// on the commands that list them.
+// requiredDependencyFailed reports whether one of svc's required dependencies failed or
+// went down, on the commands that list them.
 func (p *consoleEventProcessor) requiredDependencyFailed(svc string) bool {
 	if !commandWatchesHealth(p.command) {
 		return false
 	}
 	for _, d := range p.dependsOn[svc] {
-		if state, _ := p.depStatus(d); d.required && state == depFailed {
+		if state, _ := p.depStatus(d); d.required && (state == depFailed || p.serviceDown(d.name)) {
 			return true
 		}
 	}

@@ -209,9 +209,9 @@ func TestNeededByOnStop(t *testing.T) {
 	p := newNeededByTestProcessor("stop")
 	p.On(containerEvent("web", api.StatusStopping, api.Working))
 	lines := p.neededByLines("db", 160, true)
-	if len(lines) != 1 || !strings.Contains(lines[0], "{{|DockerStatusActive|}}Waiting") ||
-		!strings.Contains(semstyle.ToPlain(lines[0]), "needed by: cache (Still Running), web") {
-		t.Fatalf("lines = %q, want web pending and cache, outside the run, still running", plainLines(lines))
+	if len(lines) != 2 || !strings.Contains(semstyle.ToPlain(lines[0]), "needed by: cache (Still Running)") ||
+		!strings.Contains(lines[1], "{{|DockerStatusActive|}}Waiting") || !strings.Contains(semstyle.ToPlain(lines[1]), "needed by: web") {
+		t.Fatalf("lines = %q, want a line for cache, outside the run and still running, and another for web, pending", plainLines(lines))
 	}
 
 	p.On(containerEvent("web", api.StatusStopped, api.Done))
@@ -256,10 +256,10 @@ func TestNeededByOnUpFollowsTheDependency(t *testing.T) {
 	}
 
 	p.finished = true
-	p.depLogs = map[string]*depLog{"db": {problem: "Restarting"}} // it started, then went down
+	p.downLogs = map[string]*downLog{"db": {problem: "Restarting"}} // it started, then went down
 	lines := plainLines(p.neededByLines("db", 160, false))
-	if len(lines) != 1 || !strings.Contains(lines[0], "Unmet") || !strings.Contains(lines[0], "needs started by: cache, web") {
-		t.Errorf("lines = %q, want the needed-by line unmet, shown without -v", lines)
+	if len(lines) != 1 || !strings.Contains(lines[0], "Crashed") || !strings.Contains(lines[0], "needs started by: cache, web") {
+		t.Errorf("lines = %q, want the needed-by line crashed, shown without -v", lines)
 	}
 }
 
