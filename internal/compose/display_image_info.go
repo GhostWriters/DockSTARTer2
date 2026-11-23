@@ -301,11 +301,13 @@ func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoP
 // layersLine returns the layers: line under an image at -vv: the layers'
 // overall state in the status column, then a count of them by state.
 func (p *consoleEventProcessor) layersLine(layers []*consoleTask) string {
-	var cached, downloaded, active, failed int
+	var cached, downloaded, active, failed, interrupted int
 	for _, t := range layers {
 		switch {
 		case t.status == api.Error:
 			failed++
+		case t.interrupted:
+			interrupted++ // a layer the run was cut short of is not a download
 		case !t.completed():
 			active++
 		case t.text == "Already exists":
@@ -321,6 +323,8 @@ func (p *consoleEventProcessor) layersLine(layers []*consoleTask) string {
 		icon, word, style = "{{|DockerMarkerError|}}"+ic.error+"{{[-]}}", "Failed", "{{|DockerStatusFail|}}"
 	case active > 0:
 		icon, word, style = p.activeSpinnerTag(ic.spinner), "Pulling", "{{|DockerStatusActive|}}"
+	case interrupted > 0:
+		icon, word, style = "{{|DockerMarkerWarn|}}"+ic.warn+"{{[-]}}", interruptedText, "{{|DockerStatusWarn|}}"
 	case downloaded > 0:
 		icon, word, style = "{{|DockerMarkerDone|}}"+ic.done+"{{[-]}}", "Downloaded", detailFinalTag
 	default:
@@ -330,7 +334,7 @@ func (p *consoleEventProcessor) layersLine(layers []*consoleTask) string {
 	for _, c := range []struct {
 		n    int
 		what string
-	}{{failed, "failed"}, {active, "pulling"}, {downloaded, "downloaded"}, {cached, "cached"}} {
+	}{{failed, "failed"}, {active, "pulling"}, {interrupted, "interrupted"}, {downloaded, "downloaded"}, {cached, "cached"}} {
 		if c.n > 0 {
 			counts = append(counts, fmt.Sprintf("%d %s", c.n, c.what))
 		}

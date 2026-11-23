@@ -196,3 +196,18 @@ func TestUsesContainerdStore(t *testing.T) {
 		t.Errorf("overlay2 graphdriver detected as containerd")
 	}
 }
+
+func TestInterruptedLayersAreNotDownloads(t *testing.T) {
+	p := newLayerTestProcessor([]string{"sha:a", "sha:b"}, []string{"r1", "r2"})
+	p.tasks["r1"].text, p.tasks["r1"].status = "Pull complete", api.Done
+	p.tasks["r2"].text, p.tasks["r2"].status, p.tasks["r2"].interrupted = interruptedText, api.Warning, true
+	line := semstyle.ToPlain(p.layersLine([]*consoleTask{p.tasks["r1"], p.tasks["r2"]}))
+	if !strings.Contains(line, "Interrupted") || !strings.Contains(line, "1 interrupted, 1 downloaded") {
+		t.Errorf("layers line = %q, want Interrupted, 1 interrupted and 1 downloaded", line)
+	}
+	p.tasks["r1"].text, p.tasks["r1"].status = "Pull complete", api.Done
+	p.tasks["r2"].interrupted, p.tasks["r2"].text, p.tasks["r2"].status = false, "Pull complete", api.Done
+	if line := semstyle.ToPlain(p.layersLine([]*consoleTask{p.tasks["r1"], p.tasks["r2"]})); strings.Contains(line, "nterrupted") || !strings.Contains(line, "2 downloaded") {
+		t.Errorf("layers line = %q, want two downloads and no interruption", line)
+	}
+}
