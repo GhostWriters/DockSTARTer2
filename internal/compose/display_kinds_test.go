@@ -48,9 +48,9 @@ func TestServiceModelLines(t *testing.T) {
 	}
 	p.On(api.Resource{ID: "llm", Status: api.Done, Text: api.StatusConfigured})
 	lines := plainLines(p.modelLines("web", 160, true))
-	if len(lines) != 3 || !strings.Contains(lines[0], "Existing") || !strings.Contains(lines[1], "endpoint_var: LLM_URL") ||
+	if len(lines) != 3 || !strings.Contains(lines[0], "Using") || !strings.Contains(lines[1], "endpoint_var: LLM_URL") ||
 		!strings.Contains(lines[2], "model_var:    LLM_MODEL") {
-		t.Errorf("-v = %q, want the model line Existing, then its variables aligned", lines)
+		t.Errorf("-v = %q, want the model line Using, then its variables aligned", lines)
 	}
 	if lines := p.modelLines("db", 160, true); lines != nil {
 		t.Errorf("db = %q, want none: it uses no model", lines)
@@ -232,5 +232,15 @@ func TestContainerVerbFailureAndDetail(t *testing.T) {
 	}
 	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "service: radarr") || !strings.Contains(got, "project: tools") {
 		t.Errorf("-v display =\n%s\nwant each row naming what runs it", got)
+	}
+}
+
+func TestServiceModelLineKeepsAProblemsWord(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.models = map[string]string{"llm": "ai/smollm2"}
+	p.serviceModels = map[string][]serviceModel{"web": {{name: "llm", urlVar: "LLM_URL", modelVar: "LLM_MODEL"}}}
+	p.On(api.Resource{ID: "llm", Status: api.Error, Text: "pull failed"})
+	if lines := plainLines(p.modelLines("web", 160, false)); len(lines) != 1 || strings.Contains(lines[0], "Using") || !strings.Contains(lines[0], "model: llm") {
+		t.Errorf("model line = %q, want the failed model's own status, not Using", lines)
 	}
 }

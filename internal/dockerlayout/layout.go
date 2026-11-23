@@ -26,15 +26,40 @@ func StyleServiceName(svc string, style ...string) string {
 	return console.FormatLink(tag, svc, url)
 }
 
-// Label returns a kind of row's label (N services:), its count and noun in the section
-// style and the colon after. A label with names after it on the same line (a folded
-// group, or a lone row standing in for its heading) is underlined.
-func Label(count int, noun string, withNames bool) string {
+// KindStyle returns the style tag name of a kind of row's count in the summary: the
+// kinds that are top-level elements of the compose file (services, networks, volumes,
+// models, jobs, and the containers and orphans beside them) share one, App, as they
+// sit at one level; images, which are not, DockerImage. noun is the singular or plural.
+func KindStyle(noun string) string {
+	if noun == "image" || noun == "images" {
+		return "DockerImage"
+	}
+	return "App"
+}
+
+// TitleStyle returns the style tag name of a kind's titles: its items' colour at high
+// intensity and bold, so a title differs from items that are bold themselves.
+func TitleStyle(noun string) string {
+	if KindStyle(noun) == "DockerImage" {
+		return "DockerTitleImage"
+	}
+	return "DockerTitle"
+}
+
+// Title returns text as a title of the kind noun names, underlined too when names are
+// folded onto its line (folded), which a link's underline alone is not.
+func Title(noun, text string, folded bool) string {
 	attr := ""
-	if withNames {
+	if folded {
 		attr = "{{[::U]}}"
 	}
-	return "{{|DockerSection|}}" + attr + strconv.Itoa(count) + " " + noun + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
+	return "{{|" + TitleStyle(noun) + "|}}" + attr + text + "{{[-]}}"
+}
+
+// Label returns a kind of row's label (N services:): its count and noun as a Title and
+// the colon after; folded when names follow it on the same line.
+func Label(count int, noun string, folded bool) string {
+	return Title(noun, strconv.Itoa(count)+" "+noun, folded) + "{{|DockerColon|}}:{{[-]}}"
 }
 
 // Layout primitive widths — shared by compose and prune display.

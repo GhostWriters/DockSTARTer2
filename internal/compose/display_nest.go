@@ -72,16 +72,6 @@ func indexAfterColumns(line string, n int) int {
 	return -1
 }
 
-// asHeadingStatus returns line with a finished row's status in a heading's style, the
-// section style, not a row's, for a line that stands in for its heading.
-func asHeadingStatus(line string) string {
-	i := indexAfterColumns(line, globalIndentW+iconW+spaceW)
-	if i < 0 || !strings.HasPrefix(line[i:], serviceFinalTag) {
-		return line
-	}
-	return line[:i] + sectionFinalTag + line[i+len(serviceFinalTag):]
-}
-
 // labelRow returns a lone row's line (its name and a colon) with a heading's label,
 // count noun:, before the name and no colon after, so it stands in for the heading
 // over it; false when line isn't such a row.
@@ -91,7 +81,8 @@ func labelRow(line string, count int, singular, plural string) (string, bool) {
 	if count != 1 {
 		noun = plural
 	}
-	i := columnIndex(line, globalIndentW+iconW+spaceW+sectionStatusW+sectionChildIndentW)
+	// Before the name's style tag, so the name keeps its style after the label's reset.
+	i := indexAfterColumns(line, globalIndentW+iconW+spaceW+sectionStatusW+sectionChildIndentW)
 	if i < 0 || !strings.HasSuffix(line, colon) {
 		return line, false
 	}
@@ -343,10 +334,6 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 				}
 			}
 			if merged {
-				if state == rollupComplete {
-					setLines = slices.Clone(setLines)
-					setLines[0] = asHeadingStatus(setLines[0])
-				}
 				// Its timer, the row's own or the heading's, is in the heading's style.
 				if len(setTimers) > 0 {
 					setTimers = slices.Clone(setTimers)

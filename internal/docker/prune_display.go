@@ -158,11 +158,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 
 	// Final statuses take their row's style, as in the compose display: headings
 	// DockerSection (changed: DockerGroupStatus); services, networks, volumes and
-	// containers App; images and the container_name line DockerMarkerDone; layers dim.
-	untaggedStatus := semstyle.ToANSI("{{|DockerMarkerDone|}}Untagged{{[-]}}")
+	// containers App; images DockerImage; the container_name line App (its label a detail label); layers dim.
+	untaggedStatus := semstyle.ToANSI("{{|DockerImage|}}Untagged{{[-]}}")
 	removedStatus := semstyle.ToANSI("{{|App|}}Removed{{[-]}}")
 	errorStatus := semstyle.ToANSI("{{|DockerStatusFail|}}Error{{[-]}}")
-	deletedStatus := semstyle.ToANSI("{{|DockerMarkerDone|}}Deleted{{[-]}}")
+	deletedStatus := semstyle.ToANSI("{{|App|}}Deleted{{[-]}}")
 	untaggedPad := strutil.Repeat(" ", SectionStatusW-len("Untagged"))
 	removedPad := strutil.Repeat(" ", SectionStatusW-len("Removed"))
 	errorPad := strutil.Repeat(" ", SectionStatusW-len("Error"))
@@ -205,7 +205,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		label := fmt.Sprintf("%d %s", len(names), Plural(len(names), singular, plural))
 		status := semstyle.ToANSI("{{|" + statusTag + "|}}Removed{{[-]}}")
 		prefix := GlobalIndent + doneIconANSI + " " + status + semstyle.CodeReset + removedPad +
-			indent(depth) + semstyle.ToANSI("{{|DockerSection|}}{{[::U]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}") + " "
+			indent(depth) + semstyle.ToANSI("{{|"+dockerlayout.TitleStyle(plural)+"|}}{{[::U]}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}") + " "
 		prefixW := GlobalIndentW + IconW + SpaceW + IconW + SpaceW + SectionChildIndentW + SectionStatusW + depth*SectionChildIndentW + len(label) + 2
 		room := max(termW-prefixW, 20)
 		var out []string
@@ -243,7 +243,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	// parallel to the image: line, with Deleted status.
 	containerNameRow := func(name string) string {
 		return GlobalIndent + doneIconANSI + " " + deletedStatus + semstyle.CodeReset + deletedPad + indent(3) +
-			semstyle.ToANSI("{{|DockerMarkerDone|}}container_name{{[-]}}{{|DockerColon|}}:{{[-]}} {{|App|}}"+name+"{{[-]}}")
+			semstyle.ToANSI("{{|DockerDetailLabel|}}container_name{{[-]}}{{|DockerColon|}}:{{[-]}} {{|App|}}"+name+"{{[-]}}")
 	}
 
 	// ── build image groups ───────────────────────────────────────────────────
@@ -293,7 +293,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 
 	var headerParts []string
 	if totalServices > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|DockerSection|}}%d %s{{[-]}}", totalServices, Plural(totalServices, "service", "services")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", totalServices, Plural(totalServices, "service", "services")))
 	}
 	if totalImages > 0 {
 		headerParts = append(headerParts, fmt.Sprintf("{{|DockerImage|}}%d %s{{[-]}}", totalImages, Plural(totalImages, "image", "images")))
@@ -302,13 +302,13 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		headerParts = append(headerParts, fmt.Sprintf("{{[::D]}}%d %s{{[-]}}", totalLayers, Plural(totalLayers, "layer", "layers")))
 	}
 	if len(r.NetworksDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|DockerSection|}}%d %s{{[-]}}", len(r.NetworksDeleted), Plural(len(r.NetworksDeleted), "network", "networks")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.NetworksDeleted), Plural(len(r.NetworksDeleted), "network", "networks")))
 	}
 	if len(r.VolumesDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|DockerSection|}}%d %s{{[-]}}", len(r.VolumesDeleted), Plural(len(r.VolumesDeleted), "volume", "volumes")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.VolumesDeleted), Plural(len(r.VolumesDeleted), "volume", "volumes")))
 	}
 	if len(r.ContainersDeleted) > 0 {
-		headerParts = append(headerParts, fmt.Sprintf("{{|DockerSection|}}%d %s{{[-]}}", len(r.ContainersDeleted), Plural(len(r.ContainersDeleted), "container", "containers")))
+		headerParts = append(headerParts, fmt.Sprintf("{{|App|}}%d %s{{[-]}}", len(r.ContainersDeleted), Plural(len(r.ContainersDeleted), "container", "containers")))
 	}
 	if len(headerParts) > 0 {
 		// Overall marker: error if any category failed, else success. Prune is rendered
@@ -430,7 +430,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 			imgIcon, imgStatus, imgPad = errorIconANSI, errorStatus, errorPad
 		}
 		add(GlobalIndent + imgIcon + " " + imgStatus + semstyle.CodeReset + imgPad + indent(depth) +
-			semstyle.ToANSI("{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} "+StyleImageRef(ref)+layerCount))
+			semstyle.ToANSI(dockerlayout.Title("image", "image", false)+"{{|DockerColon|}}:{{[-]}} "+StyleImageRef(ref)+layerCount))
 		if !showLayers {
 			return
 		}
@@ -448,7 +448,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	}
 
 	if len(serviceGroups) > 0 {
-		add(heading(1, fmt.Sprintf("%d %s", totalServices, Plural(totalServices, "service", "services")), "DockerSection", r.ImagesError != nil, ""))
+		add(heading(1, fmt.Sprintf("%d %s", totalServices, Plural(totalServices, "service", "services")), dockerlayout.TitleStyle("services"), r.ImagesError != nil, ""))
 		for _, g := range serviceGroups {
 			svcs := imageServices[g.ref]
 			// Services of one image that show the same thing (none with a container line
@@ -481,7 +481,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		if len(imageOnly) > 0 {
 			label = fmt.Sprintf("%d %s", len(imageOnly), Plural(len(imageOnly), "unused image", "unused images"))
 		}
-		add(heading(1, label, "DockerSection", r.ImagesError != nil, imagesWord))
+		add(heading(1, label, dockerlayout.TitleStyle("images"), r.ImagesError != nil, imagesWord))
 		for _, g := range imageOnly {
 			renderImage(g, 2)
 		}
@@ -505,7 +505,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		if len(names) > 0 {
 			label = fmt.Sprintf("%d %s", len(names), Plural(len(names), singular, plural))
 		}
-		add(heading(1, label, "DockerSection", hasErr, removedWord(len(names), nil)))
+		add(heading(1, label, dockerlayout.TitleStyle(plural), hasErr, removedWord(len(names), nil)))
 		if !open && len(names) > 1 {
 			for _, line := range foldedRow(names, style, singular, plural, 2, "App") {
 				add(line)

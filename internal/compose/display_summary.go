@@ -15,9 +15,9 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
-// countLabel returns n of a kind of row (n services) in the section style.
+// countLabel returns n of a kind of row (n services) in its kind's colour.
 func countLabel(n int, singular, pluralNoun string) string {
-	return fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, n, plural(n, singular, pluralNoun))
+	return fmt.Sprintf("{{|%s|}}%d %s{{[-]}}", dockerlayout.KindStyle(pluralNoun), n, plural(n, singular, pluralNoun))
 }
 
 func (p *consoleEventProcessor) buildSummaryLine() string {
@@ -117,11 +117,11 @@ func (p *consoleEventProcessor) layerCount() int {
 type timerStyle int
 
 const (
-	timerSection timerStyle = iota // bold bright blue — services: header
+	timerSection timerStyle = iota // bright cyan bold — a kind heading's title style
 	timerService                   // App cyan — individual service containers
-	timerImage                     // DockerMarkerDone green — image rows
+	timerImage                     // bright magenta bold — the image: title style
 	timerLayer                     // unstyled — layer rows
-	timerGroup                     // bold white — changed: and unchanged: lines
+	timerGroup                     // bold green — changed: and unchanged: lines
 )
 
 type timerEntry struct {
@@ -176,13 +176,13 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		var styleTag string
 		switch e.style {
 		case timerSection:
-			styleTag = "{{|DockerSection|}}"
+			styleTag = "{{|DockerTitle|}}"
 		case timerGroup:
 			styleTag = "{{|DockerGroupStatus|}}"
 		case timerService:
 			styleTag = "{{|App|}}"
 		case timerImage:
-			styleTag = "{{|DockerMarkerDone|}}"
+			styleTag = "{{|DockerTitleImage|}}"
 		default:
 			styleTag = "{{[::D]}}"
 		}

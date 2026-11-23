@@ -82,7 +82,7 @@ func TestVersionLinksToLinuxServerRelease(t *testing.T) {
 		t.Fatalf("lines = %q, want the version change", plainLines(lines))
 	}
 	for _, v := range []string{"v1.6.2-ls368", "v1.6.2-ls369"} {
-		if want := console.FormatLink("URL", v, src+"/releases/tag/"+v); !strings.Contains(lines[0], want) {
+		if want := console.FormatLink("Version", v, src+"/releases/tag/"+v); !strings.Contains(lines[0], want) {
 			t.Errorf("line = %q, want %s linked to its release", lines[0], v)
 		}
 	}
@@ -190,5 +190,37 @@ func TestInfoValuesLineUp(t *testing.T) {
 			break
 		}
 		col = c
+	}
+}
+
+func TestInfoValuesAreInTheVersionStyle(t *testing.T) {
+	p := newHealthTestProcessor()
+	line := p.infoLine("version", len("version"), []infoPart{{"aed34377-ls11", ""}, {" (", ""}, {"2020-10-06 13:54:52", ""}, {")", ""}}, 160)
+	for _, want := range []string{"{{|Version|}}aed34377-ls11{{[-]}}", "{{|Version|}}2020-10-06 13:54:52{{[-]}}", "{{[::D]}} ({{[-]}}"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("line = %q, want %q: the version and the build date cyan, the brackets dim", line, want)
+		}
+	}
+	for _, label := range []string{"built", "digest"} {
+		if line := p.infoLine(label, len("version"), []infoPart{{"value", ""}}, 160); !strings.Contains(line, "{{|Version|}}value{{[-]}}") {
+			t.Errorf("%s line = %q, want its value in the Version style", label, line)
+		}
+	}
+	if line := p.infoLine("endpoint_var", len("endpoint_var"), []infoPart{{"LLM_URL", ""}}, 160); strings.Contains(line, "{{|Version|}}") {
+		t.Errorf("line = %q, want a model variable left dim", line)
+	}
+}
+
+func TestInfoDetailLineValueIsInTheVersionStyle(t *testing.T) {
+	p := newHealthTestProcessor()
+	for _, label := range []string{"model", "schedule"} {
+		if line := p.infoDetailLine(label, "value", 160); !strings.Contains(line, "{{|Version|}}value{{[-]}}") {
+			t.Errorf("%s line = %q, want its value in the Version style like the image info lines", label, line)
+		}
+	}
+	// A source link keeps the URL style.
+	line := p.infoLine("source", len("version"), []infoPart{{"https://example.com/repo", "https://example.com/repo"}}, 160)
+	if !strings.Contains(line, "URL") || strings.Contains(line, "{{|Version") {
+		t.Errorf("source line = %q, want the URL style", line)
 	}
 }

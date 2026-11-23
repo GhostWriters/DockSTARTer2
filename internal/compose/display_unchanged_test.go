@@ -550,15 +550,25 @@ func TestLoneRowStandsInForItsHeading(t *testing.T) {
 	if want := visibleText(rowLine("Restarted", "1 service: db")); !ok || visibleText(got) != want {
 		t.Errorf("labelRow = %q, %v; want %q: the row labelled, with no colon after db", visibleText(got), ok, want)
 	}
-	if !strings.Contains(got, "{{|DockerSection|}}{{[::U]}}1 service{{[-]}}") {
-		t.Errorf("labelRow = %q, want the label underlined, as a label with names after it is", got)
+	if !strings.Contains(got, "{{|DockerTitle|}}{{[::U]}}1 service{{[-]}}") {
+		t.Errorf("labelRow = %q, want the label as a folded title, underlined", got)
 	}
-	// A heading's label is in the section style, not underlined; one with names after it is underlined.
-	if got := groupHeading("I", "T", "Running", 2, "service", "services"); !strings.Contains(got, "{{|DockerSection|}}2 services{{[-]}}") {
-		t.Errorf("groupHeading = %q, want the label in the section style, not underlined", got)
+	// A title is its items' colour at high intensity, bold; underlined too when names are
+	// folded onto it.
+	if got := groupHeading("I", "T", "Running", 2, "service", "services"); !strings.Contains(got, "{{|DockerTitle|}}2 services{{[-]}}") || strings.Contains(got, "[::U]") {
+		t.Errorf("groupHeading = %q, want the title style, not underlined", got)
 	}
-	if got := dockerlayout.Label(2, "services", true); got != "{{|DockerSection|}}{{[::U]}}2 services{{[-]}}{{|DockerColon|}}:{{[-]}}" {
-		t.Errorf("Label with names = %q", got)
+	for noun, want := range map[string]string{"services": "{{|DockerTitle|}}{{[::U]}}2 services{{[-]}}{{|DockerColon|}}:{{[-]}}", "images": "{{|DockerTitleImage|}}{{[::U]}}2 images{{[-]}}{{|DockerColon|}}:{{[-]}}", "networks": "{{|DockerTitle|}}{{[::U]}}2 networks{{[-]}}{{|DockerColon|}}:{{[-]}}", "volumes": "{{|DockerTitle|}}{{[::U]}}2 volumes{{[-]}}{{|DockerColon|}}:{{[-]}}"} {
+		if got := dockerlayout.Label(2, noun, true); got != want {
+			t.Errorf("Label(2, %q, true) = %q, want %q", noun, got, want)
+		}
+	}
+	if got, want := dockerlayout.Label(1, "network", false), "{{|DockerTitle|}}1 network{{[-]}}{{|DockerColon|}}:{{[-]}}"; got != want {
+		t.Errorf("Label(1, network, false) = %q, want %q", got, want)
+	}
+	// The name keeps its style: the label goes before its tag, not after.
+	if want := "{{[-]}} {{|N|}}db{{[-]}}"; !strings.Contains(got, want) {
+		t.Errorf("labelRow = %q, want the name's style tag after the label: %q", got, want)
 	}
 	if _, ok := labelRow(row+" more", 1, "service", "services"); ok {
 		t.Error("labelRow took a line that doesn't end with the name and colon")
@@ -576,17 +586,6 @@ func rowLine(word, name string) string {
 	return globalIndent + "X" + " " + word + strutil.Repeat(" ", sectionStatusW-len(word)) + sectionChildIndent + name
 }
 
-func TestMergedLineTakesTheHeadingsStatusStyle(t *testing.T) {
-	row := globalIndent + "I" + " " + serviceFinalTag + "Running{{[-]}}    " + "rest"
-	if got := asHeadingStatus(row); !strings.Contains(got, sectionFinalTag+"Running") || strings.Contains(got, serviceFinalTag) {
-		t.Errorf("asHeadingStatus = %q, want the status in the section style", got)
-	}
-	warn := globalIndent + "I" + " {{|DockerStatusWarn|}}Warning{{[-]}}    rest"
-	if got := asHeadingStatus(warn); got != warn {
-		t.Errorf("asHeadingStatus = %q, want a warning's own style kept", got)
-	}
-}
-
 func TestGroupLineStatusAndTimerFollowTheTitle(t *testing.T) {
 	p := newGroupsTestProcessor("restart")
 	row := globalIndent + "X" + " " + serviceFinalTag + "Restarted{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len("Restarted")) +
@@ -601,8 +600,8 @@ func TestGroupLineStatusAndTimerFollowTheTitle(t *testing.T) {
 	if !strings.Contains(lines[0], "{{|DockerGroupStatus|}}Restarted") || timers[0].style != timerGroup {
 		t.Errorf("changed: line = %q, timer style %v; want its status and timer in the group style", lines[0], timers[0].style)
 	}
-	if !strings.Contains(lines[1], sectionFinalTag+"Restarted") || timers[1].style != timerSection {
-		t.Errorf("merged line = %q, timer style %v; want its status and timer in the section style", lines[1], timers[1].style)
+	if !strings.Contains(lines[1], serviceFinalTag+"Restarted") || timers[1].style != timerSection {
+		t.Errorf("merged line = %q, timer style %v; want its status in the row style and its timer in the title style", lines[1], timers[1].style)
 	}
 }
 
@@ -643,5 +642,18 @@ func TestRowsWithDifferentStatusWordsDontFold(t *testing.T) {
 		if !recreated.MatchString(got) || !created.MatchString(got) || strings.Contains(got, "2 services: radarr, radarr__4k") {
 			t.Errorf("level %d display =\n%s\nwant radarr Recreated and radarr__4k Created on their own rows, not folded under one word", level, got)
 		}
+	}
+}
+
+func TestSummaryCountsOfTopLevelKindsShareAStyle(t *testing.T) {
+	// Services, networks, volumes, models, jobs, containers and orphans sit at one level
+	// of the compose file, so their counts share one colour; images are magenta.
+	for _, noun := range []string{"services", "networks", "volumes", "models", "jobs", "containers", "orphans"} {
+		if got, want := countLabel(2, strings.TrimSuffix(noun, "s"), noun), "{{|App|}}2 "+noun+"{{[-]}}"; got != want {
+			t.Errorf("countLabel(%q) = %q, want %q", noun, got, want)
+		}
+	}
+	if got, want := countLabel(2, "image", "images"), "{{|DockerImage|}}2 images{{[-]}}"; got != want {
+		t.Errorf("countLabel(images) = %q, want %q", got, want)
 	}
 }

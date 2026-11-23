@@ -271,7 +271,7 @@ func TestFinalStatusTakesItsRowStyle(t *testing.T) {
 	for _, tc := range []struct{ name, got, want string }{
 		{"section", func() string { _, tag, _ := sectionStatusText(rollupComplete); return tag }(), "{{|DockerSection|}}"},
 		{"service", serviceStatusTag(api.Done, "Recreated", "up"), "{{|App|}}Recreated"},
-		{"image", imageStatusTag(api.Done, api.StatusPulled, "up"), "{{|DockerMarkerDone|}}Pulled"},
+		{"image", imageStatusTag(api.Done, api.StatusPulled, "up"), "{{|DockerImage|}}Pulled"},
 		{"layer", layerStatusTag(api.Done, "Already exists"), "{{[::D]}}"},
 		{"network", networkStatusTag(api.Done, api.StatusCreated, "up"), "{{|App|}}Created"},
 		{"volume", volumeStatusTag(api.Done, api.StatusCreated, "up"), "{{|App|}}Created"},
