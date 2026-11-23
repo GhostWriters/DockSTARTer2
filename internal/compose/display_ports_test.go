@@ -257,3 +257,36 @@ func TestPossibleConflictsFoldApart(t *testing.T) {
 		t.Errorf("display after all run =\n%s\nwant all three folded, no unconfirmed line", got)
 	}
 }
+
+func TestPortsLineStylesTheHostPortAndTheMessage(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	for _, style := range []string{"{{|DockerStatusWarn|}}", "{{|DockerStatusFail|}}"} {
+		lines := p.portsLineAs(portConflictText, "I", style, "80:80/tcp (held by swag; wanted by nginx)", 200)
+		if len(lines) != 1 {
+			t.Fatalf("lines = %q, want one", lines)
+		}
+		for _, want := range []string{style + "80{{[-]}}", "{{[::D]}}:80/tcp {{[-]}}", style + "(held by swag; wanted by nginx){{[-]}}"} {
+			if !strings.Contains(lines[0], want) {
+				t.Errorf("line = %q, want %q: the host port and the message in the line's style, the rest dim", lines[0], want)
+			}
+		}
+	}
+	// A service holding the port, a warning marked as the cause: its port follows the
+	// marker (red), its message the status (yellow).
+	cause := p.portsLineAs(portConflictText, "{{|DockerMarkerCause|}}!{{[-]}}", "{{|DockerStatusWarn|}}", "80:80/tcp (wanted by nginx)", 200)
+	for _, want := range []string{"{{|DockerMarkerCause|}}80{{[-]}}", "{{|DockerStatusWarn|}}(wanted by nginx){{[-]}}"} {
+		if !strings.Contains(cause[0], want) {
+			t.Errorf("line = %q, want %q", cause[0], want)
+		}
+	}
+	// Wrapped, the message keeps its style on every line.
+	lines := p.portsLineAs(portConflictText, "I", "{{|DockerStatusFail|}}", "80:80/tcp (held by a program on the host, or a container using host networking, often systemd-resolved)", 70)
+	if len(lines) < 2 {
+		t.Fatalf("lines = %q, want a wrapped line", lines)
+	}
+	for _, line := range lines[1:] {
+		if !strings.Contains(line, "{{|DockerStatusFail|}}") {
+			t.Errorf("wrapped line = %q, want the message still in the error style", line)
+		}
+	}
+}

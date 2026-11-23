@@ -113,8 +113,9 @@ func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) 
 // commands. After a failure only the commands that bring services up, and docker
 // start, stop or restart by container name, still group, and only below
 // dockerlayout.VerboseDetails (buildLevel): rows showing the same thing fold (an
-// interrupted service with nothing to show), and -v, like the log, shows every row in
-// its place. A failed compose teardown shows every row.
+// interrupted service with nothing to show), and -v, like the log, shows each row in
+// its place, rows that show the same thing still folded as everywhere. A failed
+// compose teardown shows every row.
 func (p *consoleEventProcessor) groupsRows() bool {
 	if p.finished && !p.succeeded || p.anyRowFailed() {
 		switch {
@@ -328,7 +329,7 @@ func (p *consoleEventProcessor) imageUnchanged(imgName string) bool {
 }
 
 // groupLines returns a folded group's lines: its state word, how many rows of noun it
-// holds, in DockerNamesLabel, and all their names, wrapped to termW under the
+// holds, underlined, and all their names, wrapped to termW under the
 // first. pending styles it as a group of rows not running (yet); Processing, rows
 // whose image compose is checking, with a spinner; Interrupted, the rows a failed run
 // never got to, as a warning.
@@ -356,12 +357,12 @@ func (p *consoleEventProcessor) foldedRowLines(icon, statusTag, statusText strin
 }
 
 // namesLines returns a line of icon, statusTag (whose visible text is word), count noun
-// in DockerNamesLabel, and names, wrapped to termW under the first.
+// underlined, and names, wrapped to termW under the first.
 func (p *consoleEventProcessor) namesLines(icon, statusTag, word string, count int, noun string, names []string, termW int) []string {
 	label := strconv.Itoa(count) + " " + noun
 	prefix := globalIndent + icon + " " + statusTag +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) + sectionChildIndent +
-		"{{|DockerNamesLabel|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
+		dockerlayout.Label(count, noun, true)
 	if len(names) == 0 {
 		return []string{prefix}
 	}

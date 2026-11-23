@@ -79,8 +79,8 @@ func TestModelSettingsChange(t *testing.T) {
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
 	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
-	llm := strings.Index(got, "Configured      llm:")
-	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "Existing        2 models: chat, embed") {
+	llm := strings.Index(got, "Configured    1 model: llm")
+	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "Existing      2 models: chat, embed") {
 		t.Errorf("display =\n%s\nwant llm Configured under changed:, chat and embed Existing under unchanged:", got)
 	}
 }
@@ -109,7 +109,7 @@ func TestFailModelsNamesTheCause(t *testing.T) {
 	// web keeps its row, its model line showing the failure; db, with nothing to show,
 	// folds as Interrupted.
 	if !strings.Contains(got, "× Error           llm:") || !strings.Contains(got, problem) || !strings.Contains(got, "× Error             model: llm") ||
-		!strings.Contains(got, "⚠ Interrupted     web:") || !strings.Contains(got, "⚠ Interrupted     1 service: db") {
+		!strings.Contains(got, "⚠ Interrupted     web:") || !strings.Contains(got, "⚠ Interrupted   1 service: db") {
 		t.Errorf("display =\n%s\nwant llm failed with compose's message, web's row with its model line Error, db folded", got)
 	}
 }
@@ -132,7 +132,7 @@ func TestModelsGroup(t *testing.T) {
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.models = map[string]string{"llm": "ai/smollm2", "embed": "ai/mxbai"}
-	if got := renderPlain(p, 0); !strings.Contains(got, "Pending         2 models: embed, llm") || !strings.Contains(got, ", 2 models") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Pending       2 models: embed, llm") || !strings.Contains(got, ", 2 models") {
 		t.Errorf("display before compose reports =\n%s\nwant both models Pending and counted in the summary", got)
 	}
 	// llm is pulled, then configured: a change, its model shown. embed is only configured,
@@ -150,9 +150,9 @@ func TestModelsGroup(t *testing.T) {
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
 	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
-	llm := strings.Index(got, "Pulled          llm:")
+	llm := strings.Index(got, "Pulled        1 model: llm")
 	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "model: ai/smollm2") ||
-		!strings.Contains(got, "Existing        1 model: embed") || strings.Contains(got, "Unknown") {
+		!strings.Contains(got, "Existing      1 model: embed") || strings.Contains(got, "Unknown") {
 		t.Errorf("display =\n%s\nwant llm Pulled with its model under changed:, embed Existing under unchanged:", got)
 	}
 }
@@ -165,7 +165,7 @@ func TestOrphansGroup(t *testing.T) {
 	p.On(api.Resource{ID: "Container autobrr", Status: api.Done, Text: api.StatusRemoved})
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "1 orphan:") || !strings.Contains(got, "Removed         autobrr:") ||
+	if !strings.Contains(got, "1 orphan:") || !strings.Contains(got, "Removed       1 orphan: autobrr") ||
 		strings.Contains(got, "Unknown") || !strings.Contains(got, ", 1 orphan") || !strings.Contains(got, "2 services: db, web") {
 		t.Errorf("display =\n%s\nwant autobrr Removed under changed: as 1 orphan, not a service", got)
 	}
@@ -188,7 +188,7 @@ func TestContainerVerbRestartFolds(t *testing.T) {
 	for _, n := range names {
 		p.On(api.Resource{ID: "Container " + n, Status: api.Working, Text: api.StatusRestarting})
 	}
-	if got := renderPlain(p, 0); !strings.Contains(got, "Restarting      3 containers: portainer, radarr, sonarr") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Restarting    3 containers: portainer, radarr, sonarr") {
 		t.Errorf("display while restarting =\n%s\nwant all three on one Restarting line", got)
 	}
 	p.On(api.Resource{ID: "Container radarr", Status: api.Done, Text: api.StatusRestarted})
@@ -199,7 +199,7 @@ func TestContainerVerbRestartFolds(t *testing.T) {
 	p.On(api.Resource{ID: "Container portainer", Status: api.Done, Text: api.StatusRestarted})
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "docker restart: 3 containers") || !strings.Contains(got, "Restarted       3 containers: portainer, radarr, sonarr") ||
+	if !strings.Contains(got, "docker restart: 3 containers") || !strings.Contains(got, "Restarted     3 containers: portainer, radarr, sonarr") ||
 		strings.Contains(got, "orphan") {
 		t.Errorf("display =\n%s\nwant the docker restart heading and all three folded Restarted", got)
 	}
@@ -214,7 +214,7 @@ func TestContainerVerbStopLeavesStoppedAlone(t *testing.T) {
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
 	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
-	stopped, notRunning := strings.Index(got, "Stopped         radarr:"), strings.Index(got, "Not Running     1 container: wizarr")
+	stopped, notRunning := strings.Index(got, "Stopped       1 container: radarr"), strings.Index(got, "Not Running   1 container: wizarr")
 	if changed < 0 || stopped < changed || stopped > unchanged || notRunning < unchanged {
 		t.Errorf("display =\n%s\nwant radarr Stopped under changed:, wizarr Not Running under unchanged:", got)
 	}

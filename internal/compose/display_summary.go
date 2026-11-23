@@ -15,12 +15,17 @@ import (
 	"DockSTARTer2/internal/strutil"
 )
 
+// countLabel returns n of a kind of row (n services) in the section style.
+func countLabel(n int, singular, pluralNoun string) string {
+	return fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, n, plural(n, singular, pluralNoun))
+}
+
 func (p *consoleEventProcessor) buildSummaryLine() string {
 	if p.containerVerb != "" {
 		// docker start, stop or restart acts on containers, whichever service they run.
 		n := len(p.containers)
-		return globalIndent + p.overallRollupIcon() + " " + fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s%d %s{{[-]}}",
-			p.containerVerb, sectionFinalTag, n, plural(n, "container", "containers"))
+		return globalIndent + p.overallRollupIcon() + " " + fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s",
+			p.containerVerb, countLabel(n, "container", "containers"))
 	}
 	svcCount := 0
 	for _, svcs := range p.imageServices {
@@ -40,8 +45,8 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 
 	layerCount := p.layerCount()
 
-	// A count of a kind of row (services, networks, volumes, models, jobs, orphans) takes the section
-	// headings' style; images and layers, lines under the services,
+	// A count of a kind of row (services, networks, volumes, models, jobs, orphans) takes
+	// the section headings' style; images and layers, lines under the services,
 	// go in brackets after them in those lines' styles.
 	var imageParts []string
 	if imgCount > 0 {
@@ -53,26 +58,26 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	var parts []string
 	switch {
 	case svcCount > 0 && len(imageParts) > 0:
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}} (%s)", sectionFinalTag, svcCount, plural(svcCount, "service", "services"), strings.Join(imageParts, ", ")))
+		parts = append(parts, countLabel(svcCount, "service", "services")+" ("+strings.Join(imageParts, ", ")+")")
 	case svcCount > 0:
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, svcCount, plural(svcCount, "service", "services")))
+		parts = append(parts, countLabel(svcCount, "service", "services"))
 	default:
 		parts = append(parts, imageParts...) // images with no service, e.g. a pull of one
 	}
 	if netCount > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, netCount, plural(netCount, "network", "networks")))
+		parts = append(parts, countLabel(netCount, "network", "networks"))
 	}
 	if volCount > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, volCount, plural(volCount, "volume", "volumes")))
+		parts = append(parts, countLabel(volCount, "volume", "volumes"))
 	}
 	if modelCount := len(p.modelRows()); modelCount > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, modelCount, plural(modelCount, "model", "models")))
+		parts = append(parts, countLabel(modelCount, "model", "models"))
 	}
 	if jobCount := len(p.jobsActedOn()); jobCount > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, jobCount, plural(jobCount, "job", "jobs")))
+		parts = append(parts, countLabel(jobCount, "job", "jobs"))
 	}
 	if orphanCount := len(p.orphanIDs); orphanCount > 0 {
-		parts = append(parts, fmt.Sprintf("%s%d %s{{[-]}}", sectionFinalTag, orphanCount, plural(orphanCount, "orphan", "orphans")))
+		parts = append(parts, countLabel(orphanCount, "orphan", "orphans"))
 	}
 	// The docker command is bold yellow (matching the summary line's overall duration);
 	// the colon uses DockerColon (matching the colons on the section/name lines below).
@@ -112,10 +117,11 @@ func (p *consoleEventProcessor) layerCount() int {
 type timerStyle int
 
 const (
-	timerSection timerStyle = iota // bold white — services: header
+	timerSection timerStyle = iota // bold bright blue — services: header
 	timerService                   // App cyan — individual service containers
 	timerImage                     // DockerMarkerDone green — image rows
 	timerLayer                     // unstyled — layer rows
+	timerGroup                     // bold white — changed: and unchanged: lines
 )
 
 type timerEntry struct {
@@ -171,6 +177,8 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		switch e.style {
 		case timerSection:
 			styleTag = "{{|DockerSection|}}"
+		case timerGroup:
+			styleTag = "{{|DockerGroupStatus|}}"
 		case timerService:
 			styleTag = "{{|App|}}"
 		case timerImage:

@@ -17,15 +17,14 @@ type serviceRow struct {
 
 // appendServiceRows draws rows, applying the display's folding rule: rows that show the
 // same thing (marker, status and every line under them) fold into one line naming
-// them, with their lines once and their timers merged. With -v (level at
-// dockerlayout.VerboseDetails) every row shows on its own.
-func (p *consoleEventProcessor) appendServiceRows(rows []serviceRow, level, termW int, appendLine func(string, *consoleTask, timerStyle)) {
+// them, with their lines once and their timers merged, at every level: with -v, rows
+// that still differ (their lines) show on their own, as instances of one app, sharing
+// an image, show as one.
+func (p *consoleEventProcessor) appendServiceRows(rows []serviceRow, termW int, appendLine func(string, *consoleTask, timerStyle)) {
 	key := func(r serviceRow) string { return r.icon + r.statusTag + "\x00" + strings.Join(r.lines, "\n") }
 	folded := map[string][]string{}
-	if level < dockerlayout.VerboseDetails {
-		for _, r := range rows {
-			folded[key(r)] = append(folded[key(r)], r.svc)
-		}
+	for _, r := range rows {
+		folded[key(r)] = append(folded[key(r)], r.svc)
 	}
 	drawn := map[string]bool{}
 	for _, r := range rows {
