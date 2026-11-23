@@ -27,7 +27,6 @@ const (
 	healthWaitTimeout    = 10 * time.Second       // how long the end of a run waits for first check results
 	healthWaitPoll       = 100 * time.Millisecond // how often that wait looks for them
 	healthWatchRetry     = time.Second            // pause before reopening an event stream that ended
-	dependencyRecheck    = time.Second            // how often the end-of-run wait looks at the dependencies' containers
 )
 
 // commandWatchesHealth reports whether command can leave containers running, so
@@ -184,12 +183,7 @@ func (p *consoleEventProcessor) waitForHealth() {
 		}
 		return false
 	}
-	nextLook := time.Now().Add(dependencyRecheck)
 	for checking() {
-		if !p.staticOut && time.Now().After(nextLook) {
-			p.fetchDependencyLogs() // a dependency may be crash-looping while its dependent waits
-			nextLook = time.Now().Add(dependencyRecheck)
-		}
 		if time.Now().After(deadline) {
 			p.mtx.Lock()
 			p.healthWaitDone = true
@@ -376,7 +370,7 @@ func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatu
 	if (holder || p.dependencyCause(t.id)) && worst != api.Error {
 		return "{{|DockerMarkerCause|}}" + p.icons().warn + "{{[-]}}"
 	}
-	if worst != api.Error && (wanter || p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.dependencyDown(t.id) || p.requiredDependencyFailed(t.id)) {
+	if worst != api.Error && (wanter || p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.serviceDown(t.id) || p.requiredDependencyFailed(t.id)) {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)
@@ -407,12 +401,6 @@ func (p *consoleEventProcessor) unhealthyServices() []string {
 // when it has no healthcheck: the state in the status column, then the check's command,
 // or its last output while unhealthy.
 func (p *consoleEventProcessor) healthLine(svc string, termW int) string {
-	return p.healthLineAt(svc, termW, 0)
-}
-
-// healthLineAt is healthLine with its label nested nest columns in, under the line it
-// is the evidence for.
-func (p *consoleEventProcessor) healthLineAt(svc string, termW, nest int) string {
 	health := p.serviceHealth(svc)
 	if health == "" {
 		return ""
@@ -443,7 +431,7 @@ func (p *consoleEventProcessor) healthLineAt(svc string, termW, nest int) string
 	}
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
-		strutil.Repeat(" ", 2*sectionChildIndentW+nest) + "{{|DockerDetailLabel|}}healthcheck{{[-]}}{{|DockerColon|}}:{{[-]}}"
+		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerDetailLabel|}}healthcheck{{[-]}}{{|DockerColon|}}:{{[-]}}"
 	if detail = cleanLogLine(detail); detail == "" {
 		return prefix
 	}

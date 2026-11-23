@@ -109,12 +109,14 @@ func preRunState(ctr container.Summary) string {
 
 // depStatus returns a dependency's state and, when it went wrong, the problem to show
 // after its name. A dependency with no row in this run counts by its state before the run.
-// One whose condition was met but whose container then went down (depLog.problem) is
-// failed, for a condition that needs it up.
+// One whose condition was met but whose container then went down (downLog.problem) is a
+// warning, for a condition that needs it up: DS2 infers it from a look at the container's
+// state, where compose reports no failure, and a container restarting at that moment may
+// be fine seconds later.
 func (p *consoleEventProcessor) depStatus(d serviceDep) (depState, string) {
 	state, problem := p.depConditionStatus(d)
-	if l := p.depLogs[d.name]; state == depMet && l != nil && l.problem != "" && d.condition != types.ServiceConditionCompletedSuccessfully {
-		return depFailed, l.problem
+	if l := p.downLogs[d.name]; state == depMet && l != nil && l.problem != "" && d.condition != types.ServiceConditionCompletedSuccessfully {
+		return depWarning, l.problem
 	}
 	return state, problem
 }
@@ -272,45 +274,24 @@ func (p *consoleEventProcessor) orderedByDependents() bool {
 	return false
 }
 
-// neededGroup is one needed-by line, with the condition it lists dependents for ("" on
-// the commands whose single line orders the run).
-type neededGroup struct {
-	condition string
-	lines     []string
-}
-
-// neededByLines returns the lines under svc's row listing what depends on it, flattened
-// from neededByGroups.
+// neededByLines returns the lines under svc's row listing what depends on it: on stop,
+// down and restart one line, where that orders the run (orderedByDependents); on the
+// commands that start containers a line for each condition, whether svc meets what its
+// dependents need of it. Without all, only while still pending or with a problem.
 func (p *consoleEventProcessor) neededByLines(svc string, termW int, all bool) []string {
-	var lines []string
-	for _, g := range p.neededByGroups(svc, termW, all) {
-		lines = append(lines, g.lines...)
-	}
-	return lines
-}
-
-// neededByGroups returns the needed-by lines under svc's row: on stop, down and restart
-// one line, where that orders the run (orderedByDependents); on the commands that start
-// containers a line for each condition, whether svc meets what its dependents need of
-// it. Without all, only while still pending or with a problem. The state, log and
-// healthcheck lines nest under them (serviceConditionLines).
-func (p *consoleEventProcessor) neededByGroups(svc string, termW int, all bool) []neededGroup {
 	if p.orderedByDependents() {
 		var entries []depEntry
 		for _, d := range p.neededBy(svc) {
 			state, problem := p.dependentStatus(svc, d)
 			entries = append(entries, depEntry{d.name, state, problem, true})
 		}
-		if lines := p.detailNameLines("needed by", entries, true, all, false, termW); lines != nil {
-			return []neededGroup{{lines: lines}}
-		}
-		return nil
+		return p.detailNameLines("needed by", entries, true, all, false, termW)
 	}
 	if !commandWatchesHealth(p.command) {
 		return nil
 	}
 	// One line for each condition the dependents need of svc, as dependsLines has.
-	var groups []neededGroup
+	var lines []string
 	for _, g := range depGroups {
 		label := g.label + " by"
 		var entries []depEntry
@@ -320,12 +301,10 @@ func (p *consoleEventProcessor) neededByGroups(svc string, termW int, all bool) 
 				entries = append(entries, depEntry{d.name, state, problem, d.required})
 			}
 		}
-		cause := g.required && p.dependencyDown(svc)
-		if lines := p.detailNameLines(label, entries, true, all, cause, termW); lines != nil {
-			groups = append(groups, neededGroup{g.condition, lines})
-		}
+		cause := g.required && p.serviceDown(svc)
+		lines = append(lines, p.detailNameLines(label, entries, true, all, cause, termW)...)
 	}
-	return groups
+	return lines
 }
 
 // depRank orders states for a line's status: a failure, then work still pending, then a
@@ -356,14 +335,61 @@ func (p *consoleEventProcessor) reachedContainers(svc string) bool {
 	return true
 }
 
-// detailNameLines returns a detail line listing entries under label, wrapped to fit
-// termW with continuation lines under the first name, or nil when there are none. Each
-// name takes its state's style; the line's status is the worst of them. A line with a
-// name still pending reads Waiting when compose may be waiting on it, else Pending. A
-// line whose only problems are optional names reads Unmet as a warning. With cause, an
-// unmet line is shown as the cause of another service's problem, not as a failure.
-// Without all, a line that is Ready with no name showing a problem is left out.
+// entry classes, in the order a split line's groups are shown: what each name's line
+// reads, so names with different statuses don't share one.
+const (
+	classFailed   = iota // compose reported it failed: Unmet, red
+	classCrashed         // it went down after it was met: Crashed
+	classOptional        // an optional name failed or warned: Unmet, a warning
+	classWarning         // a warning, such as No Result
+	classPending         // not met yet: Waiting or Pending
+	classMet             // Ready
+)
+
+// entryClass returns which line e belongs on.
+func entryClass(e depEntry) int {
+	switch {
+	case (e.state == depFailed || e.state == depWarning) && !e.required:
+		return classOptional
+	case e.state == depFailed:
+		return classFailed
+	case e.state == depWarning && downProblem(e.problem):
+		return classCrashed
+	case e.state == depWarning:
+		return classWarning
+	case e.state == depPending:
+		return classPending
+	}
+	return classMet
+}
+
+// detailNameLines returns the detail lines listing entries under label, one for each
+// status the names have (entryClass), so a line never reads Crashed over a name that is
+// fine. Without all, a line that is Ready with no name showing a problem is left out.
+// See detailNameGroup for a line.
 func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry, waiting, all, cause bool, termW int) []string {
+	var groups [classMet + 1][]depEntry
+	for _, e := range entries {
+		c := entryClass(e)
+		groups[c] = append(groups[c], e)
+	}
+	var lines []string
+	for _, g := range groups {
+		lines = append(lines, p.detailNameGroup(label, g, waiting, all, cause, termW)...)
+	}
+	return lines
+}
+
+// detailNameGroup returns a detail line listing entries, which share a status, under
+// label, wrapped to fit termW with continuation lines under the first name, or nil when
+// there are none. Each name takes its state's style; the line's status is the worst of
+// them. A line with a name still pending reads Waiting when compose may be waiting on
+// it, else Pending; one whose names went down after they were met reads Crashed; one
+// whose only problems are optional names reads Unmet as a warning. With cause, a line of
+// names that went down is the cause of another service's problem, in the cause marker,
+// not a failure. Without all, a line that is Ready with no name showing a problem is
+// left out.
+func (p *consoleEventProcessor) detailNameGroup(label string, entries []depEntry, waiting, all, cause bool, termW int) []string {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -374,6 +400,7 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 	var nameWs []int
 	worst := depMet
 	onlyNoResult := true
+	warns, downWarns := 0, 0 // names that warn, and of those, ones whose container went down
 	optionalProblem := false // an optional name failed or warned: the line is a warning
 	for _, e := range entries {
 		state := e.state
@@ -390,8 +417,14 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 			state = depMet // compose starts the service anyway; the name shows the problem
 			optionalProblem = true
 		}
-		if state == depWarning && e.problem != "No Result" {
-			onlyNoResult = false
+		if state == depWarning {
+			warns++
+			if downProblem(e.problem) {
+				downWarns++
+			}
+			if e.problem != "No Result" {
+				onlyNoResult = false
+			}
 		}
 		if depRank(state) > depRank(worst) {
 			worst = state
@@ -429,8 +462,14 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 	case depWarning:
 		icon = "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
 		statusText = "Warning"
-		if onlyNoResult {
+		switch {
+		case cause: // the dependency went down after it started: the cause marker
+			icon = "{{|DockerMarkerCause|}}" + ic.warn + "{{[-]}}"
+			statusText = "Crashed"
+		case onlyNoResult:
 			statusText = "No Result"
+		case warns == downWarns: // a dependency went down after it was met
+			statusText = "Crashed"
 		}
 		statusTag = "{{|DockerStatusWarn|}}" + statusText + "{{[-]}}"
 	case depMet:
@@ -500,4 +539,14 @@ func (p *consoleEventProcessor) splitChecking(names []string, termW int) (plain 
 		groups[i].members = append(groups[i].members, svc)
 	}
 	return plain, groups
+}
+
+// downProblem reports whether a dependency's problem is its container having gone down
+// (downLog.problem).
+func downProblem(problem string) bool {
+	switch problem {
+	case "Restarting", "Exited", "Dead":
+		return true
+	}
+	return false
 }

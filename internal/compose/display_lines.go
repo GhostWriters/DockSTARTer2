@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
 
 	"DockSTARTer2/internal/dockerlayout"
@@ -351,47 +350,23 @@ func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int,
 	return append(lines, p.modelLines(svc, termW, level >= dockerlayout.VerboseDetails)...)
 }
 
-// serviceConditionLines returns, in order, svc's needed-by lines when neededBy, with the
-// evidence nested one level under them: its state and log lines (a dependency that went
-// down) under the first, its healthcheck line under the one needing it healthy; then,
-// at the top level, whichever of those found no line to nest under, its dependency lines
-// and its ports line in a port conflict. Below dockerlayout.VerboseDetails, only the
-// ones still pending or with a problem; with expand, the needs, wants and needed-by
-// lines even when met (expandDependencyLines).
+// serviceConditionLines returns, in cause-and-effect order, svc's dependency lines (what
+// it waits on), its healthcheck line, its state and log lines when its container went
+// down (the service itself), its needed-by lines when neededBy (who waits on it), and its
+// ports line in a port conflict. Below dockerlayout.VerboseDetails, only the ones still
+// pending or with a problem; with expand, the needs, wants and needed-by lines even when
+// met (expandDependencyLines).
 func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level int, neededBy, expand bool) []string {
 	all := level >= dockerlayout.VerboseDetails
 	deps := all || expand
-	var groups []neededGroup
+	lines := p.dependsLines(svc, termW, deps)
+	if line := p.healthLine(svc, termW); line != "" && (all || p.serviceHealth(svc) != healthHealthy) {
+		lines = append(lines, line)
+	}
+	lines = append(lines, p.serviceLogLines(svc, termW)...)
 	if neededBy {
-		groups = p.neededByGroups(svc, termW, deps)
+		lines = append(lines, p.neededByLines(svc, termW, deps)...)
 	}
-	health := ""
-	if line := p.healthLineAt(svc, termW, 0); line != "" && (all || p.serviceHealth(svc) != healthHealthy) {
-		health = line
-	}
-	logged := p.depLogs[svc] != nil
-	healthParent := slices.IndexFunc(groups, func(g neededGroup) bool { return g.condition == types.ServiceConditionHealthy })
-	if health != "" && healthParent >= 0 {
-		health = p.healthLineAt(svc, termW, sectionChildIndentW)
-	}
-
-	var lines []string
-	for i, g := range groups {
-		lines = append(lines, g.lines...)
-		if i == 0 && logged {
-			lines = append(lines, p.serviceLogLinesAt(svc, termW, sectionChildIndentW)...)
-		}
-		if i == healthParent && health != "" {
-			lines = append(lines, health)
-		}
-	}
-	if healthParent < 0 && health != "" {
-		lines = append(lines, health)
-	}
-	if len(groups) == 0 {
-		lines = append(lines, p.serviceLogLines(svc, termW)...)
-	}
-	lines = append(lines, p.dependsLines(svc, termW, deps)...)
 	lines = append(lines, p.portsLines(svc, termW)...)
 	return lines
 }

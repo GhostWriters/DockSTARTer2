@@ -758,6 +758,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	err = run()
 	held.release(err)
 	reportUnhealthy(ctx, bus)
+	reportDown(ctx, bus)
 	// A job the engine has with a different spec: remove it and run again to register it.
 	if name, ok := changedJobName(err); ok && registersJobs(command) {
 		again, rerr := reregisterChangedJobs(ctx, yes, dockerCLI, project, name, command)
@@ -921,6 +922,20 @@ func reportUnhealthy(ctx context.Context, bus api.EventProcessor) {
 	logger.Warn(ctx, "Compose finished with %d unhealthy %s:", len(svcs), plural(len(svcs), "container", "containers"))
 	for _, svc := range svcs {
 		logger.Warn(ctx, "  %s{{|DockerColon|}}:{{[-]}} health check failing", dockerlayout.StyleServiceName(svc))
+	}
+}
+
+// reportDown warns about every container of the run's services that ended up restarting,
+// dead or exited non-zero, with its state and log lines as the display shows them, and
+// who needs it. Like the unhealthy list, it doesn't change the result.
+func reportDown(ctx context.Context, bus api.EventProcessor) {
+	p, ok := bus.(*consoleEventProcessor)
+	if !ok {
+		return
+	}
+	const logPrefixW = len("2006-01-02 15:04:05 [WARN  ] ")
+	for _, line := range p.downSummaryLines(max(outputWidth()-logPrefixW-4, minDetailW)) {
+		logger.Warn(ctx, "%s", line)
 	}
 }
 
