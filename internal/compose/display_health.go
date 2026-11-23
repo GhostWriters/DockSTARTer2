@@ -357,19 +357,20 @@ func (p *consoleEventProcessor) healthNoResult(svc string) bool {
 }
 
 // serviceIcon returns a service row's icon for worst, with a warning for a container
-// that is unhealthy or gave no health check result, has a required dependency that
-// failed, or isn't running but publishes a port another service couldn't bind, without
-// having failed the operation; in DockerMarkerCause when being unhealthy failed a
-// dependent (causeIcon), or when it holds that port.
+// that is unhealthy, gave no health check result, went down as a dependency, has a
+// required dependency that failed, or isn't running but publishes a port another service
+// couldn't bind, without having failed the operation; in DockerMarkerCause when being
+// unhealthy failed a dependent (causeIcon), when it holds that port, or when it is down
+// and a service requires it (dependencyCause).
 func (p *consoleEventProcessor) serviceIcon(t *consoleTask, worst api.EventStatus) string {
 	if cause := p.causeIcon(t); cause != "" && worst != api.Error {
 		return cause
 	}
 	holder, wanter := p.portRole(t.id)
-	if holder && worst != api.Error {
+	if (holder || p.dependencyCause(t.id)) && worst != api.Error {
 		return "{{|DockerMarkerCause|}}" + p.icons().warn + "{{[-]}}"
 	}
-	if worst != api.Error && (wanter || p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.requiredDependencyFailed(t.id)) {
+	if worst != api.Error && (wanter || p.serviceHealth(t.id) == healthUnhealthy || p.healthNoResult(t.id) || p.dependencyDown(t.id) || p.requiredDependencyFailed(t.id)) {
 		worst = api.Warning
 	}
 	return p.propagatedIcon(t, worst)
@@ -400,6 +401,12 @@ func (p *consoleEventProcessor) unhealthyServices() []string {
 // when it has no healthcheck: the state in the status column, then the check's command,
 // or its last output while unhealthy.
 func (p *consoleEventProcessor) healthLine(svc string, termW int) string {
+	return p.healthLineAt(svc, termW, 0)
+}
+
+// healthLineAt is healthLine with its label nested nest columns in, under the line it
+// is the evidence for.
+func (p *consoleEventProcessor) healthLineAt(svc string, termW, nest int) string {
 	health := p.serviceHealth(svc)
 	if health == "" {
 		return ""
@@ -430,8 +437,8 @@ func (p *consoleEventProcessor) healthLine(svc string, termW int) string {
 	}
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
-		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerDetailLabel|}}healthcheck{{[-]}}{{|DockerColon|}}:{{[-]}}"
-	if detail = strings.Join(strings.Fields(stripControl(detail)), " "); detail == "" {
+		strutil.Repeat(" ", 2*sectionChildIndentW+nest) + "{{|DockerDetailLabel|}}healthcheck{{[-]}}{{|DockerColon|}}:{{[-]}}"
+	if detail = cleanLogLine(detail); detail == "" {
 		return prefix
 	}
 	room := termW - timerReserveW - summaryHeaderIndentW - utf8.RuneCountInString(semstyle.ToPlain(prefix)) - 1

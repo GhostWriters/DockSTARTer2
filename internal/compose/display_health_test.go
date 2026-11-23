@@ -566,3 +566,16 @@ func TestOptionalDependencyFailureLeavesItsRow(t *testing.T) {
 		t.Errorf("web's needs line = %q, want an optional Unmet naming db unhealthy", lines)
 	}
 }
+
+func TestHealthLineRedactsSecrets(t *testing.T) {
+	p := newHealthTestProcessor()
+	p.setHealth("db", "db", healthUnhealthy)
+	p.healthOutput = map[string]string{"db": "curl: (22) 401 using Authorization: Bearer abcdef123456 and DB_PASSWORD=hunter2"}
+	got := plainLines([]string{p.healthLine("db", 200)})[0]
+	if strings.Contains(got, "abcdef123456") || strings.Contains(got, "hunter2") {
+		t.Errorf("health line holds a secret: %q", got)
+	}
+	if !strings.Contains(got, "[redacted]") {
+		t.Errorf("health line = %q, want the redaction marked", got)
+	}
+}
