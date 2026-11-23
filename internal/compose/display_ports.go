@@ -308,13 +308,13 @@ func (p *consoleEventProcessor) portsLines(svc string, termW int) []string {
 		// only when it differs from that, and the overlap only when it is neither.
 		h := c.holder
 		held = "held by " + kindName(h.name, h.service)
-		if r := h.rangeText(); r != "" && !(h.lo == c.failed.lo && h.hi == c.failed.hi) {
+		if r := h.rangeText(); r != "" && (h.lo != c.failed.lo || h.hi != c.failed.hi) {
 			held += ", ports " + r
 		}
 		// Docker names the first port that clashed; two ranges can share more.
 		if h.lo != h.hi && c.failed.lo != c.failed.hi {
 			lo, hi := max(h.lo, c.failed.lo), min(h.hi, c.failed.hi)
-			if hi > lo && !(lo == h.lo && hi == h.hi) && !(lo == c.failed.lo && hi == c.failed.hi) {
+			if hi > lo && (lo != h.lo || hi != h.hi) && (lo != c.failed.lo || hi != c.failed.hi) {
 				held += fmt.Sprintf("; the ranges overlap on %d-%d", lo, hi)
 			}
 		}
