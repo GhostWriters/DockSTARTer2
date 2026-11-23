@@ -124,7 +124,7 @@ func TestPortRanges(t *testing.T) {
 	// mapping already says what they share.
 	p.portConflict.failed = portClaim{name: "web", service: true, target: 8050, lo: 8050, hi: 8060}
 	p.portConflict.port = 8050
-	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8050:8050/tcp, part of 8050-8060 (held by service db, ports 8000-8100)") || strings.Contains(got, "overlap") {
+	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8050:8050/tcp, part of 8050-8060 (held by service db, ports 8000-8100)") || strings.Contains(got, "overlap") || strings.Count(got, "8050-8060") != 1 || strings.Count(got, "8000-8100") != 1 {
 		t.Errorf("web's line = %q, want each range once and no overlap", got)
 	}
 	// Ranges that only partly overlap: the line names every port they share.
@@ -136,7 +136,7 @@ func TestPortRanges(t *testing.T) {
 	// The same range: the holder is named alone.
 	p.portConflict.failed = portClaim{name: "web", service: true, target: 8000, lo: 8000, hi: 8100}
 	p.portConflict.port = 8000
-	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp, part of 8000-8100 (held by service db)") {
+	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp, part of 8000-8100 (held by service db)") || strings.Count(got, "8000-8100") != 1 {
 		t.Errorf("web's line = %q, want the holder named without repeating the range", got)
 	}
 }
@@ -356,6 +356,19 @@ func TestContainerClaimNameSaysWhereItIsFrom(t *testing.T) {
 	for _, c := range cases {
 		if got, svc := p.containerClaimName(c.ctr); got != c.want || svc != c.svc {
 			t.Errorf("containerClaimName = %q, %v; want %q, %v", got, svc, c.want, c.svc)
+		}
+	}
+}
+
+func TestEveryWantedPartyIsYellow(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	fail, warn := "{{|DockerStatusFail|}}", "{{|DockerStatusWarn|}}"
+	// Wanters are listed after "also wanted by", joined by "; ", the last one followed by
+	// ", not running": on a failed line they are all yellow, not the line's red.
+	lines := p.portsLineAs(portConflictText, "{{|DockerMarkerError|}}x{{[-]}}", fail, "80:80/tcp (held by service swag; also wanted by service a; service b, ports 8100-8110; container c, not running)", 300)
+	for _, want := range []string{fail + "held by service swag{{[-]}}", warn + "also wanted by service a{{[-]}}", warn + "service b, ports 8100-8110{{[-]}}", warn + "container c, not running{{[-]}}"} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("line = %q, want %q", lines[0], want)
 		}
 	}
 }

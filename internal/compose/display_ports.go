@@ -448,7 +448,8 @@ const (
 // entries separated by ", " outside parentheses, each a host port or range (80, 80-90)
 // with what follows it, and a message in parentheses to its end, in clauses separated
 // by "; ": "held by …" holds the port, "wanted by …" or "also wanted by …" wants it
-// too, "the ranges overlap …" is part of the clash.
+// too, "the ranges overlap …" is part of the clash. A clause that names a service or
+// container after one of those continues its list.
 func classifyPortsValue(value string) []byte {
 	kinds := make([]byte, len(value))
 	digit := func(c byte) bool { return c >= '0' && c <= '9' }
@@ -473,6 +474,7 @@ func classifyPortsValue(value string) []byte {
 			base := entryStart + at + 2
 			inner = strings.TrimSuffix(inner, ")")
 			clauseStart := 0
+			prev := byte(portMessage)
 			for _, clause := range strings.Split(inner, "; ") {
 				kind := byte(portMessage)
 				switch {
@@ -480,7 +482,13 @@ func classifyPortsValue(value string) []byte {
 					kind = portHeld
 				case strings.HasPrefix(clause, "wanted by"), strings.HasPrefix(clause, "also wanted by"):
 					kind = portWanted
+				case strings.HasPrefix(clause, "service "), strings.HasPrefix(clause, "container "):
+					// Another party in a list after "wanted by", which joins them with "; ".
+					if prev == portHeld || prev == portWanted {
+						kind = prev
+					}
 				}
+				prev = kind
 				for k := 0; k < len(clause); k++ {
 					kinds[base+clauseStart+k] = kind
 				}
