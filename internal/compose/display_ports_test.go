@@ -290,3 +290,28 @@ func TestPortsLineStylesTheHostPortAndTheMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestPortsValueStylesEveryHostPortAndMessage(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	warn, mark := "{{|DockerStatusWarn|}}", "{{|DockerMarkerWarn|}}"
+	// Two entries: both host ports and both messages in style, the rest dim.
+	lines := p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, "80:80/tcp (held by a), 443:443/tcp (held by b)", 300)
+	for _, want := range []string{mark + "80{{[-]}}", warn + "(held by a){{[-]}}", mark + "443{{[-]}}", "{{[::D]}}:443/tcp {{[-]}}", warn + "(held by b){{[-]}}"} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("line = %q, want %q", lines[0], want)
+		}
+	}
+	// A range is one host port.
+	lines = p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, "8000-8010/tcp (held by a)", 300)
+	if !strings.Contains(lines[0], mark+"8000-8010{{[-]}}") {
+		t.Errorf("line = %q, want the whole range in the host port style", lines[0])
+	}
+	// More lines than fit: the last ends in an ellipsis that isn't in the value, and
+	// still carries the message's style.
+	long := "80:80/tcp (" + strings.Repeat("held by a program on the host ", 12) + ")"
+	lines = p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, long, 40)
+	last := lines[len(lines)-1]
+	if len(lines) != 6 || !strings.Contains(last, "…") || !strings.Contains(last, warn) {
+		t.Errorf("lines = %q, want six, the last cut with … and still in the message style", lines)
+	}
+}

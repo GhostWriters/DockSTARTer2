@@ -623,3 +623,16 @@ func TestWarningWordPassesUpOnlyWhenTheRowsOwnIsOne(t *testing.T) {
 		t.Errorf("setWord of mixed rows = %q, want none", w)
 	}
 }
+
+func TestRowsWithDifferentStatusWordsDontFold(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.On(containerEvent("db", "Recreated", api.Done))
+	p.On(containerEvent("web", api.StatusCreated, api.Done))
+	p.finished, p.succeeded = true, true
+	for _, level := range []int{0, dockerlayout.VerboseDetails} {
+		got := renderPlain(p, level)
+		if !strings.Contains(got, "Recreated") || !strings.Contains(got, "Created") || strings.Contains(got, "2 services: db, web") {
+			t.Errorf("level %d display =\n%s\nwant db Recreated and web Created on their own rows, not folded under one word", level, got)
+		}
+	}
+}
