@@ -61,6 +61,15 @@ func (c portClaim) rangeText() string {
 	return fmt.Sprintf("%d-%d", c.lo, c.hi)
 }
 
+// kindName returns name with what it is, a service of the project or a container:
+// "service swag", "container ds2-port-blocker (not in this project)".
+func kindName(name string, service bool) string {
+	if service {
+		return "service " + name
+	}
+	return "container " + name
+}
+
 // claimText returns c's name, with its run of ports when it has one.
 func (c portClaim) claimText() string {
 	if r := c.rangeText(); r != "" {
@@ -265,7 +274,7 @@ func (p *consoleEventProcessor) findPortConflict(err error) {
 
 // containerClaimName returns how a container shows in a port conflict: its service's
 // name for a container of this project, else its name, with its project's when it
-// has one.
+// has one, or "not in this project" when it has none (a plain docker run).
 func (p *consoleEventProcessor) containerClaimName(ctr container.Summary) (string, bool) {
 	if ctr.Labels[api.ProjectLabel] == p.projectName && ctr.Labels[api.ServiceLabel] != "" {
 		return ctr.Labels[api.ServiceLabel], true
@@ -276,6 +285,8 @@ func (p *consoleEventProcessor) containerClaimName(ctr container.Summary) (strin
 	}
 	if proj := ctr.Labels[api.ProjectLabel]; proj != "" {
 		name += " (project " + proj + ")"
+	} else {
+		name += " (not in this project)"
 	}
 	return name, false
 }
@@ -293,10 +304,17 @@ func (p *consoleEventProcessor) portsLines(svc string, termW int) []string {
 	held := "held by another container"
 	switch {
 	case c.holder != nil:
-		held = "held by " + c.holder.claimText()
+		// A range is said once: the failed service's own is on the mapping, the holder's
+		// only when it differs from that, and the overlap only when it is neither.
+		h := c.holder
+		held = "held by " + kindName(h.name, h.service)
+		if r := h.rangeText(); r != "" && (h.lo != c.failed.lo || h.hi != c.failed.hi) {
+			held += ", ports " + r
+		}
 		// Docker names the first port that clashed; two ranges can share more.
-		if h := c.holder; h.lo != h.hi && c.failed.lo != c.failed.hi {
-			if lo, hi := max(h.lo, c.failed.lo), min(h.hi, c.failed.hi); hi > lo {
+		if h.lo != h.hi && c.failed.lo != c.failed.hi {
+			lo, hi := max(h.lo, c.failed.lo), min(h.hi, c.failed.hi)
+			if hi > lo && (lo != h.lo || hi != h.hi) && (lo != c.failed.lo || hi != c.failed.hi) {
 				held += fmt.Sprintf("; the ranges overlap on %d-%d", lo, hi)
 			}
 		}
@@ -315,7 +333,7 @@ func (p *consoleEventProcessor) portsLines(svc string, termW int) []string {
 	}
 	var names []string
 	for _, w := range c.wanters {
-		names = append(names, w.claimText())
+		names = append(names, kindName(w.claimText(), w.service))
 	}
 	switch {
 	case svc == c.failed.name:
@@ -326,12 +344,12 @@ func (p *consoleEventProcessor) portsLines(svc string, termW int) []string {
 		return p.portsLine("{{|DockerMarkerError|}}"+ic.error+"{{[-]}}", "{{|DockerStatusFail|}}", value+")", termW)
 	case c.holder != nil && c.holder.service && svc == c.holder.name:
 		return p.portsLine("{{|DockerMarkerCause|}}"+ic.warn+"{{[-]}}", "{{|DockerStatusWarn|}}",
-			mapping(*c.holder)+" (wanted by "+c.failed.name+")", termW)
+			mapping(*c.holder)+" (wanted by "+kindName(c.failed.name, c.failed.service)+")", termW)
 	}
 	for _, w := range c.wanters {
 		if w.service && svc == w.name {
 			return p.portsLine("{{|DockerMarkerWarn|}}"+ic.warn+"{{[-]}}", "{{|DockerStatusWarn|}}",
-				mapping(w)+" ("+held+"; wanted by "+c.failed.name+")", termW)
+				mapping(w)+" ("+held+"; wanted by "+kindName(c.failed.name, c.failed.service)+")", termW)
 		}
 	}
 	return nil
@@ -367,9 +385,10 @@ func (p *consoleEventProcessor) portsLine(icon, style, value string, termW int) 
 
 // portsLineAs returns a ports line: icon, word in style, then value, wrapped to termW
 // under its first word. The value is dim except each host port (or range), which
-// clashes, in the icon's style, and each message in parentheses, which says why, in
-// style: a warning's or an error's. A service holding the port is a warning marked as
-// the cause, so its port shows red and its message yellow.
+// clashes, in the icon's style, and the clauses inside each message in parentheses,
+// which say who holds the port (an error, red) and who wants it (a warning, yellow);
+// the parentheses stay dim, and a clause of neither kind takes style. A service
+// holding the port is a warning marked as the cause, so its port shows red.
 func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, termW int) []string {
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
@@ -418,14 +437,19 @@ func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, ter
 
 // How a byte of a ports value is styled.
 const (
-	portDim     = iota // text around the ports
+	portDim     = iota // text around the ports, and the parentheses
 	portHost           // a host port or range, which clashes
-	portMessage        // a message in parentheses, which says why
+	portHeld           // a clause naming what holds the port: an error
+	portWanted         // a clause naming what wants it too: a warning
+	portMessage        // any other clause of a message, in the line's style
 )
 
 // classifyPortsValue returns how each byte of a ports value is styled. The value is
 // entries separated by ", " outside parentheses, each a host port or range (80, 80-90)
-// with what follows it, and a message in parentheses to its end.
+// with what follows it, and a message in parentheses to its end, in clauses separated
+// by "; ": "held by …" holds the port, "wanted by …" or "also wanted by …" wants it
+// too, "the ranges overlap …" is part of the clash. A clause that names a service or
+// container after one of those continues its list.
 func classifyPortsValue(value string) []byte {
 	kinds := make([]byte, len(value))
 	digit := func(c byte) bool { return c >= '0' && c <= '9' }
@@ -446,8 +470,29 @@ func classifyPortsValue(value string) []byte {
 			kinds[entryStart+k] = portHost
 		}
 		if at := strings.Index(entry, " ("); at >= 0 {
-			for k := at + 1; k < len(entry); k++ {
-				kinds[entryStart+k] = portMessage
+			inner := entry[at+2:]
+			base := entryStart + at + 2
+			inner = strings.TrimSuffix(inner, ")")
+			clauseStart := 0
+			prev := byte(portMessage)
+			for _, clause := range strings.Split(inner, "; ") {
+				kind := byte(portMessage)
+				switch {
+				case strings.HasPrefix(clause, "held by"), strings.HasPrefix(clause, "the ranges overlap"):
+					kind = portHeld
+				case strings.HasPrefix(clause, "wanted by"), strings.HasPrefix(clause, "also wanted by"):
+					kind = portWanted
+				case strings.HasPrefix(clause, "service "), strings.HasPrefix(clause, "container "):
+					// Another party in a list after "wanted by", which joins them with "; ".
+					if prev == portHeld || prev == portWanted {
+						kind = prev
+					}
+				}
+				prev = kind
+				for k := 0; k < len(clause); k++ {
+					kinds[base+clauseStart+k] = kind
+				}
+				clauseStart += len(clause) + len("; ")
 			}
 		}
 	}
@@ -470,7 +515,8 @@ func classifyPortsValue(value string) []byte {
 }
 
 // styleValuePart returns part, which starts at byte start of a ports value (-1 when it
-// is no part of it), styled by kinds: dim, a host port in portStyle, a message in style.
+// is no part of it), styled by kinds: dim, a host port in portStyle, a clause that is
+// neither holding nor wanting in style.
 func styleValuePart(part string, start int, kinds []byte, portStyle, style string) string {
 	if start < 0 {
 		return styleValueRun(part, portDim, portStyle, style)
@@ -492,6 +538,10 @@ func styleValueRun(text string, kind byte, portStyle, style string) string {
 	switch kind {
 	case portHost:
 		return portStyle + text + "{{[-]}}"
+	case portHeld:
+		return "{{|DockerStatusFail|}}" + text + "{{[-]}}"
+	case portWanted:
+		return "{{|DockerStatusWarn|}}" + text + "{{[-]}}"
 	case portMessage:
 		return style + text + "{{[-]}}"
 	}
@@ -510,6 +560,8 @@ type predictedConflict struct {
 	target uint32
 	other  string
 	inRun  bool
+	// service is whether other is a service of the project, not a container.
+	service bool
 }
 
 // portSpec is one host port a service or container publishes.
@@ -566,9 +618,10 @@ func (p *consoleEventProcessor) predictPortConflicts(ctx context.Context, run []
 		inRun[svc] = true
 	}
 	type claimant struct {
-		name  string
-		inRun bool
-		specs []portSpec
+		name    string
+		inRun   bool
+		service bool
+		specs   []portSpec
 	}
 	var others []claimant
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -591,12 +644,12 @@ func (p *consoleEventProcessor) predictPortConflicts(ctx context.Context, run []
 				specs = append(specs, portSpec{ip: ip, port: pt.PublicPort, proto: pt.Type, target: uint32(pt.PrivatePort)})
 			}
 			if len(specs) > 0 {
-				others = append(others, claimant{name: name, specs: specs})
+				others = append(others, claimant{name: name, service: isSvc, specs: specs})
 			}
 		}
 	}
 	for _, svc := range slices.Sorted(slices.Values(run)) {
-		others = append(others, claimant{name: svc, inRun: true, specs: serviceSpecs(p.servicePorts[svc])})
+		others = append(others, claimant{name: svc, inRun: true, service: true, specs: serviceSpecs(p.servicePorts[svc])})
 	}
 
 	predicted := map[string][]predictedConflict{}
@@ -627,7 +680,7 @@ func (p *consoleEventProcessor) predictPortConflicts(ctx context.Context, run []
 						continue // inside a run already started
 					}
 					lo, hi := portRun(shared, port)
-					predicted[svc] = append(predicted[svc], predictedConflict{lo: lo, hi: hi, proto: proto, target: targets[lo], other: o.name, inRun: o.inRun})
+					predicted[svc] = append(predicted[svc], predictedConflict{lo: lo, hi: hi, proto: proto, target: targets[lo], other: o.name, inRun: o.inRun, service: o.service})
 				}
 			}
 		}
@@ -672,9 +725,9 @@ func (p *consoleEventProcessor) predictedLines(svc string, termW int) []string {
 			entries = append(entries, e)
 		}
 		if c.inRun {
-			e.wantedBy = append(e.wantedBy, c.other)
+			e.wantedBy = append(e.wantedBy, kindName(c.other, true))
 		} else {
-			e.held = append(e.held, c.other)
+			e.held = append(e.held, kindName(c.other, c.service))
 		}
 	}
 	var parts []string
@@ -730,8 +783,8 @@ func (p *consoleEventProcessor) splitPossible(names []string) (plain []string, g
 				index[ports] = i
 				out = append(out, portEntry{ports: ports})
 			}
-			if !c.inRun && !slices.Contains(out[i].held, c.other) {
-				out[i].held = append(out[i].held, c.other)
+			if held := kindName(c.other, c.service); !c.inRun && !slices.Contains(out[i].held, held) {
+				out[i].held = append(out[i].held, held)
 			}
 		}
 		for i := range out {
@@ -786,6 +839,9 @@ func (p *consoleEventProcessor) splitPossible(names []string) (plain []string, g
 			}
 			if len(wanted) > 0 {
 				slices.Sort(wanted)
+				for i, w := range wanted {
+					wanted[i] = kindName(w, true)
+				}
 				how = append(how, "also wanted by "+strings.Join(wanted, ", "))
 			}
 			part := e.ports

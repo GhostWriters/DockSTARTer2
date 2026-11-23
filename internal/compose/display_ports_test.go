@@ -7,6 +7,7 @@ import (
 
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
+	"github.com/moby/moby/api/types/container"
 )
 
 func TestParseBindError(t *testing.T) {
@@ -64,15 +65,15 @@ func TestPortsLines(t *testing.T) {
 		wanters: []portClaim{{name: "cache", service: true, target: 80}},
 	}
 	web := strings.Join(plainLines(p.portsLines("web", 160)), "\n")
-	if !strings.Contains(web, "× Conflict") || !strings.Contains(web, "ports: 8080:80/tcp (held by db; also wanted by cache, not running)") {
+	if !strings.Contains(web, "× Conflict") || !strings.Contains(web, "ports: 8080:80/tcp (held by service db; also wanted by service cache, not running)") {
 		t.Errorf("web's line = %q, want the failure naming db and cache", web)
 	}
 	db := strings.Join(plainLines(p.portsLines("db", 160)), "\n")
-	if !strings.Contains(db, "⚠ Conflict") || !strings.Contains(db, "8080:8080/tcp (wanted by web)") {
+	if !strings.Contains(db, "⚠ Conflict") || !strings.Contains(db, "8080:8080/tcp (wanted by service web)") {
 		t.Errorf("db's line = %q, want a warning that web wants its port", db)
 	}
 	cache := strings.Join(plainLines(p.portsLines("cache", 160)), "\n")
-	if !strings.Contains(cache, "⚠ Conflict") || !strings.Contains(cache, "8080:80/tcp (held by db; wanted by web)") {
+	if !strings.Contains(cache, "⚠ Conflict") || !strings.Contains(cache, "8080:80/tcp (held by service db; wanted by service web)") {
 		t.Errorf("cache's line = %q, want a warning naming db and web", cache)
 	}
 
@@ -112,18 +113,31 @@ func TestPortRanges(t *testing.T) {
 		port:   8000, proto: "tcp",
 		holder: &portClaim{name: "db", service: true, target: 8000, lo: 8000, hi: 8100},
 	}
-	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp (held by db, ports 8000-8100)") {
+	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp (held by service db, ports 8000-8100)") {
 		t.Errorf("web's line = %q, want db's range named", got)
 	}
-	if got := strings.Join(plainLines(p.portsLines("db", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp, part of 8000-8100 (wanted by web)") {
+	if got := strings.Join(plainLines(p.portsLines("db", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp, part of 8000-8100 (wanted by service web)") {
 		t.Errorf("db's line = %q, want its own range", got)
 	}
 
-	// Both ranges: the line names every port they share, not only the first.
+	// A range is said once. Inside the holder's, the failed service's own range on the
+	// mapping already says what they share.
 	p.portConflict.failed = portClaim{name: "web", service: true, target: 8050, lo: 8050, hi: 8060}
 	p.portConflict.port = 8050
-	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "(held by db, ports 8000-8100; the ranges overlap on 8050-8060)") {
+	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8050:8050/tcp, part of 8050-8060 (held by service db, ports 8000-8100)") || strings.Contains(got, "overlap") || strings.Count(got, "8050-8060") != 1 || strings.Count(got, "8000-8100") != 1 {
+		t.Errorf("web's line = %q, want each range once and no overlap", got)
+	}
+	// Ranges that only partly overlap: the line names every port they share.
+	p.portConflict.failed = portClaim{name: "web", service: true, target: 8090, lo: 8090, hi: 8110}
+	p.portConflict.port = 8090
+	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "(held by service db, ports 8000-8100; the ranges overlap on 8090-8100)") {
 		t.Errorf("web's line = %q, want the overlap named", got)
+	}
+	// The same range: the holder is named alone.
+	p.portConflict.failed = portClaim{name: "web", service: true, target: 8000, lo: 8000, hi: 8100}
+	p.portConflict.port = 8000
+	if got := strings.Join(plainLines(p.portsLines("web", 160)), "\n"); !strings.Contains(got, "8000:8000/tcp, part of 8000-8100 (held by service db)") || strings.Count(got, "8000-8100") != 1 {
+		t.Errorf("web's line = %q, want the holder named without repeating the range", got)
 	}
 }
 
@@ -152,7 +166,7 @@ func TestPortConflictShowsInTheDisplay(t *testing.T) {
 	p.On(api.Resource{ID: "Container web", Status: api.Error, Text: "Bind for 0.0.0.0:8080 failed: port is already allocated"})
 	p.portConflict = &portConflict{failed: portClaim{name: "web", service: true, target: 80}, port: 8080, proto: "tcp", holder: &portClaim{name: "portainer", target: 9000}}
 	p.finished = true
-	if got := renderPlain(p, 0); !strings.Contains(got, "ports: 8080:80/tcp (held by portainer)") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "ports: 8080:80/tcp (held by container portainer)") {
 		t.Errorf("display =\n%s\nwant web's ports line naming portainer", got)
 	}
 }
@@ -188,10 +202,10 @@ func TestPossibleConflictResolves(t *testing.T) {
 		"web": {{lo: 80, hi: 80, proto: "tcp", target: 80, other: "azuracast"}},
 		"db":  {{lo: 8100, hi: 8110, proto: "tcp", other: "web", inRun: true}},
 	}
-	if got := strings.Join(plainLines(p.predictedLines("web", 160)), "\n"); !strings.Contains(got, "? Conflict ") || !strings.Contains(got, "ports: 80:80/tcp (held by azuracast)") {
+	if got := strings.Join(plainLines(p.predictedLines("web", 160)), "\n"); !strings.Contains(got, "? Conflict ") || !strings.Contains(got, "ports: 80:80/tcp (held by container azuracast)") {
 		t.Errorf("web before compose reports = %q, want an unconfirmed ports line", got)
 	}
-	if got := strings.Join(plainLines(p.predictedLines("db", 160)), "\n"); !strings.Contains(got, "8100-8110/tcp (also wanted by web)") {
+	if got := strings.Join(plainLines(p.predictedLines("db", 160)), "\n"); !strings.Contains(got, "8100-8110/tcp (also wanted by service web)") {
 		t.Errorf("db's line = %q, want the range another service of the run wants", got)
 	}
 
@@ -219,7 +233,7 @@ func TestPossibleConflictsGroupByPort(t *testing.T) {
 		{lo: 443, hi: 443, proto: "tcp", target: 443, other: "nginx", inRun: true},
 	}}
 	got := strings.Join(plainLines(p.predictedLines("swag", 200)), "\n")
-	if !strings.Contains(got, "80:80/tcp (held by porthog; also wanted by azuracast, nginx), 443:443/tcp (also wanted by nginx)") {
+	if !strings.Contains(got, "80:80/tcp (held by container porthog; also wanted by service azuracast, service nginx), 443:443/tcp (also wanted by service nginx)") {
 		t.Errorf("swag's line = %q, want one entry per port naming every claimant", got)
 	}
 }
@@ -258,60 +272,103 @@ func TestPossibleConflictsFoldApart(t *testing.T) {
 	}
 }
 
-func TestPortsLineStylesTheHostPortAndTheMessage(t *testing.T) {
+func TestPortsLineStylesTheHostPortAndEachClause(t *testing.T) {
 	p := newGroupsTestProcessor("up")
-	for _, style := range []string{"{{|DockerStatusWarn|}}", "{{|DockerStatusFail|}}"} {
-		lines := p.portsLineAs(portConflictText, "I", style, "80:80/tcp (held by swag; wanted by nginx)", 200)
+	fail, warn := "{{|DockerStatusFail|}}", "{{|DockerStatusWarn|}}"
+	dim := func(s string) string { return "{{[::D]}}" + s + "{{[-]}}" }
+	// What holds the port is red and what wants it yellow whatever the line's own
+	// severity, the host port follows the icon, the parentheses stay dim.
+	for _, style := range []string{warn, fail} {
+		lines := p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", style, "80:80/tcp (held by swag; also wanted by nginx, not running)", 200)
 		if len(lines) != 1 {
 			t.Fatalf("lines = %q, want one", lines)
 		}
-		for _, want := range []string{style + "80{{[-]}}", "{{[::D]}}:80/tcp {{[-]}}", style + "(held by swag; wanted by nginx){{[-]}}"} {
+		for _, want := range []string{"{{|DockerMarkerWarn|}}80{{[-]}}", dim(":80/tcp ("), fail + "held by swag{{[-]}}", dim("; "), warn + "also wanted by nginx, not running{{[-]}}", dim(")")} {
 			if !strings.Contains(lines[0], want) {
-				t.Errorf("line = %q, want %q: the host port and the message in the line's style, the rest dim", lines[0], want)
+				t.Errorf("line = %q, want %q", lines[0], want)
 			}
 		}
 	}
 	// A service holding the port, a warning marked as the cause: its port follows the
-	// marker (red), its message the status (yellow).
-	cause := p.portsLineAs(portConflictText, "{{|DockerMarkerCause|}}!{{[-]}}", "{{|DockerStatusWarn|}}", "80:80/tcp (wanted by nginx)", 200)
-	for _, want := range []string{"{{|DockerMarkerCause|}}80{{[-]}}", "{{|DockerStatusWarn|}}(wanted by nginx){{[-]}}"} {
+	// marker (red), what wants it is yellow.
+	cause := p.portsLineAs(portConflictText, "{{|DockerMarkerCause|}}!{{[-]}}", warn, "80:80/tcp (wanted by nginx)", 200)
+	for _, want := range []string{"{{|DockerMarkerCause|}}80{{[-]}}", warn + "wanted by nginx{{[-]}}"} {
 		if !strings.Contains(cause[0], want) {
 			t.Errorf("line = %q, want %q", cause[0], want)
 		}
 	}
-	// Wrapped, the message keeps its style on every line.
-	lines := p.portsLineAs(portConflictText, "I", "{{|DockerStatusFail|}}", "80:80/tcp (held by a program on the host, or a container using host networking, often systemd-resolved)", 70)
+	// A clause that is neither holding nor wanting takes the line's style.
+	other := p.portsLineAs(portConflictText, "I", fail, "80:80/tcp (something else)", 200)
+	if !strings.Contains(other[0], fail+"something else{{[-]}}") {
+		t.Errorf("line = %q, want an unknown clause in the line's style", other[0])
+	}
+	// Wrapped, the clause keeps its style on every line.
+	lines := p.portsLineAs(portConflictText, "I", fail, "80:80/tcp (held by a program on the host, or a container using host networking, often systemd-resolved)", 70)
 	if len(lines) < 2 {
 		t.Fatalf("lines = %q, want a wrapped line", lines)
 	}
 	for _, line := range lines[1:] {
-		if !strings.Contains(line, "{{|DockerStatusFail|}}") {
-			t.Errorf("wrapped line = %q, want the message still in the error style", line)
+		if !strings.Contains(line, fail) {
+			t.Errorf("wrapped line = %q, want the clause still red", line)
 		}
 	}
 }
 
-func TestPortsValueStylesEveryHostPortAndMessage(t *testing.T) {
+func TestPortsValueStylesEveryHostPortAndClause(t *testing.T) {
 	p := newGroupsTestProcessor("up")
-	warn, mark := "{{|DockerStatusWarn|}}", "{{|DockerMarkerWarn|}}"
-	// Two entries: both host ports and both messages in style, the rest dim.
-	lines := p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, "80:80/tcp (held by a), 443:443/tcp (held by b)", 300)
-	for _, want := range []string{mark + "80{{[-]}}", warn + "(held by a){{[-]}}", mark + "443{{[-]}}", "{{[::D]}}:443/tcp {{[-]}}", warn + "(held by b){{[-]}}"} {
+	warn, fail, mark := "{{|DockerStatusWarn|}}", "{{|DockerStatusFail|}}", "{{|DockerMarkerWarn|}}"
+	// Two entries: both host ports and both clauses styled, the rest dim.
+	lines := p.portsLineAs(portConflictText, mark+"!{{[-]}}", warn, "80:80/tcp (held by a), 443:443/tcp (held by b)", 300)
+	for _, want := range []string{mark + "80{{[-]}}", fail + "held by a{{[-]}}", mark + "443{{[-]}}", "{{[::D]}}:443/tcp ({{[-]}}", fail + "held by b{{[-]}}"} {
 		if !strings.Contains(lines[0], want) {
 			t.Errorf("line = %q, want %q", lines[0], want)
 		}
 	}
-	// A range is one host port.
-	lines = p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, "8000-8010/tcp (held by a)", 300)
-	if !strings.Contains(lines[0], mark+"8000-8010{{[-]}}") {
-		t.Errorf("line = %q, want the whole range in the host port style", lines[0])
+	// A range is one host port; an overlap is part of the clash.
+	lines = p.portsLineAs(portConflictText, mark+"!{{[-]}}", warn, "8000-8010/tcp (held by a; the ranges overlap on 8000-8005)", 300)
+	for _, want := range []string{mark + "8000-8010{{[-]}}", fail + "the ranges overlap on 8000-8005{{[-]}}"} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("line = %q, want %q", lines[0], want)
+		}
 	}
 	// More lines than fit: the last ends in an ellipsis that isn't in the value, and
-	// the ellipsis itself carries the message's style.
+	// the ellipsis itself carries its clause's style.
 	long := "80:80/tcp (" + strings.Repeat("held by a program on the host ", 12) + ")"
-	lines = p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, long, 40)
+	lines = p.portsLineAs(portConflictText, mark+"!{{[-]}}", warn, long, 40)
 	last := lines[len(lines)-1]
-	if len(lines) != 6 || !strings.HasSuffix(last, warn+" …{{[-]}}") && !strings.HasSuffix(last, warn+"…{{[-]}}") {
-		t.Errorf("lines = %q, want six, the last cut with … in the message style", lines)
+	if len(lines) != 6 || !strings.HasSuffix(last, fail+" …{{[-]}}") && !strings.HasSuffix(last, fail+"…{{[-]}}") {
+		t.Errorf("lines = %q, want six, the last cut with … in the clause's style", lines)
+	}
+}
+
+func TestContainerClaimNameSaysWhereItIsFrom(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	p.projectName = "proj"
+	cases := []struct {
+		ctr  container.Summary
+		want string
+		svc  bool
+	}{
+		{container.Summary{Names: []string{"/proj-swag-1"}, Labels: map[string]string{api.ProjectLabel: "proj", api.ServiceLabel: "swag"}}, "swag", true},
+		{container.Summary{Names: []string{"/pihole"}, Labels: map[string]string{api.ProjectLabel: "dns", api.ServiceLabel: "pihole"}}, "pihole (project dns)", false},
+		{container.Summary{Names: []string{"/ds2-port-blocker"}}, "ds2-port-blocker (not in this project)", false},
+	}
+	for _, c := range cases {
+		if got, svc := p.containerClaimName(c.ctr); got != c.want || svc != c.svc {
+			t.Errorf("containerClaimName = %q, %v; want %q, %v", got, svc, c.want, c.svc)
+		}
+	}
+}
+
+func TestEveryWantedPartyIsYellow(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	fail, warn := "{{|DockerStatusFail|}}", "{{|DockerStatusWarn|}}"
+	// Wanters are listed after "also wanted by", joined by "; ", the last one followed by
+	// ", not running": on a failed line they are all yellow, not the line's red.
+	lines := p.portsLineAs(portConflictText, "{{|DockerMarkerError|}}x{{[-]}}", fail, "80:80/tcp (held by service swag; also wanted by service a; service b, ports 8100-8110; container c, not running)", 300)
+	for _, want := range []string{fail + "held by service swag{{[-]}}", warn + "also wanted by service a{{[-]}}", warn + "service b, ports 8100-8110{{[-]}}", warn + "container c, not running{{[-]}}"} {
+		if !strings.Contains(lines[0], want) {
+			t.Errorf("line = %q, want %q", lines[0], want)
+		}
 	}
 }
