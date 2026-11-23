@@ -275,7 +275,7 @@ func TestDependencyThatWentDownShowsItsLogsUnderItsOwnRow(t *testing.T) {
 	p.finished = true
 
 	p.dependsOn["cache"] = []serviceDep{dep("db", types.ServiceConditionStarted, true)}
-	conditions := plainLines(p.serviceConditionLines("db", 160, 0, true))
+	conditions := plainLines(p.serviceConditionLines("db", 160, 0, true, false))
 	if len(conditions) != 3 || !strings.Contains(conditions[0], "Unmet") || !strings.Contains(conditions[0], "needs started by: cache, web") ||
 		conditions[1] != "state: Restarting, exit code 1" || conditions[2] != "log:   Error: no password" {
 		t.Errorf("db condition lines = %q, want who needs it, then its state and log", conditions)
@@ -317,7 +317,7 @@ func dependencyWithEvidence(webNeeds, cacheNeeds string) *consoleEventProcessor 
 func TestConditionLinesNestTheEvidenceUnderTheLinesItBacks(t *testing.T) {
 	p := dependencyWithEvidence(types.ServiceConditionStarted, types.ServiceConditionHealthy)
 
-	lines := p.serviceConditionLines("db", 160, 0, true)
+	lines := p.serviceConditionLines("db", 160, 0, true, false)
 
 	plain := plainLines(lines)
 	want := []string{"needs started by: web", "state: Restarting", "log:   boom", "needs healthy by: cache", "healthcheck: connection refused"}
@@ -339,7 +339,7 @@ func TestConditionLinesNestTheEvidenceUnderTheLinesItBacks(t *testing.T) {
 func TestConditionLinesKeepTheHealthcheckAtTheTopWhenNothingNeedsItHealthy(t *testing.T) {
 	p := dependencyWithEvidence(types.ServiceConditionStarted, types.ServiceConditionStarted)
 
-	plain := plainLines(p.serviceConditionLines("db", 160, 0, true))
+	plain := plainLines(p.serviceConditionLines("db", 160, 0, true, false))
 
 	want := []string{"needs started by: cache, web", "state: Restarting", "log:   boom", "healthcheck: connection refused"}
 	if len(plain) != len(want) {
@@ -350,7 +350,7 @@ func TestConditionLinesKeepTheHealthcheckAtTheTopWhenNothingNeedsItHealthy(t *te
 			t.Errorf("line %d = %q, want it to hold %q", i, plain[i], w)
 		}
 	}
-	lines := p.serviceConditionLines("db", 160, 0, true)
+	lines := p.serviceConditionLines("db", 160, 0, true, false)
 	if health := columnOf(lines[3], "healthcheck"); health != columnOf(lines[0], "needs") {
 		t.Errorf("a healthcheck nothing needs healthy sits at column %d, want the same column as the needed-by line", health)
 	}
@@ -361,7 +361,7 @@ func TestConditionLinesWithoutDependentsAreUnchanged(t *testing.T) {
 	p.setHealth("db", "db", healthUnhealthy)
 	p.healthOutput = map[string]string{"db": "connection refused"}
 
-	lines := p.serviceConditionLines("db", 160, 0, true)
+	lines := p.serviceConditionLines("db", 160, 0, true, false)
 
 	if len(lines) != 1 || indentOf(lines[0]) != indentOf(p.healthLine("db", 160)) {
 		t.Errorf("lines = %q, want only the top-level healthcheck line", plainLines(lines))
@@ -376,7 +376,7 @@ func TestDownDependencyThatIsRequiredIsShownAsTheCause(t *testing.T) {
 	if got := p.serviceIcon(row, row.status); got != "{{|DockerMarkerCause|}}"+warn+"{{[-]}}" {
 		t.Errorf("db row icon = %q, want the cause marker", got)
 	}
-	lines := p.serviceConditionLines("db", 160, 0, true)
+	lines := p.serviceConditionLines("db", 160, 0, true, false)
 	if !strings.Contains(lines[0], "{{|DockerMarkerCause|}}"+warn) || !strings.Contains(lines[0], "{{|DockerStatusWarn|}}Unmet") {
 		t.Errorf("needed-by line = %q, want the cause marker with a plain Unmet", lines[0])
 	}
@@ -405,8 +405,141 @@ func TestDownDependencyThatIsOnlyOptionalStaysAWarning(t *testing.T) {
 	if got := p.serviceIcon(row, row.status); got != "{{|DockerMarkerWarn|}}"+p.icons().warn+"{{[-]}}" {
 		t.Errorf("db row icon = %q, want a plain warning", got)
 	}
-	lines := p.serviceConditionLines("db", 160, 0, true)
+	lines := p.serviceConditionLines("db", 160, 0, true, false)
 	if strings.Contains(lines[0], "DockerMarkerCause") || !strings.Contains(lines[1], "{{|DockerMarkerWarn|}}Restarting") {
 		t.Errorf("lines = %q, want warning colours for an optional dependent", lines)
+	}
+}
+
+func TestDependencyLinesShowWhenMetUntilTheRunSettles(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+	p.On(containerEvent("db", api.StatusStarted, api.Done)) // db is up, so the line is Ready
+
+	lines := plainLines(p.serviceDetailLines("web", 160, 0, true))
+	if len(lines) != 1 || !strings.Contains(lines[0], "Ready") || !strings.Contains(lines[0], "needs started: db") {
+		t.Errorf("while running: %q, want the met needs line shown", lines)
+	}
+
+	p.settleDependencies()
+	if lines := p.serviceDetailLines("web", 160, 0, true); len(lines) != 0 {
+		t.Errorf("once settled: %q, want the met line collapsed", plainLines(lines))
+	}
+}
+
+func TestExpandedLinesDoNotChangeWhichRowsAreChanges(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+
+	if lines := p.serviceConditionLines("web", 160, 0, false, false); len(lines) != 0 {
+		t.Errorf("the grouping check sees %q while running, want no lines so rows keep their group", plainLines(lines))
+	}
+}
+
+func TestFetchDependencyLogsForgetsADependencyThatCameBackUp(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+	p.projectName = "proj"
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	d := &logDaemon{state: container.State{Status: "restarting", Restarting: true, ExitCode: 1}, tty: true, logs: []byte("boom\n")}
+	p.dockerClient = d
+	p.finished = true
+
+	p.fetchDependencyLogs()
+	if p.depLogs["db"] == nil {
+		t.Fatal("no problem found while it restarts")
+	}
+	d.state = container.State{Status: "running", Running: true}
+	p.fetchDependencyLogs()
+
+	if p.depLogs["db"] != nil {
+		t.Errorf("db still marked down after it came back: %+v", p.depLogs["db"])
+	}
+}
+
+func TestStoppedDependencyIsAChangeFromTheFirstFrame(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+	p.command = "up"
+	p.preRun["db"] = "stopped" // up is going to start it
+
+	if got := p.serviceGroup("db", "", 160); got != groupChanged {
+		t.Errorf("db group = %v, want its own row under changed: while it starts", got)
+	}
+	p.preRun["cache"] = "stopped" // starting too, but nothing depends on it
+	if got := p.serviceGroup("cache", "", 160); got != groupPending {
+		t.Errorf("cache group = %v, want it pending in the group of its state", got)
+	}
+	lines := plainLines(p.serviceDetailLines("db", 160, 0, true))
+	if len(lines) != 1 || !strings.Contains(lines[0], "needs started by: web") {
+		t.Errorf("db lines = %q, want who waits on it while it starts", lines)
+	}
+
+	p.preRun["db"] = "running"
+	if got := p.serviceGroup("db", "", 160); got != groupPending {
+		t.Errorf("a running dependency is group %v, want it pending until something happens", got)
+	}
+}
+
+func TestPendingDependencyIsNotAChangeToWhatWaitsOnIt(t *testing.T) {
+	p := newDependsTestProcessor(dep("db", types.ServiceConditionStarted, true))
+	p.command = "up"
+	p.preRun["web"] = "running"
+	p.preRun["db"] = "stopped" // up is starting it; web, already running, only checks
+
+	if p.hasConditionLines("web", 160) {
+		t.Error("a pending needs line makes web a change, want it to stay with the unchanged services")
+	}
+	if got := p.serviceGroup("web", "", 160); got != groupPending {
+		t.Errorf("web group = %v, want pending, in the group of its state", got)
+	}
+
+	p.finished = true // db never started
+	if !p.hasConditionLines("web", 160) {
+		t.Error("an unmet dependency is a problem under web, want it to count")
+	}
+}
+
+// nginxScenario returns an up run where nginx is stopped and organizr and seerr, already
+// running, depend on it (seerr also on radarr, running).
+func nginxScenario() *consoleEventProcessor {
+	imgs := map[string][]string{"i/nginx:1": {"nginx"}, "i/organizr:1": {"organizr"}, "i/seerr:1": {"seerr"}, "i/radarr:1": {"radarr"}}
+	order := []string{"i/nginx:1", "i/organizr:1", "i/seerr:1", "i/radarr:1"}
+	p := NewConsoleEventProcessor(context.Background(), nil, "up", imgs, order, map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.preRun = map[string]string{"nginx": "stopped", "organizr": "running", "seerr": "running", "radarr": "running"}
+	for _, img := range order {
+		p.imageMetaBefore[img] = imageMeta{}
+	}
+	p.dependsOn = map[string][]serviceDep{
+		"organizr": {dep("nginx", types.ServiceConditionStarted, true)},
+		"seerr":    {dep("nginx", types.ServiceConditionStarted, true), dep("radarr", types.ServiceConditionStarted, true)},
+	}
+	return p
+}
+
+func TestUnchangedServicesCheckingADependencyShowTheirLinesUntilItPasses(t *testing.T) {
+	p := nginxScenario()
+
+	got := renderPlain(p, 0)
+
+	for _, want := range []string{
+		"Pending         nginx:",
+		"needs started by: organizr, seerr",
+		"1 service: organizr",
+		"needs started: nginx",
+		"1 service: seerr",
+		"needs started: nginx, radarr",
+		"1 service: radarr",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("frame lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "organizr:") {
+		t.Errorf("organizr has its own row, want it to stay in the unchanged group:\n%s", got)
+	}
+
+	p.On(containerEvent("nginx", api.StatusStarted, api.Done)) // the check passes
+	p.On(containerEvent("nginx", api.StatusStarted, api.Done))
+	after := renderPlain(p, 0)
+	if strings.Contains(after, "needs started: nginx") {
+		t.Errorf("the lines stay after nginx started:\n%s", after)
 	}
 }

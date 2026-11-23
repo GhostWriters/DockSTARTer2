@@ -27,6 +27,7 @@ const (
 	healthWaitTimeout    = 10 * time.Second       // how long the end of a run waits for first check results
 	healthWaitPoll       = 100 * time.Millisecond // how often that wait looks for them
 	healthWatchRetry     = time.Second            // pause before reopening an event stream that ended
+	dependencyRecheck    = time.Second            // how often the end-of-run wait looks at the dependencies' containers
 )
 
 // commandWatchesHealth reports whether command can leave containers running, so
@@ -183,7 +184,12 @@ func (p *consoleEventProcessor) waitForHealth() {
 		}
 		return false
 	}
+	nextLook := time.Now().Add(dependencyRecheck)
 	for checking() {
+		if !p.staticOut && time.Now().After(nextLook) {
+			p.fetchDependencyLogs() // a dependency may be crash-looping while its dependent waits
+			nextLook = time.Now().Add(dependencyRecheck)
+		}
 		if time.Now().After(deadline) {
 			p.mtx.Lock()
 			p.healthWaitDone = true

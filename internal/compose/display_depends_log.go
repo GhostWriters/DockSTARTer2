@@ -57,7 +57,7 @@ func (p *consoleEventProcessor) fetchDependencyLogs() {
 	failed := map[string]bool{} // dependency → it failed its condition, so its log is read whatever its state
 	for _, deps := range p.dependsOn {
 		for _, d := range deps {
-			state, problem := p.depStatus(d)
+			state, problem := p.depConditionStatus(d) // not depStatus: a dependency found down earlier is looked at again
 			if (state == depMet || state == depFailed && depLogProblem(problem)) && !contains(names, d.name) {
 				failed[d.name] = state == depFailed
 				names = append(names, d.name)
@@ -71,17 +71,35 @@ func (p *consoleEventProcessor) fetchDependencyLogs() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if info := p.readDependencyLog(name, failed[name]); info != nil {
-				p.mtx.Lock()
-				if p.depLogs == nil {
-					p.depLogs = make(map[string]*depLog)
-				}
+			info := p.readDependencyLog(name, failed[name])
+			p.mtx.Lock()
+			defer p.mtx.Unlock()
+			switch {
+			case info != nil && p.depLogs == nil:
+				p.depLogs = map[string]*depLog{name: info}
+			case info != nil:
 				p.depLogs[name] = info
-				p.mtx.Unlock()
+			default:
+				delete(p.depLogs, name) // it came back up since the last look
 			}
 		}()
 	}
 	wg.Wait()
+}
+
+// settleDependencies marks the end-of-run checks done, so the dependency lines collapse
+// to the ones with a problem (expandDependencyLines).
+func (p *consoleEventProcessor) settleDependencies() {
+	p.mtx.Lock()
+	p.depsSettled = true
+	p.mtx.Unlock()
+}
+
+// expandDependencyLines reports whether the needs, wants and needed-by lines show even
+// when met, until the run and its end-of-run checks are over: a dependency that started
+// can still go down, and the lines say what is being waited on. Callers hold p.mtx.
+func (p *consoleEventProcessor) expandDependencyLines() bool {
+	return !p.depsSettled
 }
 
 // readDependencyLog returns svc's container state and picked log lines, or nil when it
