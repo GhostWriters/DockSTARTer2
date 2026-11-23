@@ -196,7 +196,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
 	summary := p.buildSummaryLine()
 	// Indent all content lines under the summary header (which carries the overall
-	// icon + "update:" text) so the block nests beneath it. The header itself is not
+	// icon + the docker command) so the block nests beneath it. The header itself is not
 	// indented. Done before attachTimers so the timer column accounts for the shift.
 	headerIndent := strutil.Repeat(" ", summaryHeaderIndentW)
 	for i := range lines {

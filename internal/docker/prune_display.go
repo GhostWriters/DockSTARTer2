@@ -211,7 +211,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		var out []string
 		line, lineW := "", 0
 		for i, name := range names {
-			text, styled := name, semstyle.ToANSI("{{|"+style+"|}}"+name+"{{[-]}}")
+			styled := semstyle.ToANSI("{{|" + style + "|}}" + name + "{{[-]}}")
+			if singular == "service" { // a service's name is a link or a user app's, as everywhere
+				styled = semstyle.ToANSI(dockerlayout.StyleServiceName(name))
+			}
+			text := name
 			if i < len(names)-1 {
 				text += ","
 				styled += semstyle.ToANSI("{{|DockerColon|}},{{[-]}}")

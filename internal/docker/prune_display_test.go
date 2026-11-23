@@ -5,8 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhostWriters/semstyle"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/moby/moby/api/types/image"
+
+	"DockSTARTer2/internal/dockerlayout"
 )
 
 // prunePlain returns the prune report's lines as plain text.
@@ -102,6 +106,21 @@ func TestPruneFoldsKindsOntoTheirHeadings(t *testing.T) {
 	for _, want := range []string{"✓ Removed       2 networks:\n", "Removed         net_a:", "Removed         net_b:", "✓ Removed       1 volume: vol_a"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("-v display =\n%s\nwant %q", got, want)
+		}
+	}
+}
+
+func TestPruneFoldedServicesKeepTheirNameStyle(t *testing.T) {
+	prev := semstyle.GetPreferredProfile()
+	semstyle.SetPreferredProfile(colorprofile.ANSI)
+	t.Cleanup(func() { semstyle.SetPreferredProfile(prev) })
+	r := PruneReport{ImagesDeleted: []image.DeleteResponse{{Untagged: "example/zzuser:1"}, {Deleted: "sha256:l1"}}}
+	lines, _ := buildPruneLines(r, map[string][]string{"example/zzuser:1": {"zzuser1", "zzuser2"}}, false, false, 160)
+	joined := strings.Join(lines, "\n")
+	// A user-defined service's name is the plain user style, not the bold built-in one.
+	for _, name := range []string{"zzuser1", "zzuser2"} {
+		if want := semstyle.ToANSI(dockerlayout.StyleServiceName(name)); !strings.Contains(joined, want) {
+			t.Errorf("folded line lacks %q styled as a service name", name)
 		}
 	}
 }
