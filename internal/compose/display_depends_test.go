@@ -241,10 +241,34 @@ func TestNeededByOnRestartOnlyRestartTrue(t *testing.T) {
 	}
 }
 
-func TestNeededByNotOnUp(t *testing.T) {
+func TestNeededByOnUpFollowsTheDependency(t *testing.T) {
 	p := newNeededByTestProcessor("up")
-	if lines := p.neededByLines("db", 160, true); lines != nil {
-		t.Errorf("up shows %q, want no needed-by lines", lines)
+	if lines := plainLines(p.neededByLines("db", 160, true)); len(lines) != 1 || !strings.Contains(lines[0], "Waiting") || !strings.Contains(lines[0], "needs started by: cache, web") {
+		t.Fatalf("lines = %q, want cache and web waiting on db", lines)
+	}
+
+	p.On(containerEvent("db", api.StatusStarted, api.Done))
+	if lines := p.neededByLines("db", 160, false); lines != nil {
+		t.Errorf("a met dependency shows %q without -v, want none", plainLines(lines))
+	}
+	if lines := p.neededByLines("db", 160, true); len(lines) != 1 || !strings.Contains(lines[0], detailFinalTag+"Ready") {
+		t.Errorf("lines = %q, want Ready with -v", plainLines(lines))
+	}
+
+	p.finished = true
+	p.depLogs = map[string]*depLog{"db": {problem: "Restarting"}} // it started, then went down
+	lines := plainLines(p.neededByLines("db", 160, false))
+	if len(lines) != 1 || !strings.Contains(lines[0], "Unmet") || !strings.Contains(lines[0], "needs started by: cache, web") {
+		t.Errorf("lines = %q, want the needed-by line unmet, shown without -v", lines)
+	}
+}
+
+func TestNeededByNotOnCommandsThatLeaveNothingRunning(t *testing.T) {
+	for _, command := range []string{"pull", "create", "rm", "kill"} {
+		p := newNeededByTestProcessor(command)
+		if lines := p.neededByLines("db", 160, true); lines != nil {
+			t.Errorf("%s shows %q, want no needed-by lines", command, plainLines(lines))
+		}
 	}
 }
 
@@ -305,5 +329,17 @@ func TestOptionalProblemShowsWithoutVerbose(t *testing.T) {
 	p.finished = true // db never started: a warning, since it's optional, with the problem
 	if lines := p.dependsLines("web", 160, false); len(lines) != 1 || !strings.Contains(semstyle.ToPlain(lines[0]), "Not Started") {
 		t.Errorf("lines = %q, want the optional dependency's problem shown without -v", plainLines(lines))
+	}
+}
+
+func TestNeededByOnUpHasALineForEachCondition(t *testing.T) {
+	p := newNeededByTestProcessor("up")
+	p.dependsOn["web"] = []serviceDep{{name: "db", condition: types.ServiceConditionHealthy, required: true}}
+	p.dependsOn["cache"] = []serviceDep{{name: "db", condition: types.ServiceConditionStarted, required: false}}
+
+	lines := plainLines(p.neededByLines("db", 160, true))
+
+	if len(lines) != 2 || !strings.Contains(lines[0], "needs healthy by: web") || !strings.Contains(lines[1], "needs started by (optional): cache") {
+		t.Errorf("lines = %q, want one line for each condition, the optional one labelled", lines)
 	}
 }

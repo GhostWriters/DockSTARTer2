@@ -30,6 +30,7 @@ type daemonClient interface {
 	ContainerInspect(ctx context.Context, containerID string, options dockerclient.ContainerInspectOptions) (dockerclient.ContainerInspectResult, error)
 	Events(ctx context.Context, options dockerclient.EventsListOptions) dockerclient.EventsResult
 	ContainerList(ctx context.Context, options dockerclient.ContainerListOptions) (dockerclient.ContainerListResult, error)
+	ContainerLogs(ctx context.Context, containerID string, options dockerclient.ContainerLogsOptions) (dockerclient.ContainerLogsResult, error)
 }
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
@@ -272,12 +273,13 @@ type consoleEventProcessor struct {
 	// Docker's state (starting/healthy/unhealthy), absent until known and for a container
 	// with no healthcheck; serviceHealth combines a service's containers.
 	health         map[string]map[string]string
-	healthChecked  map[string]string // container → its service, for containers this run tracks
-	healthWG       sync.WaitGroup    // pending health inspects
-	healthStop     func()            // ends the health event watch; nil when none runs
-	healthWaitDone bool              // the end-of-run wait for first check results ran out
-	healthCmd      map[string]string // svc → its healthcheck's command, shown on its healthcheck line
-	healthOutput   map[string]string // container → its last health check's output, shown while unhealthy
+	healthChecked  map[string]string  // container → its service, for containers this run tracks
+	healthWG       sync.WaitGroup     // pending health inspects
+	healthStop     func()             // ends the health event watch; nil when none runs
+	healthWaitDone bool               // the end-of-run wait for first check results ran out
+	healthCmd      map[string]string  // svc → its healthcheck's command, shown on its healthcheck line
+	healthOutput   map[string]string  // container → its last health check's output, shown while unhealthy
+	depLogs        map[string]*depLog // service → state and log lines of a dependency that failed its condition or went down after meeting it
 
 	// Dependencies, listed under each service row. dependsOn[svc] is its depends_on
 	// entries; containerStarted[svc] marks a container this run reported running; preRun
@@ -546,6 +548,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 		p.inspectWG.Wait()
 		p.waitVersionLinks()
 		p.waitForHealth()
+		p.fetchDependencyLogs()
 		p.stopHealthWatch()
 		p.mtx.Lock()
 		termW := goterm.Width()
@@ -563,6 +566,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 
 	// Wait for first health check results while the display still updates.
 	p.waitForHealth()
+	p.fetchDependencyLogs()
 
 	// Stop the ticker goroutine first.
 	p.doneCh <- struct{}{}
