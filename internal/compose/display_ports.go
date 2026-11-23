@@ -366,10 +366,10 @@ func (p *consoleEventProcessor) portsLine(icon, style, value string, termW int) 
 }
 
 // portsLineAs returns a ports line: icon, word in style, then value, wrapped to termW
-// under its first word. The value is dim except the host port, which clashes, in the
-// icon's style, and the message in parentheses, which says why, in style: a warning's
-// or an error's. A service holding the port is a warning marked as the cause, so its
-// port shows red and its message yellow.
+// under its first word. The value is dim except each host port (or range), which
+// clashes, in the icon's style, and each message in parentheses, which says why, in
+// style: a warning's or an error's. A service holding the port is a warning marked as
+// the cause, so its port shows red and its message yellow.
 func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, termW int) []string {
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
@@ -382,14 +382,7 @@ func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, ter
 			portStyle = icon[:end+3]
 		}
 	}
-	portEnd := 0
-	for portEnd < len(value) && value[portEnd] >= '0' && value[portEnd] <= '9' {
-		portEnd++
-	}
-	parenAt := strings.Index(value, " (")
-	if parenAt >= 0 {
-		parenAt++
-	}
+	kinds := classifyPortsValue(value)
 	var lines []string
 	cursor := 0
 	for i, part := range wrapWords(value, room, 6) {
@@ -397,52 +390,112 @@ func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, ter
 		if i > 0 {
 			lead = strutil.Repeat(" ", prefixW)
 		}
-		start := -1
-		if at := strings.Index(value[cursor:], part); at >= 0 {
-			start = cursor + at
-			cursor = start + len(part)
+		// The last line, when more was cut, ends in an ellipsis that isn't in value.
+		body, tail := part, ""
+		if strings.HasSuffix(part, "…") {
+			body, tail = strings.TrimSuffix(part, "…"), "…"
+			if strings.HasSuffix(body, " ") {
+				body, tail = strings.TrimSuffix(body, " "), " …"
+			}
 		}
-		lines = append(lines, lead+styleValuePart(part, start, portEnd, parenAt, portStyle, style))
+		start := -1
+		if at := strings.Index(value[cursor:], body); at >= 0 {
+			start = cursor + at
+			cursor = start + len(body)
+		}
+		styled := styleValuePart(body, start, kinds, portStyle, style)
+		if tail != "" {
+			last := byte(portDim)
+			if start >= 0 && len(body) > 0 {
+				last = kinds[start+len(body)-1]
+			}
+			styled += styleValueRun(tail, last, portStyle, style)
+		}
+		lines = append(lines, lead+styled)
 	}
 	return lines
 }
 
-// styleValuePart returns part, which starts at byte start of a ports value (-1 when it
-// is no part of it), dim except the host port (the value's first portEnd bytes), in
-// portStyle, and the message in parentheses (from parenAt), in style.
-func styleValuePart(part string, start, portEnd, parenAt int, portStyle, style string) string {
-	if start < 0 {
-		return "{{[::D]}}" + part + "{{[-]}}"
-	}
-	// kind returns how byte j is styled: 1 the host port, 2 the message, 0 dim.
-	kind := func(j int) int {
-		at := start + j
-		switch {
-		case at < portEnd:
-			return 1
-		case parenAt >= 0 && at >= parenAt:
-			return 2
+// How a byte of a ports value is styled.
+const (
+	portDim     = iota // text around the ports
+	portHost           // a host port or range, which clashes
+	portMessage        // a message in parentheses, which says why
+)
+
+// classifyPortsValue returns how each byte of a ports value is styled. The value is
+// entries separated by ", " outside parentheses, each a host port or range (80, 80-90)
+// with what follows it, and a message in parentheses to its end.
+func classifyPortsValue(value string) []byte {
+	kinds := make([]byte, len(value))
+	digit := func(c byte) bool { return c >= '0' && c <= '9' }
+	entryStart := 0
+	flush := func(end int) {
+		entry := value[entryStart:end]
+		i := 0
+		for i < len(entry) && digit(entry[i]) {
+			i++
 		}
-		return 0
+		if i > 0 && i+1 < len(entry) && entry[i] == '-' && digit(entry[i+1]) {
+			i++
+			for i < len(entry) && digit(entry[i]) {
+				i++
+			}
+		}
+		for k := 0; k < i; k++ {
+			kinds[entryStart+k] = portHost
+		}
+		if at := strings.Index(entry, " ("); at >= 0 {
+			for k := at + 1; k < len(entry); k++ {
+				kinds[entryStart+k] = portMessage
+			}
+		}
+	}
+	depth := 0
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ',':
+			if depth == 0 && i+1 < len(value) && value[i+1] == ' ' {
+				flush(i)
+				entryStart = i + 2
+			}
+		}
+	}
+	flush(len(value))
+	return kinds
+}
+
+// styleValuePart returns part, which starts at byte start of a ports value (-1 when it
+// is no part of it), styled by kinds: dim, a host port in portStyle, a message in style.
+func styleValuePart(part string, start int, kinds []byte, portStyle, style string) string {
+	if start < 0 {
+		return styleValueRun(part, portDim, portStyle, style)
 	}
 	var b strings.Builder
 	for j := 0; j < len(part); {
 		k := j
-		for k < len(part) && kind(k) == kind(j) {
+		for k < len(part) && kinds[start+k] == kinds[start+j] {
 			k++
 		}
-		switch kind(j) {
-		case 1:
-			b.WriteString(portStyle)
-		case 2:
-			b.WriteString(style)
-		default:
-			b.WriteString("{{[::D]}}")
-		}
-		b.WriteString(part[j:k] + "{{[-]}}")
+		b.WriteString(styleValueRun(part[j:k], kinds[start+j], portStyle, style))
 		j = k
 	}
 	return b.String()
+}
+
+// styleValueRun returns text in the style of kind.
+func styleValueRun(text string, kind byte, portStyle, style string) string {
+	switch kind {
+	case portHost:
+		return portStyle + text + "{{[-]}}"
+	case portMessage:
+		return style + text + "{{[-]}}"
+	}
+	return "{{[::D]}}" + text + "{{[-]}}"
 }
 
 // ── Predicted conflicts, before the run ────────────────────────────────────
