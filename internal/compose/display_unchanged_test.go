@@ -3,6 +3,7 @@ package compose
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -625,14 +626,22 @@ func TestWarningWordPassesUpOnlyWhenTheRowsOwnIsOne(t *testing.T) {
 }
 
 func TestRowsWithDifferentStatusWordsDontFold(t *testing.T) {
-	p := newGroupsTestProcessor("up")
-	p.On(containerEvent("db", "Recreated", api.Done))
-	p.On(containerEvent("web", api.StatusCreated, api.Done))
+	// Two instances of one app share an image block, so their rows are compared for
+	// folding; one is Recreated, the other Created.
+	const img = "example/radarr:1"
+	p := NewConsoleEventProcessor(context.Background(), nil, "up",
+		map[string][]string{img: {"radarr", "radarr__4k"}}, []string{img},
+		map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.preRun = map[string]string{"radarr": "running", "radarr__4k": "running"}
+	p.imageMetaBefore[img] = imageMeta{}
+	p.On(containerEvent("radarr", "Recreated", api.Done))
+	p.On(containerEvent("radarr__4k", api.StatusCreated, api.Done))
 	p.finished, p.succeeded = true, true
+	recreated, created := regexp.MustCompile(`\bRecreated\b.*\bradarr\b`), regexp.MustCompile(`\bCreated\b.*\bradarr__4k\b`)
 	for _, level := range []int{0, dockerlayout.VerboseDetails} {
 		got := renderPlain(p, level)
-		if !strings.Contains(got, "Recreated") || !strings.Contains(got, "Created") || strings.Contains(got, "2 services: db, web") {
-			t.Errorf("level %d display =\n%s\nwant db Recreated and web Created on their own rows, not folded under one word", level, got)
+		if !recreated.MatchString(got) || !created.MatchString(got) || strings.Contains(got, "2 services: radarr, radarr__4k") {
+			t.Errorf("level %d display =\n%s\nwant radarr Recreated and radarr__4k Created on their own rows, not folded under one word", level, got)
 		}
 	}
 }

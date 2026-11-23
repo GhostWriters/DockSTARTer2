@@ -307,11 +307,11 @@ func TestPortsValueStylesEveryHostPortAndMessage(t *testing.T) {
 		t.Errorf("line = %q, want the whole range in the host port style", lines[0])
 	}
 	// More lines than fit: the last ends in an ellipsis that isn't in the value, and
-	// still carries the message's style.
+	// the ellipsis itself carries the message's style.
 	long := "80:80/tcp (" + strings.Repeat("held by a program on the host ", 12) + ")"
 	lines = p.portsLineAs(portConflictText, "{{|DockerMarkerWarn|}}!{{[-]}}", warn, long, 40)
 	last := lines[len(lines)-1]
-	if len(lines) != 6 || !strings.Contains(last, "…") || !strings.Contains(last, warn) {
-		t.Errorf("lines = %q, want six, the last cut with … and still in the message style", lines)
+	if len(lines) != 6 || !strings.HasSuffix(last, warn+" …{{[-]}}") && !strings.HasSuffix(last, warn+"…{{[-]}}") {
+		t.Errorf("lines = %q, want six, the last cut with … in the message style", lines)
 	}
 }
