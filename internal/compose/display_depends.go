@@ -471,3 +471,33 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 	}
 	return append(lines, line)
 }
+
+// checkingGroup is services in a group of unchanged ones that show the same dependency
+// lines, still waiting on a dependency.
+type checkingGroup struct {
+	members []string
+	lines   []string
+}
+
+// splitChecking separates, from the names of a group of unchanged services, those with
+// a dependency line to show (pending: a problem would make them a change), grouped by
+// identical lines, from the plain rest. The lines go once the checks pass.
+func (p *consoleEventProcessor) splitChecking(names []string, termW int) (plain []string, groups []checkingGroup) {
+	byKey := map[string]int{}
+	for _, svc := range names {
+		lines := p.dependsLines(svc, termW, false)
+		if len(lines) == 0 {
+			plain = append(plain, svc)
+			continue
+		}
+		key := strings.Join(lines, "\n")
+		i, ok := byKey[key]
+		if !ok {
+			i = len(groups)
+			byKey[key] = i
+			groups = append(groups, checkingGroup{lines: lines})
+		}
+		groups[i].members = append(groups[i].members, svc)
+	}
+	return plain, groups
+}

@@ -253,6 +253,17 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 					// Services with possible port conflicts fold apart, one group per
 					// identical set of them, each with its unconfirmed ports line.
 					plain, possible := p.splitPossible(names)
+					// Services still checking a dependency fold apart the same way, one
+					// group per identical set of lines, until the check passes.
+					plain, checking := p.splitChecking(plain, termW)
+					for _, g := range checking {
+						for _, line := range p.groupLines(word, notRunning, g.members, "service", "services", termW) {
+							appendLine(line, nil, timerLayer)
+						}
+						for _, line := range g.lines {
+							appendLine(line, nil, timerLayer)
+						}
+					}
 					if len(plain) > 0 {
 						for _, line := range p.groupLines(word, notRunning, plain, "service", "services", termW) {
 							appendLine(line, nil, timerLayer)
@@ -336,7 +347,7 @@ func (p *consoleEventProcessor) appendOrphanRow(svcID string, termW, level int, 
 // change), then its model lines, each model's variables only at
 // dockerlayout.VerboseDetails.
 func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int, neededBy bool) []string {
-	lines := append(p.serviceConditionLines(svc, termW, level, neededBy), p.predictedLines(svc, termW)...)
+	lines := append(p.serviceConditionLines(svc, termW, level, neededBy, p.expandDependencyLines()), p.predictedLines(svc, termW)...)
 	return append(lines, p.modelLines(svc, termW, level >= dockerlayout.VerboseDetails)...)
 }
 
@@ -345,12 +356,14 @@ func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int,
 // down) under the first, its healthcheck line under the one needing it healthy; then,
 // at the top level, whichever of those found no line to nest under, its dependency lines
 // and its ports line in a port conflict. Below dockerlayout.VerboseDetails, only the
-// ones still pending or with a problem.
-func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level int, neededBy bool) []string {
+// ones still pending or with a problem; with expand, the needs, wants and needed-by
+// lines even when met (expandDependencyLines).
+func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level int, neededBy, expand bool) []string {
 	all := level >= dockerlayout.VerboseDetails
+	deps := all || expand
 	var groups []neededGroup
 	if neededBy {
-		groups = p.neededByGroups(svc, termW, all)
+		groups = p.neededByGroups(svc, termW, deps)
 	}
 	health := ""
 	if line := p.healthLineAt(svc, termW, 0); line != "" && (all || p.serviceHealth(svc) != healthHealthy) {
@@ -378,7 +391,7 @@ func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level i
 	if len(groups) == 0 {
 		lines = append(lines, p.serviceLogLines(svc, termW)...)
 	}
-	lines = append(lines, p.dependsLines(svc, termW, all)...)
+	lines = append(lines, p.dependsLines(svc, termW, deps)...)
 	lines = append(lines, p.portsLines(svc, termW)...)
 	return lines
 }

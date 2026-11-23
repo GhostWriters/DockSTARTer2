@@ -279,6 +279,7 @@ type consoleEventProcessor struct {
 	healthWaitDone bool               // the end-of-run wait for first check results ran out
 	healthCmd      map[string]string  // svc → its healthcheck's command, shown on its healthcheck line
 	healthOutput   map[string]string  // container → its last health check's output, shown while unhealthy
+	depsSettled    bool               // the run and its end-of-run checks are over: the dependency lines collapse to the ones with a problem
 	depLogs        map[string]*depLog // service → state and log lines of a dependency that failed its condition or went down after meeting it
 
 	// Dependencies, listed under each service row. dependsOn[svc] is its depends_on
@@ -549,6 +550,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 		p.waitVersionLinks()
 		p.waitForHealth()
 		p.fetchDependencyLogs()
+		p.settleDependencies()
 		p.stopHealthWatch()
 		p.mtx.Lock()
 		termW := goterm.Width()
@@ -567,6 +569,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 	// Wait for first health check results while the display still updates.
 	p.waitForHealth()
 	p.fetchDependencyLogs()
+	p.settleDependencies()
 
 	// Stop the ticker goroutine first.
 	p.doneCh <- struct{}{}

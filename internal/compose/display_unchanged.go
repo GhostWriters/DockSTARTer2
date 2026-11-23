@@ -97,7 +97,7 @@ func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) 
 	if t := p.tasks[svc]; t != nil && !t.interrupted {
 		return false
 	}
-	if p.portConflict != nil && p.portConflict.involves(svc) || len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
+	if p.portConflict != nil && p.portConflict.involves(svc) || p.hasConditionLines(svc, termW) {
 		return false
 	}
 	for _, m := range p.serviceModels[svc] {
@@ -237,15 +237,30 @@ func (p *consoleEventProcessor) settledWord() string {
 // serviceGroup returns svc's group, imgName being its image ("" for none). A
 // service stays pending until something happens to it or it's confirmed settled;
 // an image check alone (update checks every image) isn't something happening,
-// layers being downloaded are. Once the call has returned, nothing is pending.
+// layers being downloaded are. Once the call has returned, nothing is pending. A
+// service the command is going to start that others depend on is a change at once
+// (willStart).
 func (p *consoleEventProcessor) serviceGroup(svc, imgName string, termW int) rowGroup {
 	switch {
 	case p.serviceSettled(svc, imgName, termW):
 		return groupSettled
-	case p.serviceChanged(svc, imgName, termW) || p.finished:
+	case p.serviceChanged(svc, imgName, termW) || p.finished || p.willStart(svc):
 		return groupChanged
 	}
 	return groupPending
+}
+
+// willStart reports whether a command that brings services up is going to start svc's
+// container (it is stopped or doesn't exist yet) and something depends on it. Such a
+// service has its own row from the first frame, with the services waiting on it in its
+// needed-by line, instead of sitting in the group of its state until compose reports.
+func (p *consoleEventProcessor) willStart(svc string) bool {
+	switch p.command {
+	case "up", "update":
+		state, seen := p.preRun[svc]
+		return (!seen || state == "stopped") && len(p.neededBy(svc)) > 0
+	}
+	return false
 }
 
 // serviceSettled reports whether svc is final and left as it was: for a pull, its
@@ -264,7 +279,7 @@ func (p *consoleEventProcessor) serviceSettled(svc, imgName string, termW int) b
 	if h := p.serviceHealth(svc); h != "" && h != healthHealthy {
 		return false
 	}
-	if len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
+	if p.hasConditionLines(svc, termW) {
 		return false
 	}
 	return imgName == "" || p.imageUnchanged(imgName)
@@ -277,7 +292,7 @@ func (p *consoleEventProcessor) serviceChanged(svc, imgName string, termW int) b
 		t.message != "" || t.healthErr || t.conditionErr || t.interrupted) {
 		return true
 	}
-	if p.serviceHealth(svc) == healthUnhealthy || len(p.serviceConditionLines(svc, termW, 0, false)) > 0 {
+	if p.serviceHealth(svc) == healthUnhealthy || p.hasConditionLines(svc, termW) {
 		return true
 	}
 	if imgName == "" {
@@ -381,4 +396,30 @@ func (p *consoleEventProcessor) namesLines(icon, statusTag, word string, count i
 		}
 	}
 	return lines
+}
+
+// hasConditionLines reports whether something is shown under svc's row that makes it a
+// change: its healthcheck while not healthy, a dependency with a problem, the state and
+// log of one that went down, or a ports conflict. A dependency still pending is only a
+// check on what is already running, so it doesn't: the row stays in its group until the
+// condition fails.
+func (p *consoleEventProcessor) hasConditionLines(svc string, termW int) bool {
+	if line := p.healthLine(svc, termW); line != "" && p.serviceHealth(svc) != healthHealthy {
+		return true
+	}
+	return p.dependsHaveProblem(svc) || len(p.serviceLogLines(svc, termW)) > 0 || len(p.portsLines(svc, termW)) > 0
+}
+
+// dependsHaveProblem reports whether any of svc's dependencies has failed its condition
+// or gives a warning (a pending one has not).
+func (p *consoleEventProcessor) dependsHaveProblem(svc string) bool {
+	if !commandWatchesHealth(p.command) {
+		return false
+	}
+	for _, d := range p.dependsOn[svc] {
+		if state, _ := p.depStatus(d); state == depFailed || state == depWarning {
+			return true
+		}
+	}
+	return false
 }
