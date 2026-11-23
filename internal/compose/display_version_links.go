@@ -31,6 +31,22 @@ const (
 
 var versionCheckClient = &http.Client{Timeout: versionCheckTimeout}
 
+// hubLookupClient pages through a repo's tags: its context ends the search, so no
+// shorter client timeout does, and it follows redirects only within the Docker Hub host.
+var hubLookupClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	if !sameHost(req.URL.String(), dockerHubBaseURL) {
+		return http.ErrUseLastResponse
+	}
+	return nil
+}}
+
+// sameHost reports whether raw is an URL on the host of base, with base's scheme.
+func sameHost(raw, base string) bool {
+	u, err := url.Parse(raw)
+	b, berr := url.Parse(base)
+	return err == nil && berr == nil && u.Host != "" && u.Scheme == b.Scheme && u.Host == b.Host
+}
+
 // versionKey identifies a version of an image in versionLinks.
 func versionKey(imgRef, version string) string {
 	return imgRef + "\x00" + version
@@ -129,7 +145,7 @@ func hubTagsForDigest(ctx context.Context, repo, digest string) []string {
 			return nil
 		}
 		req.Header.Set("User-Agent", "DockSTARTer2")
-		resp, err := versionCheckClient.Do(req)
+		resp, err := hubLookupClient.Do(req)
 		if err != nil {
 			return nil
 		}
@@ -153,6 +169,9 @@ func hubTagsForDigest(ctx context.Context, repo, digest string) []string {
 		}
 		if len(tags) > 0 || page.Next == "" {
 			return tags
+		}
+		if !sameHost(page.Next, dockerHubBaseURL) {
+			return nil // a response must not send the search to another host
 		}
 		next = page.Next
 	}

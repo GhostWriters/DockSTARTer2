@@ -3,6 +3,7 @@ package compose
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -239,6 +240,17 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 	return lines
 }
 
+// safeURL returns raw as an http or https URL with its characters encoded, so a link
+// target from an image label can't carry anything the link markup would read as its own;
+// "" for anything else, and for "".
+func safeURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Scheme != "http" && u.Scheme != "https" {
+		return ""
+	}
+	return u.String()
+}
+
 // infoLine returns one info line: an "i" marker and Info in the status column, then
 // label: value one step in under image:, all but the value in DockerInfo, the value
 // padded to start labelW past the label's start. Each part of the value is linked to its
@@ -260,6 +272,7 @@ func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoP
 	var plain strings.Builder
 	for i := range value {
 		value[i].text = stripControl(value[i].text)
+		value[i].url = safeURL(value[i].url)
 		plain.WriteString(value[i].text)
 	}
 	if utf8.RuneCountInString(plain.String()) > room {
