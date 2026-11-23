@@ -1,6 +1,7 @@
 package dockerlayout
 
 import (
+	"strconv"
 	"strings"
 
 	"DockSTARTer2/internal/appenv"
@@ -23,6 +24,17 @@ func StyleServiceName(svc string, style ...string) string {
 		tag = style[0]
 	}
 	return console.FormatLink(tag, svc, url)
+}
+
+// Label returns a kind of row's label (N services:), its count and noun in the section
+// style and the colon after. A label with names after it on the same line (a folded
+// group, or a lone row standing in for its heading) is underlined.
+func Label(count int, noun string, withNames bool) string {
+	attr := ""
+	if withNames {
+		attr = "{{[::U]}}"
+	}
+	return "{{|DockerSection|}}" + attr + strconv.Itoa(count) + " " + noun + "{{[-]}}{{|DockerColon|}}:{{[-]}}"
 }
 
 // Layout primitive widths — shared by compose and prune display.

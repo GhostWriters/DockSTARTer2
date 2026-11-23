@@ -98,13 +98,13 @@ func (p *consoleEventProcessor) kindSection(k rowKind, termW, level int) ([]stri
 	return append(lines, l...), append(timers, t...)
 }
 
-// kindRows returns k's rows names, in order. Below -v, when k splits its rows
+// kindRows returns k's rows names, in order. When k splits its rows
 // (rowStatus, rowDetail), rows that show the same thing fold into one line naming them,
 // their lines once and their timers merged, as appendServiceRows does for services.
 func (p *consoleEventProcessor) kindRows(k rowKind, names []string, termW, level int) ([]string, []timerEntry) {
 	var lines []string
 	var timers []timerEntry
-	fold := k.rowStatus != nil && k.rowDetail != nil && level < dockerlayout.VerboseDetails
+	fold := k.rowStatus != nil && k.rowDetail != nil
 	key := func(name string) string {
 		icon, tag, _ := k.rowStatus(name)
 		return icon + tag + "\x00" + strings.Join(k.rowDetail(name, termW, level), "\n")

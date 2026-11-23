@@ -12,6 +12,7 @@ import (
 	"github.com/docker/compose/v5/pkg/api"
 
 	"DockSTARTer2/internal/dockerlayout"
+	"DockSTARTer2/internal/strutil"
 )
 
 // Two images, one service each, so one can change while the other stays in its group.
@@ -71,7 +72,7 @@ func TestUntouchedServicesSettleInTheRunningGroup(t *testing.T) {
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Running         2 services: db, web") || strings.Contains(got, "image:") {
+	if !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, "image:") {
 		t.Errorf("display =\n%s\nwant db and web in the Running group, their images with them", got)
 	}
 }
@@ -81,7 +82,7 @@ func TestAChangedServiceLeavesItsGroup(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	got := renderPlain(p, 0)
 	// db has its own row, first; web stays in Running, the group's count down to 1.
-	if !strings.Contains(got, "Recreated       db:") || !strings.Contains(got, "Running         1 service: web") {
+	if !strings.Contains(got, "Recreated     1 service: db") || !strings.Contains(got, "Running         1 service: web") {
 		t.Errorf("display =\n%s\nwant db's own row and only web in Running", got)
 	}
 	if strings.Index(got, "db:") > strings.Index(got, "1 service: web") {
@@ -117,16 +118,19 @@ func TestVerboseNestsRowsUnderHeadings(t *testing.T) {
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, dockerlayout.VerboseDetails)
 	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
-	if changed < 0 || unchanged < changed || strings.Count(got, "Complete      1 service:") != 2 {
-		t.Fatalf("-v display =\n%s\nwant changed:, then unchanged:, each with a 1 service: heading, all Complete", got)
+	if changed < 0 || unchanged < changed {
+		t.Fatalf("-v display =\n%s\nwant changed:, then unchanged:, both Complete", got)
 	}
-	// Each kind heading's rows sit nestW further in than its count, the status column
-	// staying put: "Recreated" and "Running" start where the headings' status does.
-	if db := strings.Index(got, "Recreated       db:"); db < changed || db > unchanged {
-		t.Errorf("-v display =\n%s\nwant db nested under changed:", got)
+	// A service's row, its image under it, stands in for its kind's heading, the status
+	// column staying put.
+	if db := strings.Index(got, "Recreated     1 service: db"); db < changed || db > unchanged {
+		t.Errorf("-v display =\n%s\nwant db under changed:", got)
 	}
-	if web := strings.Index(got, "Running         web:"); web < unchanged {
-		t.Errorf("-v display =\n%s\nwant web nested under unchanged:", got)
+	if web := strings.Index(got, "Running       1 service: web"); web < unchanged {
+		t.Errorf("-v display =\n%s\nwant web under unchanged:", got)
+	}
+	if strings.Contains(got, "Complete      1 service:") {
+		t.Errorf("-v display =\n%s\nwant no heading line over a row that says the same", got)
 	}
 }
 
@@ -144,8 +148,8 @@ func TestNetworksGroupLikeServices(t *testing.T) {
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.finished, p.succeeded = true, true
 	got = renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
-	if changed < 0 || unchanged < changed || !strings.Contains(got, "Complete      1 network:") || !strings.Contains(got, "Created         proj_backend:") || !strings.Contains(got, "Existing        1 network: proj_default") {
+	changed, unchanged := strings.Index(got, "Created     changed:"), strings.Index(got, "Complete    unchanged:")
+	if changed < 0 || unchanged < changed || !strings.Contains(got, "Created       1 network:") || !strings.Contains(got, "Created       1 network: proj_backend") || !strings.Contains(got, "Existing      1 network: proj_default") {
 		t.Errorf("display =\n%s\nwant proj_backend Created under changed:, proj_default still Existing under unchanged:", got)
 	}
 }
@@ -158,10 +162,10 @@ func TestChangedHoldsEachKindThatChanged(t *testing.T) {
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, svcs, nets, unchanged := strings.Index(got, "changed:"), strings.Index(got, "1 service:\n"),
+	changed, svcs, nets, unchanged := strings.Index(got, "changed:"), strings.Index(got, "1 service: db"),
 		strings.Index(got, "1 network:"), strings.Index(got, "unchanged:")
 	if strings.Count(got, " changed:") != 1 || changed > svcs || svcs > nets || nets > unchanged ||
-		!strings.Contains(got, "Running         1 service: web") || strings.Contains(got, "services:") {
+		!strings.Contains(got, "Running       1 service: web") || strings.Contains(got, "services:") {
 		t.Errorf("display =\n%s\nwant one changed: holding 1 service: then 1 network:, web under unchanged:, no section headings", got)
 	}
 }
@@ -211,7 +215,7 @@ func TestNestLineKeepsTheStatusColumn(t *testing.T) {
 func TestPullGroupsCachedImages(t *testing.T) {
 	p := newGroupsTestProcessor("pull")
 	p.finished, p.succeeded = true, true // both checks found nothing to pull
-	if got := renderPlain(p, 0); !strings.Contains(got, "Cached          2 services: db, web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Cached        2 services: db, web") {
 		t.Errorf("display =\n%s\nwant db and web in the Cached group", got)
 	}
 }
@@ -251,7 +255,7 @@ func TestAFailureFoldsWhatItDidntReach(t *testing.T) {
 	// The rows a failed run never reached fold as Interrupted, under a heading that is
 	// a warning: nothing there failed. With -v, every row in its place.
 	got := renderPlain(q, 0)
-	if !strings.Contains(got, "⚠ Interrupted     2 services: db, web") || !strings.Contains(got, "⚠ Warning     unchanged:") || strings.Contains(got, "Pending") {
+	if !strings.Contains(got, "⚠ Interrupted   2 services: db, web") || !strings.Contains(got, "⚠ Interrupted unchanged:") || strings.Contains(got, "Pending") {
 		t.Errorf("display =\n%s\nwant the unreached rows folded Interrupted under a warning", got)
 	}
 	if got := renderPlain(q, dockerlayout.VerboseDetails); !strings.Contains(got, "Interrupted   db:") || !strings.Contains(got, "services:") {
@@ -269,8 +273,8 @@ func TestTeardownGroups(t *testing.T) {
 	p.On(containerEvent("db", api.StatusRemoved, api.Done))
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
-	if changed < 0 || unchanged < changed || !strings.Contains(got, "Removed         db:") || !strings.Contains(got, "Not Created     1 service: web") || strings.Contains(got, "services:") {
+	changed, unchanged := strings.Index(got, "Removed     changed:"), strings.Index(got, "Not Created unchanged:")
+	if changed < 0 || unchanged < changed || !strings.Contains(got, "Removed       1 service: db") || !strings.Contains(got, "Not Created   1 service: web") || strings.Contains(got, "services:") {
 		t.Errorf("down display =\n%s\nwant db Removed under changed:, web Not Created under unchanged:, no services: section", got)
 	}
 
@@ -280,7 +284,7 @@ func TestTeardownGroups(t *testing.T) {
 	q.On(containerEvent("db", api.StatusStopped, api.Done))
 	q.On(containerEvent("web", api.StatusStopped, api.Done))
 	q.finished, q.succeeded = true, true
-	if got := renderPlain(q, 0); !strings.Contains(got, "Stopped         db:") || !strings.Contains(got, "Not Running     1 service: web") {
+	if got := renderPlain(q, 0); !strings.Contains(got, "Stopped       1 service: db") || !strings.Contains(got, "Not Running   1 service: web") {
 		t.Errorf("stop display =\n%s\nwant db Stopped under changed: and web in the Not Running group", got)
 	}
 
@@ -330,14 +334,14 @@ func TestTeardownLeavesStatesAlone(t *testing.T) {
 	p.preRun["web"] = preRunPaused
 	p.On(containerEvent("db", pausedText, api.Done))
 	p.finished, p.succeeded = true, true
-	if got := renderPlain(p, 0); !strings.Contains(got, "Paused          db:") || !strings.Contains(got, "Paused          1 service: web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Paused        1 service: db") || !strings.Contains(got, "Paused        1 service: web") {
 		t.Errorf("pause display =\n%s\nwant db Paused under changed: and web in the Paused group", got)
 	}
 
 	// unpause with nothing paused: both left Running, nothing changed.
 	q := newGroupsTestProcessor("unpause")
 	q.finished, q.succeeded = true, true
-	if got := renderPlain(q, 0); !strings.Contains(got, "Running         2 services: db, web") || strings.Contains(got, " changed:") {
+	if got := renderPlain(q, 0); !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, " changed:") {
 		t.Errorf("unpause display =\n%s\nwant both Running under unchanged:", got)
 	}
 
@@ -346,7 +350,7 @@ func TestTeardownLeavesStatesAlone(t *testing.T) {
 	r.preRun["web"] = "stopped"
 	r.On(containerEvent("db", api.StatusKilled, api.Done))
 	r.finished, r.succeeded = true, true
-	if got := renderPlain(r, 0); !strings.Contains(got, "Killed          db:") || !strings.Contains(got, "Not Running     1 service: web") {
+	if got := renderPlain(r, 0); !strings.Contains(got, "Killed        1 service: db") || !strings.Contains(got, "Not Running   1 service: web") {
 		t.Errorf("kill display =\n%s\nwant db Killed and web Not Running", got)
 	}
 
@@ -357,7 +361,7 @@ func TestTeardownLeavesStatesAlone(t *testing.T) {
 	s.On(containerEvent("web", api.StatusStopped, api.Done))
 	s.finished, s.succeeded = true, true
 	// Both stopped the same way, so they fold into one line.
-	if got := renderPlain(s, 0); !strings.Contains(got, "Stopped         2 services: db, web") || strings.Contains(got, "Not Running") {
+	if got := renderPlain(s, 0); !strings.Contains(got, "Stopped       2 services: db, web") || strings.Contains(got, "Not Running") {
 		t.Errorf("stop display =\n%s\nwant paused web Stopped with db under changed:", got)
 	}
 
@@ -380,7 +384,7 @@ func TestScheduledJobsGroup(t *testing.T) {
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning}) // registered by an earlier up
 	p.On(api.Resource{ID: "Job report", Status: api.Done, Text: api.StatusCreated}) // registered now
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Scheduled       report:") || !strings.Contains(got, "Scheduled       1 job: backup") {
+	if !strings.Contains(got, "Scheduled     1 job: report") || !strings.Contains(got, "Scheduled     1 job: backup") {
 		t.Errorf("jobs =\n%s\nwant report's own row and backup in the Scheduled group", got)
 	}
 }
@@ -452,12 +456,12 @@ func TestIdenticalRowsFold(t *testing.T) {
 	p.On(containerEvent("radarr__4k", "Recreated", api.Done))
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Recreated       2 services: radarr, radarr__4k") || strings.Count(got, "image: example/radarr:1") != 1 {
+	if !strings.Contains(got, "Recreated     2 services: radarr, radarr__4k") || strings.Count(got, "image: example/radarr:1") != 1 {
 		t.Errorf("display =\n%s\nwant both folded into one Recreated line, the image once", got)
 	}
-	// -v shows every row.
-	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "radarr:") || !strings.Contains(got, "radarr__4k:") {
-		t.Errorf("-v display =\n%s\nwant each instance on its own row", got)
+	// -v folds them too: the instances show the same thing, the image once.
+	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "2 services: radarr, radarr__4k") || strings.Count(got, "image: example/radarr:1") != 1 {
+		t.Errorf("-v display =\n%s\nwant the instances folded, the image once", got)
 	}
 }
 
@@ -471,11 +475,11 @@ func TestTeardownFoldsIdenticalRows(t *testing.T) {
 	}
 	p.On(containerEvent("db", api.StatusRemoved, api.Done))
 	p.finished, p.succeeded = true, true
-	if got := renderPlain(p, 0); !strings.Contains(got, "Removed         2 services: db, web") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Removed       2 services: db, web") {
 		t.Errorf("display =\n%s\nwant both folded into one Removed line", got)
 	}
-	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "db:") || !strings.Contains(got, "web:") {
-		t.Errorf("-v display =\n%s\nwant each on its own row", got)
+	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "2 services: db, web") {
+		t.Errorf("-v display =\n%s\nwant both folded at -v too", got)
 	}
 }
 
@@ -516,8 +520,8 @@ func TestSharedImageSplitsBetweenChangedAndUnchanged(t *testing.T) {
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
 	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
-	started := strings.Index(got, "Started         2 services: sonarr, sonarr__4k")
-	running := strings.Index(got, "Running         2 services: sonarr__alt, sonarr__alt4k")
+	started := strings.Index(got, "Started       2 services: sonarr, sonarr__4k")
+	running := strings.Index(got, "Running       2 services: sonarr__alt, sonarr__alt4k")
 	if changed < 0 || started < changed || started > unchanged || running < unchanged {
 		t.Errorf("display =\n%s\nwant the two started under changed:, the two left running under unchanged:", got)
 	}
@@ -535,5 +539,87 @@ func TestComposeHeading(t *testing.T) {
 	p := newGroupsTestProcessor("update")
 	if got := renderPlain(p, 0); !strings.Contains(got, "docker compose up --pull always: 2 services") {
 		t.Errorf("display =\n%s\nwant the docker command in the heading", got)
+	}
+}
+
+func TestLoneRowStandsInForItsHeading(t *testing.T) {
+	colon := "{{|DockerColon|}}:{{[-]}}"
+	row := rowLine("Restarted", "{{|N|}}db{{[-]}}") + colon
+	got, ok := labelRow(row, 1, "service", "services")
+	if want := visibleText(rowLine("Restarted", "1 service: db")); !ok || visibleText(got) != want {
+		t.Errorf("labelRow = %q, %v; want %q: the row labelled, with no colon after db", visibleText(got), ok, want)
+	}
+	if !strings.Contains(got, "{{|DockerSection|}}{{[::U]}}1 service{{[-]}}") {
+		t.Errorf("labelRow = %q, want the label underlined, as a label with names after it is", got)
+	}
+	// A heading's label is in the section style, not underlined; one with names after it is underlined.
+	if got := groupHeading("I", "T", "Running", 2, "service", "services"); !strings.Contains(got, "{{|DockerSection|}}2 services{{[-]}}") {
+		t.Errorf("groupHeading = %q, want the label in the section style, not underlined", got)
+	}
+	if got := dockerlayout.Label(2, "services", true); got != "{{|DockerSection|}}{{[::U]}}2 services{{[-]}}{{|DockerColon|}}:{{[-]}}" {
+		t.Errorf("Label with names = %q", got)
+	}
+	if _, ok := labelRow(row+" more", 1, "service", "services"); ok {
+		t.Error("labelRow took a line that doesn't end with the name and colon")
+	}
+	if w, _ := sharedStatus([]string{rowLine("Running", "a"), rowLine("Running", "b")}); w != "Running" {
+		t.Errorf("sharedStatus word = %q, want Running", w)
+	}
+	if w, _ := sharedStatus([]string{rowLine("Running", "a"), rowLine("Existing", "b")}); w != "" {
+		t.Errorf("sharedStatus word = %q, want none for differing words", w)
+	}
+}
+
+// rowLine returns a row's line with status word word and name name.
+func rowLine(word, name string) string {
+	return globalIndent + "X" + " " + word + strutil.Repeat(" ", sectionStatusW-len(word)) + sectionChildIndent + name
+}
+
+func TestMergedLineTakesTheHeadingsStatusStyle(t *testing.T) {
+	row := globalIndent + "I" + " " + serviceFinalTag + "Running{{[-]}}    " + "rest"
+	if got := asHeadingStatus(row); !strings.Contains(got, sectionFinalTag+"Running") || strings.Contains(got, serviceFinalTag) {
+		t.Errorf("asHeadingStatus = %q, want the status in the section style", got)
+	}
+	warn := globalIndent + "I" + " {{|DockerStatusWarn|}}Warning{{[-]}}    rest"
+	if got := asHeadingStatus(warn); got != warn {
+		t.Errorf("asHeadingStatus = %q, want a warning's own style kept", got)
+	}
+}
+
+func TestGroupLineStatusAndTimerFollowTheTitle(t *testing.T) {
+	p := newGroupsTestProcessor("restart")
+	row := globalIndent + "X" + " " + serviceFinalTag + "Restarted{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len("Restarted")) +
+		sectionChildIndent + "{{|App|}}db{{[-]}}" + "{{|DockerColon|}}:{{[-]}}"
+	k := kindGroups{singular: "service", plural: "services", changed: groupSet{
+		count: 1, state: rollupComplete, lines: []string{row}, timers: []timerEntry{{style: timerService}},
+	}}
+	lines, timers := p.groupedLines([]kindGroups{k})
+	if len(lines) != 2 || len(timers) != 2 {
+		t.Fatalf("lines = %q, want the changed: line and the lone row standing in for its heading", lines)
+	}
+	if !strings.Contains(lines[0], "{{|DockerGroupStatus|}}Restarted") || timers[0].style != timerGroup {
+		t.Errorf("changed: line = %q, timer style %v; want its status and timer in the group style", lines[0], timers[0].style)
+	}
+	if !strings.Contains(lines[1], sectionFinalTag+"Restarted") || timers[1].style != timerSection {
+		t.Errorf("merged line = %q, timer style %v; want its status and timer in the section style", lines[1], timers[1].style)
+	}
+}
+
+func TestWarningWordPassesUpOnlyWhenTheRowsOwnIsOne(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	warn := p.groupLines(interruptedText, false, []string{"db", "web"}, "service", "services", 120)
+	set := groupSet{count: 2, state: rollupWarning, lines: warn, timers: make([]timerEntry, len(warn))}
+	if w := setWord(set, rollupWarning); w != interruptedText {
+		t.Errorf("setWord of rows all Interrupted = %q, want Interrupted", w)
+	}
+	// Rows that say Running, whatever warning their set has, don't pass Running up as a warning.
+	ok := p.groupLines(api.StatusRunning, false, []string{"db", "web"}, "service", "services", 120)
+	if w := setWord(groupSet{count: 2, lines: ok}, rollupWarning); w != "" {
+		t.Errorf("setWord of Running rows under a warning = %q, want none", w)
+	}
+	// Mixed words stay Warning.
+	mixed := append(slices.Clone(warn), ok...)
+	if w := setWord(groupSet{count: 4, lines: mixed}, rollupWarning); w != "" {
+		t.Errorf("setWord of mixed rows = %q, want none", w)
 	}
 }

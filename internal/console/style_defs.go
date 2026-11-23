@@ -117,9 +117,9 @@ type AppColors struct {
 	DockerSpinner       string
 	DockerBar           string
 	DockerSharedLayer   string
-	DockerSection       string // section headers (services:, networks:, volumes:, jobs:, and the N services: headings under changed: and unchanged:), their timers and final status
+	DockerSection       string // section headers (services:, networks:, volumes:, jobs:, the N services: headings and the summary line's counts), their timers and final status
 	DockerGroupHeading  string // the changed: and unchanged: headings
-	DockerNamesLabel    string // the N services: label before a folded line's names, styled like a name but underlined
+	DockerGroupStatus   string // the status word (Complete) and timer on those headings' lines
 	DockerInfo          string // an image's info lines: their marker, Info status and label
 	DockerStatusSuccess string
 	DockerStatusFail    string
@@ -238,9 +238,9 @@ var Colors = AppColors{
 	DockerSpinner:      "{{[-]}}{{[yellow]}}",
 	DockerBar:          "{{[-]}}{{[cyan]}}",
 	DockerSharedLayer:  "{{[-]}}{{[yellow]}}",
-	DockerSection:      "{{[-]}}{{[white::B]}}",
+	DockerSection:      "{{[-]}}{{[bright-blue::B]}}",
 	DockerGroupHeading: "{{[-]}}{{[white::BU]}}",
-	DockerNamesLabel:   "{{[-]}}{{[cyan::BU]}}",
+	DockerGroupStatus:  "{{[-]}}{{[white::B]}}",
 	DockerInfo:         "{{[-]}}{{[bright-blue]}}",
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess: "{{[-]}}{{[cyan]}}",

@@ -365,23 +365,84 @@ func (p *consoleEventProcessor) portsLine(icon, style, value string, termW int) 
 	return p.portsLineAs(portConflictText, icon, style, value, termW)
 }
 
-// portsLineAs returns a ports line: icon, word in style, then value dim, wrapped to
-// termW under its first word.
+// portsLineAs returns a ports line: icon, word in style, then value, wrapped to termW
+// under its first word. The value is dim except the host port, which clashes, in the
+// icon's style, and the message in parentheses, which says why, in style: a warning's
+// or an error's. A service holding the port is a warning marked as the cause, so its
+// port shows red and its message yellow.
 func (p *consoleEventProcessor) portsLineAs(word, icon, style, value string, termW int) []string {
 	prefix := globalIndent + icon + " " + style + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
 		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerDetailLabel|}}ports{{[-]}}{{|DockerColon|}}:{{[-]}} "
 	prefixW := utf8.RuneCountInString(semstyle.ToPlain(prefix))
 	room := max(termW-timerReserveW-summaryHeaderIndentW-prefixW, minDetailW)
+	portStyle := style
+	if strings.HasPrefix(icon, "{{|") {
+		if end := strings.Index(icon, "|}}"); end >= 0 {
+			portStyle = icon[:end+3]
+		}
+	}
+	portEnd := 0
+	for portEnd < len(value) && value[portEnd] >= '0' && value[portEnd] <= '9' {
+		portEnd++
+	}
+	parenAt := strings.Index(value, " (")
+	if parenAt >= 0 {
+		parenAt++
+	}
 	var lines []string
+	cursor := 0
 	for i, part := range wrapWords(value, room, 6) {
 		lead := prefix
 		if i > 0 {
 			lead = strutil.Repeat(" ", prefixW)
 		}
-		lines = append(lines, lead+"{{[::D]}}"+part+"{{[-]}}")
+		start := -1
+		if at := strings.Index(value[cursor:], part); at >= 0 {
+			start = cursor + at
+			cursor = start + len(part)
+		}
+		lines = append(lines, lead+styleValuePart(part, start, portEnd, parenAt, portStyle, style))
 	}
 	return lines
+}
+
+// styleValuePart returns part, which starts at byte start of a ports value (-1 when it
+// is no part of it), dim except the host port (the value's first portEnd bytes), in
+// portStyle, and the message in parentheses (from parenAt), in style.
+func styleValuePart(part string, start, portEnd, parenAt int, portStyle, style string) string {
+	if start < 0 {
+		return "{{[::D]}}" + part + "{{[-]}}"
+	}
+	// kind returns how byte j is styled: 1 the host port, 2 the message, 0 dim.
+	kind := func(j int) int {
+		at := start + j
+		switch {
+		case at < portEnd:
+			return 1
+		case parenAt >= 0 && at >= parenAt:
+			return 2
+		}
+		return 0
+	}
+	var b strings.Builder
+	for j := 0; j < len(part); {
+		k := j
+		for k < len(part) && kind(k) == kind(j) {
+			k++
+		}
+		switch kind(j) {
+		case 1:
+			b.WriteString(portStyle)
+		case 2:
+			b.WriteString(style)
+		default:
+			b.WriteString("{{[::D]}}")
+		}
+		b.WriteString(part[j:k] + "{{[-]}}")
+		j = k
+	}
+	return b.String()
 }
 
 // ── Predicted conflicts, before the run ────────────────────────────────────

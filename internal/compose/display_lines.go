@@ -134,7 +134,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			lines = append(lines, p.serviceDetailLines(svc, termW, level, false)...)
 			rows = append(rows, serviceRow{svc: svc, statusText: statusText, statusTag: statusTag, icon: icon, lines: lines})
 		}
-		p.appendServiceRows(rows, level, termW, appendLine)
+		p.appendServiceRows(rows, termW, appendLine)
 
 		layers := p.layersForImage(imgName)
 
@@ -847,7 +847,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 			lines = append(lines, p.serviceDetailLines(svc, termW, level, true)...)
 			rows = append(rows, serviceRow{svc, icon, statusTag, statusText, lines})
 		}
-		p.appendServiceRows(rows, level, termW, appendLine)
+		p.appendServiceRows(rows, termW, appendLine)
 	}
 
 	if p.groupsRows() {
