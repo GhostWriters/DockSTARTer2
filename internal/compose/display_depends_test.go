@@ -110,7 +110,7 @@ func TestDependsLinesGroupByCondition(t *testing.T) {
 	want := []string{
 		"✓ Ready                   needs started: cache",
 		"× Unmet                   needs healthy: db (Unhealthy)",
-		"⚠ Unmet                   needs healthy (optional): search (Unhealthy)", // a warning: optional
+		"⚠ Unmet                   wants healthy: search (Unhealthy)", // a warning: optional
 	}
 	for i := range want {
 		if i >= len(got) || strings.Join(strings.Fields(got[i]), " ") != strings.Join(strings.Fields(want[i]), " ") {
@@ -339,7 +339,24 @@ func TestNeededByOnUpHasALineForEachCondition(t *testing.T) {
 
 	lines := plainLines(p.neededByLines("db", 160, true))
 
-	if len(lines) != 2 || !strings.Contains(lines[0], "needs healthy by: web") || !strings.Contains(lines[1], "needs started by (optional): cache") {
-		t.Errorf("lines = %q, want one line for each condition, the optional one labelled", lines)
+	if len(lines) != 2 || !strings.Contains(lines[0], "needs healthy by: web") || !strings.Contains(lines[1], "wants started by: cache") {
+		t.Errorf("lines = %q, want one line for each condition, the optional one saying wants", lines)
+	}
+}
+
+func TestNeedsAndWantsLinesAlignTheirNames(t *testing.T) {
+	p := newDependsTestProcessor(
+		dep("db", types.ServiceConditionStarted, true),
+		dep("cache", types.ServiceConditionStarted, false),
+	)
+	p.finished = true
+
+	lines := p.dependsLines("web", 160, true)
+
+	if len(lines) != 2 {
+		t.Fatalf("lines = %q, want a needs line and a wants line", plainLines(lines))
+	}
+	if needs, wants := columnOf(lines[0], "db"), columnOf(lines[1], "cache"); needs != wants {
+		t.Errorf("names start at columns %d and %d, want them lined up: %q", needs, wants, plainLines(lines))
 	}
 }

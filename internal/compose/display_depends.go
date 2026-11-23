@@ -46,7 +46,8 @@ type depEntry struct {
 }
 
 // depGroups lists a service's dependency lines in display order: label, condition
-// and required, one line for each the service uses.
+// and required, one line for each the service uses. A required dependency is needed and
+// an optional one wanted, two words of one length so their names line up.
 var depGroups = []struct {
 	label     string
 	condition string
@@ -55,9 +56,9 @@ var depGroups = []struct {
 	{"needs started", types.ServiceConditionStarted, true},
 	{"needs healthy", types.ServiceConditionHealthy, true},
 	{"needs completed", types.ServiceConditionCompletedSuccessfully, true},
-	{"needs started (optional)", types.ServiceConditionStarted, false},
-	{"needs healthy (optional)", types.ServiceConditionHealthy, false},
-	{"needs completed (optional)", types.ServiceConditionCompletedSuccessfully, false},
+	{"wants started", types.ServiceConditionStarted, false},
+	{"wants healthy", types.ServiceConditionHealthy, false},
+	{"wants completed", types.ServiceConditionCompletedSuccessfully, false},
 }
 
 // projectDependencies returns each service's depends_on entries, sorted by name.
@@ -312,9 +313,6 @@ func (p *consoleEventProcessor) neededByGroups(svc string, termW int, all bool) 
 	var groups []neededGroup
 	for _, g := range depGroups {
 		label := g.label + " by"
-		if strings.HasSuffix(g.label, " (optional)") {
-			label = strings.TrimSuffix(g.label, " (optional)") + " by (optional)"
-		}
 		var entries []depEntry
 		for _, d := range p.neededBy(svc) {
 			if d.condition == g.condition && d.required == g.required {
