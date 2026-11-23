@@ -242,7 +242,9 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 // infoLine returns one info line: an "i" marker and Info in the status column, then
 // label: value one step in under image:, all but the value in DockerInfo, the value
 // padded to start labelW past the label's start. Each part of the value is linked to its
-// url when it has one, else dim. A value too long for termW is cut: still linked when it
+// url when it has one (the URL style), else dim, except a version, build date or digest,
+// which are in the Version style linked or not: the hyperlink code underlines a
+// clickable one. A value too long for termW is cut: still linked when it
 // is a single linked part (a source URL), else dim and unlinked.
 func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoPart, termW int) string {
 	const icon, word = "i", "Info" // a plain i: the info sign isn't in every terminal font
@@ -251,6 +253,10 @@ func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoP
 		strutil.Repeat(" ", 3*sectionChildIndentW) + "{{|DockerInfo|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}} " +
 		strutil.Repeat(" ", max(labelW-len(label), 0))
 	room := max(termW-timerReserveW-summaryHeaderIndentW-utf8.RuneCountInString(semstyle.ToPlain(prefix)), minDetailW)
+	// A version, build date or digest is in the Version style, so the block reads as Info
+	// labels and cyan values; the separators between them stay dim, a source link is in
+	// the URL style.
+	valued := label == "version" || label == "built" || label == "digest"
 	var plain strings.Builder
 	for i := range value {
 		value[i].text = stripControl(value[i].text)
@@ -260,13 +266,19 @@ func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoP
 		if len(value) == 1 && value[0].url != "" {
 			return prefix + console.FormatLink("URL", cutRunes(plain.String(), room), value[0].url)
 		}
+		if valued {
+			return prefix + "{{|Version|}}" + cutRunes(plain.String(), room) + "{{[-]}}"
+		}
 		return prefix + "{{[::D]}}" + cutRunes(plain.String(), room) + "{{[-]}}"
 	}
 	out := prefix
 	for _, part := range value {
-		if part.url != "" {
+		switch trimmed := strings.TrimSpace(part.text); {
+		case valued && trimmed != "→" && trimmed != "(" && trimmed != ")":
+			out += console.FormatLink("Version", part.text, part.url) // underlined by the link code when clickable
+		case part.url != "":
 			out += console.FormatLink("URL", part.text, part.url)
-		} else {
+		default:
 			out += "{{[::D]}}" + part.text + "{{[-]}}"
 		}
 	}

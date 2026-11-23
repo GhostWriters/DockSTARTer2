@@ -65,7 +65,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 	// changed: and unchanged: headings take the sections' place.
 	grouped := p.groupsRows()
 	if !grouped && (len(svcRollupIDs) > 0 || p.runJob == "") {
-		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+dockerlayout.Title("services", "services", false)+"{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 	}
 
 	maxImgNameW := 0
@@ -466,7 +466,7 @@ func (p *consoleEventProcessor) layerCountWidth(imgName string) int {
 }
 
 func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, layers []*consoleTask, maxImgNameW int, termW int) string {
-	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerMarkerDone|}}image{{[-]}}{{|DockerColon|}}:{{[-]}} "
+	imageLabel := strutil.Repeat(" ", 2*sectionChildIndentW) + dockerlayout.Title("image", "image", false) + "{{|DockerColon|}}:{{[-]}} "
 	// Layer count is appended directly to the image URL (e.g. "radarr:latest [9/2]").
 	// Brackets use the image-tag color (DockerTag); the count interior is dim.
 	layerCount := ""
@@ -569,7 +569,7 @@ func (p *consoleEventProcessor) buildNetworkLines(termW int) ([]string, []timerE
 	}
 	netIcon, netStatusTag, netStatusText, _ := p.sectionRollupWithPropagation(netIDs, nil)
 	netStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(netStatusText))
-	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + "{{|DockerSection|}}networks{{[-]}}{{|DockerColon|}}:{{[-]}}"}
+	lines := []string{globalIndent + netIcon + " " + netStatusTag + "{{[-]}}" + netStatusPad + dockerlayout.Title("networks", "networks", false) + "{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(netIDs), style: timerSection}}
 	for _, netID := range netIDs {
 		t := p.tasks[netID]
@@ -601,7 +601,7 @@ func (p *consoleEventProcessor) buildVolumeLines(termW int) ([]string, []timerEn
 	}
 	volIcon, volStatusTag, volStatusText, _ := p.sectionRollupWithPropagation(p.volumeIDs, nil)
 	volStatusPad := strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(volStatusText))
-	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + "{{|DockerSection|}}volumes{{[-]}}{{|DockerColon|}}:{{[-]}}"}
+	lines := []string{globalIndent + volIcon + " " + volStatusTag + "{{[-]}}" + volStatusPad + dockerlayout.Title("volumes", "volumes", false) + "{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(p.volumeIDs), style: timerSection}}
 	for _, volID := range p.volumeIDs {
 		t := p.tasks[volID]
@@ -854,7 +854,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 		lines, timers = p.teardownGroupedLines(svcs, svcImageMap, renderRow, renderChanged, &lines, &timers, termW, level)
 	} else {
 		if p.containerVerb == "" { // container mode has only containers
-			appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+"{{|DockerSection|}}services{{[-]}}{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
+			appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+dockerlayout.Title("services", "services", false)+"{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
 		}
 		for _, svc := range svcs {
 			word := "" // a service the command left alone keeps its state's word

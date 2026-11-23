@@ -432,13 +432,13 @@ func abbreviateStatus(text string) string {
 	return dockerlayout.AbbreviateStatus(text)
 }
 
-// Final statuses take their row's style, the one its timer or label uses: section
-// headers DockerSection, services, networks and volumes App, images DockerMarkerDone,
-// layers dim, and detail lines (healthcheck, depends_on) DockerDetailLabel.
+// Final statuses take their row's style, the one its name or label uses: services,
+// networks and volumes App, images DockerImage, layers dim, and detail lines
+// (healthcheck, depends_on) DockerDetailLabel; a heading's is DockerSection.
 const (
 	sectionFinalTag = "{{|DockerSection|}}"
 	serviceFinalTag = "{{|App|}}"
-	imageFinalTag   = "{{|DockerMarkerDone|}}"
+	imageFinalTag   = "{{|DockerImage|}}"
 	layerFinalTag   = "{{[::D]}}"
 	detailFinalTag  = "{{|DockerDetailLabel|}}"
 )

@@ -92,7 +92,7 @@ func (p *consoleEventProcessor) kindSection(k rowKind, termW, level int) ([]stri
 	}
 	icon, tag, text := p.stateLine(p.kindState(k, k.names))
 	lines := []string{globalIndent + icon + " " + tag + strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
-		"{{|DockerSection|}}" + k.section + "{{[-]}}{{|DockerColon|}}:{{[-]}}"}
+		dockerlayout.Title(k.section, k.section, false) + "{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(k.taskIDs(k.names)), style: timerSection}}
 	l, t := p.kindRows(k, k.names, termW, level)
 	return append(lines, l...), append(timers, t...)
@@ -277,18 +277,24 @@ func serviceModelDecls(project *types.Project) map[string][]serviceModel {
 
 // modelLines returns the lines under svc's row for the models it uses, on the commands
 // that ensure models, as the file writes them: a model: line for each, with the model's
-// own status, then with all the variables compose sets for it.
+// status, or Using once it is in place (the model's own state is on its definition's
+// row), unstyled, then with all the variables compose sets for it.
 func (p *consoleEventProcessor) modelLines(svc string, termW int, all bool) []string {
 	if !ensuresModels(p.command) {
 		return nil
 	}
 	const varLabelW = len("endpoint_var")
-	label := strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerMarkerDone|}}model{{[-]}}{{|DockerColon|}}:{{[-]}} "
+	label := strutil.Repeat(" ", 2*sectionChildIndentW) + "model{{|DockerColon|}}:{{[-]}} "
 	var lines []string
 	for _, m := range p.serviceModels[svc] {
 		text, tag, icon := p.modelStatus(m.name)
+		if strings.HasPrefix(tag, serviceFinalTag) { // in place: Existing, Configured, Pulled
+			text, tag = modelUsingText, modelUsingText
+		}
+		// The line is unstyled, plain text: only a problem's status takes its warning or
+		// error colour.
 		lines = append(lines, globalIndent+icon+" "+tag+strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text))+
-			label+dockerlayout.StyleServiceName(m.name))
+			label+m.name)
 		if all {
 			lines = append(lines,
 				p.infoLine("endpoint_var", varLabelW, []infoPart{{m.urlVar, ""}}, termW),
@@ -297,6 +303,9 @@ func (p *consoleEventProcessor) modelLines(svc string, termW int, all bool) []st
 	}
 	return lines
 }
+
+// modelUsingText is the status of a service's model: line once its model is in place.
+const modelUsingText = "Using"
 
 // ensuresModels reports whether command makes compose pull and configure the
 // project's models: the commands that create containers.

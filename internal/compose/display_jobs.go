@@ -303,7 +303,7 @@ func (p *consoleEventProcessor) buildJobLines(termW, level int) ([]string, []tim
 		taskIDs = append(taskIDs, jobTaskID(name))
 	}
 	lines := []string{globalIndent + icon + " " + tag + strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text)) +
-		"{{|DockerSection|}}jobs{{[-]}}{{|DockerColon|}}:{{[-]}}"}
+		dockerlayout.Title("jobs", "jobs", false) + "{{|DockerColon|}}:{{[-]}}"}
 	timers := []timerEntry{{task: p.sectionTaskFor(taskIDs), style: timerSection}}
 	for _, name := range names {
 		l, t := p.jobRowLines(name, termW, level)
@@ -400,12 +400,13 @@ func (p *consoleEventProcessor) scheduleLine(schedule string, termW int) string 
 }
 
 // infoDetailLine returns an Info line under a simple row (a job, a model): label:
-// value one step in under the row's name, the value dim and cut to termW.
+// value one step in under the row's name, the value in the Version style, as the image
+// info lines' are, and cut to termW.
 func (p *consoleEventProcessor) infoDetailLine(label, value string, termW int) string {
 	const icon, word = "i", "Info"
 	prefix := globalIndent + "{{|DockerInfo|}}" + icon + "{{[-]}} {{|DockerInfo|}}" + word + "{{[-]}}" +
 		strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(word)) +
 		strutil.Repeat(" ", 2*sectionChildIndentW) + "{{|DockerInfo|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}} "
 	room := max(termW-timerReserveW-summaryHeaderIndentW-utf8.RuneCountInString(semstyle.ToPlain(prefix)), minDetailW)
-	return prefix + "{{[::D]}}" + cutRunes(stripControl(value), room) + "{{[-]}}"
+	return prefix + "{{|Version|}}" + cutRunes(stripControl(value), room) + "{{[-]}}"
 }

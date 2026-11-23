@@ -117,9 +117,11 @@ type AppColors struct {
 	DockerSpinner       string
 	DockerBar           string
 	DockerSharedLayer   string
-	DockerSection       string // section headers (services:, networks:, volumes:, jobs:, the N services: headings and the summary line's counts), their timers and final status
+	DockerSection       string // the final status word on a section or kind heading's line
+	DockerTitle         string // a kind heading's title (services:, N networks:), its items' colour at high intensity
+	DockerTitleImage    string // the same for images
 	DockerGroupHeading  string // the changed: and unchanged: headings
-	DockerGroupStatus   string // the status word (Complete) and timer on those headings' lines
+	DockerGroupStatus   string // the status word (Complete) and the timer on those headings' lines
 	DockerInfo          string // an image's info lines: their marker, Info status and label
 	DockerStatusSuccess string
 	DockerStatusFail    string
@@ -136,6 +138,23 @@ type AppColors struct {
 	DockerDependsWaiting string
 	DockerDependsMet     string
 	DockerDependsFailed  string
+}
+
+// The hues the Docker display's kinds share: what the compose file defines (services,
+// networks, volumes, models, jobs, with the containers and orphans beside them) is
+// itemHue, images are imageHue. A kind's name, final status and counts are its hue; its
+// title and timer are the bright version, bold. Change a hue here and they all follow.
+const (
+	itemHue  = "cyan"
+	imageHue = "magenta"
+)
+
+// hueStyle returns the style of hue with attrs (B bold, U underline, D dim).
+func hueStyle(hue, attrs string) string {
+	if attrs == "" {
+		return "{{[-]}}{{[" + hue + "]}}"
+	}
+	return "{{[-]}}{{[" + hue + "::" + attrs + "]}}"
 }
 
 // Colors is DS2's global style instance. RegisterBaseTags reads from it.
@@ -190,26 +209,26 @@ var Colors = AppColors{
 	UnitTestPass:           "{{[-]}}{{[green]}}",
 	UnitTestFail:           "{{[-]}}{{[red]}}",
 	UnitTestFailArrow:      "{{[-]}}{{[red]}}",
-	App:                    "{{[-]}}{{[cyan::B]}}",
-	UserApp:                "{{[-]}}{{[cyan]}}",
+	App:                    hueStyle(itemHue, "B"),
+	UserApp:                hueStyle(itemHue, ""),
 	ApplicationName:        "{{[-]}}{{[cyan::B]}}",
 	Branch:                 "{{[-]}}{{[cyan]}}",
 	FailingCommand:         "{{[-]}}{{[red]}}",
 	File:                   "{{[-]}}{{[cyan::B]}}",
-	Folder:                 "{{[-]}}{{[cyan::B]}}",
+	Folder:                 hueStyle(itemHue, "B"),
 	Program:                "{{[-]}}{{[cyan]}}",
 	RunningCommand:         "{{[-]}}{{[green::B]}}",
 	Theme:                  "{{[-]}}{{[cyan]}}",
 	Update:                 "{{[-]}}{{[green]}}",
 	User:                   "{{[-]}}{{[cyan]}}",
-	IPAddress:              "{{[-]}}{{[cyan]}}",
-	URL:                    "{{[-]}}{{[cyan::U]}}",
+	IPAddress:              hueStyle(itemHue, ""),
+	URL:                    hueStyle(itemHue, "U"),
 	UserCommand:            "{{[-]}}{{[yellow::B]}}",
 	UserCommandError:       "{{[-]}}{{[red::U]}}",
 	UserCommandErrorMarker: "{{[-]}}{{[red]}}",
 	MenuPage:               "{{[-]}}{{[cyan]}}",
 	Var:                    "{{[-]}}{{[magenta]}}",
-	Version:                "{{[-]}}{{[cyan]}}",
+	Version:                hueStyle(itemHue, ""),
 	Yes:                    "{{[-]}}{{[green]}}",
 	No:                     "{{[-]}}{{[red]}}",
 
@@ -233,17 +252,19 @@ var Colors = AppColors{
 	DockerMarkerWarn:   "{{[-]}}{{[yellow]}}",
 	DockerMarkerCause:  "{{[-]}}{{[red]}}",
 	DockerColon:        "{{[-]}}{{[gray::D]}}",
-	DockerImage:        "{{[-]}}{{[magenta]}}",
-	DockerTag:          "{{[-]}}{{[magenta::D]}}",
+	DockerImage:        hueStyle(imageHue, ""),
+	DockerTag:          hueStyle(imageHue, "D"),
 	DockerSpinner:      "{{[-]}}{{[yellow]}}",
-	DockerBar:          "{{[-]}}{{[cyan]}}",
+	DockerBar:          hueStyle(itemHue, ""),
 	DockerSharedLayer:  "{{[-]}}{{[yellow]}}",
-	DockerSection:      "{{[-]}}{{[bright-blue::B]}}",
-	DockerGroupHeading: "{{[-]}}{{[white::BU]}}",
-	DockerGroupStatus:  "{{[-]}}{{[white::B]}}",
-	DockerInfo:         "{{[-]}}{{[bright-blue]}}",
+	DockerSection:      hueStyle(itemHue, "B"),
+	DockerTitle:        hueStyle("bright-"+itemHue, "B"),
+	DockerTitleImage:   hueStyle("bright-"+imageHue, "B"),
+	DockerGroupHeading: "{{[-]}}{{[green::BU]}}",
+	DockerGroupStatus:  "{{[-]}}{{[green::B]}}",
+	DockerInfo:         "{{[-]}}{{[bright-blue::B]}}",
 	// Docker Compose progress colors — status text
-	DockerStatusSuccess: "{{[-]}}{{[cyan]}}",
+	DockerStatusSuccess: hueStyle(itemHue, ""),
 	DockerStatusFail:    "{{[-]}}{{[red]}}",
 	DockerStatusWarn:    "{{[-]}}{{[yellow]}}",
 	DockerStatusPending: "{{[-]}}{{[gray::D]}}",
