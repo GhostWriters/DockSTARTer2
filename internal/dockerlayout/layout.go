@@ -68,7 +68,7 @@ const (
 	GlobalIndentW        = 1  // left margin for all lines
 	IconW                = 1  // width of a spinner/status icon character
 	SpaceW               = 1  // single separator space between icon and status
-	SectionStatusTextW   = 11 // max status text width ("Downloading", "Untagged")
+	SectionStatusTextW   = 11 // max status text width ("Downloading")
 	SectionStatusGutterW = 1  // spaces after status text before next column
 	SectionStatusW       = SectionStatusTextW + SectionStatusGutterW
 	SectionChildIndentW  = 2 // extra indent per nesting level (matches YAML convention)
@@ -107,7 +107,7 @@ func AbbreviateStatus(text string) string {
 	case "Extracting":
 		return "Extracting"
 	// Prune statuses — pass-through for now, centralised for easy renaming.
-	case "Removed", "Untagged", "Deleted", "Error", "Failed":
+	case "Removed", "Kept", "Error", "Failed":
 		return text
 	}
 	return text
@@ -215,6 +215,9 @@ func imageTagURL(name, tag string) string {
 func StyleImageRef(ref string) string {
 	if strings.HasPrefix(ref, "sha256:") {
 		return "{{|DockerTag|}}sha256:{{[-]}}{{|DockerImage|}}" + ref[7:] + "{{[-]}}"
+	}
+	if name, digest, ok := strings.Cut(ref, "@"); ok {
+		return StyleImageRef(name) + "{{|DockerColon|}}@{{[-]}}" + StyleImageRef(digest)
 	}
 	if idx := strings.LastIndex(ref, ":"); idx >= 0 {
 		name, tag := ref[:idx], ref[idx+1:]

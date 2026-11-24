@@ -28,8 +28,8 @@ func TestPruneUnusedImagesListAsImages(t *testing.T) {
 		{Untagged: "sha256:cf4fe1"}, {Deleted: "sha256:l3"},
 	}, SpaceReclaimed: 1 << 20}
 	got := prunePlain(r, nil, false)
-	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Untagged    changed:", "✓ Untagged      2 unused images:", "✓ Untagged        image: sha256:067bd9 [2]",
-		"✓ Untagged        image: sha256:cf4fe1 [1]", "Total reclaimed space:"} {
+	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Removed     changed:", "✓ Removed       <no service>:", "✓ Removed         image: sha256:067bd9 [2]",
+		"✓ Removed         image: sha256:cf4fe1 [1]", "Total reclaimed space:"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
@@ -49,8 +49,8 @@ func TestPruneServicesNetworksAndVolumes(t *testing.T) {
 	}
 	svcs := map[string][]string{"example/web:1": {"web"}}
 	got := prunePlain(r, svcs, false)
-	for _, want := range []string{"1 service:", "Removed         web:", "Deleted           container_name: web-1",
-		"Untagged          image: example/web:1 [1]", "✓ Removed       2 networks: net_a, net_b",
+	for _, want := range []string{"1 service:", "Removed         web:", "Removed           container_name: web-1",
+		"Removed           image: example/web:1 [1]", "✓ Removed       2 networks: net_a, net_b",
 		"✓ Removed       1 volume: vol_a"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
@@ -59,6 +59,101 @@ func TestPruneServicesNetworksAndVolumes(t *testing.T) {
 	// -v: every row on its own.
 	if got := prunePlain(r, svcs, true); !strings.Contains(got, "Removed         net_a:") || !strings.Contains(got, "Removed         net_b:") {
 		t.Errorf("-v display =\n%s\nwant each network on its own row", got)
+	}
+}
+
+func TestPruneRepoDigestImagesGoUnderTheirService(t *testing.T) {
+	digest := "7b34d43ba1b3d6417033d26bd514971c05d09d6cf7a60c69a0c0aa2f96ddf23b"
+	r := PruneReport{ImagesDeleted: []image.DeleteResponse{
+		{Untagged: "ghcr.io/alexta69/metube@sha256:" + digest}, {Deleted: "sha256:l1"},
+		{Untagged: "redis@sha256:" + digest}, {Deleted: "sha256:l2"},
+		{Untagged: "sha256:be802d"}, {Deleted: "sha256:l3"},
+	}}
+	svcs := map[string][]string{"ghcr.io/alexta69/metube:latest": {"metube"}, "docker.io/library/redis:7": {"redis"}}
+	got := prunePlain(r, svcs, true)
+	for _, want := range []string{"✓ docker system prune: 2 services, 3 images, 3 layers", "2 services:",
+		"Removed         metube:", "Removed           image: ghcr.io/alexta69/metube@sha256:7b34d43ba1b3 [1]",
+		"Removed         redis:", "Removed           image: redis@sha256:7b34d43ba1b3 [1]",
+		"✓ Removed       <no service>:", "✓ Removed         image: sha256:be802d [1]"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("display =\n%s\nwant %q", got, want)
+		}
+	}
+}
+
+func TestPruneShowsInspectedLayers(t *testing.T) {
+	// containerd: after the image's ID come its manifests, not layers. overlay2: after
+	// the ID come the storage driver's layer IDs. Either way the inspected layers show.
+	r := PruneReport{
+		ImagesDeleted: []image.DeleteResponse{
+			{Untagged: "example/web:1"}, {Untagged: "example/web:latest"},
+			{Deleted: "sha256:img1"}, {Deleted: "sha256:manifest1"}, {Deleted: "sha256:attest1"},
+			{Untagged: "sha256:img2"}, {Deleted: "sha256:img2"}, {Deleted: "sha256:driverlayer"},
+		},
+		ImageLayers: map[string][]string{
+			"sha256:img1": {"sha256:base", "sha256:web1", "sha256:web2"},
+			"sha256:img2": {"sha256:base", "sha256:old1"},
+			"sha256:kept": {"sha256:base"}, // an image in use shares the base layer
+		},
+	}
+	lines, _ := buildPruneLines(r, nil, true, true, 160)
+	got := ansi.Strip(strings.Join(lines, "\n"))
+	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers",
+		"✓ Removed     changed:", "✓ Removed       <no service>:", // with layers too, Removed passes up
+		"image: example/web:1 [2]", "Removed           web1", "Removed           web2",
+		"image: sha256:img2 [1]", "Removed           old1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("display =\n%s\nwant %q", got, want)
+		}
+	}
+	for _, unwanted := range []string{"example/web:latest", "manifest1", "attest1", "driverlayer", "base", "Kept"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("display =\n%s\nwant no %q", got, unwanted)
+		}
+	}
+
+	// With kept layers shown, the shared base layer is listed as Kept, outside the counts.
+	showKeptLayers = true
+	t.Cleanup(func() { showKeptLayers = false })
+	lines, _ = buildPruneLines(r, nil, true, true, 160)
+	got = ansi.Strip(strings.Join(lines, "\n"))
+	if strings.Count(got, "Kept              base") != 2 || !strings.Contains(got, "✓ Complete      <no service>:") ||
+		!strings.Contains(got, "2 images, 3 layers") || !strings.Contains(got, "image: example/web:1 [2]") {
+		t.Errorf("display =\n%s\nwant base Kept under both images, uncounted", got)
+	}
+}
+
+func TestPruneLayersFallBackToDeletions(t *testing.T) {
+	// An image missing from the inspected list shows what prune deleted.
+	r := PruneReport{
+		ImagesDeleted: []image.DeleteResponse{{Untagged: "example/new:1"}, {Deleted: "sha256:newid"}, {Deleted: "sha256:l1"}},
+		ImageLayers:   map[string][]string{"sha256:other": {"sha256:x"}},
+	}
+	lines, _ := buildPruneLines(r, nil, true, true, 160)
+	got := ansi.Strip(strings.Join(lines, "\n"))
+	if !strings.Contains(got, "image: example/new:1 [2]") || !strings.Contains(got, "Removed           newid") {
+		t.Errorf("display =\n%s\nwant the deletions as layers", got)
+	}
+}
+
+func TestServicesOfPrunedImages(t *testing.T) {
+	svcs := map[string][]string{
+		"lscr.io/linuxserver/sonarr":     {"sonarr"},
+		"lscr.io/linuxserver/sonarr:4k":  {"sonarr__4k"},
+		"ghcr.io/hotio/seerr@sha256:aaa": {"seerr"},
+	}
+	digest := "@sha256:7b34d43ba1b3d6417033d26bd514971c05d09d6cf7a60c69a0c0aa2f96ddf23b"
+	for ref, want := range map[string]string{
+		"lscr.io/linuxserver/sonarr:latest":   "sonarr",            // a missing tag is latest
+		"lscr.io/linuxserver/sonarr:4k":       "sonarr__4k",        // exact
+		"lscr.io/linuxserver/sonarr" + digest: "sonarr,sonarr__4k", // digest: every service of the repo
+		"lscr.io/linuxserver/sonarr:3":        "",                  // another tag
+		"sha256:be802d":                       "",                  // an image ID
+	} {
+		got := strings.Join(servicesOfPrunedImages([]string{ref}, svcs)[ref], ",")
+		if got != want {
+			t.Errorf("servicesOfPrunedImages(%q) = %q, want %q", ref, got, want)
+		}
 	}
 }
 
@@ -131,9 +226,9 @@ func TestPruneImagesHeadingWordIsImageStyle(t *testing.T) {
 	t.Cleanup(func() { semstyle.SetPreferredProfile(prev) })
 	r := PruneReport{ImagesDeleted: []image.DeleteResponse{{Untagged: "sha256:067bd9"}, {Deleted: "sha256:l1"}}}
 	lines, _ := buildPruneLines(r, nil, false, false, 160)
-	want := semstyle.ToANSI("{{|DockerImage|}}Untagged{{[-]}}")
+	want := semstyle.ToANSI("{{|DockerImage|}}Removed{{[-]}}")
 	for _, l := range lines {
-		if strings.Contains(ansi.Strip(l), "unused image:") && !strings.Contains(l, want) {
+		if strings.Contains(ansi.Strip(l), "<no service>:") && !strings.Contains(l, want) {
 			t.Errorf("images heading %q lacks the image style for its status word", l)
 		}
 	}

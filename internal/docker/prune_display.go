@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/GhostWriters/semstyle"
+	"github.com/distribution/reference"
 	"github.com/docker/go-units"
 	"github.com/moby/moby/api/types/image"
 
@@ -36,6 +38,11 @@ type PruneReport struct {
 	// image was also pruned are shown nested under that service; the rest are listed under
 	// their own heading (by container name when known, else the truncated raw ID).
 	ContainerInfo map[string]containerMeta
+
+	// ImageLayers maps each image's ID to its layers (RootFS diff IDs), inspected before
+	// pruning, so a pruned image shows its real layers and leaves out those an image that
+	// stays still has. nil when the images couldn't be listed.
+	ImageLayers map[string][]string
 }
 
 // containerMeta is the pre-flight info for one container.
@@ -49,9 +56,10 @@ func (r *PruneReport) hasErrors() bool {
 		r.VolumesError != nil || r.ContainersError != nil
 }
 
-// imageGroup is the display unit — one ref with its layers and per-layer status.
+// imageGroup is the display unit: one pruned image, shown by ref, with its layers.
 type imageGroup struct {
-	ref       string
+	ref       string   // the name shown: a tag, else a digest ref, else what prune reported
+	refs      []string // every name prune untagged for the image
 	layers    []layerEntry
 	refStatus entryStatus
 }
@@ -59,12 +67,17 @@ type imageGroup struct {
 type layerEntry struct {
 	id     string
 	status entryStatus
+	kept   bool // an image that stays has it too, so it wasn't freed
 }
+
+// showKeptLayers lists a pruned image's layers that an image which stays still has, as
+// Kept rows outside the counts; off, they're left out.
+var showKeptLayers = false
 
 type entryStatus int
 
 const (
-	statusRemoved entryStatus = iota // ✓ Removed / Untagged / Deleted
+	statusRemoved entryStatus = iota // ✓ Removed
 	statusFailed                     // ⚠ Failed — expected but not in deleted list
 )
 
@@ -160,14 +173,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	// DockerSection (changed: DockerGroupStatus); services, networks, volumes and containers
 	// App; images, and their heading, DockerImage; the container_name line App (its label a
 	// detail label); layers dim.
-	untaggedStatus := semstyle.ToANSI("{{|DockerImage|}}Untagged{{[-]}}")
+	imageRemovedStatus := semstyle.ToANSI("{{|DockerImage|}}Removed{{[-]}}")
 	removedStatus := semstyle.ToANSI("{{|App|}}Removed{{[-]}}")
 	errorStatus := semstyle.ToANSI("{{|DockerStatusFail|}}Error{{[-]}}")
-	deletedStatus := semstyle.ToANSI("{{|App|}}Deleted{{[-]}}")
-	untaggedPad := strutil.Repeat(" ", SectionStatusW-len("Untagged"))
 	removedPad := strutil.Repeat(" ", SectionStatusW-len("Removed"))
 	errorPad := strutil.Repeat(" ", SectionStatusW-len("Error"))
-	deletedPad := strutil.Repeat(" ", SectionStatusW-len("Deleted"))
 	indent := func(depth int) string { return strutil.Repeat(" ", depth*SectionChildIndentW) }
 
 	var lines []string
@@ -248,26 +258,28 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		return out
 	}
 	// containerNameRow renders a "container_name: <name>" sub-line under a service,
-	// parallel to the image: line, with Deleted status.
+	// parallel to the image: line, with Removed status.
 	containerNameRow := func(name string) string {
-		return GlobalIndent + doneIconANSI + " " + deletedStatus + semstyle.CodeReset + deletedPad + indent(3) +
+		return GlobalIndent + doneIconANSI + " " + removedStatus + semstyle.CodeReset + removedPad + indent(3) +
 			semstyle.ToANSI("{{|DockerDetailLabel|}}container_name{{[-]}}{{|DockerColon|}}:{{[-]}} {{|App|}}"+name+"{{[-]}}")
 	}
 
 	// ── build image groups ───────────────────────────────────────────────────
-	var groups []imageGroup
-	var current *imageGroup
-	for _, item := range r.ImagesDeleted {
-		if item.Untagged != "" {
-			groups = append(groups, imageGroup{ref: item.Untagged, refStatus: statusRemoved})
-			current = &groups[len(groups)-1]
+	groups := pruneImageGroups(r)
+	var allRefs []string
+	for _, g := range groups {
+		allRefs = append(allRefs, g.refs...)
+	}
+	refServices := servicesOfPrunedImages(allRefs, imageServices)
+	imageServices = make(map[string][]string, len(groups))
+	for _, g := range groups {
+		var svcs []string
+		for _, ref := range g.refs {
+			svcs = append(svcs, refServices[ref]...)
 		}
-		if item.Deleted != "" {
-			if current == nil {
-				groups = append(groups, imageGroup{ref: ""})
-				current = &groups[len(groups)-1]
-			}
-			current.layers = append(current.layers, layerEntry{id: item.Deleted, status: statusRemoved})
+		if len(svcs) > 0 {
+			slices.Sort(svcs)
+			imageServices[g.ref] = slices.Compact(svcs)
 		}
 	}
 
@@ -290,9 +302,15 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	// ── header ───────────────────────────────────────────────────────────────
 	var totalImages, totalLayers int
 	seenSvcsForHeader := make(map[string]bool)
+	seenLayers := make(map[string]bool)
 	for _, g := range groups {
 		totalImages++
-		totalLayers += len(g.layers)
+		for _, l := range g.layers {
+			if !l.kept && !seenLayers[l.id] {
+				seenLayers[l.id] = true
+				totalLayers++
+			}
+		}
 		for _, svc := range imageServices[g.ref] {
 			seenSvcsForHeader[svc] = true
 		}
@@ -373,18 +391,27 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	}
 
 	// What the rows under each heading say, when they all say it: its word passes up to
-	// the heading, and a kind's folded line stands in for its heading. The images no
-	// container uses show Untagged (without their layers, which say Deleted); networks,
-	// volumes and containers Removed; services, with their images, a mix.
-	imagesWord := ""
-	if len(imageOnly) > 0 && !showLayers && r.ImagesError == nil {
-		imagesWord = "Untagged"
-		for _, g := range imageOnly {
+	// the heading, and a kind's folded line stands in for its heading. All rows say
+	// Removed, as compose says for each kind, so images pass it up unless one failed or,
+	// with layers shown, a layer failed or is Kept.
+	imagesWordOf := func(gs []imageGroup) string {
+		if len(gs) == 0 || r.ImagesError != nil {
+			return ""
+		}
+		for _, g := range gs {
 			if g.refStatus == statusFailed {
-				imagesWord = ""
+				return ""
+			}
+			for _, l := range g.layers {
+				if showLayers && (l.kept || l.status == statusFailed) {
+					return ""
+				}
 			}
 		}
+		return "Removed"
 	}
+	imagesWord := imagesWordOf(imageOnly)
+	servicesWord := imagesWordOf(serviceGroups)
 	removedWord := func(n int, err error) string {
 		if n > 0 && err == nil {
 			return "Removed"
@@ -393,7 +420,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	}
 	var changedWords []string
 	if len(serviceGroups) > 0 {
-		changedWords = append(changedWords, "")
+		changedWords = append(changedWords, servicesWord)
 	}
 	if len(imageOnly) > 0 {
 		changedWords = append(changedWords, imagesWord)
@@ -420,8 +447,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	}
 
 	// ── services and images ─────────────────────────────────────────────────
-	layerDeletedANSI := semstyle.ToANSI("{{[::D]}}Deleted{{[-]}}") + deletedPad
+	layerRemovedANSI := semstyle.ToANSI("{{[::D]}}Removed{{[-]}}") + removedPad
 	layerFailedANSI := semstyle.ToANSI("{{|DockerStatusFail|}}Failed{{[-]}}") + strutil.Repeat(" ", SectionStatusW-len("Failed"))
+	layerKeptANSI := semstyle.ToANSI("{{[::D]}}Kept{{[-]}}") + strutil.Repeat(" ", SectionStatusW-len("Kept"))
 
 	// renderImage adds an image's line with its label at depth, then with showLayers
 	// its layers, one step in from that label.
@@ -432,20 +460,29 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 		}
 		// Match compose: append the layer count directly to the image URL ("ref [N]")
 		// rather than in a separate padded column. "[N]" uses DockerTag brackets, dim interior.
-		layerCount := fmt.Sprintf(" {{|DockerTag|}}[{{[-]}}{{[::D]}}%d{{[-]}}{{|DockerTag|}}]{{[-]}}", len(g.layers))
-		imgIcon, imgStatus, imgPad := doneIconANSI, untaggedStatus, untaggedPad
+		freed := 0
+		for _, l := range g.layers {
+			if !l.kept {
+				freed++
+			}
+		}
+		layerCount := fmt.Sprintf(" {{|DockerTag|}}[{{[-]}}{{[::D]}}%d{{[-]}}{{|DockerTag|}}]{{[-]}}", freed)
+		imgIcon, imgStatus, imgPad := doneIconANSI, imageRemovedStatus, removedPad
 		if g.refStatus == statusFailed {
 			imgIcon, imgStatus, imgPad = errorIconANSI, errorStatus, errorPad
 		}
 		add(GlobalIndent + imgIcon + " " + imgStatus + semstyle.CodeReset + imgPad + indent(depth) +
-			semstyle.ToANSI(dockerlayout.Title("image", "image", false)+"{{|DockerColon|}}:{{[-]}} "+StyleImageRef(ref)+layerCount))
+			semstyle.ToANSI(dockerlayout.Title("image", "image", false)+"{{|DockerColon|}}:{{[-]}} "+StyleImageRef(shortRefDigest(ref))+layerCount))
 		if !showLayers {
 			return
 		}
 		for _, l := range g.layers {
-			lIcon, lStatus := doneIconANSI, layerDeletedANSI
-			if l.status == statusFailed {
+			lIcon, lStatus := doneIconANSI, layerRemovedANSI
+			switch {
+			case l.status == statusFailed:
 				lIcon, lStatus = errorIconANSI, layerFailedANSI
+			case l.kept:
+				lStatus = layerKeptANSI
 			}
 			lid := strings.TrimPrefix(l.id, "sha256:")
 			if len(lid) > 12 {
@@ -456,7 +493,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	}
 
 	if len(serviceGroups) > 0 {
-		add(heading(1, fmt.Sprintf("%d %s", totalServices, Plural(totalServices, "service", "services")), dockerlayout.TitleStyle("services"), r.ImagesError != nil, ""))
+		add(heading(1, fmt.Sprintf("%d %s", totalServices, Plural(totalServices, "service", "services")), dockerlayout.TitleStyle("services"), r.ImagesError != nil, servicesWord))
 		for _, g := range serviceGroups {
 			svcs := imageServices[g.ref]
 			// Services of one image that show the same thing (none with a container line
@@ -482,12 +519,12 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 			renderImage(g, 3)
 		}
 	}
-	// Images no container uses (Docker's "unused" images, which prune --all removes):
-	// listed as what they are, each its own row.
+	// Images no compose service names: their own heading beside the services, each
+	// image its own row.
 	if len(imageOnly) > 0 || r.ImagesError != nil && len(groups) == 0 {
 		label := "images"
 		if len(imageOnly) > 0 {
-			label = fmt.Sprintf("%d %s", len(imageOnly), Plural(len(imageOnly), "unused image", "unused images"))
+			label = "<no service>"
 		}
 		add(heading(1, label, dockerlayout.TitleStyle("images"), r.ImagesError != nil, imagesWord))
 		for _, g := range imageOnly {
@@ -563,4 +600,155 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	}
 
 	return lines, errs
+}
+
+// pruneImageGroups splits prune's deleted list into images: each image's untagged names,
+// then its deletions. An image found in r.ImageLayers, by its ID among those deletions,
+// shows the layers inspected before pruning, since the rest of the deletions aren't
+// always layers (on the containerd store they're the image's manifests); a layer an
+// image that stays still has is marked kept. Any other image shows its deletions.
+func pruneImageGroups(r PruneReport) []imageGroup {
+	type run struct{ refs, deleted []string }
+	var runs []run
+	for _, item := range r.ImagesDeleted {
+		if item.Untagged != "" && (len(runs) == 0 || len(runs[len(runs)-1].deleted) > 0) {
+			runs = append(runs, run{})
+		}
+		if len(runs) == 0 {
+			runs = append(runs, run{})
+		}
+		cur := &runs[len(runs)-1]
+		if item.Untagged != "" {
+			cur.refs = append(cur.refs, item.Untagged)
+		}
+		if item.Deleted != "" {
+			cur.deleted = append(cur.deleted, item.Deleted)
+		}
+	}
+
+	ids := make([]string, len(runs))
+	removed := make(map[string]bool)
+	for i, rn := range runs {
+		for _, d := range rn.deleted {
+			if _, ok := r.ImageLayers[d]; ok {
+				ids[i] = d
+				removed[d] = true
+				break
+			}
+		}
+	}
+	keptLayers := make(map[string]bool)
+	for id, layers := range r.ImageLayers {
+		if !removed[id] {
+			for _, l := range layers {
+				keptLayers[l] = true
+			}
+		}
+	}
+
+	groups := make([]imageGroup, 0, len(runs))
+	for i, rn := range runs {
+		g := imageGroup{ref: displayRef(rn.refs), refs: rn.refs, refStatus: statusRemoved}
+		if ids[i] == "" {
+			for _, d := range rn.deleted {
+				g.layers = append(g.layers, layerEntry{id: d, status: statusRemoved})
+			}
+		} else {
+			for _, l := range r.ImageLayers[ids[i]] {
+				kept := keptLayers[l]
+				if kept && !showKeptLayers {
+					continue
+				}
+				g.layers = append(g.layers, layerEntry{id: l, status: statusRemoved, kept: kept})
+			}
+		}
+		groups = append(groups, g)
+	}
+	return groups
+}
+
+// displayRef returns the name an image is shown by: its first tag, else its first
+// digest ref, else its first name; "" for none.
+func displayRef(refs []string) string {
+	for _, ref := range refs {
+		if !strings.HasPrefix(ref, "sha256:") && !strings.Contains(ref, "@") {
+			return ref
+		}
+	}
+	for _, ref := range refs {
+		if strings.Contains(ref, "@") {
+			return ref
+		}
+	}
+	if len(refs) > 0 {
+		return refs[0]
+	}
+	return ""
+}
+
+// servicesOfPrunedImages maps each pruned image ref to the compose services whose image it
+// is. A ref matches its compose image by name and tag, a missing tag meaning latest; a
+// repo@digest ref (an image whose tag moved to a newer pull) matches every service of
+// its repository. Image IDs match nothing.
+func servicesOfPrunedImages(refs []string, imageServices map[string][]string) map[string][]string {
+	byTag := map[string][]string{}
+	byRepo := map[string][]string{}
+	for img, svcs := range imageServices {
+		named, err := reference.ParseNormalizedNamed(img)
+		if err != nil {
+			continue
+		}
+		byRepo[named.Name()] = append(byRepo[named.Name()], svcs...)
+		if key := tagKey(named); key != "" {
+			byTag[key] = append(byTag[key], svcs...)
+		}
+	}
+	out := make(map[string][]string, len(refs))
+	for _, ref := range refs {
+		if svcs, ok := imageServices[ref]; ok {
+			out[ref] = svcs
+			continue
+		}
+		if ref == "" || strings.HasPrefix(ref, "sha256:") {
+			continue
+		}
+		named, err := reference.ParseNormalizedNamed(ref)
+		if err != nil {
+			continue
+		}
+		svcs := byTag[tagKey(named)]
+		if _, tagged := named.(reference.Tagged); !tagged {
+			if _, digested := named.(reference.Digested); digested {
+				svcs = byRepo[named.Name()]
+			}
+		}
+		if len(svcs) > 0 {
+			svcs = slices.Clone(svcs)
+			slices.Sort(svcs)
+			out[ref] = slices.Compact(svcs)
+		}
+	}
+	return out
+}
+
+// tagKey returns named's repository and tag, latest when it has none; "" for a
+// reference pinned by digest alone.
+func tagKey(named reference.Named) string {
+	if t, ok := named.(reference.Tagged); ok {
+		return named.Name() + ":" + t.Tag()
+	}
+	if _, ok := named.(reference.Digested); ok {
+		return ""
+	}
+	return named.Name() + ":latest"
+}
+
+// shortRefDigest returns ref with a digest after its repository cut to its first 12
+// characters, as Docker shows IDs; other refs as they are.
+func shortRefDigest(ref string) string {
+	repo, digest, ok := strings.Cut(ref, "@sha256:")
+	if !ok || len(digest) <= 12 {
+		return ref
+	}
+	return repo + "@sha256:" + digest[:12]
 }

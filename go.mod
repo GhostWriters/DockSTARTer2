@@ -22,6 +22,7 @@ require (
 	github.com/compose-spec/compose-go/v2 v2.17.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.7.1
+	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.10.0+incompatible
 	github.com/docker/compose/v5 v5.8.0
 	github.com/docker/go-units v0.5.0
@@ -94,7 +95,6 @@ require (
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
-	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.8.0 // indirect
 	github.com/docker/docker-credential-helpers v0.9.9 // indirect
