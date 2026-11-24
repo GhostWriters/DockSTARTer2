@@ -379,6 +379,9 @@ func (m *ProgramBoxModel) Init() tea.Cmd {
 				go func() {
 					defer writer.Close()
 					// task is already wrapped with WithTUIWriter if coming from RunCommand
+					if console.SendFuncFromContext(taskCtx) == nil {
+						taskCtx = console.WithSendFunc(taskCtx, send)
+					}
 					errChan <- task(taskCtx, writer)
 				}()
 

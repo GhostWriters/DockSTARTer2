@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	charm.land/bubbles/v2 v2.2.2
 	charm.land/bubbletea/v2 v2.1.2
-	charm.land/glamour/v2 v2.0.2-0.20261015065741-010543cac1a0
+	charm.land/glamour/v2 v2.0.2-0.20261124135012-e8e818de371b
 	charm.land/lipgloss/v2 v2.1.1
 	charm.land/log/v2 v2.0.1
 	charm.land/ssh v0.4.3
@@ -17,6 +17,7 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/buger/goterm v1.0.4
 	github.com/charmbracelet/colorprofile v0.4.3
+	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4
 	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/charmbracelet/x/input v0.3.7
 	github.com/compose-spec/compose-go/v2 v2.17.0
@@ -64,13 +65,13 @@ require (
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
+	github.com/bits-and-blooms/bitset v1.24.6 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
 	github.com/charmbracelet/keygen v0.5.4 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/log v1.0.0 // indirect
-	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/conpty v0.2.0 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20260913004009-c615ff2f7805 // indirect
@@ -169,6 +170,8 @@ require (
 	github.com/sigstore/sigstore v1.10.9 // indirect
 	github.com/sigstore/sigstore-go v1.3.0 // indirect
 	github.com/skeema/knownhosts v1.3.3 // indirect
+	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
+	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/tilt-dev/fsnotify v1.4.8-0.20220602155310-fff9c274a375 // indirect
 	github.com/tonistiigi/fsutil v0.0.0-20260819142231-83cac42c1c52 // indirect
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0 // indirect
@@ -199,6 +202,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
+	golang.org/x/image v0.45.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
@@ -213,3 +217,7 @@ require (
 	gotest.tools/v3 v3.5.2 // indirect
 	tags.cncf.io/container-device-interface v1.1.1 // indirect
 )
+
+// glamour with rgba() SVG colours fixed (charmbracelet/glamour#662, #663).
+// Remove once upstream has the fix: drop this line and bump charm.land/glamour/v2.
+replace charm.land/glamour/v2 => github.com/CLHatch/glamour/v2 v2.0.2-rgba.1
