@@ -18,8 +18,64 @@ import (
 	"DockSTARTer2/internal/theme"
 )
 
+// docHyperlinks resolves the markdown hyperlink setting for this session:
+// glamour's own two modes plus whether the OSC8 escapes are stripped after
+// rendering. glamour itself only has two modes (Auto/Inline) -- "off" renders
+// with Auto (link text + visible URL) and strips the resulting OSC8 escapes
+// afterward, leaving plain readable text with no embedded hyperlink.
+func docHyperlinks(connType string) (glamouransi.HyperlinkMode, bool) {
+	if connType == "" {
+		connType = console.ActiveConnType()
+	}
+	mode := config.LoadAppConfig().Appearance.ForConnType(connType).MarkdownHyperlinks
+	hyperlinkMode := glamouransi.HyperlinkModeInline
+	if mode == "off" || mode == "auto" {
+		hyperlinkMode = glamouransi.HyperlinkModeAuto
+	}
+	return hyperlinkMode, mode == "off"
+}
+
+// renderDocMarkdown renders source via glamour at the given column width.
+// With images, inline images are drawn as Kitty Unicode placeholders and the
+// out-of-band transmit/placement commands come back as gfx; they must reach
+// the terminal before the returned text is shown. Fetching remote images
+// blocks, so callers pass images only from a background command.
+func renderDocMarkdown(source, connType string, width int, images bool) (out string, gfx []string, err error) {
+	hyperlinkMode, strip := docHyperlinks(connType)
+	opts := []glamour.TermRendererOption{
+		glamour.WithStandardStyle(glamourstyles.DarkStyle),
+		glamour.WithWordWrap(width),
+		glamour.WithHyperlinkMode(hyperlinkMode),
+	}
+	if images {
+		// A drawn image needs no "Image: alt" caption, so the caption is
+		// empty (nothing is written); an image that fails still shows its
+		// link.
+		style := glamourstyles.DarkStyleConfig
+		style.ImageText.Format = `{{""}}`
+		opts = append(opts,
+			glamour.WithStyles(style),
+			glamour.WithImageProtocol(glamouransi.ImageProtocolKittyPlaceholders),
+			glamour.WithRemoteImages(),
+		)
+	}
+	r, err := glamour.NewTermRenderer(opts...)
+	if err != nil {
+		return "", nil, err
+	}
+	out, err = r.Render(source)
+	if err != nil {
+		return "", nil, err
+	}
+	if strip {
+		out = displayengine.StripHyperlinks(out)
+	}
+	return strings.TrimRight(out, "\n"), r.GraphicsCommands(), nil
+}
+
 // getRenderedMarkdown renders DocMarkdown via glamour at the given column width,
-// caching the result so repeated ViewString calls are cheap.
+// caching the result so repeated ViewString calls are cheap. Images are not
+// drawn here (see ensureDocImages, which swaps in an image render when ready).
 func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 	if m.contextInfo.DocMarkdown == "" {
 		return ""
@@ -28,41 +84,64 @@ func (m *HelpDialogModel) getRenderedMarkdown(width int) string {
 		return m.renderedMarkdown
 	}
 
-	source := m.contextInfo.DocMarkdown
-	mode := config.LoadAppConfig().Appearance.ForConnType(console.ActiveConnType()).MarkdownHyperlinks
-
-	// glamour itself only has two modes (Auto/Inline) -- "off" renders with
-	// Auto (link text + visible URL) and strips the resulting OSC8 escapes
-	// afterward, leaving plain readable text with no embedded hyperlink.
-	hyperlinkMode := glamouransi.HyperlinkModeInline
-	if mode == "off" || mode == "auto" {
-		hyperlinkMode = glamouransi.HyperlinkModeAuto
-	}
-
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle(glamourstyles.DarkStyle),
-		glamour.WithWordWrap(width),
-		glamour.WithHyperlinkMode(hyperlinkMode),
-	)
+	out, _, err := renderDocMarkdown(m.contextInfo.DocMarkdown, m.connType, width, false)
 	if err != nil {
-		m.renderedMarkdown = m.contextInfo.DocMarkdown
-		m.renderedMarkdownWidth = width
-		return m.renderedMarkdown
+		out = m.contextInfo.DocMarkdown
 	}
-
-	out, err := r.Render(source)
-	if err != nil {
-		m.renderedMarkdown = m.contextInfo.DocMarkdown
-		m.renderedMarkdownWidth = width
-		return m.renderedMarkdown
-	}
-	if mode == "off" {
-		out = displayengine.StripHyperlinks(out)
-	}
-
-	m.renderedMarkdown = strings.TrimRight(out, "\n")
+	m.renderedMarkdown = out
 	m.renderedMarkdownWidth = width
 	return m.renderedMarkdown
+}
+
+// helpDocImagesMsg carries a doc page rendered with its images, for the
+// column width it was rendered at.
+type helpDocImagesMsg struct {
+	width int
+	out   string
+	gfx   []string
+	err   error
+}
+
+// docImagesEnabled reports whether this dialog draws the doc page's images:
+// the session's terminal supports them and the markdown has any. Other
+// terminals would show the placeholder characters instead of the text.
+func (m *HelpDialogModel) docImagesEnabled() bool {
+	if !m.images {
+		return false
+	}
+	doc := m.contextInfo.DocMarkdown
+	return strings.Contains(doc, "![") || strings.Contains(doc, "<img")
+}
+
+// ensureDocImages starts a background render of the doc page with its images
+// for the current column width, once per width. The text render stays on
+// screen until the image render replaces it.
+func (m *HelpDialogModel) ensureDocImages() tea.Cmd {
+	if !m.docImagesEnabled() {
+		return nil
+	}
+	width := m.docTextWidth()
+	if width <= 0 || m.docImagesFor == width {
+		return nil
+	}
+	m.docImagesFor = width
+	source, connType := m.contextInfo.DocMarkdown, m.connType
+	return func() tea.Msg {
+		out, gfx, err := renderDocMarkdown(source, connType, width, true)
+		return helpDocImagesMsg{width: width, out: out, gfx: gfx, err: err}
+	}
+}
+
+// applyDocImages swaps in a finished image render and returns the command that
+// sends its graphics commands to the terminal. A stale render (the dialog was
+// resized meanwhile) or a failed one is dropped.
+func (m *HelpDialogModel) applyDocImages(msg helpDocImagesMsg) tea.Cmd {
+	if msg.err != nil || msg.width != m.docTextWidth() || len(msg.gfx) == 0 {
+		return nil
+	}
+	m.renderedMarkdown = msg.out
+	m.renderedMarkdownWidth = msg.width
+	return tea.Raw(strings.Join(msg.gfx, ""))
 }
 
 // getDocLines returns the rendered markdown split into individual lines.

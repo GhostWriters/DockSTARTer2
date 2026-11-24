@@ -250,9 +250,13 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				// A bare CLI invocation owns stdin/stdout outright (no
 				// Bubble Tea Program running yet), so it can safely run a
 				// real capability query instead of falling back to a
-				// connType guess.
-				canDisplayGraphics := graphics.QuerySixelSupport(int(os.Stdin.Fd()), os.Stdin, os.Stdout, graphics.DefaultQueryTimeout)
-				return commands.HandleMan(subCtx, &group, canDisplayGraphics)
+				// connType guess. Under -g the query already ran before the
+				// program started (see below).
+				protocol, ok := graphics.ProtocolFromContext(subCtx)
+				if !ok {
+					protocol = graphics.QueryProtocol(int(os.Stdin.Fd()), os.Stdin, os.Stdout, graphics.DefaultQueryTimeout)
+				}
+				return commands.HandleMan(subCtx, &group, protocol)
 			case "--env-appfiles":
 				ranCommand = true
 				return commands.HandleEnvAppFiles(subCtx, &group)
@@ -458,6 +462,11 @@ func Execute(ctx context.Context, groups []CommandGroup) int {
 				logger.Error(ctx, sessionlocks.EditLockLines(info, closing))
 				return 1
 			}
+		}
+
+		if state.GUI && commands.BaseCommand(group.Command) == "--man" {
+			// The program box takes over the terminal, so query it first.
+			ctx = graphics.WithProtocol(ctx, graphics.QueryProtocol(int(os.Stdin.Fd()), os.Stdin, os.Stdout, graphics.DefaultQueryTimeout))
 		}
 
 		if state.GUI && group.Command != "" && group.Command != "-M" && group.Command != "--menu" {

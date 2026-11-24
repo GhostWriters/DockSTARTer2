@@ -581,8 +581,13 @@ func (m *AppModel) showHelpCmd(capturedCtx *displayengine.HelpContext, screenLev
 	}
 
 	graphicsSupported := m.connType == "web" || m.graphicsSupported
+	connType := m.connType
+	images := m.connType == "web" || m.kittyImages
 	return func() tea.Msg {
-		return displayengine.ShowDialogMsg{Dialog: NewHelpDialogWithContext(km, contextInfo, graphicsSupported)}
+		d := NewHelpDialogWithContext(km, contextInfo, graphicsSupported)
+		d.SetConnType(connType)
+		d.SetImages(images)
+		return displayengine.ShowDialogMsg{Dialog: d}
 	}
 }
 

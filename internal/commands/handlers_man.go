@@ -3,9 +3,12 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
+	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	glamour "charm.land/glamour/v2"
 	glamouransi "charm.land/glamour/v2/ansi"
 	glamourstyles "charm.land/glamour/v2/styles"
@@ -15,6 +18,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/console"
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 )
 
@@ -32,7 +36,17 @@ func stripHyperlinks(rendered string) string {
 	return osc8MarkerRegex.ReplaceAllString(rendered, "")
 }
 
-func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool) error {
+// manProtocol maps a session's resolved "can show Kitty placeholder images"
+// flag (see AppModel.kittyImages) to a protocol, for --man run from the
+// console panel.
+func manProtocol(kittyImages bool) graphics.Protocol {
+	if kittyImages {
+		return graphics.ProtocolKitty
+	}
+	return graphics.ProtocolNone
+}
+
+func HandleMan(ctx context.Context, group *CommandGroup, protocol graphics.Protocol) error {
 	if len(group.Args) == 0 {
 		logger.Error(ctx, "The '{{|UserCommand|}}%s{{[-]}}' command requires an application name.", group.Command)
 		return fmt.Errorf("no application name provided")
@@ -44,15 +58,28 @@ func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool
 		return err
 	}
 
-	// Detect terminal width for proper wrapping and soft-break handling
-	width := 0
-	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
-		width = w
-	}
+	// Under -g or the console panel the output goes to a viewport inside a
+	// running TUI, not to the terminal.
+	tuiW, inTUI := ctx.Value(console.TUIWriterKey).(io.Writer)
 
-	styleName := glamourstyles.LightStyle
-	if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
-		styleName = glamourstyles.DarkStyle
+	// Width for proper wrapping and soft-break handling: the viewport's, or
+	// the terminal's.
+	width := 0
+	styleName := glamourstyles.DarkStyle
+	if inTUI {
+		if console.OutputContentWidthFn != nil {
+			width = console.OutputContentWidthFn()
+		}
+		if width <= 0 {
+			width = 80
+		}
+	} else {
+		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+			width = w
+		}
+		if !lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
+			styleName = glamourstyles.LightStyle
+		}
 	}
 
 	mode := config.LoadAppConfig().Appearance.ForConnType(console.ConnTypeFromContext(ctx)).MarkdownHyperlinks
@@ -64,11 +91,34 @@ func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool
 		hyperlinkMode = glamouransi.HyperlinkModeAuto
 	}
 
-	r, err := glamour.NewTermRenderer(
+	opts := []glamour.TermRendererOption{
 		glamour.WithStandardStyle(styleName),
 		glamour.WithWordWrap(width),
 		glamour.WithHyperlinkMode(hyperlinkMode),
-	)
+	}
+	// Kitty placeholders are plain text cells (the image data goes to the
+	// terminal separately), so they survive a TUI. A drawn image needs no
+	// "Image: alt" caption, so the caption is empty; an image that fails
+	// still shows its link.
+	var imageOpts []glamour.TermRendererOption
+	switch {
+	case protocol == graphics.ProtocolKitty:
+		// Placeholders also outside a TUI: unlike direct images, which are
+		// drawn below their paragraph, they keep one-row badges inline.
+		imageOpts = []glamour.TermRendererOption{glamour.WithImageProtocol(glamouransi.ImageProtocolKittyPlaceholders)}
+	case protocol == graphics.ProtocolSixel && !inTUI:
+		imageOpts = []glamour.TermRendererOption{glamour.WithImageProtocol(glamouransi.ImageProtocolSixel)}
+	}
+	if imageOpts != nil {
+		style := glamourstyles.DarkStyleConfig
+		if styleName == glamourstyles.LightStyle {
+			style = glamourstyles.LightStyleConfig
+		}
+		style.ImageText.Format = `{{""}}` // an empty caption: nothing is written
+		opts = append(opts, glamour.WithStyles(style), glamour.WithRemoteImages())
+		opts = append(opts, imageOpts...)
+	}
+	r, err := glamour.NewTermRenderer(opts...)
 	if err != nil {
 		return err
 	}
@@ -80,7 +130,24 @@ func HandleMan(ctx context.Context, group *CommandGroup, canDisplayGraphics bool
 	if mode == "off" {
 		rendered = stripHyperlinks(rendered)
 	}
-	// Output directly to stdout to avoid any string mangling.
-	os.Stdout.WriteString(rendered)
-	return nil
+	if !inTUI {
+		// Output directly to stdout to avoid any string mangling. The image
+		// data goes first, so the placeholders show their images.
+		w := console.SpinnerSafeWriter(os.Stdout)
+		if gfx := r.GraphicsCommands(); len(gfx) > 0 {
+			if _, err := io.WriteString(w, strings.Join(gfx, "")); err != nil {
+				return err
+			}
+		}
+		_, err = io.WriteString(w, rendered)
+		return err
+	}
+	// The image data has to reach the terminal before the placeholders show.
+	if gfx := r.GraphicsCommands(); len(gfx) > 0 {
+		if send := console.SendFuncFromContext(ctx); send != nil {
+			send(tea.RawMsg{Msg: strings.Join(gfx, "")})
+		}
+	}
+	_, err = io.WriteString(tuiW, rendered+"\n")
+	return err
 }

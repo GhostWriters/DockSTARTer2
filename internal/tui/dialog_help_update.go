@@ -8,6 +8,18 @@ import (
 )
 
 func (m *HelpDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if done, ok := msg.(helpDocImagesMsg); ok {
+		return m, m.applyDocImages(done)
+	}
+	if cmd := m.ensureDocImages(); cmd != nil {
+		// The dialog was resized since the images were rendered.
+		inner, innerCmd := m.update(msg)
+		return inner, tea.Batch(cmd, innerCmd)
+	}
+	return m.update(msg)
+}
+
+func (m *HelpDialogModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	totalDocLines, visibleDocRows := m.docInfo()
 	if newOff, cmd, changed := m.Scroll.Update(msg, m.contextOffset, totalDocLines, visibleDocRows); changed {
 		m.contextOffset = newOff

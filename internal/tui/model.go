@@ -13,6 +13,7 @@ import (
 	"DockSTARTer2/internal/appenv"
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
+	"DockSTARTer2/internal/graphics"
 	"DockSTARTer2/internal/logger"
 )
 
@@ -254,9 +255,15 @@ type AppModel struct {
 	// case) -- most terminals respond within a frame or two of startup, but
 	// an unsupported one may never respond, so false is also the permanent
 	// answer in that case. "web" sessions skip the query entirely and are
-	// always treated as supported (the browser frontend's xterm.js loads
-	// @xterm/addon-image, which decodes Sixel unconditionally).
+	// always treated as supported (the browser frontend is sip's WebGL
+	// terminal, which draws Sixel and Kitty images, placeholders included).
 	graphicsSupported bool
+
+	// kittyImages reports whether this session's terminal answered the
+	// Init()-time Kitty graphics probe (graphics.KittyProbe), so it can show
+	// the help dialog's images as Kitty placeholders. "web" sessions skip the
+	// probe and always count (sip's terminal draws them).
+	kittyImages bool
 
 	// program is this session's own *tea.Program, set via SetProgram once it
 	// exists (AppModel is constructed before NewProgram(model, ...) returns
@@ -459,7 +466,7 @@ func (m *AppModel) Init() tea.Cmd {
 	if m.connType == "local" || m.connType == "ssh" {
 		// "web" is already trusted (see graphicsSupported's doc comment);
 		// querying it too would be harmless but pointless.
-		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes))
+		cmds = append(cmds, tea.Raw(ansi.RequestPrimaryDeviceAttributes), tea.Raw(graphics.KittyProbe))
 	}
 	RegisterConnTypeTints(m.ctx, m.connType, m.config.Appearance.ForConnType(m.connType).AnsiColors)
 	RegisterConnTypeTheme(m.ctx, m.connType, m.config)

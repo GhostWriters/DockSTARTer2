@@ -87,6 +87,8 @@ type HelpDialogModel struct {
 	contextInfo       displayengine.HelpContext // structured help info
 	contextOffset     int                       // scroll offset for item context text
 	graphicsSupported bool                      // resolved capability -- gates markdown graphics rendering
+	connType          string                    // the session's connType, for per-connType settings
+	images            bool                      // the session's terminal can show Kitty placeholder images
 
 	// Paged mode: cycles through context page and/or multiple binding column pages.
 	paged        bool
@@ -100,6 +102,7 @@ type HelpDialogModel struct {
 	// Markdown cache
 	renderedMarkdown      string
 	renderedMarkdownWidth int
+	docImagesFor          int // column width the image render was last requested for
 
 	// displayengine.Scrollbar component
 	Scroll displayengine.Scrollbar
@@ -131,7 +134,14 @@ func NewHelpDialogWithContext(km help.KeyMap, info displayengine.HelpContext, gr
 	return &HelpDialogModel{help: h, focused: true, keyMap: km, contextInfo: info, graphicsSupported: graphicsSupported, Scroll: displayengine.Scrollbar{ID: "help-dialog"}}
 }
 
-func (m *HelpDialogModel) Init() tea.Cmd { return nil }
+// SetConnType records the owning session's connType (see AppModel.connType).
+func (m *HelpDialogModel) SetConnType(connType string) { m.connType = connType }
+
+// SetImages records whether the session's terminal can show Kitty placeholder
+// images (see AppModel.kittyImages).
+func (m *HelpDialogModel) SetImages(images bool) { m.images = images }
+
+func (m *HelpDialogModel) Init() tea.Cmd { return m.ensureDocImages() }
 
 // SetSize updates the dialog dimensions (called by AppModel on window resize).
 func (m *HelpDialogModel) SetSize(w, h int) {
@@ -154,27 +164,29 @@ func (m *HelpDialogModel) HaloColor() color.Color {
 	return lipgloss.Color("0") // Solid black halo
 }
 
+// docTextWidth is the column width the doc page's markdown is wrapped at,
+// exactly matching ViewString: the doc page fills the full usable width
+// (ViewString's targetWidth), less one column for the scrollbar.
+func (m *HelpDialogModel) docTextWidth() int {
+	availW, _ := displayengine.GetAvailableDialogSize(m.width, m.height, true)
+	if availW < 30 {
+		availW = 30
+	}
+	targetWidth := availW
+	if targetWidth < 20 {
+		targetWidth = 20
+	}
+	return targetWidth - 1
+}
+
 func (m *HelpDialogModel) docInfo() (total int, visible int) {
 	if m.contextInfo.DocMarkdown == "" {
 		return 0, 0
 	}
 
-	// Calculate target width for help content exactly matching ViewString.
-	availW, availH := displayengine.GetAvailableDialogSize(m.width, m.height, true)
-	if availW < 30 {
-		availW = 30
-	}
-	targetWidth := availW - 8
-	if targetWidth < 20 {
-		targetWidth = 20
-	}
-	if targetWidth > availW {
-		targetWidth = availW
-	}
-
+	_, availH := displayengine.GetAvailableDialogSize(m.width, m.height, true)
 	// Use rendered lines (wrapped) for accurate scrollbar math.
-	docTextW := targetWidth - 1
-	docLines := m.getDocLines(docTextW)
+	docLines := m.getDocLines(m.docTextWidth())
 	total = len(docLines)
 
 	// Available height for the doc box matching ViewString: availH - halo/outer border overhead (4)

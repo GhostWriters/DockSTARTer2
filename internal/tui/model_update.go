@@ -2,7 +2,7 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/input"
+	uv "github.com/charmbracelet/ultraviolet"
 
 	"DockSTARTer2/internal/config"
 	"DockSTARTer2/internal/displayengine"
@@ -39,9 +39,16 @@ func (m *AppModel) updateWithTint(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// graphicsSupported doc comment). Handled before the !m.ready gate below
 	// since the reply can arrive before the first WindowSizeMsg; doesn't
 	// affect anything currently on screen, so no re-render is needed.
-	if da1, ok := msg.(input.PrimaryDeviceAttributesEvent); ok {
+	if da1, ok := msg.(uv.PrimaryDeviceAttributesEvent); ok {
 		if graphics.HasSixelSupport(da1) {
 			m.graphicsSupported = true
+		}
+		return m, nil
+	}
+
+	if reply, ok := msg.(uv.KittyGraphicsEvent); ok {
+		if graphics.IsKittyProbeReply(reply.Options.ID, reply.Payload) {
+			m.kittyImages = true
 			m.panel.SetGraphicsSupported(true)
 		}
 		return m, nil
