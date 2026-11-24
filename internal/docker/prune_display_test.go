@@ -62,19 +62,21 @@ func TestPruneServicesNetworksAndVolumes(t *testing.T) {
 	}
 }
 
-func TestPruneRepoDigestImagesGoUnderTheirService(t *testing.T) {
+func TestPruneOnlyExactImagesGoUnderTheirService(t *testing.T) {
+	// An older untagged image of a service's repository isn't known to be that
+	// service's: it stays under <no service>, by its repository name.
 	digest := "7b34d43ba1b3d6417033d26bd514971c05d09d6cf7a60c69a0c0aa2f96ddf23b"
 	r := PruneReport{ImagesDeleted: []image.DeleteResponse{
 		{Untagged: "ghcr.io/alexta69/metube@sha256:" + digest}, {Deleted: "sha256:l1"},
-		{Untagged: "redis@sha256:" + digest}, {Deleted: "sha256:l2"},
+		{Untagged: "redis:7"}, {Deleted: "sha256:l2"},
 		{Untagged: "sha256:be802d"}, {Deleted: "sha256:l3"},
 	}}
 	svcs := map[string][]string{"ghcr.io/alexta69/metube:latest": {"metube"}, "docker.io/library/redis:7": {"redis"}}
 	got := prunePlain(r, svcs, true)
-	for _, want := range []string{"✓ docker system prune: 2 services, 3 images, 3 layers", "2 services:",
-		"Removed         metube:", "Removed           image: ghcr.io/alexta69/metube@sha256:7b34d43ba1b3 [1]",
-		"Removed         redis:", "Removed           image: redis@sha256:7b34d43ba1b3 [1]",
-		"✓ Removed       <no service>:", "✓ Removed         image: sha256:be802d [1]"} {
+	for _, want := range []string{"✓ docker system prune: 1 service, 3 images, 3 layers", "1 service:",
+		"Removed         redis:", "Removed           image: redis:7 [1]",
+		"✓ Removed       <no service>:", "✓ Removed         image: ghcr.io/alexta69/metube@sha256:7b34d43ba1b3 [1]",
+		"✓ Removed         image: sha256:be802d [1]"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
@@ -137,18 +139,20 @@ func TestPruneLayersFallBackToDeletions(t *testing.T) {
 }
 
 func TestServicesOfPrunedImages(t *testing.T) {
-	svcs := map[string][]string{
-		"lscr.io/linuxserver/sonarr":     {"sonarr"},
-		"lscr.io/linuxserver/sonarr:4k":  {"sonarr__4k"},
-		"ghcr.io/hotio/seerr@sha256:aaa": {"seerr"},
-	}
 	digest := "@sha256:7b34d43ba1b3d6417033d26bd514971c05d09d6cf7a60c69a0c0aa2f96ddf23b"
+	svcs := map[string][]string{
+		"lscr.io/linuxserver/sonarr":    {"sonarr"},
+		"lscr.io/linuxserver/sonarr:4k": {"sonarr__4k"},
+		"ghcr.io/hotio/seerr" + digest:  {"seerr"},
+	}
 	for ref, want := range map[string]string{
-		"lscr.io/linuxserver/sonarr:latest":   "sonarr",            // a missing tag is latest
-		"lscr.io/linuxserver/sonarr:4k":       "sonarr__4k",        // exact
-		"lscr.io/linuxserver/sonarr" + digest: "sonarr,sonarr__4k", // digest: every service of the repo
-		"lscr.io/linuxserver/sonarr:3":        "",                  // another tag
-		"sha256:be802d":                       "",                  // an image ID
+		"lscr.io/linuxserver/sonarr:latest":   "sonarr",     // a missing tag is latest
+		"lscr.io/linuxserver/sonarr:4k":       "sonarr__4k", // exact
+		"docker.io/library/redis:7":           "",           // not a service's image
+		"ghcr.io/hotio/seerr" + digest:        "seerr",      // the pinned digest
+		"lscr.io/linuxserver/sonarr" + digest: "",           // another digest of the repo
+		"lscr.io/linuxserver/sonarr:3":        "",           // another tag
+		"sha256:be802d":                       "",           // an image ID
 	} {
 		got := strings.Join(servicesOfPrunedImages([]string{ref}, svcs)[ref], ",")
 		if got != want {
