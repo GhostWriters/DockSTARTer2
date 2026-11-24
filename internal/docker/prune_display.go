@@ -157,8 +157,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	errorIconANSI := semstyle.ToANSI(errorIcon)
 
 	// Final statuses take their row's style, as in the compose display: headings
-	// DockerSection (changed: DockerGroupStatus); services, networks, volumes and
-	// containers App; images DockerImage; the container_name line App (its label a detail label); layers dim.
+	// DockerSection (changed: DockerGroupStatus); services, networks, volumes and containers
+	// App; images, and their heading, DockerImage; the container_name line App (its label a
+	// detail label); layers dim.
 	untaggedStatus := semstyle.ToANSI("{{|DockerImage|}}Untagged{{[-]}}")
 	removedStatus := semstyle.ToANSI("{{|App|}}Removed{{[-]}}")
 	errorStatus := semstyle.ToANSI("{{|DockerStatusFail|}}Error{{[-]}}")
@@ -181,8 +182,11 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 			word = "Complete"
 		}
 		tag := "DockerSection"
-		if depth == 0 {
+		switch {
+		case depth == 0:
 			tag = "DockerGroupStatus"
+		case style == dockerlayout.TitleStyle("images"):
+			tag = "DockerImage" // an images heading's word is an image row's
 		}
 		status = semstyle.ToANSI("{{|" + tag + "|}}" + word + "{{[-]}}")
 		if hasErr {

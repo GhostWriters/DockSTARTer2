@@ -124,3 +124,17 @@ func TestPruneFoldedServicesKeepTheirNameStyle(t *testing.T) {
 		}
 	}
 }
+
+func TestPruneImagesHeadingWordIsImageStyle(t *testing.T) {
+	prev := semstyle.GetPreferredProfile()
+	semstyle.SetPreferredProfile(colorprofile.ANSI)
+	t.Cleanup(func() { semstyle.SetPreferredProfile(prev) })
+	r := PruneReport{ImagesDeleted: []image.DeleteResponse{{Untagged: "sha256:067bd9"}, {Deleted: "sha256:l1"}}}
+	lines, _ := buildPruneLines(r, nil, false, false, 160)
+	want := semstyle.ToANSI("{{|DockerImage|}}Untagged{{[-]}}")
+	for _, l := range lines {
+		if strings.Contains(ansi.Strip(l), "unused image:") && !strings.Contains(l, want) {
+			t.Errorf("images heading %q lacks the image style for its status word", l)
+		}
+	}
+}
