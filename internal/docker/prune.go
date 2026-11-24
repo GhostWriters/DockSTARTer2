@@ -88,7 +88,9 @@ func Prune(ctx context.Context, assumeYes bool) error {
 		report.SpaceReclaimed += vRes.Report.SpaceReclaimed
 	}
 
-	// 4. Images (--all = include non-dangling, equivalent to docker image prune --all)
+	// 4. Images (--all = include non-dangling, equivalent to docker image prune --all).
+	// Every image's layers first, as only an image's inspect gives its real layers.
+	report.ImageLayers = imageLayerMap(ctx, cli)
 	iRes, err := cli.ImagePrune(ctx, client.ImagePruneOptions{Filters: make(client.Filters).Add("dangling", "false")})
 	if err != nil {
 		report.ImagesError = err
@@ -107,6 +109,24 @@ func Prune(ctx context.Context, assumeYes bool) error {
 	}
 
 	return nil
+}
+
+// imageLayerMap returns each image's ID mapped to its layers (RootFS diff IDs); nil when
+// the images can't be listed. An image that can't be inspected is left out.
+func imageLayerMap(ctx context.Context, cli *client.Client) map[string][]string {
+	res, err := cli.ImageList(ctx, client.ImageListOptions{})
+	if err != nil {
+		return nil
+	}
+	m := make(map[string][]string, len(res.Items))
+	for _, img := range res.Items {
+		info, err := cli.ImageInspect(ctx, img.ID)
+		if err != nil {
+			continue
+		}
+		m[img.ID] = info.RootFS.Layers
+	}
+	return m
 }
 
 // containerServiceMap returns a map of container ID (both full and 12-char short forms)
