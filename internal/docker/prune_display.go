@@ -686,21 +686,15 @@ func displayRef(refs []string) string {
 	return ""
 }
 
-// servicesOfPrunedImages maps each pruned image ref to the compose services whose image it
-// is. A ref matches its compose image by name and tag, a missing tag meaning latest; a
-// repo@digest ref (an image whose tag moved to a newer pull) matches every service of
-// its repository. Image IDs match nothing.
+// servicesOfPrunedImages maps each pruned image ref to the compose services configured
+// with that exact image: the same name and tag (a missing tag meaning latest) or the
+// same digest. An image of a service's repository under another tag or digest isn't
+// known to be that service's, so it matches nothing; nor do image IDs.
 func servicesOfPrunedImages(refs []string, imageServices map[string][]string) map[string][]string {
-	byTag := map[string][]string{}
-	byRepo := map[string][]string{}
+	byKey := map[string][]string{}
 	for img, svcs := range imageServices {
-		named, err := reference.ParseNormalizedNamed(img)
-		if err != nil {
-			continue
-		}
-		byRepo[named.Name()] = append(byRepo[named.Name()], svcs...)
-		if key := tagKey(named); key != "" {
-			byTag[key] = append(byTag[key], svcs...)
+		if key := imageKey(img); key != "" {
+			byKey[key] = append(byKey[key], svcs...)
 		}
 	}
 	out := make(map[string][]string, len(refs))
@@ -712,17 +706,7 @@ func servicesOfPrunedImages(refs []string, imageServices map[string][]string) ma
 		if ref == "" || strings.HasPrefix(ref, "sha256:") {
 			continue
 		}
-		named, err := reference.ParseNormalizedNamed(ref)
-		if err != nil {
-			continue
-		}
-		svcs := byTag[tagKey(named)]
-		if _, tagged := named.(reference.Tagged); !tagged {
-			if _, digested := named.(reference.Digested); digested {
-				svcs = byRepo[named.Name()]
-			}
-		}
-		if len(svcs) > 0 {
+		if svcs := byKey[imageKey(ref)]; len(svcs) > 0 {
 			svcs = slices.Clone(svcs)
 			slices.Sort(svcs)
 			out[ref] = slices.Compact(svcs)
@@ -731,16 +715,14 @@ func servicesOfPrunedImages(refs []string, imageServices map[string][]string) ma
 	return out
 }
 
-// tagKey returns named's repository and tag, latest when it has none; "" for a
-// reference pinned by digest alone.
-func tagKey(named reference.Named) string {
-	if t, ok := named.(reference.Tagged); ok {
-		return named.Name() + ":" + t.Tag()
-	}
-	if _, ok := named.(reference.Digested); ok {
+// imageKey returns ref in its full form, with latest for a missing tag
+// (busybox → docker.io/library/busybox:latest); "" when it doesn't parse.
+func imageKey(ref string) string {
+	named, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
 		return ""
 	}
-	return named.Name() + ":latest"
+	return reference.TagNameOnly(named).String()
 }
 
 // shortRefDigest returns ref with a digest after its repository cut to its first 12
