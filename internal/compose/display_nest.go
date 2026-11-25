@@ -302,13 +302,97 @@ type kindGroups struct {
 	changed, unchanged groupSet
 }
 
+// namesLead matches a line's text past its status column when a label (N noun:) leads
+// names on it: the indent, then the label and the space after it.
+var namesLead = regexp.MustCompile(`^( *)(\d+ [^\s:]+: )\S`)
+
+// namesColumn returns the visible column where the names a label (N noun:) leads start
+// on line, -1 when line is not a row with such names.
+func namesColumn(line string) int {
+	if rowWord(line) == "" {
+		return -1
+	}
+	runes := []rune(visibleText(line))
+	start := globalIndentW + iconW + spaceW + sectionStatusW
+	if len(runes) <= start {
+		return -1
+	}
+	m := namesLead.FindStringSubmatch(string(runes[start:]))
+	if m == nil {
+		return -1
+	}
+	return start + utf8.RuneCountInString(m[1]) + utf8.RuneCountInString(m[2])
+}
+
+// continuesNames reports whether line is a wrapped line of names starting at col.
+func continuesNames(line string, col int) bool {
+	runes := []rune(visibleText(line))
+	return len(runes) > col && strings.TrimLeft(string(runes[:col]), " ") == "" && runes[col] != ' '
+}
+
+// alignNames returns lines with the names of every label (N noun:) starting at one
+// column, the furthest any reaches; a folded group's names are rewrapped to termW from
+// there. timers stay one per line.
+func alignNames(lines []string, timers []timerEntry, termW int) ([]string, []timerEntry) {
+	type namesRun struct{ first, end, col int } // lines [first, end), names at col
+	var runs []namesRun
+	target := 0
+	for i := 0; i < len(lines); i++ {
+		col := namesColumn(lines[i])
+		if col < 0 {
+			continue
+		}
+		r := namesRun{first: i, end: i + 1, col: col}
+		for r.end < len(lines) && strings.HasSuffix(visibleText(lines[r.end-1]), ",") && continuesNames(lines[r.end], col) {
+			r.end++
+		}
+		runs = append(runs, r)
+		target = max(target, col)
+		i = r.end - 1
+	}
+	var outLines []string
+	var outTimers []timerEntry
+	next := 0
+	for _, r := range runs {
+		if r.col == target {
+			continue
+		}
+		outLines = append(outLines, lines[next:r.first]...)
+		outTimers = append(outTimers, timers[next:r.first]...)
+		next = r.end
+		k := indexAfterColumns(lines[r.first], r.col)
+		names := []string{lines[r.first][k:]}
+		for _, line := range lines[r.first+1 : r.end] {
+			names = append(names, strings.TrimLeft(line, " "))
+		}
+		room := max(termW-timerReserveW-summaryHeaderIndentW-target, minDetailW)
+		for w, part := range wrapStyled(strings.Join(names, " "), room) {
+			if w == 0 {
+				outLines = append(outLines, lines[r.first][:k]+strutil.Repeat(" ", target-r.col)+part)
+			} else {
+				outLines = append(outLines, strutil.Repeat(" ", target)+part)
+			}
+			t := timerEntry{}
+			if r.first+w < r.end {
+				t = timers[r.first+w]
+			}
+			outTimers = append(outTimers, t)
+		}
+	}
+	if next == 0 {
+		return lines, timers
+	}
+	return append(outLines, lines[next:]...), append(outTimers, timers[next:]...)
+}
+
 // groupedLines returns the changed: heading, then the unchanged: one, each with
 // its kinds' rolled-up state and timer, leaving out one with no rows. Under each, a
 // kind with rows gets a heading (N services:) and its rows, or folded group lines,
 // nested under it, so a line keeps its indent as rows fold and unfold. A heading shows
 // the status word all its rows share, and a folded group or a lone row that is all
-// there is under it stands in for it.
-func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []timerEntry) {
+// there is under it stands in for it. Names after a label (N noun:) all start at one
+// column (alignNames), wrapped to termW.
+func (p *consoleEventProcessor) groupedLines(kinds []kindGroups, termW int) ([]string, []timerEntry) {
 	var lines []string
 	var timers []timerEntry
 	// After a failed run nothing is still pending: what never got going was cut short,
@@ -396,7 +480,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 			timers = append(timers, setTimers...)
 		}
 	}
-	return lines, timers
+	return alignNames(lines, timers, termW)
 }
 
 // set returns k's changed or unchanged set, by adjective.
