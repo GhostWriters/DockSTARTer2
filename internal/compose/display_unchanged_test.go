@@ -34,9 +34,18 @@ func newGroupsTestProcessor(command string) *consoleEventProcessor {
 	return p
 }
 
-// renderPlain returns the processor's lines, plain, at level.
+// renderPlain returns the processor's lines, plain, at level, with one space after a
+// label (N noun:) whatever column alignNames moved its names to.
 func renderPlain(p *consoleEventProcessor, level int) string {
-	return strings.Join(plainLines(p.buildLines(160, level)), "\n")
+	return unalignNames(strings.Join(plainLines(p.buildLines(160, level)), "\n"))
+}
+
+// alignedLabel matches a label (N noun:) and the spaces after it.
+var alignedLabel = regexp.MustCompile(`(\d+ [^\s:]+:) +`)
+
+// unalignNames returns s with one space after each label (N noun:).
+func unalignNames(s string) string {
+	return alignedLabel.ReplaceAllString(s, "$1 ")
 }
 
 func TestServicesStartInTheGroupOfTheirState(t *testing.T) {
@@ -593,7 +602,7 @@ func TestGroupLineStatusAndTimerFollowTheTitle(t *testing.T) {
 	k := kindGroups{singular: "service", plural: "services", changed: groupSet{
 		count: 1, state: rollupComplete, lines: []string{row}, timers: []timerEntry{{style: timerService}},
 	}}
-	lines, timers := p.groupedLines([]kindGroups{k})
+	lines, timers := p.groupedLines([]kindGroups{k}, 120)
 	if len(lines) != 2 || len(timers) != 2 {
 		t.Fatalf("lines = %q, want the changed: line and the lone row standing in for its heading", lines)
 	}
@@ -680,13 +689,13 @@ func TestHeadingIgnoresLinesUnderItsRows(t *testing.T) {
 	k := kindGroups{singular: "service", plural: "services", changed: groupSet{
 		count: 1, state: rollupComplete, lines: lines, timers: make([]timerEntry, len(lines)),
 	}}
-	got, _ := p.groupedLines([]kindGroups{k})
+	got, _ := p.groupedLines([]kindGroups{k}, 120)
 	if !strings.Contains(got[0], "Recreated") || strings.Contains(got[0], "Complete") {
 		t.Errorf("changed: line = %q, want Recreated", got[0])
 	}
 	// A failure under the row shows through the state, not as Recreated.
 	k.changed.state = rollupError
-	got, _ = p.groupedLines([]kindGroups{k})
+	got, _ = p.groupedLines([]kindGroups{k}, 120)
 	if !strings.Contains(got[0], "Error") || strings.Contains(got[0], "Recreated") {
 		t.Errorf("changed: line with a failed image = %q, want Error", got[0])
 	}

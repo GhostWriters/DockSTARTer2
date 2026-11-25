@@ -35,7 +35,7 @@ func newJobsTestProcessor(command string) *consoleEventProcessor {
 // on their own, else the jobs: section.
 func jobLines(p *consoleEventProcessor, level int) []string {
 	if p.groupsRows() {
-		lines, _ := p.groupedLines([]kindGroups{p.jobGroups(160, level)})
+		lines, _ := p.groupedLines([]kindGroups{p.jobGroups(160, level)}, 160)
 		return plainLines(lines)
 	}
 	lines, _ := p.buildJobLines(160, level)
