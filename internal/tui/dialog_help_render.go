@@ -199,7 +199,7 @@ func (m *HelpDialogModel) ViewString() string {
 	m.help.SetWidth(targetWidth)
 
 	dialogStyle := theme.ThemeSemanticStyle("{{|Dialog|}}")
-	haloColor := lipgloss.Color("0") // Solid black halo
+	haloColor := helpHaloColor()
 
 	// Apply theme styles to the help component
 	sepStyle := dialogStyle
@@ -482,13 +482,12 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	if boxContent != "" {
-		// Use white-on-black ONLY for the documentation page.
-		// Standard context boxes should match the outer dialog theme.
+		// The documentation page is a viewport onto rendered text, so it uses
+		// the theme's console/program output style. Standard context boxes
+		// match the outer dialog theme.
 		scrollCtx := ctx
 		if isDoc {
-			scrollCtx.ContentBackground = lipgloss.NewStyle().
-				Background(lipgloss.Color("0")).
-				Foreground(lipgloss.Color("15"))
+			scrollCtx.ContentBackground = theme.ThemeSemanticRawStyle("ProgramBox")
 		}
 
 		boxContent = displayengine.ApplyScrollbar(

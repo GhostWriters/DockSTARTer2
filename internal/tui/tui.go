@@ -418,9 +418,9 @@ func parseClientInfo(environ []string) (clientIP, connType string, viaOwnServer 
 // detected once at its own launch (that says nothing about what any given
 // connecting client can actually render).
 //
-//   - "web": always TrueColor. The web frontend is a real xterm.js instance
-//     in a modern browser -- same "assume max capability" reasoning already
-//     used elsewhere for it (e.g. Sixel graphics support).
+//   - "web": always TrueColor. The web frontend is sip's WebGL terminal in a
+//     modern browser -- same "assume max capability" reasoning already used
+//     elsewhere for it (e.g. image support).
 //   - "ssh": derived from this session's own negotiated TERM (ssh_handler.go
 //     sets "TERM=<ptyReq.Term>" in Environ) and COLORTERM, if the client
 //     forwarded it (most don't by default). Uses colorprofile.Env, not

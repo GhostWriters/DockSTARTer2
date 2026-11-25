@@ -248,15 +248,15 @@ type AppModel struct {
 	// from its own launch environment.
 	colorProfile colorprofile.Profile
 
-	// graphicsSupported reports whether this session's terminal has
-	// confirmed Sixel graphics support, via a Primary Device Attributes
-	// (DA1) query sent from Init(). Starts false and flips true if/when the
-	// terminal answers (see model_update.go's input.PrimaryDeviceAttributesEvent
-	// case) -- most terminals respond within a frame or two of startup, but
-	// an unsupported one may never respond, so false is also the permanent
-	// answer in that case. "web" sessions skip the query entirely and are
-	// always treated as supported (the browser frontend is sip's WebGL
-	// terminal, which draws Sixel and Kitty images, placeholders included).
+	// graphicsSupported reports whether this session's terminal listed Sixel
+	// in its reply to the Primary Device Attributes (DA1) query sent from
+	// Init() (see model_update.go's uv.PrimaryDeviceAttributesEvent case).
+	// Starts false and flips true if/when the terminal answers -- most
+	// terminals respond within a frame or two of startup, but an unsupported
+	// one may never respond, so false is also the permanent answer in that
+	// case. "web" sessions skip the query and count as supported (the
+	// browser frontend is sip's WebGL terminal, which draws Sixel and Kitty
+	// images, placeholders included).
 	graphicsSupported bool
 
 	// kittyImages reports whether this session's terminal answered the

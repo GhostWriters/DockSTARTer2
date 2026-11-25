@@ -86,7 +86,7 @@ type HelpDialogModel struct {
 	keyMap            help.KeyMap
 	contextInfo       displayengine.HelpContext // structured help info
 	contextOffset     int                       // scroll offset for item context text
-	graphicsSupported bool                      // resolved capability -- gates markdown graphics rendering
+	graphicsSupported bool                      // set by the caller, not read here; the doc images are gated by images
 	connType          string                    // the session's connType, for per-connType settings
 	images            bool                      // the session's terminal can show Kitty placeholder images
 
@@ -125,8 +125,8 @@ func NewHelpDialogModelWithMap(km help.KeyMap) *HelpDialogModel {
 // NewHelpDialogWithContext creates a help dialog that shows contextInfo
 // (e.g. current variable info) above the standard key bindings.
 // Pass an empty displayengine.HelpContext to show only the key bindings.
-// graphicsSupported gates whether the doc page's markdown attempts graphics
-// rendering -- the caller resolves this from AppModel.graphicsSupported /
+// graphicsSupported is stored but not read (the doc images are gated by
+// SetImages); the caller resolves it from AppModel.graphicsSupported /
 // connType == "web" (see showHelpCmd).
 func NewHelpDialogWithContext(km help.KeyMap, info displayengine.HelpContext, graphicsSupported bool) *HelpDialogModel {
 	h := help.New()
@@ -161,7 +161,17 @@ func (m *HelpDialogModel) HasHalo() bool {
 
 // HaloColor implements HaloProvider
 func (m *HelpDialogModel) HaloColor() color.Color {
-	return lipgloss.Color("0") // Solid black halo
+	return helpHaloColor()
+}
+
+// helpHaloColor is the colour of the help dialog's halo and rim: the theme's
+// shadow colour, so that, like every themed colour, it goes through the tints
+// (a raw palette index bypasses them, and shows as a different black).
+func helpHaloColor() color.Color {
+	if c := displayengine.GetActiveContext().ShadowColor; c != nil && c != (lipgloss.NoColor{}) {
+		return c
+	}
+	return lipgloss.Color("0")
 }
 
 // docTextWidth is the column width the doc page's markdown is wrapped at,
