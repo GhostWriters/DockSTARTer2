@@ -118,9 +118,9 @@ func TestVerboseNestsRowsUnderHeadings(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, dockerlayout.VerboseDetails)
-	changed, unchanged := strings.Index(got, "Complete    changed:"), strings.Index(got, "Complete    unchanged:")
+	changed, unchanged := strings.Index(got, "Recreated   changed:"), strings.Index(got, "Running     unchanged:")
 	if changed < 0 || unchanged < changed {
-		t.Fatalf("-v display =\n%s\nwant changed:, then unchanged:, both Complete", got)
+		t.Fatalf("-v display =\n%s\nwant changed:, then unchanged:, each with its rows' word", got)
 	}
 	// A service's row, its image under it, stands in for its kind's heading, the status
 	// column staying put.
@@ -573,22 +573,22 @@ func TestLoneRowStandsInForItsHeading(t *testing.T) {
 	if _, ok := labelRow(row+" more", 1, "service", "services"); ok {
 		t.Error("labelRow took a line that doesn't end with the name and colon")
 	}
-	if w, _ := sharedStatus([]string{rowLine("Running", "a"), rowLine("Running", "b")}); w != "Running" {
-		t.Errorf("sharedStatus word = %q, want Running", w)
+	if l := sharedStatus([]string{rowLine("Running", "a"), rowLine("Running", "b")}); l.word != "Running" {
+		t.Errorf("sharedStatus word = %q, want Running", l.word)
 	}
-	if w, _ := sharedStatus([]string{rowLine("Running", "a"), rowLine("Existing", "b")}); w != "" {
-		t.Errorf("sharedStatus word = %q, want none for differing words", w)
+	if l := sharedStatus([]string{rowLine("Running", "a"), rowLine("Existing", "b")}); l.word != "" {
+		t.Errorf("sharedStatus word = %q, want none for differing words", l.word)
 	}
 }
 
 // rowLine returns a row's line with status word word and name name.
 func rowLine(word, name string) string {
-	return globalIndent + "X" + " " + word + strutil.Repeat(" ", sectionStatusW-len(word)) + sectionChildIndent + name
+	return globalIndent + "X" + " " + word + strutil.Repeat(" ", sectionStatusW-len(word)) + sectionChildIndent + name + "{{|DockerColon|}}:{{[-]}}"
 }
 
 func TestGroupLineStatusAndTimerFollowTheTitle(t *testing.T) {
 	p := newGroupsTestProcessor("restart")
-	row := globalIndent + "X" + " " + serviceFinalTag + "Restarted{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len("Restarted")) +
+	row := globalIndent + "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}} " + serviceFinalTag + "Restarted{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len("Restarted")) +
 		sectionChildIndent + "{{|App|}}db{{[-]}}" + "{{|DockerColon|}}:{{[-]}}"
 	k := kindGroups{singular: "service", plural: "services", changed: groupSet{
 		count: 1, state: rollupComplete, lines: []string{row}, timers: []timerEntry{{style: timerService}},
@@ -609,18 +609,18 @@ func TestWarningWordPassesUpOnlyWhenTheRowsOwnIsOne(t *testing.T) {
 	p := newGroupsTestProcessor("up")
 	warn := p.groupLines(interruptedText, false, []string{"db", "web"}, "service", "services", 120)
 	set := groupSet{count: 2, state: rollupWarning, lines: warn, timers: make([]timerEntry, len(warn))}
-	if w := setWord(set, rollupWarning); w != interruptedText {
-		t.Errorf("setWord of rows all Interrupted = %q, want Interrupted", w)
+	if w := setLook(set, rollupWarning).word; w != interruptedText {
+		t.Errorf("setLook of rows all Interrupted = %q, want Interrupted", w)
 	}
 	// Rows that say Running, whatever warning their set has, don't pass Running up as a warning.
 	ok := p.groupLines(api.StatusRunning, false, []string{"db", "web"}, "service", "services", 120)
-	if w := setWord(groupSet{count: 2, lines: ok}, rollupWarning); w != "" {
-		t.Errorf("setWord of Running rows under a warning = %q, want none", w)
+	if w := setLook(groupSet{count: 2, lines: ok}, rollupWarning).word; w != "" {
+		t.Errorf("setLook of Running rows under a warning = %q, want none", w)
 	}
 	// Mixed words stay Warning.
 	mixed := append(slices.Clone(warn), ok...)
-	if w := setWord(groupSet{count: 4, lines: mixed}, rollupWarning); w != "" {
-		t.Errorf("setWord of mixed rows = %q, want none", w)
+	if w := setLook(groupSet{count: 4, lines: mixed}, rollupWarning).word; w != "" {
+		t.Errorf("setLook of mixed rows = %q, want none", w)
 	}
 }
 
@@ -655,5 +655,60 @@ func TestSummaryCountsOfTopLevelKindsShareAStyle(t *testing.T) {
 	}
 	if got, want := countLabel(2, "image", "images"), "{{|DockerImage|}}2 images{{[-]}}"; got != want {
 		t.Errorf("countLabel(images) = %q, want %q", got, want)
+	}
+}
+
+// detailLine returns a line under a row: a status word in its column, then a label and a value.
+func detailLine(icon, tag, word, label string) string {
+	return globalIndent + icon + " " + tag + word + "{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len(word)) +
+		sectionChildIndent + sectionChildIndent + label + "{{|DockerColon|}}:{{[-]}} value"
+}
+
+func TestHeadingIgnoresLinesUnderItsRows(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	row := globalIndent + "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}} " + serviceFinalTag + "Recreated{{[-]}}" +
+		strutil.Repeat(" ", sectionStatusW-len("Recreated")) + sectionChildIndent + "{{|App|}}jackett{{[-]}}{{|DockerColon|}}:{{[-]}}"
+	lines := []string{
+		row,
+		detailLine("{{|DockerMarkerDone|}}"+p.icons().done+"{{[-]}}", "{{|DockerImage|}}", "Pulled", "image"),
+		detailLine("{{|DockerInfo|}}i{{[-]}}", "{{|DockerInfo|}}", "Info", "version"),
+		detailLine("{{|DockerInfo|}}i{{[-]}}", "{{|DockerInfo|}}", "Info", "built"),
+	}
+	if l := sharedStatus(lines); l.word != "Recreated" {
+		t.Errorf("sharedStatus word = %q, want Recreated whatever sits under the row", l.word)
+	}
+	k := kindGroups{singular: "service", plural: "services", changed: groupSet{
+		count: 1, state: rollupComplete, lines: lines, timers: make([]timerEntry, len(lines)),
+	}}
+	got, _ := p.groupedLines([]kindGroups{k})
+	if !strings.Contains(got[0], "Recreated") || strings.Contains(got[0], "Complete") {
+		t.Errorf("changed: line = %q, want Recreated", got[0])
+	}
+	// A failure under the row shows through the state, not as Recreated.
+	k.changed.state = rollupError
+	got, _ = p.groupedLines([]kindGroups{k})
+	if !strings.Contains(got[0], "Error") || strings.Contains(got[0], "Recreated") {
+		t.Errorf("changed: line with a failed image = %q, want Error", got[0])
+	}
+}
+
+func TestHeadingTakesTheRowsInfoIcon(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	manual := func(name string) string {
+		return globalIndent + "{{|DockerInfo|}}i{{[-]}} {{|DockerInfo|}}Manual{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len("Manual")) +
+			sectionChildIndent + name + "{{|DockerColon|}}:{{[-]}}"
+	}
+	done := globalIndent + "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}} " + serviceFinalTag + "Created{{[-]}}" +
+		strutil.Repeat(" ", sectionStatusW-len("Created")) + sectionChildIndent + "job" + "{{|DockerColon|}}:{{[-]}}"
+	set := func(lines ...string) groupSet {
+		return groupSet{count: len(lines), state: rollupComplete, lines: lines, timers: make([]timerEntry, len(lines))}
+	}
+	icon, tag, text := p.stateLineWord(rollupComplete, setLook(set(manual("a"), manual("b")), rollupComplete))
+	if text != "Manual" || !strings.Contains(icon, "DockerInfo") || !strings.Contains(tag, "DockerInfo") {
+		t.Errorf("heading over manual jobs = %q %q %q, want the info icon, style and Manual", icon, tag, text)
+	}
+	icon, _, text = p.stateLineWord(rollupComplete, setLook(set(manual("a"), done), rollupComplete))
+	if text != "Complete" || strings.Contains(icon, "DockerInfo") {
+		t.Errorf("heading over mixed rows = %q %q, want the generic Complete look", icon, text)
 	}
 }
