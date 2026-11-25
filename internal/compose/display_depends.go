@@ -36,13 +36,22 @@ const (
 	depFailed
 )
 
-// depEntry is one name on a detail line: its state, the problem to show after it, and
-// whether it is required (an optional one's failure makes the line a warning, not a failure).
+// depEntry is one name on a detail line: its state, the problem to show after it,
+// whether it is required (an optional one's failure makes the line a warning, not a
+// failure), and whether it failed only because the run stopped (knockOn): a warning too.
 type depEntry struct {
 	name     string
 	state    depState
 	problem  string
 	required bool
+	knockOn  bool
+}
+
+// knockOn reports whether svc's row was interrupted: compose gave it up when another
+// row failed or the run stopped early, so it is not the failure itself.
+func (p *consoleEventProcessor) knockOn(svc string) bool {
+	t := p.tasks[svc]
+	return t != nil && t.interrupted
 }
 
 // depGroups lists a service's dependency lines in display order: label, condition
@@ -190,7 +199,7 @@ func (p *consoleEventProcessor) dependsLines(svc string, termW int, all bool) []
 		for _, d := range deps {
 			if d.condition == g.condition && d.required == g.required {
 				state, problem := p.depStatus(d)
-				entries = append(entries, depEntry{d.name, state, problem, d.required})
+				entries = append(entries, depEntry{d.name, state, problem, d.required, state == depFailed && p.knockOn(d.name)})
 			}
 		}
 		lines = append(lines, p.detailNameLines(g.label, entries, p.reachedContainers(svc), all, false, termW)...)
@@ -283,7 +292,7 @@ func (p *consoleEventProcessor) neededByLines(svc string, termW int, all bool) [
 		var entries []depEntry
 		for _, d := range p.neededBy(svc) {
 			state, problem := p.dependentStatus(svc, d)
-			entries = append(entries, depEntry{d.name, state, problem, true})
+			entries = append(entries, depEntry{d.name, state, problem, true, state == depFailed && p.knockOn(d.name)})
 		}
 		return p.detailNameLines("needed by", entries, true, all, false, termW)
 	}
@@ -298,7 +307,8 @@ func (p *consoleEventProcessor) neededByLines(svc string, termW int, all bool) [
 		for _, d := range p.neededBy(svc) {
 			if d.condition == g.condition && d.required == g.required {
 				state, problem := p.dependentStatus(svc, d)
-				entries = append(entries, depEntry{d.name, state, problem, d.required})
+				// state is whether svc met the need, so svc's own row decides knockOn.
+				entries = append(entries, depEntry{d.name, state, problem, d.required, state == depFailed && p.knockOn(svc)})
 			}
 		}
 		cause := g.required && p.serviceDown(svc)
@@ -339,6 +349,7 @@ func (p *consoleEventProcessor) reachedContainers(svc string) bool {
 // reads, so names with different statuses don't share one.
 const (
 	classFailed   = iota // compose reported it failed: Unmet, red
+	classKnockOn         // it failed only because the run stopped: Unmet, a warning
 	classCrashed         // it went down after it was met: Crashed
 	classOptional        // an optional name failed or warned: Unmet, a warning
 	classWarning         // a warning, such as No Result
@@ -351,6 +362,8 @@ func entryClass(e depEntry) int {
 	switch {
 	case (e.state == depFailed || e.state == depWarning) && !e.required:
 		return classOptional
+	case e.state == depFailed && e.knockOn:
+		return classKnockOn
 	case e.state == depFailed:
 		return classFailed
 	case e.state == depWarning && downProblem(e.problem):
@@ -385,7 +398,8 @@ func (p *consoleEventProcessor) detailNameLines(label string, entries []depEntry
 // there are none. Each name takes its state's style; the line's status is the worst of
 // them. A line with a name still pending reads Waiting when compose may be waiting on
 // it, else Pending; one whose names went down after they were met reads Crashed; one
-// whose only problems are optional names reads Unmet as a warning. With cause, a line of
+// whose only problems are optional names, or names that failed only because the run
+// stopped (knockOn), reads Unmet as a warning. With cause, a line of
 // names that went down is the cause of another service's problem, in the cause marker,
 // not a failure. Without all, a line that is Ready with no name showing a problem is
 // left out.
@@ -402,16 +416,20 @@ func (p *consoleEventProcessor) detailNameGroup(label string, entries []depEntry
 	onlyNoResult := true
 	warns, downWarns := 0, 0 // names that warn, and of those, ones whose container went down
 	optionalProblem := false // an optional name failed or warned: the line is a warning
+	knockOn := true          // every failed name failed only because the run stopped: a warning
 	for _, e := range entries {
 		state := e.state
 		style := "DockerDependsWaiting"
 		switch {
 		case state == depMet:
 			style = "DockerDependsMet"
-		case state == depFailed && e.required && cause:
-			style = "DockerDependsWaiting" // named as the one it blocks, in the warning colour
+		case state == depFailed && e.required && (cause || e.knockOn):
+			style = "DockerDependsWaiting" // the warning colour: named as the one it blocks, or a knock-on
 		case state == depFailed && e.required:
 			style = "DockerDependsFailed"
+		}
+		if state == depFailed && e.required && !e.knockOn {
+			knockOn = false
 		}
 		if (state == depFailed || state == depWarning) && !e.required {
 			state = depMet // compose starts the service anyway; the name shows the problem
@@ -445,10 +463,15 @@ func (p *consoleEventProcessor) detailNameGroup(label string, entries []depEntry
 	case depFailed:
 		icon = "{{|DockerMarkerError|}}" + ic.error + "{{[-]}}"
 		statusText, statusTag = "Unmet", "{{|DockerStatusFail|}}Unmet{{[-]}}"
-		if cause {
+		switch {
+		case cause:
 			// The unmet condition is this service's own fault: the cause marker, as on a
 			// ports line that holds a port another service wanted.
 			icon = "{{|DockerMarkerCause|}}" + ic.warn + "{{[-]}}"
+			statusTag = "{{|DockerStatusWarn|}}Unmet{{[-]}}"
+		case knockOn:
+			// Unmet only because the run stopped: a warning, as the interrupted rows are.
+			icon = "{{|DockerMarkerWarn|}}" + ic.warn + "{{[-]}}"
 			statusTag = "{{|DockerStatusWarn|}}Unmet{{[-]}}"
 		}
 	case depPending:
