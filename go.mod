@@ -4,12 +4,12 @@ go 1.27.4
 
 require (
 	charm.land/bubbles/v2 v2.2.2
-	charm.land/bubbletea/v2 v2.1.2
+	charm.land/bubbletea/v2 v2.1.3
 	charm.land/glamour/v2 v2.0.2-0.20261124135012-e8e818de371b
 	charm.land/lipgloss/v2 v2.1.1
 	charm.land/log/v2 v2.0.1
 	charm.land/ssh v0.4.3
-	charm.land/wish/v2 v2.0.5
+	charm.land/wish/v2 v2.0.6
 	github.com/Gaurav-Gosain/sip v0.10.1-0.20261125150211-569e05a3ad31
 	github.com/GhostWriters/semstyle v0.4.1
 	github.com/Masterminds/semver/v3 v3.5.0
@@ -17,14 +17,14 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/buger/goterm v1.0.4
 	github.com/charmbracelet/colorprofile v0.4.3
-	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4
+	github.com/charmbracelet/ultraviolet v0.0.0-20261125122737-8ed499892fb4
 	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/charmbracelet/x/input v0.3.7
 	github.com/compose-spec/compose-go/v2 v2.17.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.7.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.10.0+incompatible
+	github.com/docker/cli v29.10.1+incompatible
 	github.com/docker/compose/v5 v5.8.0
 	github.com/docker/go-units v0.5.0
 	github.com/fsnotify/fsnotify v1.10.1
