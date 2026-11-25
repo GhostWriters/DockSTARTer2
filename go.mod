@@ -10,7 +10,7 @@ require (
 	charm.land/log/v2 v2.0.1
 	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.5
-	github.com/Gaurav-Gosain/sip v0.10.0
+	github.com/Gaurav-Gosain/sip v0.10.1-0.20261125150211-569e05a3ad31
 	github.com/GhostWriters/semstyle v0.4.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/adrg/xdg v0.5.3

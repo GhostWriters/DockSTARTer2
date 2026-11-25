@@ -26,8 +26,8 @@ github.com/CLHatch/glamour/v2 v2.0.2-rgba.1 h1:il+D6F0gG5DqvECY9umdvv/3QSLjh0J8u
 github.com/CLHatch/glamour/v2 v2.0.2-rgba.1/go.mod h1:xpPFR57NqHiVk5CGF6v3/RQ7vRJ9s+jPlH/gWpajWQY=
 github.com/DefangLabs/secret-detector v1.1.0 h1:uLwHshx7w7p8u7FMaeZdIqfohfVT/9YU2KX/Y8fyBpA=
 github.com/DefangLabs/secret-detector v1.1.0/go.mod h1:AKE3ccusL69/Lku0WQkDmIaNDqMyOt6YqRQwmZ0bvsI=
-github.com/Gaurav-Gosain/sip v0.10.0 h1:u1pAfiSaUx9g3aB1kNH8KEzxP7j+ffHZkwImRhfGtfA=
-github.com/Gaurav-Gosain/sip v0.10.0/go.mod h1:BCi2XYCVFybEeSXPgSFmyPy+sO4xaPg47k+XCREyPDk=
+github.com/Gaurav-Gosain/sip v0.10.1-0.20261125150211-569e05a3ad31 h1:aWOoOrlJhDMxgcJdmKqhTur2Naz4TS7KrGqumyEaT8g=
+github.com/Gaurav-Gosain/sip v0.10.1-0.20261125150211-569e05a3ad31/go.mod h1:BCi2XYCVFybEeSXPgSFmyPy+sO4xaPg47k+XCREyPDk=
 github.com/GhostWriters/semstyle v0.4.1 h1:kyXWlMABXdJzUsLTZhiL/wTrgrh9Lw1S6EoEBQV1q6E=
 github.com/GhostWriters/semstyle v0.4.1/go.mod h1:PuoGlb821OkCHJw0VIbOP0GtOmJD+BSqvVe3yPtRiVE=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
