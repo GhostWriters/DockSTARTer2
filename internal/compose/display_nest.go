@@ -423,7 +423,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups, termW int) ([]s
 		groupState := combineStates(states)
 		icon, tag, text := p.stateLineWord(groupState, commonLook(looks))
 		if groupState == rollupComplete {
-			tag = strings.Replace(tag, sectionFinalTag, "{{|DockerGroupStatus|}}", 1) // the group's own style, as its title
+			tag = strings.Replace(tag, sectionFinalTag, "{{|DockerGroupStatus|}}", 1) // in the group's hue, as a kind heading's is in its kind's
 		}
 		lines = append(lines, globalIndent+icon+" "+tag+strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text))+
 			"{{|DockerGroupHeading|}}"+adjective+"{{[-]}}{{|DockerColon|}}:{{[-]}}")

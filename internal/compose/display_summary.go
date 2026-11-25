@@ -121,7 +121,7 @@ const (
 	timerService                   // App cyan — individual service containers
 	timerImage                     // bright magenta bold — the image: title style
 	timerLayer                     // unstyled — layer rows
-	timerGroup                     // bold green — changed: and unchanged: lines
+	timerGroup                     // bright green bold — the changed: and unchanged: title style
 )
 
 type timerEntry struct {
@@ -178,7 +178,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		case timerSection:
 			styleTag = "{{|DockerTitle|}}"
 		case timerGroup:
-			styleTag = "{{|DockerGroupStatus|}}"
+			styleTag = "{{|DockerGroupHeading|}}"
 		case timerService:
 			styleTag = "{{|App|}}"
 		case timerImage:
