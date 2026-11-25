@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -92,6 +93,45 @@ func TestDepStatus(t *testing.T) {
 		if state, problem := p.depStatus(tc.d); state != tc.wantState || problem != tc.wantProblem {
 			t.Errorf("%s: %v %q, want %v %q", tc.name, state, problem, tc.wantState, tc.wantProblem)
 		}
+	}
+}
+
+func TestUnmetOnAnInterruptedDependencyIsAWarning(t *testing.T) {
+	p := NewConsoleEventProcessor(context.Background(), nil, "up",
+		map[string][]string{testImg: {"cache", "db", "queue", "web"}}, []string{testImg},
+		map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.preRun = map[string]string{}
+	p.dependsOn = map[string][]serviceDep{"web": {
+		dep("cache", types.ServiceConditionStarted, true),
+		dep("db", types.ServiceConditionStarted, true),
+		dep("queue", types.ServiceConditionStarted, true),
+	}}
+	p.On(api.Resource{ID: "Container db", Status: api.Error, Text: "port is already allocated"})
+	p.On(api.Resource{ID: "Container cache", Status: api.Error, Text: "interrupted by the failure of Container db"})
+	p.On(api.Resource{ID: "Container queue", Status: api.Warning, Text: "Skipped: optional dependency"})
+
+	lines := p.dependsLines("web", 160, true)
+	got := plainLines(lines)
+	if len(got) != 2 {
+		t.Fatalf("lines = %q, want the failed name and the knock-on names on lines of their own", got)
+	}
+	// A skipped dependency failed to start itself: a failure, as db is.
+	if !strings.Contains(got[0], "db (Failed)") || !strings.Contains(got[0], "queue (Skipped)") ||
+		!strings.Contains(lines[0], "DockerStatusFail") || !strings.Contains(lines[0], "DockerDependsFailed") {
+		t.Errorf("failed line = %q, want db and queue Unmet as a failure", lines[0])
+	}
+	if !strings.Contains(got[1], "cache (Interrupted)") || !strings.Contains(got[1], "Unmet") ||
+		!strings.Contains(lines[1], "DockerStatusWarn") || strings.Contains(lines[1], "DockerStatusFail") ||
+		strings.Contains(lines[1], "DockerDependsFailed") {
+		t.Errorf("knock-on line = %q, want cache Unmet as a warning", lines[1])
+	}
+
+	// An interrupted service's needed-by line is a warning too.
+	p = newDependsTestProcessor()
+	p.dependsOn["web"] = []serviceDep{dep("db", types.ServiceConditionHealthy, true)}
+	p.On(api.Resource{ID: "Container db", Status: api.Error, Text: "interrupted by the failure of Container proxy"})
+	if lines := p.neededByLines("db", 160, true); len(lines) != 1 || !strings.Contains(lines[0], "DockerStatusWarn") || strings.Contains(lines[0], "DockerStatusFail") {
+		t.Errorf("needed-by lines = %q, want one Unmet warning", lines)
 	}
 }
 
