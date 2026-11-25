@@ -185,7 +185,7 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 
 	// heading returns a heading at depth (changed: at 0, a kind's count at 1): the word
 	// all its rows show, or Complete when they differ, or, when its part of the prune
-	// failed, Error. changed: carries its own style, as its title.
+	// failed, Error. changed:'s word is in the group's hue (DockerGroupStatus).
 	heading := func(depth int, label, style string, hasErr bool, word string) string {
 		icon, status := doneIconANSI, ""
 		if word == "" {
