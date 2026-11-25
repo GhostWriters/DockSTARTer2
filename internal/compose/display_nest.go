@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -136,62 +137,97 @@ func rowStatusTag(line string) string {
 	return line[i : i+end+3]
 }
 
-// sharedStatus returns the status word, and its style tag, every row of lines shows,
-// "" when they differ or there is none.
-func sharedStatus(lines []string) (word, tag string) {
+// headLook is the status word, style tag and icon a heading takes from its rows when
+// they all show the same; the zero value is the generic look of the heading's state.
+type headLook struct{ word, tag, icon string }
+
+// rowIcon returns the styled icon a line shows before its status, "" for a line with none.
+func rowIcon(line string) string {
+	i := indexAfterColumns(line, globalIndentW)
+	j := indexAfterColumns(line, globalIndentW+iconW+spaceW)
+	if i < 0 || j < i {
+		return ""
+	}
+	return strings.TrimSpace(line[i:j])
+}
+
+// groupLead matches how a folded group's line opens past its status column: N noun:.
+var groupLead = regexp.MustCompile(`^\d+ [^\s:]+:`)
+
+// isRowLine reports whether line is a row of its set (a named row, or a folded group
+// of them) and not a line under one (an image, an info, a ports or a health line).
+func isRowLine(line string) bool {
+	if strings.HasSuffix(line, "{{|DockerColon|}}:{{[-]}}") {
+		return true
+	}
+	runes := []rune(visibleText(line))
+	start := globalIndentW + iconW + spaceW + sectionStatusW
+	return len(runes) > start && groupLead.MatchString(strings.TrimSpace(string(runes[start:])))
+}
+
+// sharedStatus returns the look every row of lines shows, the zero look when they
+// differ or there is none. Only the rows count: the lines under a row never change what
+// its heading says, a failure under one reaches the heading through its state.
+func sharedStatus(lines []string) headLook {
+	var look headLook
 	for _, line := range lines {
+		if !isRowLine(line) {
+			continue
+		}
 		w := rowWord(line)
 		if w == "" {
 			continue
 		}
-		t := rowStatusTag(line)
+		l := headLook{word: w, tag: rowStatusTag(line), icon: rowIcon(line)}
 		switch {
-		case word == "":
-			word, tag = w, t
-		case word != w || tag != t:
-			return "", ""
+		case look.word == "":
+			look = l
+		case look != l:
+			return headLook{}
 		}
 	}
-	return word, tag
+	return look
 }
 
-// commonWord returns the word all of words are, "" when any is empty or they differ.
-func commonWord(words []string) string {
-	if len(words) == 0 || words[0] == "" {
-		return ""
+// commonLook returns the look all of looks are, the zero look when any is generic or
+// they differ.
+func commonLook(looks []headLook) headLook {
+	if len(looks) == 0 || looks[0].word == "" {
+		return headLook{}
 	}
-	for _, w := range words[1:] {
-		if w != words[0] {
-			return ""
+	for _, l := range looks[1:] {
+		if l != looks[0] {
+			return headLook{}
 		}
 	}
-	return words[0]
+	return looks[0]
 }
 
-// setWord returns the status word a heading over set shows (state being its settled
-// state): the word all its rows show, so a heading over rows that are all Running says
-// Running, or "" for the generic word (Pending, Processing, Complete, Warning, Error)
-// when they differ. A warning, an error or a pending word is passed on only when the
-// rows' own word is one, in that style, not a row that merely sits in a set that is.
-func setWord(set groupSet, state sectionRollupState) string {
-	word, tag := sharedStatus(set.lines)
+// setLook returns the look a heading over set shows (state being its settled state):
+// the one all its rows show, so a heading over rows that are all Running says Running,
+// or the zero look for the generic word (Pending, Processing, Complete, Warning,
+// Error) when they differ. A warning, an error or a pending word is passed on only
+// when the rows' own word is one, in that style, not a row that merely sits in a set
+// that is.
+func setLook(set groupSet, state sectionRollupState) headLook {
+	look := sharedStatus(set.lines)
 	switch state {
 	case rollupComplete, rollupProcessing:
-		return word
+		return look
 	case rollupWarning:
-		if tag == "{{|DockerStatusWarn|}}" {
-			return word
+		if look.tag == "{{|DockerStatusWarn|}}" {
+			return look
 		}
 	case rollupError:
-		if tag == "{{|DockerStatusFail|}}" {
-			return word
+		if look.tag == "{{|DockerStatusFail|}}" {
+			return look
 		}
 	case rollupPending:
-		if tag == "{{|DockerStatusPending|}}" {
-			return word
+		if look.tag == "{{|DockerStatusPending|}}" {
+			return look
 		}
 	}
-	return ""
+	return headLook{}
 }
 
 // leadsWithLabel reports whether line is a folded group's line: it opens, past its
@@ -225,19 +261,24 @@ func groupHeading(icon, statusTag, statusText string, count int, singular, plura
 // stateLine returns a rollup state's icon, styled status and status text, as a
 // section heading shows them: a spinner while processing.
 func (p *consoleEventProcessor) stateLine(state sectionRollupState) (icon, tag, text string) {
-	return p.stateLineWord(state, "")
+	return p.stateLineWord(state, headLook{})
 }
 
-// stateLineWord is stateLine with the text of a state replaced by word, the status all
-// the rows it heads share, when there is one.
-func (p *consoleEventProcessor) stateLineWord(state sectionRollupState, word string) (icon, tag, text string) {
+// stateLineWord is stateLine with the text of a state replaced by the word of look, the
+// status all the rows it heads share, when there is one. Unless it is processing, when
+// their icon is not the state's (an info marker, as a manual job's) the heading takes
+// their icon and style too.
+func (p *consoleEventProcessor) stateLineWord(state sectionRollupState, look headLook) (icon, tag, text string) {
 	text, stTag, iconTag := sectionStatusText(state)
-	if word != "" {
-		text = word
-	}
 	icon = iconTag + p.sectionRollupIcon(state) + "{{[-]}}"
 	if state == rollupProcessing {
 		icon = p.activeSpinnerTag(p.icons().spinner)
+	}
+	if look.word != "" {
+		text = look.word
+		if state != rollupProcessing && look.icon != "" && look.icon != icon {
+			icon, stTag = look.icon, look.tag
+		}
 	}
 	return icon, stTag + text + "{{[-]}}", text
 }
@@ -282,13 +323,13 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 	}
 	for _, adjective := range []string{"changed", "unchanged"} {
 		var states []sectionRollupState
-		var words []string
+		var looks []headLook
 		var tasks []*consoleTask
 		for _, k := range kinds {
 			if set := k.set(adjective); set.count > 0 {
 				state := settle(adjective, set.state)
 				states = append(states, state)
-				words = append(words, setWord(set, state))
+				looks = append(looks, setLook(set, state))
 				tasks = append(tasks, set.timer)
 			}
 		}
@@ -296,7 +337,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 			continue
 		}
 		groupState := combineStates(states)
-		icon, tag, text := p.stateLineWord(groupState, commonWord(words))
+		icon, tag, text := p.stateLineWord(groupState, commonLook(looks))
 		if groupState == rollupComplete {
 			tag = strings.Replace(tag, sectionFinalTag, "{{|DockerGroupStatus|}}", 1) // the group's own style, as its title
 		}
@@ -309,7 +350,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 				continue
 			}
 			state := settle(adjective, set.state)
-			word := setWord(set, state)
+			look := setLook(set, state)
 			setTimers := set.timers
 			setLines := set.lines
 			// A folded group, or a lone row, that is all there is under the heading says
@@ -319,12 +360,11 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 			merged := false
 			if len(setLines) > 0 {
 				// With lines under it (an image, details) the row stands in only for a heading
-				// that is Complete, one with nothing to hide; its own word then replaces
-				// Complete.
-				alone := word != "" && len(setLines) == 1
+				// that is Complete, one with nothing to hide.
+				alone := look.word != "" && len(setLines) == 1
 				complete := state == rollupComplete
 				switch {
-				case (word != "" || complete) && leadsWithLabel(setLines[0], set.count, k.singular, k.plural):
+				case (look.word != "" || complete) && leadsWithLabel(setLines[0], set.count, k.singular, k.plural):
 					merged = true
 				case set.count == 1 && (alone || complete):
 					if line, ok := labelRow(setLines[0], set.count, k.singular, k.plural); ok {
@@ -343,7 +383,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups) ([]string, []ti
 					setTimers[0].style = timerSection
 				}
 			} else {
-				icon, tag, text := p.stateLineWord(state, word)
+				icon, tag, text := p.stateLineWord(state, look)
 				lines = append(lines, groupHeading(icon, tag, text, set.count, k.singular, k.plural))
 				timers = append(timers, timerEntry{task: set.timer, style: timerSection})
 			}
