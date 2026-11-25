@@ -482,12 +482,12 @@ func (m *HelpDialogModel) ViewString() string {
 	}
 
 	if boxContent != "" {
-		// The documentation page is a viewport onto rendered text, so it uses
-		// the theme's console/program output style. Standard context boxes
-		// match the outer dialog theme.
+		// The documentation page is a viewport onto rendered text, so it looks
+		// like the program box and the CLI. Standard context boxes match the
+		// outer dialog theme.
 		scrollCtx := ctx
 		if isDoc {
-			scrollCtx.ContentBackground = theme.ThemeSemanticRawStyle("ProgramBox")
+			scrollCtx.ContentBackground = displayengine.GetStyles().Console
 		}
 
 		boxContent = displayengine.ApplyScrollbar(
