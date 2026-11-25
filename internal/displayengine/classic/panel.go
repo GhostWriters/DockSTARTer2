@@ -107,7 +107,7 @@ type PanelModel struct {
 
 	PanelMode          string                                                                               // "log", "console", "system", or "none"
 	connType           string                                                                               // "local", "ssh", or "web"
-	graphicsSupported  bool                                                                                 // resolved terminal capability -- see AppModel.graphicsSupported; kept in sync via SetGraphicsSupported
+	graphicsSupported  bool                                                                                 // whether the terminal shows Kitty placeholder images -- see AppModel.kittyImages; kept in sync via SetGraphicsSupported
 	clientIP           string                                                                               // the owning session's real client IP/address, for edit-lock terminal attribution (see sessionlocks.SessionManager.AcquireEditLock)
 	sessionKey         string                                                                               // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
 	logSub             <-chan string                                                                        // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
@@ -295,16 +295,16 @@ func (m *PanelModel) PromptFunc() func(title, question string, sensitive bool, i
 }
 
 // SetGraphicsSupported updates this panel's copy of the owning session's
-// resolved terminal graphics capability (see graphicsSupported), used when
-// running --man from the console panel. AppModel calls this once its DA1
-// query resolves, since the capability isn't known yet when the panel is
-// first constructed.
+// image capability (AppModel.kittyImages, see graphicsSupported), used when
+// running --man from the console panel. AppModel calls this once the
+// terminal answers its Kitty probe, since the capability isn't known yet
+// when the panel is first constructed.
 func (m *PanelModel) SetGraphicsSupported(v bool) {
 	m.graphicsSupported = v
 }
 
-// GraphicsSupported returns this panel's copy of the owning session's
-// resolved terminal graphics capability, for passing into commands.Execute.
+// GraphicsSupported returns this panel's copy of the owning session's image
+// capability, for passing into commands.Execute.
 func (m *PanelModel) GraphicsSupported() bool {
 	return m.graphicsSupported
 }

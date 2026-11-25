@@ -48,7 +48,7 @@ func SetUIProvider(p UIProvider) {
 // server daemon process) for edit-lock re-entry and "Resource Busy"
 // attribution -- see sessionlocks.SessionManager.localSessionKey and
 // sessionlocks.SessionLabel. graphicsSupported is the owning session's
-// already-resolved terminal graphics capability (see PanelModel.
+// already-resolved image capability (Kitty placeholders, see PanelModel.
 // GraphicsSupported), used by --man instead of re-querying the terminal --
 // a Bubble Tea Program already owns input/output here, so a second reader
 // would race it. Returns the exit code (0 = success).
