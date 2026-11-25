@@ -286,7 +286,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 				p.resourceGroups(volumeKind, p.volumes, p.volumeIDs, termW, level))
 		}
 		kinds = append(kinds, p.kindGroups(p.modelKind(), termW, level), p.jobGroups(termW, level), p.kindGroups(p.orphanKind(), termW, level))
-		groupLines, groupTimers := p.groupedLines(kinds)
+		groupLines, groupTimers := p.groupedLines(kinds, termW)
 		for i, line := range groupLines {
 			appendLine(line, groupTimers[i].task, groupTimers[i].style)
 		}
@@ -967,5 +967,5 @@ func (p *consoleEventProcessor) teardownGroupedLines(svcs []string, svcImageMap 
 		p.jobGroups(termW, level),
 		p.kindGroups(p.orphanKind(), termW, level),
 		p.kindGroups(p.containerKind(), termW, level),
-	})
+	}, termW)
 }
