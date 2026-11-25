@@ -89,8 +89,6 @@ func Update(ctx context.Context, force bool, file string) error {
 	// Unconditional — users need immediate feedback since the check can take a while.
 	logger.Notice(ctx, "Updating environment variable files.")
 	if NeedsUpdate(ctx, force, composeEnvFile) {
-		logger.Notice(ctx, "Updating '"+console.FormatFilePath(composeEnvFile)+"'.")
-
 		// Read current .env file content
 		input, _ := os.ReadFile(composeEnvFile)
 		allLines := strings.Split(string(input), "\n")
@@ -149,6 +147,7 @@ func Update(ctx context.Context, force bool, file string) error {
 		// Compare with any prior "Last written" line stripped, so its own
 		// ever-changing timestamp doesn't make every run look "changed".
 		if stripLastWrittenLine(string(existing)) != finalContent {
+			logger.Notice(ctx, "Updating '"+console.FormatFilePath(composeEnvFile)+"'.")
 			// Only now, as the literal last step before the write, insert
 			// the "Last written:" line -- not inside FormatLinesCore, which
 			// is also used for live TUI display where nothing is written yet.
@@ -168,6 +167,8 @@ func Update(ctx context.Context, force bool, file string) error {
 			// written:" text -- best-effort, a failure here just means the
 			// two might drift by a moment, not worth failing the update over.
 			_ = os.Chtimes(composeEnvFile, writeTime, writeTime)
+		} else {
+			logger.Info(ctx, "File '"+console.FormatFilePath(composeEnvFile)+"' is already up to date.")
 		}
 		UnsetNeedsUpdate(ctx, composeEnvFile)
 	} else {
@@ -192,11 +193,8 @@ func Update(ctx context.Context, force bool, file string) error {
 		for _, pattern := range patterns {
 			appEnvFile := filepath.Join(conf.ComposeDir, strings.ReplaceAll(pattern, "*", strings.ToLower(appName)))
 			if NeedsUpdate(ctx, force, appEnvFile) {
-				if _, err := os.Stat(appEnvFile); os.IsNotExist(err) {
-					logger.Notice(ctx, "Creating '"+console.FormatFilePath(appEnvFile)+"'.")
-				} else {
-					logger.Notice(ctx, "Updating '"+console.FormatFilePath(appEnvFile)+"'.")
-				}
+				_, statErr := os.Stat(appEnvFile)
+				creating := os.IsNotExist(statErr)
 				LogAppTemplateOverride(ctx, appName)
 
 				// Only use template for non-user-defined apps (Parity lines 99-101)
@@ -215,12 +213,18 @@ func Update(ctx context.Context, force bool, file string) error {
 					existing, _ := os.ReadFile(appEnvFile)
 					// Compare with any prior "Last written" line stripped
 					// (see the main .env write above for why).
-					if stripLastWrittenLine(string(existing)) == finalAppContent {
+					if !creating && stripLastWrittenLine(string(existing)) == finalAppContent {
+						logger.Info(ctx, "Environment variable file '"+console.FormatFilePath(appEnvFile)+"' is already up to date.")
 						system.SetPermissions(ctx, appEnvFile)
 						UnsetNeedsUpdate(ctx, appEnvFile)
 						continue
 					}
 
+					if creating {
+						logger.Notice(ctx, "Creating '"+console.FormatFilePath(appEnvFile)+"'.")
+					} else {
+						logger.Notice(ctx, "Updating '"+console.FormatFilePath(appEnvFile)+"'.")
+					}
 					// Only now, as the literal last step before the write,
 					// insert the "Last written:" line.
 					writeTime := time.Now().Local()
