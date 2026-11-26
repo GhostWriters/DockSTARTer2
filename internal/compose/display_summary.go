@@ -409,6 +409,11 @@ func (p *consoleEventProcessor) logSummary() {
 	// unscoped to any session, racing against every other concurrently
 	// rendering one.
 	for _, line := range lines {
+		// A blank display line is the prefix alone, with no trailing space.
+		if line == "" {
+			logger.Notice(ctx, strings.TrimRight(pfx, " "))
+			continue
+		}
 		logger.Notice(ctx, pfx+line)
 	}
 }

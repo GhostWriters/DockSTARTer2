@@ -386,9 +386,10 @@ func alignNames(lines []string, timers []timerEntry, termW int) ([]string, []tim
 }
 
 // groupedLines returns the changed: heading, then the unchanged: one, each with
-// its kinds' rolled-up state and timer, leaving out one with no rows. Under each, a
-// kind with rows gets a heading (N services:) and its rows, or folded group lines,
-// nested under it, so a line keeps its indent as rows fold and unfold. A heading shows
+// its kinds' rolled-up state and timer, leaving out one with no rows, and a blank
+// line between the two when both show. Under each, a kind with rows gets a heading
+// (N services:) and its rows, or folded group lines, nested under it, so a line
+// keeps its indent as rows fold and unfold. A heading shows
 // the status word all its rows share, and a folded group or a lone row that is all
 // there is under it stands in for it. Names after a label (N noun:) all start at one
 // column (alignNames), wrapped to termW.
@@ -419,6 +420,10 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups, termW int) ([]s
 		}
 		if len(states) == 0 {
 			continue
+		}
+		// A blank line sets unchanged: apart from the changed: block above it.
+		if len(lines) > 0 {
+			lines, timers = append(lines, ""), append(timers, timerEntry{})
 		}
 		groupState := combineStates(states)
 		icon, tag, text := p.stateLineWord(groupState, commonLook(looks))
