@@ -47,9 +47,13 @@ type depEntry struct {
 	knockOn  bool
 }
 
-// knockOn reports whether svc's row was interrupted: compose gave it up when another
-// row failed or the run stopped early, so it is not the failure itself.
+// knockOn reports whether an unmet condition of svc's is a warning, not a failure: its
+// row was interrupted (compose gave it up when another row failed or the run stopped
+// early), or the command is status, which only reports what it finds.
 func (p *consoleEventProcessor) knockOn(svc string) bool {
+	if p.command == statusCommand {
+		return true
+	}
 	t := p.tasks[svc]
 	return t != nil && t.interrupted
 }
@@ -467,7 +471,7 @@ func (p *consoleEventProcessor) detailNameGroup(label string, entries []depEntry
 		case cause:
 			// The unmet condition is this service's own fault: the cause marker, as on a
 			// ports line that holds a port another service wanted.
-			icon = "{{|DockerMarkerCause|}}" + ic.warn + "{{[-]}}"
+			icon = p.causeMarker()
 			statusTag = "{{|DockerStatusWarn|}}Unmet{{[-]}}"
 		case knockOn:
 			// Unmet only because the run stopped: a warning, as the interrupted rows are.
@@ -487,7 +491,7 @@ func (p *consoleEventProcessor) detailNameGroup(label string, entries []depEntry
 		statusText = "Warning"
 		switch {
 		case cause: // the dependency went down after it started: the cause marker
-			icon = "{{|DockerMarkerCause|}}" + ic.warn + "{{[-]}}"
+			icon = p.causeMarker()
 			statusText = "Crashed"
 		case onlyNoResult:
 			statusText = "No Result"
@@ -565,10 +569,10 @@ func (p *consoleEventProcessor) splitChecking(names []string, termW int) (plain 
 }
 
 // downProblem reports whether a dependency's problem is its container having gone down
-// (downLog.problem).
+// (downLog.problem); one that failed to start never went down.
 func downProblem(problem string) bool {
 	switch problem {
-	case "Restarting", "Exited", "Dead":
+	case restartingText, exitedText, deadText:
 		return true
 	}
 	return false

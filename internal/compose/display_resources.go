@@ -63,7 +63,7 @@ func (p *consoleEventProcessor) resourceGroups(kind resourceKind, decl resourceD
 			changed = append(changed, name)
 		case decl.exists[name]:
 			groups[existingText] = append(groups[existingText], name)
-		case p.finished:
+		case p.finished && p.command != statusCommand:
 			changed = append(changed, name) // never created, nor reported: its own row
 		default:
 			groups[notCreatedText] = append(groups[notCreatedText], name)
@@ -71,9 +71,9 @@ func (p *consoleEventProcessor) resourceGroups(kind resourceKind, decl resourceD
 	}
 
 	// Each set's state: the changed rows' rollup, and for the rest Complete, or Pending
-	// while some aren't created yet.
+	// while some aren't created yet (status creates nothing, so its sets stay Complete).
 	unchangedState := rollupComplete
-	if len(groups[notCreatedText]) > 0 {
+	if len(groups[notCreatedText]) > 0 && p.command != statusCommand {
 		unchangedState = rollupPending
 	}
 	var lines []string

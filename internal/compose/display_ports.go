@@ -184,11 +184,20 @@ func (p *consoleEventProcessor) findPortConflict(err error) {
 			}
 		}
 	}
-	servicePorts := p.servicePorts
 	p.mtx.Unlock()
 	if failed == "" {
 		return
 	}
+	p.resolvePortConflict(failed, port, proto, hostHeld)
+}
+
+// resolvePortConflict looks for what holds port, which service failed couldn't bind,
+// and what else publishes it, for the ports lines; proto is "" when Docker's message
+// didn't give it. Callers hold no lock.
+func (p *consoleEventProcessor) resolvePortConflict(failed string, port uint16, proto string, hostHeld bool) {
+	p.mtx.Lock()
+	servicePorts := p.servicePorts
+	p.mtx.Unlock()
 	if proto == "" {
 		proto = "tcp"
 		for _, pr := range []string{"tcp", "udp", "sctp"} {
@@ -341,9 +350,12 @@ func (p *consoleEventProcessor) portsLines(svc string, termW int) []string {
 		if len(names) > 0 {
 			value += "; also wanted by " + strings.Join(names, "; ") + ", not running"
 		}
+		if p.command == statusCommand { // status reports a failed start; nothing it did failed
+			return p.portsLine("{{|DockerMarkerWarn|}}"+ic.warn+"{{[-]}}", "{{|DockerStatusWarn|}}", value+")", termW)
+		}
 		return p.portsLine("{{|DockerMarkerError|}}"+ic.error+"{{[-]}}", "{{|DockerStatusFail|}}", value+")", termW)
 	case c.holder != nil && c.holder.service && svc == c.holder.name:
-		return p.portsLine("{{|DockerMarkerCause|}}"+ic.warn+"{{[-]}}", "{{|DockerStatusWarn|}}",
+		return p.portsLine(p.causeMarker(), "{{|DockerStatusWarn|}}",
 			mapping(*c.holder)+" (wanted by "+kindName(c.failed.name, c.failed.service)+")", termW)
 	}
 	for _, w := range c.wanters {

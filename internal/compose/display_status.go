@@ -1,6 +1,8 @@
 package compose
 
 import (
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/docker/compose/v5/pkg/api"
@@ -77,6 +79,21 @@ func (p *consoleEventProcessor) overallRollupIcon() string {
 	state := p.rollupState(ids, nil)
 	if p.finished && !p.succeeded {
 		state = rollupError // the call failed, whatever its rows show
+	}
+	if p.command == statusCommand {
+		svcImage := map[string]string{} // status's rows have no events: their state is what it found
+		for img, svcs := range p.imageServices {
+			for _, svc := range svcs {
+				svcImage[svc] = img
+			}
+		}
+		svcs := slices.Collect(maps.Keys(svcImage))
+		for _, svc := range p.serviceIDs {
+			if _, ok := svcImage[svc]; !ok {
+				svcs = append(svcs, svc)
+			}
+		}
+		state = p.statusRollup(svcs, func(svc string) string { return svcImage[svc] })
 	}
 	if state == rollupProcessing || state == rollupPending {
 		return p.activeSpinnerTag(p.icons().spinner)

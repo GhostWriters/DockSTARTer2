@@ -224,6 +224,10 @@ func GetUsage(target string, noHeading bool) string {
 			"	The '{{|UsageOption|}}update{{[-]}}' command is the same as a '{{|UsageOption|}}pull{{[-]}}' followed by an '{{|UsageOption|}}up{{[-]}}'",
 			"{{|UsageCommand|}}-c --compose{{[-]}} {{|UsageOption|}}run{{[-]}} {{|UsageApp|}}<job>{{[-]}}",
 			"	Run a job from the compose files now, after starting its dependencies, and show its output",
+			"{{|UsageCommand|}}-c --compose{{[-]}} {{|UsageOption|}}status{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
+			"	Show the state of the services, networks, models and jobs without changing anything: each in the group",
+			"	of its state, with the state and log of any service crashing, failed to start or exited with an error,",
+			"	watched for a few seconds to catch a crash loop, and what holds a port one couldn't bind",
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
 			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
 		)

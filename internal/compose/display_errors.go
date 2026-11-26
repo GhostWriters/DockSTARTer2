@@ -258,12 +258,21 @@ func (p *consoleEventProcessor) hasConditionErr() bool {
 	return false
 }
 
-// causeIcon returns the warning icon in the DockerMarkerCause style (red),
-// for a row whose own state is a warning but caused another row's failure, or "" for any
-// other row.
+// causeIcon returns the warning icon in the cause marker's style (causeMarker), for a
+// row whose own state is a warning but caused another row's failure, or "" for any other
+// row.
 func (p *consoleEventProcessor) causeIcon(t *consoleTask) string {
 	if t == nil || !p.unhealthyHealthErr(t) {
 		return ""
+	}
+	return p.causeMarker()
+}
+
+// causeMarker returns the warning icon in DockerMarkerCause (red), marking what caused
+// another row's failure; under status, which reports and fails nothing, a plain warning.
+func (p *consoleEventProcessor) causeMarker() string {
+	if p.command == statusCommand {
+		return "{{|DockerMarkerWarn|}}" + p.icons().warn + "{{[-]}}"
 	}
 	return "{{|DockerMarkerCause|}}" + p.icons().warn + "{{[-]}}"
 }

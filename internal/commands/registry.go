@@ -262,6 +262,18 @@ func IsSessionLocked(flag string) bool {
 	return Registry[BaseCommand(flag)].SessionLocked
 }
 
+// GroupSessionLocked reports whether running group takes the edit lock: its command's
+// SessionLocked, except -c status, which only reads container states.
+func GroupSessionLocked(group CommandGroup) bool {
+	switch BaseCommand(group.Command) {
+	case "-c", "--compose":
+		if len(group.Args) > 0 && group.Args[0] == "status" {
+			return false
+		}
+	}
+	return IsSessionLocked(group.Command)
+}
+
 // GroupsNeedConfigReload reports whether any group in groups has ConfigChanging set,
 // meaning the TUI should reload config/styles after execution.
 func GroupsNeedConfigReload(groups []CommandGroup) bool {

@@ -89,10 +89,14 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 
 // composeHeading returns the docker command DS2 ran for command, as the summary
 // heading names it: update is up --pull always, the one flag that sets it apart (the
-// flags DS2 always passes are in the Running: line above).
+// flags DS2 always passes are in the Running: line above). Status runs no docker
+// command, so it is named alone.
 func composeHeading(command string) string {
-	if command == "update" {
+	switch command {
+	case "update":
 		return "docker compose up --pull always"
+	case statusCommand:
+		return statusCommand
 	}
 	return "docker compose " + command
 }

@@ -109,7 +109,9 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			t := p.tasks[svc]
 			var statusText, statusTag, icon string
 			if t == nil {
-				if img != nil && p.allLayersAlreadyExist(imgName) {
+				if p.command == statusCommand {
+					statusText, statusTag, icon = p.statusRowStatus(svc, imgName)
+				} else if img != nil && p.allLayersAlreadyExist(imgName) {
 					statusText, statusTag, icon = p.cachedStatus(isPullingText(img.text), serviceFinalTag)
 				} else if img != nil {
 					// The row shows its image's status, styled as a service row's.
@@ -221,7 +223,11 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 			if len(ids) == 0 {
 				return set
 			}
-			set.state = p.rollupState(ids, func(id string) string { return svcImageMap[id] })
+			imageOf := func(id string) string { return svcImageMap[id] }
+			set.state = p.rollupState(ids, imageOf)
+			if p.command == statusCommand {
+				set.state = p.statusRollup(ids, imageOf) // its rows have no events
+			}
 			set.timer = p.serviceSectionTask(ids)
 			set.lines, set.timers = capture(render)
 			return set
@@ -248,13 +254,31 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 						continue
 					}
 					slices.Sort(names)
+					if p.command == statusCommand {
+						// A service with lines to show (a crash's state and log, a failing
+						// health check) shows its block in the group's place.
+						names = slices.DeleteFunc(names, func(svc string) bool {
+							if len(p.serviceDetailLines(svc, termW, level, true)) == 0 {
+								return false
+							}
+							renderBlock(block{img: svcImageMap[svc], svcs: []string{svc}})
+							return true
+						})
+						if len(names) == 0 {
+							continue
+						}
+					}
 					notRunning := word != api.StatusRunning && word != cachedText
 					// Services with possible port conflicts fold apart, one group per
 					// identical set of them, each with its unconfirmed ports line.
 					plain, possible := p.splitPossible(names)
 					// Services still checking a dependency fold apart the same way, one
-					// group per identical set of lines, until the check passes.
-					plain, checking := p.splitChecking(plain, termW)
+					// group per identical set of lines, until the check passes. Status has
+					// none: its lines are final, shown with the blocks above.
+					var checking []checkingGroup
+					if p.command != statusCommand {
+						plain, checking = p.splitChecking(plain, termW)
+					}
 					for _, g := range checking {
 						for _, line := range p.groupLines(word, notRunning, g.members, "service", "services", termW) {
 							appendLine(line, nil, timerLayer)
@@ -322,7 +346,9 @@ func (p *consoleEventProcessor) appendOrphanRow(svcID string, termW, level int, 
 	t := p.tasks[svcID]
 	nameTag := dockerlayout.StyleServiceName(svcID)
 	var statusText, statusTag, icon string
-	if t == nil {
+	if t == nil && p.command == statusCommand {
+		statusText, statusTag, icon = p.statusRowStatus(svcID, "")
+	} else if t == nil {
 		impliedText, impliedTag := p.impliedStatus()
 		statusText = impliedText
 		statusTag = impliedTag + statusText + "{{[-]}}"
@@ -357,6 +383,11 @@ func (p *consoleEventProcessor) serviceDetailLines(svc string, termW, level int,
 func (p *consoleEventProcessor) serviceConditionLines(svc string, termW, level int, neededBy, expand bool) []string {
 	all := level >= dockerlayout.VerboseDetails
 	deps := all || expand
+	// Under status, below VerboseDetails, a service left as it was (not running, no
+	// problem) has no dependency lines: unmet needs are what stopped services have.
+	if !all && p.command == statusCommand && p.statusIdle(svc) {
+		return p.serviceLogLines(svc, termW)
+	}
 	lines := p.dependsLines(svc, termW, deps)
 	if line := p.healthLine(svc, termW); line != "" && (all || p.serviceHealth(svc) != healthHealthy) {
 		lines = append(lines, line)
