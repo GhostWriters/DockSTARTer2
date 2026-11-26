@@ -721,3 +721,37 @@ func TestHeadingTakesTheRowsInfoIcon(t *testing.T) {
 		t.Errorf("heading over mixed rows = %q %q, want the generic Complete look", icon, text)
 	}
 }
+
+func TestBlankLineBetweenChangedAndUnchanged(t *testing.T) {
+	p := newGroupsTestProcessor("up")
+	row := func(word, name string) string {
+		return globalIndent + "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}} " + serviceFinalTag + word + "{{[-]}}" +
+			strutil.Repeat(" ", sectionStatusW-len(word)) + sectionChildIndent + name + "{{|DockerColon|}}:{{[-]}}"
+	}
+	set := func(word string) groupSet {
+		return groupSet{count: 1, state: rollupComplete, lines: []string{row(word, "web")}, timers: make([]timerEntry, 1)}
+	}
+	both := kindGroups{singular: "service", plural: "services", changed: set("Recreated"), unchanged: set("Existing")}
+	lines, timers := p.groupedLines([]kindGroups{both}, 120)
+	if len(timers) != len(lines) {
+		t.Fatalf("%d timers for %d lines", len(timers), len(lines))
+	}
+	at := -1
+	for i, l := range lines {
+		if strings.Contains(l, "unchanged{{") {
+			at = i
+		}
+	}
+	if at < 1 || lines[at-1] != "" {
+		t.Errorf("lines = %q, want a blank line before unchanged:", lines)
+	}
+	for _, only := range []kindGroups{
+		{singular: "service", plural: "services", changed: set("Recreated")},
+		{singular: "service", plural: "services", unchanged: set("Existing")},
+	} {
+		lines, _ = p.groupedLines([]kindGroups{only}, 120)
+		if slices.Contains(lines, "") {
+			t.Errorf("lines = %q, want no blank line with only one heading", lines)
+		}
+	}
+}
