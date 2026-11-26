@@ -20,6 +20,7 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/docker/compose/v5/pkg/api"
 	composev5 "github.com/docker/compose/v5/pkg/compose"
+	"github.com/moby/moby/api/types/container"
 	mobyclient "github.com/moby/moby/client"
 
 	"DockSTARTer2/internal/appenv"
@@ -100,6 +101,11 @@ func YesNotice(command, appNamesJoined string) string {
 			return fmt.Sprintf("Starting: %s.", appNamesJoined)
 		}
 		return "Starting containers for all enabled services."
+	case statusCommand:
+		if appNamesJoined != "" {
+			return fmt.Sprintf("Checking the status of: %s.", appNamesJoined)
+		}
+		return "Checking the status of all enabled services."
 	case "generate", "merge":
 		return "Merging enabled app templates to 'docker-compose.yml'."
 	default: // update
@@ -156,7 +162,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		appNamesJoined = strings.Join(niceNames, ", ")
 		// Name the services beyond the requested ones that the command will act on too,
 		// from the depends_on the next merge will produce (nothing is written yet).
-		if command != "merge" && command != "generate" {
+		if command != "merge" && command != "generate" && command != statusCommand {
 			project, err := previewDependencies(ctx)
 			switch {
 			case err != nil:
@@ -291,6 +297,12 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			yesNotice = "Starting containers for all enabled services."
 			noNotice = "Not starting containers for all enabled services."
 		}
+	case statusCommand:
+		if appNamesJoined != "" {
+			yesNotice = fmt.Sprintf("Checking the status of: {{|App|}}%s{{[-]}}.", appNamesJoined)
+		} else {
+			yesNotice = "Checking the status of all enabled services."
+		}
 	case "run":
 		question = fmt.Sprintf("Run job: {{|App|}}%s{{[-]}}?", appNamesJoined)
 		yesNotice = fmt.Sprintf("Running job: {{|App|}}%s{{[-]}}.", appNamesJoined)
@@ -307,13 +319,16 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	}
 
 	// --- PROMPT FIRST — no file modifications until user confirms ---
-	answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Compose", question, "Y", yes)
-	if err != nil {
-		return err
-	}
-	if !answer {
-		logger.Notice(ctx, noNotice)
-		return nil
+	// Status changes nothing, so it doesn't ask.
+	if command != statusCommand {
+		answer, err := console.QuestionPrompt(ctx, logger.Notice, "Docker Compose", question, "Y", yes)
+		if err != nil {
+			return err
+		}
+		if !answer {
+			logger.Notice(ctx, noNotice)
+			return nil
+		}
 	}
 
 	logger.Notice(ctx, yesNotice)
@@ -325,7 +340,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 
 	// For all other operations: merge first (now that user confirmed), then run SDK operation
 	if command != "down" && command != "stop" && command != "start" && command != "kill" &&
-		command != "pause" && command != "unpause" && command != "rm" {
+		command != "pause" && command != "unpause" && command != "rm" && command != statusCommand {
 		if err := MergeYML(ctx, force); err != nil {
 			return err
 		}
@@ -494,8 +509,9 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 				containerToService[svc.ContainerName] = name
 			}
 		}
-		preRun := make(map[string]string)      // service → container state before the run, for the dependency lines
-		preRunImage := make(map[string]string) // service → the image ID its container ran
+		preRun := make(map[string]string)          // service → container state before the run, for the dependency lines
+		preRunImage := make(map[string]string)     // service → the image ID its container ran
+		statusRunning := make(map[string][]string) // status: service → its running containers, whose health it tracks
 		// Also query running containers to map their actual names (which may include
 		// random suffixes like "<project>-<service>-<random>") to service names via label.
 		f := mobyclient.Filters{}
@@ -516,9 +532,17 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 					if cname != svcName {
 						containerToService[cname] = svcName
 					}
+					if command == statusCommand && ctr.State == container.StateRunning {
+						statusRunning[svcName] = append(statusRunning[svcName], cname)
+					}
 				}
 			}
 			targets, filtered = teardownTargets(command, serviceNames, preRun)
+		} else if command == statusCommand {
+			// A run goes ahead without the states; status would show every service as having
+			// no container, so it can't report anything.
+			logger.Error(ctx, "Can't read the containers' states from Docker: %v", err)
+			return reportedError{err}
 		}
 		imageOrder := make([]string, 0, len(imageServices))
 		for img, svcs := range imageServices {
@@ -548,6 +572,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			}
 			p.preRun = preRun
 			p.preRunImage = preRunImage
+			p.statusRunning = statusRunning
 			p.jobs = jobDecls(project)
 			p.models = modelDecls(project)
 			p.serviceModels = serviceModelDecls(project)
@@ -557,6 +582,21 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 					p.failModels(problem)
 				} else {
 					p.modelSettingsBefore = readModelSettings(ctx, path, p.models)
+				}
+			}
+			if len(p.models) > 0 && command == statusCommand {
+				// Which models the runner has pulled, as compose asks before pulling.
+				path, problem := modelPlugin(dockerCLI)
+				if problem == "" {
+					if onDisk, err := readModelsOnDisk(ctx, path); err != nil {
+						problem = err.Error()
+					} else {
+						p.modelsOnDisk = onDisk
+					}
+				}
+				if problem != "" {
+					p.modelsUnknown = true
+					logger.Warn(ctx, "Can't tell whether the models are pulled: %s", problem)
 				}
 			}
 			p.projectNetworks = len(displayProject.Networks)
@@ -706,6 +746,8 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		case "pull":
 			logRunning("pull", "--include-deps")
 			return srv.Pull(sdkCtx, project, api.PullOptions{})
+		case statusCommand:
+			return nothingToDo(statusCommand) // no compose operation: the display's checks are the status
 		case "restart":
 			logRunning("restart")
 			restartOpts := api.RestartOptions{Project: fullProject, NoDeps: deps == DepsNone}
@@ -841,9 +883,10 @@ func takesDown(command string) bool {
 
 // includesDependencies reports whether command's requested services bring their
 // dependencies with them: commands that bring services up do, as docker compose up
-// does, unless --no-deps.
+// does, unless --no-deps. Status shows the services asked for; their needs lines name
+// the dependencies' states.
 func includesDependencies(command string, deps DepsMode) bool {
-	return !takesDown(command) && deps != DepsNone
+	return !takesDown(command) && command != statusCommand && deps != DepsNone
 }
 
 // includesDependents reports whether command's requested services bring the services
@@ -919,7 +962,7 @@ func reportUnhealthy(ctx context.Context, bus api.EventProcessor) {
 	if len(svcs) == 0 {
 		return
 	}
-	logger.Warn(ctx, "Compose finished with %d unhealthy %s:", len(svcs), plural(len(svcs), "container", "containers"))
+	logger.Warn(ctx, "%s %d unhealthy %s:", p.recapLead(), len(svcs), plural(len(svcs), "container", "containers"))
 	for _, svc := range svcs {
 		logger.Warn(ctx, "  %s{{|DockerColon|}}:{{[-]}} health check failing", dockerlayout.StyleServiceName(svc))
 	}

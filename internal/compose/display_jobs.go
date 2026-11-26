@@ -133,12 +133,12 @@ func (p *consoleEventProcessor) upsertJob(name string, e api.Resource) {
 	}
 }
 
-// jobRows returns the jobs the display lists, by name: those the command registers,
-// at verbosity level the manual ones too, every job compose reported on but one it
+// jobRows returns the jobs the display lists, by name: those the command registers, or
+// under status declares, at verbosity level the manual ones too, every job compose reported on but one it
 // found nothing to remove for, and the job -c run runs.
 func (p *consoleEventProcessor) jobRows(level int) []string {
 	var names []string
-	if registersJobs(p.command) {
+	if registersJobs(p.command) || p.command == statusCommand {
 		for name, d := range p.jobs {
 			if d.scheduled || level >= dockerlayout.VerboseDetails {
 				names = append(names, name)
@@ -205,8 +205,9 @@ func (p *consoleEventProcessor) jobsActedOn() []string {
 }
 
 // jobStatus returns job name's row status: its last event's, Pending before it has
-// one, Interrupted when the command ended without registering it, and Manual for a job
-// with no schedule, which up leaves for -c run.
+// one, Interrupted when the command ended without registering it, Scheduled for a
+// scheduled job under status, which shows what the compose files declare, and Manual
+// for a job with no schedule, which up leaves for -c run.
 func (p *consoleEventProcessor) jobStatus(name string) (text, tag, icon string) {
 	ic := p.icons()
 	t := p.tasks[jobTaskID(name)]
@@ -214,6 +215,10 @@ func (p *consoleEventProcessor) jobStatus(name string) (text, tag, icon string) 
 		switch {
 		case !p.jobs[name].scheduled:
 			return jobManualText, "{{|DockerInfo|}}" + jobManualText + "{{[-]}}", "{{|DockerInfo|}}i{{[-]}}"
+		case p.command == statusCommand:
+			// Status shows what the compose files declare; whether up has registered it
+			// isn't known.
+			return jobScheduledText, serviceFinalTag + jobScheduledText + "{{[-]}}", "{{|DockerMarkerDone|}}" + ic.done + "{{[-]}}"
 		case p.finished:
 			// The run stopped at a failure before compose registered it, as the
 			// services it never reached.
@@ -275,6 +280,8 @@ func (p *consoleEventProcessor) jobRollup() sectionRollupState {
 func (p *consoleEventProcessor) jobGroup(name string) rowGroup {
 	t := p.tasks[jobTaskID(name)]
 	switch {
+	case p.command == statusCommand && p.jobs[name].scheduled:
+		return groupSettled // declared, which is all status knows of it
 	case name == p.runJob:
 		return groupChanged
 	case t != nil && t.text == api.StatusRunning && t.status == api.Done:
@@ -360,7 +367,10 @@ func (p *consoleEventProcessor) jobGroups(termW, level int) kindGroups {
 			}
 		}
 		s.state = p.rollupState(ids, nil)
-		if len(ids) == 0 {
+		switch {
+		case p.command == statusCommand && !p.finished:
+			s.state = rollupProcessing // status's jobs have no events: in progress until status is done, as its services
+		case p.command == statusCommand, len(ids) == 0:
 			s.state = rollupComplete // only manual jobs, which nothing happens to
 		}
 		s.timer = p.sectionTaskFor(ids)

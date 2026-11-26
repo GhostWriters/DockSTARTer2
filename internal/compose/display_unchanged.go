@@ -27,7 +27,7 @@ const (
 	cachedText     = "Cached"
 )
 
-var groupOrder = []string{pendingText, processingText, interruptedText, notPulledText, notCreatedText, notRunningText, pausedText, api.StatusRunning, cachedText}
+var groupOrder = []string{restartingText, deadText, exitedText, failedStartText, notStartedText, unhealthyText, pendingText, processingText, interruptedText, notPulledText, notCreatedText, notRunningText, pausedText, api.StatusRunning, cachedText}
 
 // rowGroup is where a row goes: its own line under changed for a change, or into
 // the group of its state under unchanged, nothing having happened to it yet or for
@@ -47,8 +47,12 @@ const (
 // what's next for it: Processing while compose checks its image, Not Pulled when its
 // image isn't on disk, else for a pull Cached, otherwise its container's state before
 // the run (Running, Paused, Not Running, Not Created; unhealthy is a problem, its own
-// row). A failed run's services with nothing to show are Interrupted.
+// row). A failed run's services with nothing to show are Interrupted. Under status
+// every service is in a group (statusGroupWord).
 func (p *consoleEventProcessor) serviceGroupWord(svc, imgName string, termW int) string {
+	if p.command == statusCommand {
+		return p.statusGroupWord(svc, imgName)
+	}
 	if p.interruptedOnly(svc, imgName, termW) {
 		return interruptedText
 	}
@@ -109,14 +113,17 @@ func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) 
 }
 
 // groupsRows reports whether the display groups its rows under changed and
-// unchanged: on the commands that bring services up or pull them, and on teardown
-// commands. After a failure only the commands that bring services up, and docker
+// unchanged: on the commands that bring services up or pull them, on teardown
+// commands, and on status. After a failure only the commands that bring services up, and docker
 // start, stop or restart by container name, still group, and only below
 // dockerlayout.VerboseDetails (buildLevel): rows showing the same thing fold (an
 // interrupted service with nothing to show), and -v, like the log, shows each row in
 // its place, rows that show the same thing still folded as everywhere. A failed
 // compose teardown shows every row.
 func (p *consoleEventProcessor) groupsRows() bool {
+	if p.command == statusCommand {
+		return true // nothing runs, so nothing fails
+	}
 	if p.finished && !p.succeeded || p.anyRowFailed() {
 		switch {
 		case p.command == "up", p.command == "update", p.command == "run", p.containerVerb != "":

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -33,9 +34,18 @@ const (
 // state, and the few log lines picked and redacted from its output (display_logredact.go).
 type downLog struct {
 	state   string
-	problem string // set when its container ended up restarting, dead or exited non-zero: shown after its name
+	problem string // set when its container ended up restarting, dead, exited non-zero or failed to start: shown after its name
+	err     string // the daemon's reason it stopped or couldn't start, shown on its error line
 	lines   []string
 }
+
+// containerIDInError matches a container or endpoint ID in parentheses in a daemon
+// error, which only takes room on the error line.
+var containerIDInError = regexp.MustCompile(` ?\([0-9a-f]{64}\)`)
+
+// downErrRows is how many rows a down container's error line wraps to before it is cut:
+// one more than a log line, a daemon error carrying its cause at the end.
+const downErrRows = depLogRows + 1
 
 // depLogProblem reports whether a failed dependency's problem leaves a container worth
 // looking at; a skipped or interrupted dependency never ran.
@@ -96,10 +106,15 @@ func (p *consoleEventProcessor) stopCrashWatch() {
 // the summary. Compose reports a container started even when it crashes straight away.
 // Live (while the run is going) only a container restarting or dead counts: one exited
 // may be waiting for compose to start it. At the end an exit non-zero counts too. A
-// container down but outside the run is left to the runs that include it.
+// container down but outside the run is left to the runs that include it. Status counts
+// an exit non-zero at every look and a container that failed to start, and doesn't
+// look at stopped dependencies.
 func (p *consoleEventProcessor) scanServicesDown(live bool) {
 	if p.dockerClient == nil || p.projectName == "" || !commandWatchesHealth(p.command) {
 		return
+	}
+	if p.command == statusCommand {
+		live = false // nothing is going to start an exited container
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), depLogTimeout)
 	f := dockerclient.Filters{}
@@ -117,7 +132,7 @@ func (p *consoleEventProcessor) scanServicesDown(live bool) {
 		force[name] = force[name] || failed
 	}
 	for svc, deps := range p.dependsOn { // all the project's, so only those of the run's services count
-		if live || !p.isKnownServiceName(svc) {
+		if live || !p.isKnownServiceName(svc) || p.command == statusCommand { // to status a failed condition is a stopped service
 			continue
 		}
 		for _, d := range deps {
@@ -136,6 +151,8 @@ func (p *consoleEventProcessor) scanServicesDown(live bool) {
 			case ctr.State == container.StateRestarting, ctr.State == container.StateDead:
 				add(svc, false)
 			case ctr.State == container.StateExited && !live: // an exit of 0 is dropped when read
+				add(svc, false)
+			case ctr.State == container.StateCreated && p.command == statusCommand: // one that failed to start is kept when read
 				add(svc, false)
 			}
 		}
@@ -207,8 +224,9 @@ func (p *consoleEventProcessor) expandDependencyLines() bool {
 	return !p.depsSettled
 }
 
-// readServiceLog returns svc's container state and picked log lines, or nil when it
-// has no container, the daemon doesn't answer, or it is fine and wasn't failed (force).
+// readServiceLog returns svc's container state, the daemon's error and picked log lines,
+// or nil when it has no container, the daemon doesn't answer, or it is fine and wasn't
+// failed (force).
 func (p *consoleEventProcessor) readServiceLog(svc string, force bool) *downLog {
 	ctx, cancel := context.WithTimeout(context.Background(), depLogTimeout)
 	defer cancel()
@@ -241,13 +259,18 @@ func (p *consoleEventProcessor) readServiceLog(svc string, force bool) *downLog 
 			parts = append(parts, fmt.Sprintf("restarted %d times", c.RestartCount))
 		}
 		info.state = strings.Join(parts, ", ")
+		info.err = cleanLogLine(containerIDInError.ReplaceAllString(st.Error, "")) // e.g. a port already allocated
 		switch {
 		case st.Restarting || status == "restarting":
-			info.problem = "Restarting"
+			info.problem = restartingText
 		case status == "dead":
-			info.problem = "Dead"
+			info.problem = deadText
 		case status == "exited" && st.ExitCode != 0:
-			info.problem = "Exited"
+			info.problem = exitedText
+		case status == "created" && st.ExitCode != 0 && strings.Contains(st.Error, "context canceled"):
+			info.problem = notStartedText // its start was cancelled when another service failed
+		case status == "created" && st.ExitCode != 0:
+			info.problem = failedStartText // it never got going
 		}
 	}
 	if !force && info.problem == "" {
@@ -276,11 +299,13 @@ func (p *consoleEventProcessor) readServiceLog(svc string, force bool) *downLog 
 	return info
 }
 
-// serviceLogLines returns the state and log lines under svc's row when its container
-// went down, at the row's detail level. The state takes the colour its row's icon does
-// (the error colour when the row itself failed or a service requires it, the cause
-// marker, else the warning colour) and the log, as a message, the warning colour. Each
-// line of text wraps to two rows, then is cut.
+// serviceLogLines returns the state, error and log lines under svc's row when its
+// container went down or couldn't start, at the row's detail level, led by Crashed, or
+// by Start Failed or Not Started for one that never started. The state takes the colour
+// its row's icon does (the error colour when the row itself failed or, outside status, a
+// service requires it, the cause marker, else the warning colour), and the error and
+// log, as messages, the warning colour. Each line of text wraps to two rows (an error
+// line, downErrRows), then is cut.
 func (p *consoleEventProcessor) serviceLogLines(svc string, termW int) []string {
 	d := p.downLogs[svc]
 	if d == nil || (d.state == "" && len(d.lines) == 0) {
@@ -293,7 +318,7 @@ func (p *consoleEventProcessor) serviceLogLines(svc string, termW int) []string 
 		errored = true
 	}
 	stateTag, logTag := "{{|DockerMarkerWarn|}}", "{{|DockerStatusWarn|}}"
-	if errored || p.dependencyCause(svc) {
+	if errored || p.dependencyCause(svc) && p.command != statusCommand {
 		stateTag = "{{|DockerMarkerError|}}"
 	}
 	if errored {
@@ -307,9 +332,12 @@ func (p *consoleEventProcessor) serviceLogLines(svc string, termW int) []string 
 	case errored:
 		icon, statusTag = "{{|DockerMarkerError|}}"+ic.error+"{{[-]}}", "{{|DockerStatusFail|}}"
 	case p.dependencyCause(svc):
-		icon = "{{|DockerMarkerCause|}}" + ic.warn + "{{[-]}}"
+		icon = p.causeMarker()
 	}
-	const word = "Crashed"
+	word := "Crashed"
+	if d.problem == failedStartText || d.problem == notStartedText {
+		word = d.problem // it never started, so it didn't crash
+	}
 	leadW := utf8.RuneCountInString(semstyle.ToPlain(globalIndent+icon+" ")) + sectionStatusW
 	lead := globalIndent + icon + " " + statusTag + word + "{{[-]}}" + strutil.Repeat(" ", sectionStatusW-len(word))
 	indent := leadW + 2*sectionChildIndentW
@@ -333,6 +361,9 @@ func (p *consoleEventProcessor) serviceLogLines(svc string, termW int) []string 
 	var lines []string
 	for i, text := range wrapWords(d.state, room, depLogRows) {
 		lines = append(lines, row("state", text, stateTag, i == 0))
+	}
+	for i, text := range wrapWords(d.err, room, downErrRows) {
+		lines = append(lines, row("error", text, logTag, i == 0))
 	}
 	first := true
 	for _, l := range d.lines {
@@ -394,14 +425,14 @@ func (p *consoleEventProcessor) downServices() []string {
 }
 
 // downSummaryLines returns the summary's list of the containers that ended up down: each
-// one's name, then its state and log lines as the display shows them, wrapped to wrapW
-// under their labels. Nil when none did.
+// one's name, then its state, error and log lines as the display shows them, wrapped to
+// wrapW under their labels. Nil when none did.
 func (p *consoleEventProcessor) downSummaryLines(wrapW int) []string {
 	down := p.downServices()
 	if len(down) == 0 {
 		return nil
 	}
-	lines := []string{fmt.Sprintf("Compose finished with %d %s down:", len(down), plural(len(down), "container", "containers"))}
+	lines := []string{fmt.Sprintf("%s %d %s down:", p.recapLead(), len(down), plural(len(down), "container", "containers"))}
 	const labelW = len("state")
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -410,8 +441,8 @@ func (p *consoleEventProcessor) downSummaryLines(wrapW int) []string {
 		lines = append(lines, "  "+dockerlayout.StyleServiceName(svc)+"{{|DockerColon|}}:{{[-]}}")
 		const indent = "    "
 		textW := max(wrapW-len(indent)-labelW-2, minDetailW)
-		row := func(label, text string) {
-			for i, part := range wrapWords(text, textW, depLogRows) {
+		row := func(label, text string, rows int) {
+			for i, part := range wrapWords(text, textW, rows) {
 				prefix := indent + strutil.Repeat(" ", labelW+2)
 				if i == 0 && label != "" {
 					prefix = indent + "{{|DockerDetailLabel|}}" + label + "{{[-]}}{{|DockerColon|}}:{{[-]}} " + strutil.Repeat(" ", labelW-len(label))
@@ -420,14 +451,17 @@ func (p *consoleEventProcessor) downSummaryLines(wrapW int) []string {
 			}
 		}
 		if d.state != "" {
-			row("state", d.state)
+			row("state", d.state, depLogRows)
+		}
+		if d.err != "" {
+			row("error", d.err, downErrRows)
 		}
 		for i, l := range d.lines {
 			label := "log"
 			if i > 0 {
 				label = ""
 			}
-			row(label, l)
+			row(label, l, depLogRows)
 		}
 		// Who needs it, as on its row.
 		for _, g := range depGroups {

@@ -166,7 +166,8 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 		}
 
 		// Block action commands when someone else is currently editing the configuration.
-		if def.SessionLocked {
+		locked := GroupSessionLocked(group)
+		if locked {
 			if !sessionlocks.Sessions.AcquireEditLock(clientIP, cmdStr, "console", connType, sessionKey) {
 				info := sessionlocks.Sessions.ReadEditInfo()
 				closing := fmt.Sprintf("Cannot run '{{|UserCommand|}}%s{{[-]}}' while the configuration is being edited.", cmdStr)
@@ -346,7 +347,7 @@ func Execute(ctx context.Context, groups []CommandGroup, clientIP, connType, ses
 			}
 		}
 
-		if def.SessionLocked {
+		if locked {
 			sessionlocks.Sessions.ReleaseEditLockAs(sessionKey)
 		}
 

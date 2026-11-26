@@ -280,6 +280,7 @@ type consoleEventProcessor struct {
 	healthCmd      map[string]string   // svc → its healthcheck's command, shown on its healthcheck line
 	healthOutput   map[string]string   // container → its last health check's output, shown while unhealthy
 	lastStart      time.Time           // when the run last started a container, for the wait before looking for crashes
+	statusRunning  map[string][]string // -c status: service → its running containers, whose health it tracks (beginStatus)
 	crashStop      func()              // ends the watch for containers restarting; nil when none runs
 	depsSettled    bool                // the run and its end-of-run checks are over: the dependency lines collapse to the ones with a problem
 	downLogs       map[string]*downLog // service → state and log lines of a container that went down, or a dependency that failed its condition
@@ -359,6 +360,8 @@ type consoleEventProcessor struct {
 	serviceModels       map[string][]serviceModel
 	modelIDs            []string
 	modelPulled         map[string]bool
+	modelsOnDisk        map[string]bool // -c status: the model references the runner has pulled (statusModelWord)
+	modelsUnknown       bool            // -c status: the runner couldn't be asked, so whether each model is pulled is unknown
 	orphanIDs           []string
 
 	versionLinks   map[string]string
@@ -427,6 +430,9 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 
 	// Pre-flight: inspect all images to get RootFS DiffIDs before pull events arrive.
 	p.preflight(ctx)
+	if p.command == statusCommand {
+		p.beginStatus()
+	}
 
 	// Static mode (redirected stdout, no TTY/TUI): no live rendering or ticker — events are
 	// processed silently and the final lines are emitted once in Done.
@@ -554,6 +560,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 		p.waitForHealth()
 		p.waitForStartedToSettle()
 		p.checkServicesDown()
+		p.findStatusPortConflict()
 		p.settleDependencies()
 		p.stopHealthWatch()
 		p.mtx.Lock()
@@ -582,6 +589,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 	p.waitForStartedToSettle()
 	p.stopCrashWatch() // the final check below drops what is no longer down
 	p.checkServicesDown()
+	p.findStatusPortConflict()
 	p.settleDependencies()
 
 	// Stop the ticker goroutine.

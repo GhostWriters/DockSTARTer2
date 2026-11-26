@@ -63,6 +63,9 @@ func (k rowKind) taskIDs(names []string) []string {
 // kindState returns the rolled-up state of k's rows names: their tasks', and pending
 // for a row with none yet, or a warning once the run ended without reaching it.
 func (p *consoleEventProcessor) kindState(k rowKind, names []string) sectionRollupState {
+	if p.command == statusCommand && len(names) > 0 {
+		return p.statusKindState(k, names) // nothing reports on status's rows
+	}
 	var reported []string
 	states := []sectionRollupState{}
 	for _, name := range names {
@@ -410,10 +413,11 @@ func (p *consoleEventProcessor) upsertModel(name string, e api.Resource) {
 }
 
 // modelRows returns the models the display lists: the project's on the commands that
-// bring services up (compose ensures every one), and any compose reported on.
+// bring services up (compose ensures every one) and on status, and any compose
+// reported on.
 func (p *consoleEventProcessor) modelRows() []string {
 	var names []string
-	if ensuresModels(p.command) {
+	if ensuresModels(p.command) || p.command == statusCommand {
 		for name := range p.models {
 			names = append(names, name)
 		}
@@ -430,9 +434,12 @@ func (p *consoleEventProcessor) modelRows() []string {
 // modelStatus returns model name's row status: Pending before compose reports on it,
 // Interrupted when the run ended first, Pulled once a model the run pulled is
 // configured, Existing once one already pulled is, else compose's own (Pulling,
-// Configuring, Error).
+// Configuring, Error). Under status, what the runner has (statusModelStatus).
 func (p *consoleEventProcessor) modelStatus(name string) (text, tag, icon string) {
 	ic := p.icons()
+	if p.command == statusCommand {
+		return p.statusModelStatus(name)
+	}
 	t := p.tasks[modelTaskID(name)]
 	switch {
 	case t == nil && p.finished:
@@ -464,8 +471,11 @@ func (p *consoleEventProcessor) modelKind() rowKind {
 		section: "models", singular: "model", plural: "models",
 		names:  p.modelRows(),
 		taskID: modelTaskID,
-		order:  []string{pendingText, existingText},
+		order:  []string{unknownText, pendingText, notPulledText, existingText},
 		group: func(name string) (string, bool) {
+			if p.command == statusCommand {
+				return p.statusModelWord(name), false
+			}
 			t := p.tasks[modelTaskID(name)]
 			switch {
 			case t == nil && !p.finished:
