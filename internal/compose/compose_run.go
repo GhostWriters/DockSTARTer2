@@ -19,6 +19,7 @@ import (
 
 	"DockSTARTer2/internal/dockerlayout"
 	"DockSTARTer2/internal/logger"
+	"DockSTARTer2/internal/strutil"
 	"DockSTARTer2/internal/version"
 )
 
@@ -228,7 +229,8 @@ func (p *consoleEventProcessor) jobOutputLines(displayLines int) []string {
 			lines = lines[len(lines)-keep:]
 		}
 	}
-	out := []string{"{{|DockerSection|}}──{{[-]}} " + dockerlayout.StyleServiceName(p.runJob) + " {{|DockerSection|}}output ──{{[-]}}"}
+	rule := strutil.Repeat(p.icons().rule, 2)
+	out := []string{"{{|DockerSection|}}" + rule + "{{[-]}} " + dockerlayout.StyleServiceName(p.runJob) + " {{|DockerSection|}}output " + rule + "{{[-]}}"}
 	for _, line := range lines {
 		if p.forLog {
 			line = semstyle.StripANSI(line)

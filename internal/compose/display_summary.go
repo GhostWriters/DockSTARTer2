@@ -121,12 +121,24 @@ const (
 	timerService                   // App cyan — individual service containers
 	timerImage                     // bright magenta bold — the image: title style
 	timerLayer                     // unstyled — layer rows
-	timerGroup                     // bright green bold — the changed: and unchanged: title style
+	timerGroup                     // bright green bold — the changed and unchanged title style
 )
 
+// minRuleW is the fewest characters a heading's rule takes.
+const minRuleW = 3
+
+// timerEntry is a line's timer. rule marks a heading that attachTimers follows with a
+// rule out to the line column's right edge (headingRule), before the timer.
 type timerEntry struct {
 	task  *consoleTask
 	style timerStyle
+	rule  bool
+}
+
+// headingRule returns a space and a rule w wide in all, in the line characters
+// setting's character.
+func (p *consoleEventProcessor) headingRule(w int) string {
+	return " {{|DockerSeparator|}}" + strutil.Repeat(p.icons().rule, max(w-1, minRuleW)) + "{{[-]}}"
 }
 
 // attachTimers right-aligns elapsed timers on lines. extraWidth lets the caller include
@@ -135,10 +147,12 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 	// Recompute the widest line each render (not grow-only) so the timer column follows
 	// the content when the terminal/viewport shrinks on resize.
 	p.maxLineWidth = extraWidth
-	for _, line := range lines {
-		if w := utf8.RuneCountInString(semstyle.ToPlain(line)); w > p.maxLineWidth {
-			p.maxLineWidth = w
+	for i, line := range lines {
+		w := utf8.RuneCountInString(semstyle.ToPlain(line))
+		if timers[i].rule {
+			w += 1 + minRuleW
 		}
+		p.maxLineWidth = max(p.maxLineWidth, w)
 	}
 	timerStrs := make([]string, len(timers))
 	maxTimerW := 0
@@ -167,6 +181,9 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 	out := make([]string, len(lines))
 	for i, line := range lines {
 		e := timers[i]
+		if e.rule {
+			line += p.headingRule(p.maxLineWidth - utf8.RuneCountInString(semstyle.ToPlain(line)))
+		}
 		if e.task == nil {
 			out[i] = line
 			continue

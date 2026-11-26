@@ -24,7 +24,7 @@ var containerVerbWords = map[string][2]string{
 
 // ContainerVerbDisplay is the live display of docker start, stop or restart acting on
 // containers by name: the compose display in its container mode, its heading the
-// docker command, each container a row under changed: or unchanged:.
+// docker command, each container a row under changed or unchanged.
 type ContainerVerbDisplay struct {
 	p    *consoleEventProcessor
 	verb string

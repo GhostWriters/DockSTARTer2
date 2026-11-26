@@ -120,8 +120,9 @@ type AppColors struct {
 	DockerSection       string // the final status word on a section or kind heading's line
 	DockerTitle         string // a kind heading's title (services:, N networks:), its items' colour at high intensity
 	DockerTitleImage    string // the same for images
-	DockerGroupHeading  string // the changed: and unchanged: headings and their timers
+	DockerGroupHeading  string // the changed and unchanged headings and their timers
 	DockerGroupStatus   string // the final status word on those headings' lines (Complete, or the word their rows share)
+	DockerSeparator     string // the rule of the changed and unchanged headings, in the group's hue
 	DockerInfo          string // an image's info lines: their marker, Info status and label
 	DockerStatusSuccess string
 	DockerStatusFail    string
@@ -142,7 +143,7 @@ type AppColors struct {
 
 // The hues the Docker display's kinds share: what the compose file defines (services,
 // networks, volumes, models, jobs, with the containers and orphans beside them) is
-// itemHue, images are imageHue; groupHue is the changed: and unchanged: groups', as if
+// itemHue, images are imageHue; groupHue is the changed and unchanged groups', as if
 // they had items of their own. A kind's name, final status and counts are its hue; its
 // title and timer are the bright version, bold. Change a hue here and they all follow.
 const (
@@ -264,6 +265,7 @@ var Colors = AppColors{
 	DockerTitleImage:   hueStyle("bright-"+imageHue, "B"),
 	DockerGroupHeading: hueStyle("bright-"+groupHue, "B"),
 	DockerGroupStatus:  hueStyle(groupHue, "B"),
+	DockerSeparator:    hueStyle(groupHue, ""),
 	DockerInfo:         "{{[-]}}{{[bright-blue::B]}}",
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess: hueStyle(itemHue, ""),

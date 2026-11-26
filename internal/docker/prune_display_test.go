@@ -28,7 +28,7 @@ func TestPruneUnusedImagesListAsImages(t *testing.T) {
 		{Untagged: "sha256:cf4fe1"}, {Deleted: "sha256:l3"},
 	}, SpaceReclaimed: 1 << 20}
 	got := prunePlain(r, nil, false)
-	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Removed     changed:", "✓ Removed       <no service>:", "✓ Removed         image: sha256:067bd9 [2]",
+	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Removed     ─ changed ─", "✓ Removed       <no service>:", "✓ Removed         image: sha256:067bd9 [2]",
 		"✓ Removed         image: sha256:cf4fe1 [1]", "Total reclaimed space:"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
@@ -101,7 +101,7 @@ func TestPruneShowsInspectedLayers(t *testing.T) {
 	lines, _ := buildPruneLines(r, nil, true, true, 160)
 	got := ansi.Strip(strings.Join(lines, "\n"))
 	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers",
-		"✓ Removed     changed:", "✓ Removed       <no service>:", // with layers too, Removed passes up
+		"✓ Removed     ─ changed ─", "✓ Removed       <no service>:", // with layers too, Removed passes up
 		"image: example/web:1 [2]", "Removed           web1", "Removed           web2",
 		"image: sha256:img2 [1]", "Removed           old1"} {
 		if !strings.Contains(got, want) {
@@ -182,17 +182,17 @@ func TestPruneErrorMarksItsHeading(t *testing.T) {
 	r := PruneReport{VolumesError: errors.New("permission denied"), NetworksDeleted: []string{"net_a"}}
 	lines, errs := buildPruneLines(r, nil, false, false, 160)
 	got := ansi.Strip(strings.Join(lines, "\n"))
-	if !strings.Contains(got, "× Error       changed:") || !strings.Contains(got, "× Error         volumes:") ||
+	if !strings.Contains(got, "× Error       ─ changed ─") || !strings.Contains(got, "× Error         volumes:") ||
 		!strings.Contains(got, "✓ Removed       1 network: net_a") || len(errs) != 1 {
-		t.Errorf("display =\n%s\nerrs = %q\nwant changed: and volumes: failed, networks complete", got, errs)
+		t.Errorf("display =\n%s\nerrs = %q\nwant changed and volumes: failed, networks complete", got, errs)
 	}
 }
 
 func TestPruneFoldsKindsOntoTheirHeadings(t *testing.T) {
-	// Only networks and volumes, all Removed: changed: says Removed too.
+	// Only networks and volumes, all Removed: changed says Removed too.
 	r := PruneReport{NetworksDeleted: []string{"net_a", "net_b"}, VolumesDeleted: []string{"vol_a"}}
 	got := prunePlain(r, nil, false)
-	for _, want := range []string{"✓ Removed     changed:", "✓ Removed       2 networks: net_a, net_b", "✓ Removed       1 volume: vol_a"} {
+	for _, want := range []string{"✓ Removed     ─ changed ─", "✓ Removed       2 networks: net_a, net_b", "✓ Removed       1 volume: vol_a"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}

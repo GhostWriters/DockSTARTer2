@@ -78,10 +78,10 @@ func TestModelSettingsChange(t *testing.T) {
 	}
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
+	changed, unchanged := strings.Index(got, " changed ─"), strings.Index(got, "unchanged ─")
 	llm := strings.Index(got, "Configured    1 model: llm")
 	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "Existing      2 models: chat, embed") {
-		t.Errorf("display =\n%s\nwant llm Configured under changed:, chat and embed Existing under unchanged:", got)
+		t.Errorf("display =\n%s\nwant llm Configured under changed, chat and embed Existing under unchanged", got)
 	}
 }
 
@@ -149,11 +149,11 @@ func TestModelsGroup(t *testing.T) {
 	}
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
+	changed, unchanged := strings.Index(got, " changed ─"), strings.Index(got, "unchanged ─")
 	llm := strings.Index(got, "Pulled        1 model: llm")
 	if changed < 0 || llm < changed || llm > unchanged || !strings.Contains(got, "model: ai/smollm2") ||
 		!strings.Contains(got, "Existing      1 model: embed") || strings.Contains(got, "Unknown") {
-		t.Errorf("display =\n%s\nwant llm Pulled with its model under changed:, embed Existing under unchanged:", got)
+		t.Errorf("display =\n%s\nwant llm Pulled with its model under changed, embed Existing under unchanged", got)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestOrphansGroup(t *testing.T) {
 	got := renderPlain(p, 0)
 	if !strings.Contains(got, "1 orphan:") || !strings.Contains(got, "Removed       1 orphan: autobrr") ||
 		strings.Contains(got, "Unknown") || !strings.Contains(got, ", 1 orphan") || !strings.Contains(got, "2 services: db, web") {
-		t.Errorf("display =\n%s\nwant autobrr Removed under changed: as 1 orphan, not a service", got)
+		t.Errorf("display =\n%s\nwant autobrr Removed under changed as 1 orphan, not a service", got)
 	}
 }
 
@@ -213,10 +213,10 @@ func TestContainerVerbStopLeavesStoppedAlone(t *testing.T) {
 	p.On(api.Resource{ID: "Container wizarr", Status: api.Done, Text: api.StatusStopped})
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
+	changed, unchanged := strings.Index(got, " changed ─"), strings.Index(got, "unchanged ─")
 	stopped, notRunning := strings.Index(got, "Stopped       1 container: radarr"), strings.Index(got, "Not Running   1 container: wizarr")
 	if changed < 0 || stopped < changed || stopped > unchanged || notRunning < unchanged {
-		t.Errorf("display =\n%s\nwant radarr Stopped under changed:, wizarr Not Running under unchanged:", got)
+		t.Errorf("display =\n%s\nwant radarr Stopped under changed, wizarr Not Running under unchanged", got)
 	}
 }
 

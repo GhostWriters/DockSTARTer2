@@ -31,12 +31,12 @@ func newJobsTestProcessor(command string) *consoleEventProcessor {
 	return p
 }
 
-// jobLines returns the jobs' lines, plain: grouped, under changed: and unchanged:
+// jobLines returns the jobs' lines, plain: grouped, under changed and unchanged
 // on their own, else the jobs: section.
 func jobLines(p *consoleEventProcessor, level int) []string {
 	if p.groupsRows() {
-		lines, _ := p.groupedLines([]kindGroups{p.jobGroups(160, level)}, 160)
-		return plainLines(lines)
+		lines, timers := p.groupedLines([]kindGroups{p.jobGroups(160, level)}, 160)
+		return plainLines(renderGrouped(p, lines, timers))
 	}
 	lines, _ := p.buildJobLines(160, level)
 	return plainLines(lines)
@@ -53,21 +53,21 @@ func TestScheduleText(t *testing.T) {
 
 func TestJobRowsOnUp(t *testing.T) {
 	p := newJobsTestProcessor("up")
-	// Below -v only the scheduled job, which up registers, is listed: under unchanged:,
+	// Below -v only the scheduled job, which up registers, is listed: under unchanged,
 	// in the Pending group.
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[0], "unchanged:") ||
+	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[0], "unchanged ─") ||
 		!strings.Contains(lines[1], "Pending") || !strings.Contains(lines[1], "1 job: backup") {
-		t.Fatalf("lines = %q, want unchanged:, and backup Pending on the line standing in for its 1 job: heading", lines)
+		t.Fatalf("lines = %q, want unchanged, and backup Pending on the line standing in for its 1 job: heading", lines)
 	}
 	// -v adds the manual job.
 	if lines := jobLines(p, dockerlayout.VerboseDetails); !strings.Contains(strings.Join(lines, "\n"), "Manual") {
 		t.Errorf("lines = %q, want repair as Manual with -v", lines)
 	}
-	// Scheduled anew: under changed:, the schedule shows without -v.
+	// Scheduled anew: under changed, the schedule shows without -v.
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusCreated})
 	lines := jobLines(p, 0)
-	if len(lines) != 3 || !strings.Contains(lines[0], "changed:") || !strings.Contains(lines[1], jobScheduledText) || !strings.Contains(lines[1], "1 job: backup") || !strings.Contains(lines[2], "schedule: 0 3 * * * (Europe/London)") {
-		t.Errorf("lines = %q, want backup Scheduled with its schedule under changed:", lines)
+	if len(lines) != 3 || !strings.Contains(lines[0], "changed ─") || !strings.Contains(lines[1], jobScheduledText) || !strings.Contains(lines[1], "1 job: backup") || !strings.Contains(lines[2], "schedule: 0 3 * * * (Europe/London)") {
+		t.Errorf("lines = %q, want backup Scheduled with its schedule under changed", lines)
 	}
 	// Already registered: in the Scheduled group, its schedule only with -v.
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRunning})
@@ -78,9 +78,9 @@ func TestJobRowsOnUp(t *testing.T) {
 	// repair nested under it, the heading Complete.
 	lines = jobLines(p, dockerlayout.VerboseDetails)
 	joined := strings.Join(lines, "\n")
-	if !strings.Contains(joined, "Complete      2 jobs:") || strings.Contains(joined, " changed:") ||
+	if !strings.Contains(joined, "Complete      2 jobs:") || strings.Contains(joined, " changed ─") ||
 		!strings.Contains(joined, "    backup:") || !strings.Contains(joined, "    repair:") || !strings.Contains(joined, "schedule:") {
-		t.Errorf("-v lines = %q, want backup and repair nested under one Complete 2 jobs: heading, no changed:", lines)
+		t.Errorf("-v lines = %q, want backup and repair nested under one Complete 2 jobs: heading, no changed", lines)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestJobsOnDownComeFromEvents(t *testing.T) {
 	p.On(api.Resource{ID: "Job backup", Status: api.Done, Text: api.StatusRemoved})
 	// A manual job is never registered: down finds nothing to remove for it.
 	p.On(api.Resource{ID: "Job repair", Status: api.Done, Text: jobNotFoundText})
-	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[0], "changed:") || !strings.Contains(lines[1], api.StatusRemoved) {
+	if lines := jobLines(p, 0); len(lines) != 2 || !strings.Contains(lines[0], "changed ─") || !strings.Contains(lines[1], api.StatusRemoved) {
 		t.Errorf("lines = %q, want only backup Removed", lines)
 	}
 	if n := len(p.jobsActedOn()); n != 1 {
@@ -282,6 +282,11 @@ func TestJobOutputLines(t *testing.T) {
 	if want := []string{"── repair output ──", "one", "two", "three"}; strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("live lines = %q, want %q (the unfinished line too)", got, want)
 	}
+	p.asciiMode = true
+	if got := plainLines(p.jobOutputLines(5))[0]; got != "-- repair output --" {
+		t.Errorf("header without line characters = %q, want %q", got, "-- repair output --")
+	}
+	p.asciiMode = false
 	// While running, only the last lines that fit show; once finished, all of them.
 	for range 100 {
 		p.addJobOutput("more\n")
@@ -300,8 +305,8 @@ func TestRunJobRowShowsItsOwnStatus(t *testing.T) {
 	p.runJob = "repair"
 	p.setJobRunStatus("repair", jobRunningText, api.Working, "")
 	lines := jobLines(p, 0)
-	if len(lines) != 2 || !strings.Contains(lines[0], "changed:") || !strings.Contains(lines[1], jobRunningText) || !strings.Contains(lines[1], "1 job: repair") {
-		t.Errorf("lines = %q, want repair's own row, Running, under changed:", lines)
+	if len(lines) != 2 || !strings.Contains(lines[0], "changed ─") || !strings.Contains(lines[1], jobRunningText) || !strings.Contains(lines[1], "1 job: repair") {
+		t.Errorf("lines = %q, want repair's own row, Running, under changed", lines)
 	}
 	if got := semstyle.ToPlain(strings.Join(lines, "")); strings.Contains(got, "backup") {
 		t.Errorf("lines = %q: run listed a job it doesn't run", lines)

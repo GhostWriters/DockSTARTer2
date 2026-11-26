@@ -29,13 +29,13 @@ const (
 
 var groupOrder = []string{pendingText, processingText, interruptedText, notPulledText, notCreatedText, notRunningText, pausedText, api.StatusRunning, cachedText}
 
-// rowGroup is where a row goes: its own line under changed: for a change, or into
-// the group of its state under unchanged:, nothing having happened to it yet or for
+// rowGroup is where a row goes: its own line under changed for a change, or into
+// the group of its state under unchanged, nothing having happened to it yet or for
 // good.
 type rowGroup int
 
 const (
-	groupChanged     rowGroup = iota // something happened to it: its own row, under changed:
+	groupChanged     rowGroup = iota // something happened to it: its own row, under changed
 	groupPending                     // nothing has happened to it yet: the group of its state before the run
 	groupSettled                     // confirmed left as it was: Running (Cached for a pull; Scheduled for a job)
 	groupInterrupted                 // a failed run never got to it, with nothing else to show
@@ -108,8 +108,8 @@ func (p *consoleEventProcessor) interruptedOnly(svc, imgName string, termW int) 
 	return imgName == "" || p.imageUnchanged(imgName)
 }
 
-// groupsRows reports whether the display groups its rows under changed: and
-// unchanged:: on the commands that bring services up or pull them, and on teardown
+// groupsRows reports whether the display groups its rows under changed and
+// unchanged: on the commands that bring services up or pull them, and on teardown
 // commands. After a failure only the commands that bring services up, and docker
 // start, stop or restart by container name, still group, and only below
 // dockerlayout.VerboseDetails (buildLevel): rows showing the same thing fold (an
@@ -132,7 +132,7 @@ func (p *consoleEventProcessor) groupsRows() bool {
 }
 
 // teardownGroupWord returns the group a teardown leaves svc in, or "" for its own row
-// under changed:, and whether the group's rows are still to be acted on. A service
+// under changed, and whether the group's rows are still to be acted on. A service
 // with no container is Not Created, one the command leaves alone is in the group of
 // its state (teardownSkip, verbLeavesAlone: stop of one already stopped is Not Running
 // though compose still reports stopping it); until compose reports on the rest, they
