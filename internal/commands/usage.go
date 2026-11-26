@@ -186,7 +186,7 @@ func GetUsage(target string, noHeading bool) string {
 	if match("-F", "--follow") {
 		printStr(
 			"{{|UsageCommand|}}-F --follow{{[-]}}",
-			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}}) -- like other modifiers, must come before the command it modifies, e.g. {{|UsageCommand|}}-F --logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}",
+			"	Follow log output (used with {{|UsageCommand|}}--logs{{[-]}}) -- like other modifiers, must come before the command it modifies, e.g. {{|UsageCommand|}}-F --logs{{[-]}} {{|UsageApp|}}<container>{{[-]}}. Ctrl+C stops following and goes on to the next command.",
 		)
 	}
 	if match("-D", "--deps") {

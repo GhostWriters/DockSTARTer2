@@ -214,11 +214,20 @@ func HandleContainerLogs(ctx context.Context, group *CommandGroup, state *CmdSta
 		_, copyErr = stdcopy.StdCopy(stdout, stderr, rc)
 	}
 	_ = rc.Close()
-	// A canceled context (Ctrl+C stopping the follow) isn't a failure --
-	// nothing the command was doing actually failed, it just stopped
-	// watching.
-	if copyErr != nil && !errors.Is(copyErr, context.Canceled) {
-		return copyErr
+	if err := logStreamEnd(logCtx, copyErr); err != nil {
+		logger.Error(ctx, "Lost the log stream for '{{|App|}}%s{{[-]}}': %v", name, err)
+		return err
 	}
 	return nil
+}
+
+// logStreamEnd returns the error a log stream ended with, or nil when it ended
+// because its context was canceled: Ctrl+C stopping a follow isn't a failure, so
+// the commands after it still run. Whatever the read fails with once the stream is
+// cut (not always context.Canceled) is part of that stop.
+func logStreamEnd(streamCtx context.Context, copyErr error) error {
+	if copyErr == nil || streamCtx.Err() != nil || errors.Is(copyErr, context.Canceled) {
+		return nil
+	}
+	return copyErr
 }
