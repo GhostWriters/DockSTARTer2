@@ -326,9 +326,10 @@ func (p *consoleEventProcessor) propagatedIcon(t *consoleTask, worstStatus api.E
 	return p.spinnerIcon(t)
 }
 
-// iconSet holds the status markers; unsure marks a problem not confirmed yet.
+// iconSet holds the status markers; unsure marks a problem not confirmed yet. rule is
+// the character a separator line repeats.
 type iconSet struct {
-	done, error, warn, unsure, pending, spinner string
+	done, error, warn, unsure, pending, spinner, rule string
 }
 
 func (p *consoleEventProcessor) icons() iconSet {
@@ -337,13 +338,13 @@ func (p *consoleEventProcessor) icons() iconSet {
 		if console.SpinnerEnabledFor(console.ConnTypeFromContext(p.logCtx)) {
 			spinnerChar = asciiSpinnerFrames[p.spinnerFrame%len(asciiSpinnerFrames)]
 		}
-		return iconSet{done: "+", error: "x", warn: "!", unsure: "?", pending: "-", spinner: spinnerChar}
+		return iconSet{done: "+", error: "x", warn: "!", unsure: "?", pending: "-", spinner: spinnerChar, rule: "-"}
 	}
 	spinnerChar := "·"
 	if console.SpinnerEnabledFor(console.ConnTypeFromContext(p.logCtx)) {
 		spinnerChar = spinnerFrames[p.spinnerFrame]
 	}
-	return iconSet{done: "✓", error: "×", warn: "⚠", unsure: "?", pending: "·", spinner: spinnerChar}
+	return iconSet{done: "✓", error: "×", warn: "⚠", unsure: "?", pending: "·", spinner: spinnerChar, rule: "─"}
 }
 
 func (p *consoleEventProcessor) activeSpinnerTag(char string) string {

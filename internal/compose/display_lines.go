@@ -62,7 +62,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 
 	// ── services: section ──────────────────────────────────────────────────
 	// A job -c run runs with no service dependencies has none to show. Grouped, the
-	// changed: and unchanged: headings take the sections' place.
+	// changed and unchanged headings take the sections' place.
 	grouped := p.groupsRows()
 	if !grouped && (len(svcRollupIDs) > 0 || p.runJob == "") {
 		appendLine(globalIndent+svcIcon+" "+svcStatusTag+"{{[-]}}"+svcStatusPad+dockerlayout.Title("services", "services", false)+"{{|DockerColon|}}:{{[-]}}", p.serviceSectionTask(svcRollupIDs), timerSection)
@@ -287,9 +287,7 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 		}
 		kinds = append(kinds, p.kindGroups(p.modelKind(), termW, level), p.jobGroups(termW, level), p.kindGroups(p.orphanKind(), termW, level))
 		groupLines, groupTimers := p.groupedLines(kinds, termW)
-		for i, line := range groupLines {
-			appendLine(line, groupTimers[i].task, groupTimers[i].style)
-		}
+		lines, timers = append(lines, groupLines...), append(timers, groupTimers...)
 	}
 
 	var sections [][]string
@@ -899,7 +897,7 @@ func (p *consoleEventProcessor) buildTeardownLines(termW int, level int) []strin
 // teardownOrder is the order of a teardown's unchanged groups.
 var teardownOrder = []string{api.StatusRunning, pausedText, notRunningText, notCreatedText}
 
-// teardownGroupedLines returns a teardown's rows under changed: and unchanged:: the
+// teardownGroupedLines returns a teardown's rows under changed and unchanged: the
 // services compose acted on, and the networks, volumes and jobs it removed, changed;
 // the services it left (teardownGroupWord) unchanged, each group one folded line of
 // names, or with -v their rows. renderRow appends a service's rows to *lines and

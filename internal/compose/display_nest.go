@@ -246,7 +246,7 @@ func leadsWithLabel(line string, count int, singular, plural string) bool {
 	return strings.HasPrefix(strings.TrimSpace(string(runes[start:])), strconv.Itoa(count)+" "+noun+":")
 }
 
-// groupHeading returns a kind's heading under changed: or unchanged:: its rows'
+// groupHeading returns a kind's heading under changed or unchanged: its rows'
 // rolled-up state in the status column, then how many rows of noun it holds, both as
 // a section heading's.
 func groupHeading(icon, statusTag, statusText string, count int, singular, plural string) string {
@@ -283,7 +283,7 @@ func (p *consoleEventProcessor) stateLineWord(state sectionRollupState, look hea
 	return icon, stTag + text + "{{[-]}}", text
 }
 
-// groupSet is one kind's rows under changed: or unchanged:: how many, their rolled-up
+// groupSet is one kind's rows under changed or unchanged: how many, their rolled-up
 // state and timer, and their lines: its rows, or for a folded unchanged set its
 // group lines (one per state, or per set of possible port conflicts within one, each
 // naming its kind).
@@ -385,11 +385,10 @@ func alignNames(lines []string, timers []timerEntry, termW int) ([]string, []tim
 	return append(outLines, lines[next:]...), append(outTimers, timers[next:]...)
 }
 
-// groupedLines returns the changed: heading, then the unchanged: one, each with
-// its kinds' rolled-up state and timer, leaving out one with no rows, and a blank
-// line between the two when both show. Under each, a kind with rows gets a heading
-// (N services:) and its rows, or folded group lines, nested under it, so a line
-// keeps its indent as rows fold and unfold. A heading shows
+// groupedLines returns the changed heading, then the unchanged one, each with its
+// kinds' rolled-up state, timer and rule, leaving out one with no rows. Under each, a
+// kind with rows gets a heading (N services:) and its rows, or folded group lines,
+// nested under it, so a line keeps its indent as rows fold and unfold. A heading shows
 // the status word all its rows share, and a folded group or a lone row that is all
 // there is under it stands in for it. Names after a label (N noun:) all start at one
 // column (alignNames), wrapped to termW.
@@ -397,7 +396,7 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups, termW int) ([]s
 	var lines []string
 	var timers []timerEntry
 	// After a failed run nothing is still pending: what never got going was cut short,
-	// a warning. Nothing under unchanged: failed, so it is a warning at most.
+	// a warning. Nothing under unchanged failed, so it is a warning at most.
 	settle := func(adjective string, s sectionRollupState) sectionRollupState {
 		if p.finished && !p.succeeded {
 			if s == rollupPending || s == rollupProcessing || adjective == "unchanged" && s == rollupError {
@@ -421,18 +420,17 @@ func (p *consoleEventProcessor) groupedLines(kinds []kindGroups, termW int) ([]s
 		if len(states) == 0 {
 			continue
 		}
-		// A blank line sets unchanged: apart from the changed: block above it.
-		if len(lines) > 0 {
-			lines, timers = append(lines, ""), append(timers, timerEntry{})
-		}
 		groupState := combineStates(states)
 		icon, tag, text := p.stateLineWord(groupState, commonLook(looks))
 		if groupState == rollupComplete {
 			tag = strings.Replace(tag, sectionFinalTag, "{{|DockerGroupStatus|}}", 1) // in the group's hue, as a kind heading's is in its kind's
 		}
+		// A rule character leads the title, lining it up with the kind headings under it,
+		// and attachTimers follows it with a rule: together they mark where the block
+		// starts, as wrapped rows leave the status column blank.
 		lines = append(lines, globalIndent+icon+" "+tag+strutil.Repeat(" ", sectionStatusW-utf8.RuneCountInString(text))+
-			"{{|DockerGroupHeading|}}"+adjective+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
-		timers = append(timers, timerEntry{task: mergeTimers(tasks), style: timerGroup})
+			"{{|DockerSeparator|}}"+p.icons().rule+"{{[-]}} {{|DockerGroupHeading|}}"+adjective+"{{[-]}}")
+		timers = append(timers, timerEntry{task: mergeTimers(tasks), style: timerGroup, rule: true})
 		for _, k := range kinds {
 			set := k.set(adjective)
 			if set.count == 0 {

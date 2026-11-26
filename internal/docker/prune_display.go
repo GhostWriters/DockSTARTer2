@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/GhostWriters/semstyle"
 	"github.com/distribution/reference"
@@ -153,8 +154,11 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	}
 }
 
+// pruneMinRuleW is the fewest characters the changed heading's rule takes.
+const pruneMinRuleW = 3
+
 // buildPruneLines returns the prune report's lines and its error notices. Everything a
-// prune does is a removal, so it all goes under changed:, as in the compose display:
+// prune does is a removal, so it all goes under changed, as in the compose display:
 // one heading per kind with its count, its rows nested under it, or for a kind whose
 // rows all say Removed, one folded line standing in for the heading. showLayers adds
 // each image's layers; below open (-v), rows that show the same thing fold into one
@@ -162,15 +166,17 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayers, open bool, termW int) ([]string, []string) {
 	doneIcon := "{{|DockerMarkerDone|}}✓{{[-]}}"
 	errorIcon := "{{|DockerMarkerError|}}×{{[-]}}"
+	ruleCh := "─"
 	if r.AsciiMode {
 		doneIcon = "{{|DockerMarkerDone|}}+{{[-]}}"
 		errorIcon = "{{|DockerMarkerError|}}x{{[-]}}"
+		ruleCh = "-"
 	}
 	doneIconANSI := semstyle.ToANSI(doneIcon)
 	errorIconANSI := semstyle.ToANSI(errorIcon)
 
 	// Final statuses take their row's style, as in the compose display: headings
-	// DockerSection (changed: DockerGroupStatus); services, networks, volumes and containers
+	// DockerSection (the changed heading's DockerGroupStatus); services, networks, volumes and containers
 	// App; images, and their heading, DockerImage; the container_name line App (its label a
 	// detail label); layers dim.
 	imageRemovedStatus := semstyle.ToANSI("{{|DockerImage|}}Removed{{[-]}}")
@@ -183,9 +189,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	var lines []string
 	add := func(line string) { lines = append(lines, line) }
 
-	// heading returns a heading at depth (changed: at 0, a kind's count at 1): the word
+	// heading returns a heading at depth (changed at 0, a kind's count at 1): the word
 	// all its rows show, or Complete when they differ, or, when its part of the prune
-	// failed, Error. changed:'s word is in the group's hue (DockerGroupStatus).
+	// failed, Error. changed's word is in the group's hue (DockerGroupStatus).
 	heading := func(depth int, label, style string, hasErr bool, word string) string {
 		icon, status := doneIconANSI, ""
 		if word == "" {
@@ -203,8 +209,14 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 			icon, status, word = errorIconANSI, errorStatus, "Error"
 		}
 		pad := strutil.Repeat(" ", SectionStatusW-len(word))
+		lead, colon := "", "{{|DockerColon|}}:{{[-]}}"
+		if depth == 0 {
+			// changed is led by a rule character, lining up with the kind headings under it,
+			// and followed by a rule once the widest line is known, as in the compose display.
+			lead, colon = "{{|DockerSeparator|}}"+ruleCh+"{{[-]}} ", ""
+		}
 		return GlobalIndent + icon + " " + status + semstyle.CodeReset + pad + indent(depth) +
-			semstyle.ToANSI("{{|"+style+"|}}"+label+"{{[-]}}{{|DockerColon|}}:{{[-]}}")
+			semstyle.ToANSI(lead+"{{|"+style+"|}}"+label+"{{[-]}}"+colon)
 	}
 	// removedRow returns a removed row under a kind's heading.
 	removedRow := func(nameANSI string) string {
@@ -442,7 +454,9 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 			}
 		}
 	}
+	changedAt := -1
 	if len(groups) > 0 || len(r.NetworksDeleted) > 0 || len(r.VolumesDeleted) > 0 || len(leftoverContainers) > 0 || r.hasErrors() {
+		changedAt = len(lines)
 		add(heading(0, "changed", "DockerGroupHeading", r.hasErrors(), changedWord))
 	}
 
@@ -590,6 +604,17 @@ func buildPruneLines(r PruneReport, imageServices map[string][]string, showLayer
 	headerIndent := strutil.Repeat(" ", IconW+SpaceW+SectionChildIndentW)
 	for i := headerEnd; i < len(lines); i++ {
 		lines[i] = headerIndent + lines[i]
+	}
+
+	// The changed heading's rule runs to the widest line's end, as in the compose display.
+	if changedAt >= 0 {
+		plainW := func(s string) int { return utf8.RuneCountInString(semstyle.ToPlain(s)) }
+		widest := 0
+		for _, l := range lines {
+			widest = max(widest, plainW(l))
+		}
+		fill := max(widest-plainW(lines[changedAt])-1, pruneMinRuleW)
+		lines[changedAt] += " " + semstyle.ToANSI("{{|DockerSeparator|}}"+strutil.Repeat(ruleCh, fill)+"{{[-]}}")
 	}
 
 	// ── summary ───────────────────────────────────────────────────────────────

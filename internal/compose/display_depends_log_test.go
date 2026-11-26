@@ -472,7 +472,7 @@ func TestStoppedDependencyIsAChangeFromTheFirstFrame(t *testing.T) {
 	p.preRun["db"] = "stopped" // up is going to start it
 
 	if got := p.serviceGroup("db", "", 160); got != groupChanged {
-		t.Errorf("db group = %v, want its own row under changed: while it starts", got)
+		t.Errorf("db group = %v, want its own row under changed while it starts", got)
 	}
 	p.preRun["cache"] = "stopped" // starting too, but nothing depends on it
 	if got := p.serviceGroup("cache", "", 160); got != groupPending {

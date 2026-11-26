@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/GhostWriters/semstyle"
 	"github.com/compose-spec/compose-go/v2/types"
@@ -38,6 +40,18 @@ func newGroupsTestProcessor(command string) *consoleEventProcessor {
 // label (N noun:) whatever column alignNames moved its names to.
 func renderPlain(p *consoleEventProcessor, level int) string {
 	return unalignNames(strings.Join(plainLines(p.buildLines(160, level)), "\n"))
+}
+
+// renderGrouped returns groupedLines' lines as the display shows them, each heading's
+// rule at its shortest.
+func renderGrouped(p *consoleEventProcessor, lines []string, timers []timerEntry) []string {
+	out := slices.Clone(lines)
+	for i, e := range timers {
+		if e.rule {
+			out[i] += p.headingRule(0)
+		}
+	}
+	return out
 }
 
 // alignedLabel matches a label (N noun:) and the spaces after it.
@@ -103,8 +117,8 @@ func TestAChangedServiceLeavesItsGroup(t *testing.T) {
 func TestAnImageCheckAloneDoesntChangeAService(t *testing.T) {
 	p := newGroupsTestProcessor("update")
 	p.On(api.Resource{ID: dbImg, Status: api.Working, Text: api.StatusPulling}) // update checks every image
-	if got := renderPlain(p, 0); !strings.Contains(got, "Processing      1 service: db") || strings.Contains(got, " changed:") {
-		t.Errorf("display =\n%s\nwant db Processing under unchanged:, no row of its own, while its image is only checked", got)
+	if got := renderPlain(p, 0); !strings.Contains(got, "Processing      1 service: db") || strings.Contains(got, " changed ─") {
+		t.Errorf("display =\n%s\nwant db Processing under unchanged, no row of its own, while its image is only checked", got)
 	}
 	p.On(api.Resource{ID: "layer1", ParentID: dbImg, Status: api.Working, Text: api.StatusDownloading})
 	if got := renderPlain(p, 0); !strings.Contains(got, "db:") || !strings.Contains(got, "1 service: web") {
@@ -127,17 +141,17 @@ func TestVerboseNestsRowsUnderHeadings(t *testing.T) {
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	got := renderPlain(p, dockerlayout.VerboseDetails)
-	changed, unchanged := strings.Index(got, "Recreated   changed:"), strings.Index(got, "Running     unchanged:")
+	changed, unchanged := strings.Index(got, "Recreated   ─ changed ─"), strings.Index(got, "Running     ─ unchanged ─")
 	if changed < 0 || unchanged < changed {
-		t.Fatalf("-v display =\n%s\nwant changed:, then unchanged:, each with its rows' word", got)
+		t.Fatalf("-v display =\n%s\nwant changed, then unchanged, each with its rows' word", got)
 	}
 	// A service's row, its image under it, stands in for its kind's heading, the status
 	// column staying put.
 	if db := strings.Index(got, "Recreated     1 service: db"); db < changed || db > unchanged {
-		t.Errorf("-v display =\n%s\nwant db under changed:", got)
+		t.Errorf("-v display =\n%s\nwant db under changed", got)
 	}
 	if web := strings.Index(got, "Running       1 service: web"); web < unchanged {
-		t.Errorf("-v display =\n%s\nwant web under unchanged:", got)
+		t.Errorf("-v display =\n%s\nwant web under unchanged", got)
 	}
 	if strings.Contains(got, "Complete      1 service:") {
 		t.Errorf("-v display =\n%s\nwant no heading line over a row that says the same", got)
@@ -149,18 +163,18 @@ func TestNetworksGroupLikeServices(t *testing.T) {
 	p.networks = resourceDecl{names: []string{"proj_default", "proj_backend"}, exists: map[string]bool{"proj_default": true}}
 	got := renderPlain(p, 0)
 	// Before the run reaches them: one exists, one isn't created yet; both unchanged so far.
-	if strings.Contains(got, " changed:") || !strings.Contains(got, "Not Created     1 network: proj_backend") || !strings.Contains(got, "Existing        1 network: proj_default") {
+	if strings.Contains(got, " changed ─") || !strings.Contains(got, "Not Created     1 network: proj_backend") || !strings.Contains(got, "Existing        1 network: proj_default") {
 		t.Errorf("display =\n%s\nwant proj_backend Not Created and proj_default Existing, both unchanged", got)
 	}
-	// compose creates proj_backend: it gets its own row under changed:.
+	// compose creates proj_backend: it gets its own row under changed.
 	p.On(api.Resource{ID: "Network proj_backend", Status: api.Done, Text: api.StatusCreated})
 	p.On(containerEvent("db", api.StatusRunning, api.Done))
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.finished, p.succeeded = true, true
 	got = renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, "Created     changed:"), strings.Index(got, "Complete    unchanged:")
+	changed, unchanged := strings.Index(got, "Created     ─ changed ─"), strings.Index(got, "Complete    ─ unchanged ─")
 	if changed < 0 || unchanged < changed || !strings.Contains(got, "Created       1 network:") || !strings.Contains(got, "Created       1 network: proj_backend") || !strings.Contains(got, "Existing      1 network: proj_default") {
-		t.Errorf("display =\n%s\nwant proj_backend Created under changed:, proj_default still Existing under unchanged:", got)
+		t.Errorf("display =\n%s\nwant proj_backend Created under changed, proj_default still Existing under unchanged", got)
 	}
 }
 
@@ -172,11 +186,11 @@ func TestChangedHoldsEachKindThatChanged(t *testing.T) {
 	p.On(containerEvent("web", api.StatusRunning, api.Done))
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, svcs, nets, unchanged := strings.Index(got, "changed:"), strings.Index(got, "1 service: db"),
-		strings.Index(got, "1 network:"), strings.Index(got, "unchanged:")
-	if strings.Count(got, " changed:") != 1 || changed > svcs || svcs > nets || nets > unchanged ||
+	changed, svcs, nets, unchanged := strings.Index(got, "changed ─"), strings.Index(got, "1 service: db"),
+		strings.Index(got, "1 network:"), strings.Index(got, "unchanged ─")
+	if strings.Count(got, " changed ─") != 1 || changed > svcs || svcs > nets || nets > unchanged ||
 		!strings.Contains(got, "Running       1 service: web") || strings.Contains(got, "services:") {
-		t.Errorf("display =\n%s\nwant one changed: holding 1 service: then 1 network:, web under unchanged:, no section headings", got)
+		t.Errorf("display =\n%s\nwant one changed holding 1 service: then 1 network:, web under unchanged, no section headings", got)
 	}
 }
 
@@ -265,7 +279,7 @@ func TestAFailureFoldsWhatItDidntReach(t *testing.T) {
 	// The rows a failed run never reached fold as Interrupted, under a heading that is
 	// a warning: nothing there failed. With -v, every row in its place.
 	got := renderPlain(q, 0)
-	if !strings.Contains(got, "⚠ Interrupted   2 services: db, web") || !strings.Contains(got, "⚠ Interrupted unchanged:") || strings.Contains(got, "Pending") {
+	if !strings.Contains(got, "⚠ Interrupted   2 services: db, web") || !strings.Contains(got, "⚠ Interrupted ─ unchanged ─") || strings.Contains(got, "Pending") {
 		t.Errorf("display =\n%s\nwant the unreached rows folded Interrupted under a warning", got)
 	}
 	if got := renderPlain(q, dockerlayout.VerboseDetails); !strings.Contains(got, "Interrupted   db:") || !strings.Contains(got, "services:") {
@@ -274,18 +288,18 @@ func TestAFailureFoldsWhatItDidntReach(t *testing.T) {
 }
 
 func TestTeardownGroups(t *testing.T) {
-	// down: db removed under changed:; web, with no container, Not Created under unchanged:.
+	// down: db removed under changed; web, with no container, Not Created under unchanged.
 	p := newGroupsTestProcessor("down")
 	delete(p.preRun, "web")
-	if got := renderPlain(p, 0); !strings.Contains(got, "Running         1 service: db") || !strings.Contains(got, "Not Created     1 service: web") || strings.Contains(got, " changed:") {
+	if got := renderPlain(p, 0); !strings.Contains(got, "Running         1 service: db") || !strings.Contains(got, "Not Created     1 service: web") || strings.Contains(got, " changed ─") {
 		t.Errorf("down display before any event =\n%s\nwant db Running (to be removed) and web Not Created, nothing changed yet", got)
 	}
 	p.On(containerEvent("db", api.StatusRemoved, api.Done))
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, "Removed     changed:"), strings.Index(got, "Not Created unchanged:")
+	changed, unchanged := strings.Index(got, "Removed     ─ changed ─"), strings.Index(got, "Not Created ─ unchanged ─")
 	if changed < 0 || unchanged < changed || !strings.Contains(got, "Removed       1 service: db") || !strings.Contains(got, "Not Created   1 service: web") || strings.Contains(got, "services:") {
-		t.Errorf("down display =\n%s\nwant db Removed under changed:, web Not Created under unchanged:, no services: section", got)
+		t.Errorf("down display =\n%s\nwant db Removed under changed, web Not Created under unchanged, no services: section", got)
 	}
 
 	// stop: web, already stopped, stays unchanged though compose reports stopping it.
@@ -295,7 +309,7 @@ func TestTeardownGroups(t *testing.T) {
 	q.On(containerEvent("web", api.StatusStopped, api.Done))
 	q.finished, q.succeeded = true, true
 	if got := renderPlain(q, 0); !strings.Contains(got, "Stopped       1 service: db") || !strings.Contains(got, "Not Running   1 service: web") {
-		t.Errorf("stop display =\n%s\nwant db Stopped under changed: and web in the Not Running group", got)
+		t.Errorf("stop display =\n%s\nwant db Stopped under changed and web in the Not Running group", got)
 	}
 
 	// restart: web, not running before, is started rather than restarted.
@@ -310,7 +324,7 @@ func TestTeardownGroups(t *testing.T) {
 
 	// A failed teardown shows every row under the services: section.
 	q.On(api.Resource{ID: "Container db", Status: api.Error, Text: "permission denied"})
-	if got := renderPlain(q, 0); !strings.Contains(got, "services:") || strings.Contains(got, "changed:") {
+	if got := renderPlain(q, 0); !strings.Contains(got, "services:") || strings.Contains(got, "changed ─") {
 		t.Errorf("failed stop display =\n%s\nwant the services: section, ungrouped", got)
 	}
 }
@@ -345,14 +359,14 @@ func TestTeardownLeavesStatesAlone(t *testing.T) {
 	p.On(containerEvent("db", pausedText, api.Done))
 	p.finished, p.succeeded = true, true
 	if got := renderPlain(p, 0); !strings.Contains(got, "Paused        1 service: db") || !strings.Contains(got, "Paused        1 service: web") {
-		t.Errorf("pause display =\n%s\nwant db Paused under changed: and web in the Paused group", got)
+		t.Errorf("pause display =\n%s\nwant db Paused under changed and web in the Paused group", got)
 	}
 
 	// unpause with nothing paused: both left Running, nothing changed.
 	q := newGroupsTestProcessor("unpause")
 	q.finished, q.succeeded = true, true
-	if got := renderPlain(q, 0); !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, " changed:") {
-		t.Errorf("unpause display =\n%s\nwant both Running under unchanged:", got)
+	if got := renderPlain(q, 0); !strings.Contains(got, "Running       2 services: db, web") || strings.Contains(got, " changed ─") {
+		t.Errorf("unpause display =\n%s\nwant both Running under unchanged", got)
 	}
 
 	// kill: web, stopped, is Not Running, not Killed.
@@ -372,7 +386,7 @@ func TestTeardownLeavesStatesAlone(t *testing.T) {
 	s.finished, s.succeeded = true, true
 	// Both stopped the same way, so they fold into one line.
 	if got := renderPlain(s, 0); !strings.Contains(got, "Stopped       2 services: db, web") || strings.Contains(got, "Not Running") {
-		t.Errorf("stop display =\n%s\nwant paused web Stopped with db under changed:", got)
+		t.Errorf("stop display =\n%s\nwant paused web Stopped with db under changed", got)
 	}
 
 	// restart of a paused service is a restart, not a start.
@@ -529,11 +543,11 @@ func TestSharedImageSplitsBetweenChangedAndUnchanged(t *testing.T) {
 	p.On(containerEvent("sonarr__alt4k", api.StatusRunning, api.Done))
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
-	changed, unchanged := strings.Index(got, " changed:"), strings.Index(got, "unchanged:")
+	changed, unchanged := strings.Index(got, " changed ─"), strings.Index(got, "unchanged ─")
 	started := strings.Index(got, "Started       2 services: sonarr, sonarr__4k")
 	running := strings.Index(got, "Running       2 services: sonarr__alt, sonarr__alt4k")
 	if changed < 0 || started < changed || started > unchanged || running < unchanged {
-		t.Errorf("display =\n%s\nwant the two started under changed:, the two left running under unchanged:", got)
+		t.Errorf("display =\n%s\nwant the two started under changed, the two left running under unchanged", got)
 	}
 }
 
@@ -604,10 +618,10 @@ func TestGroupLineStatusAndTimerFollowTheTitle(t *testing.T) {
 	}}
 	lines, timers := p.groupedLines([]kindGroups{k}, 120)
 	if len(lines) != 2 || len(timers) != 2 {
-		t.Fatalf("lines = %q, want the changed: line and the lone row standing in for its heading", lines)
+		t.Fatalf("lines = %q, want the changed line and the lone row standing in for its heading", lines)
 	}
 	if !strings.Contains(lines[0], "{{|DockerGroupStatus|}}Restarted") || timers[0].style != timerGroup {
-		t.Errorf("changed: line = %q, timer style %v; want its status and timer in the group style", lines[0], timers[0].style)
+		t.Errorf("changed line = %q, timer style %v; want its status and timer in the group style", lines[0], timers[0].style)
 	}
 	if !strings.Contains(lines[1], serviceFinalTag+"Restarted") || timers[1].style != timerSection {
 		t.Errorf("merged line = %q, timer style %v; want its status in the row style and its timer in the title style", lines[1], timers[1].style)
@@ -691,13 +705,13 @@ func TestHeadingIgnoresLinesUnderItsRows(t *testing.T) {
 	}}
 	got, _ := p.groupedLines([]kindGroups{k}, 120)
 	if !strings.Contains(got[0], "Recreated") || strings.Contains(got[0], "Complete") {
-		t.Errorf("changed: line = %q, want Recreated", got[0])
+		t.Errorf("changed line = %q, want Recreated", got[0])
 	}
 	// A failure under the row shows through the state, not as Recreated.
 	k.changed.state = rollupError
 	got, _ = p.groupedLines([]kindGroups{k}, 120)
 	if !strings.Contains(got[0], "Error") || strings.Contains(got[0], "Recreated") {
-		t.Errorf("changed: line with a failed image = %q, want Error", got[0])
+		t.Errorf("changed line with a failed image = %q, want Error", got[0])
 	}
 }
 
@@ -722,7 +736,9 @@ func TestHeadingTakesTheRowsInfoIcon(t *testing.T) {
 	}
 }
 
-func TestBlankLineBetweenChangedAndUnchanged(t *testing.T) {
+// The changed and unchanged headings each get a rule, with no colon and no blank line
+// between the two blocks.
+func TestGroupHeadingsHaveRules(t *testing.T) {
 	p := newGroupsTestProcessor("up")
 	row := func(word, name string) string {
 		return globalIndent + "{{|DockerMarkerDone|}}" + p.icons().done + "{{[-]}} " + serviceFinalTag + word + "{{[-]}}" +
@@ -736,22 +752,41 @@ func TestBlankLineBetweenChangedAndUnchanged(t *testing.T) {
 	if len(timers) != len(lines) {
 		t.Fatalf("%d timers for %d lines", len(timers), len(lines))
 	}
-	at := -1
-	for i, l := range lines {
-		if strings.Contains(l, "unchanged{{") {
-			at = i
+	var headings []string
+	for i, e := range timers {
+		if e.rule {
+			headings = append(headings, strings.Fields(semstyle.ToPlain(lines[i]))[3])
 		}
 	}
-	if at < 1 || lines[at-1] != "" {
-		t.Errorf("lines = %q, want a blank line before unchanged:", lines)
+	if strings.Join(headings, ",") != "changed,unchanged" || slices.Contains(lines, "") {
+		t.Errorf("lines = %q, headings with rules = %q, want changed then unchanged and no blank line", lines, headings)
 	}
-	for _, only := range []kindGroups{
-		{singular: "service", plural: "services", changed: set("Recreated")},
-		{singular: "service", plural: "services", unchanged: set("Existing")},
-	} {
-		lines, _ = p.groupedLines([]kindGroups{only}, 120)
-		if slices.Contains(lines, "") {
-			t.Errorf("lines = %q, want no blank line with only one heading", lines)
+}
+
+// A heading's rule follows its title and runs to the line column's right edge, where
+// the timer column starts, in the line characters setting's character.
+func TestHeadingRuleReachesTheLineColumnsRightEdge(t *testing.T) {
+	for _, ascii := range []bool{false, true} {
+		p := newGroupsTestProcessor("up")
+		p.asciiMode = ascii
+		task := &consoleTask{status: api.Done, startTime: time.Now().Add(-1500 * time.Millisecond), endTime: time.Now()}
+		status := globalIndent + "+ " + strutil.Repeat(" ", sectionStatusW)
+		lines := []string{status + "unchanged", status + sectionChildIndent + strutil.Repeat("x", 60)}
+		timers := []timerEntry{{task: task, style: timerGroup, rule: true}, {task: task, style: timerService}}
+		var out []string
+		for _, l := range p.prependSummary(lines, timers) {
+			out = append(out, semstyle.ToPlain(l))
+		}
+		head, row := out[len(out)-2], out[len(out)-1]
+		want, other := "─", "-"
+		if ascii {
+			want, other = other, want
+		}
+		if hw, rw := utf8.RuneCountInString(head), utf8.RuneCountInString(row); hw != rw {
+			t.Errorf("ascii=%v: heading %q is %d wide, want %d like %q", ascii, head, hw, rw, row)
+		}
+		if !strings.Contains(head, strutil.Repeat(" ", sectionStatusW)+"unchanged "+strutil.Repeat(want, minRuleW)) || strings.Contains(head, other) {
+			t.Errorf("ascii=%v: heading = %q, want unchanged at the title column, then %q", ascii, head, want)
 		}
 	}
 }
