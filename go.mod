@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	charm.land/bubbles/v2 v2.2.2
-	charm.land/bubbletea/v2 v2.1.3
+	charm.land/bubbletea/v2 v2.2.0
 	charm.land/glamour/v2 v2.0.2-0.20261124135012-e8e818de371b
 	charm.land/lipgloss/v2 v2.1.1
 	charm.land/log/v2 v2.0.1
@@ -18,7 +18,7 @@ require (
 	github.com/buger/goterm v1.0.4
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/ultraviolet v0.0.0-20261125122737-8ed499892fb4
-	github.com/charmbracelet/x/ansi v0.11.10
+	github.com/charmbracelet/x/ansi v0.12.0
 	github.com/charmbracelet/x/input v0.3.7
 	github.com/compose-spec/compose-go/v2 v2.17.0
 	github.com/containerd/errdefs v1.0.0
