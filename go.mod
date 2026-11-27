@@ -53,7 +53,6 @@ require (
 
 require (
 	code.gitea.io/sdk/gitea v0.25.1 // indirect
-	connectrpc.com/connect v1.19.1 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/42wim/httpsig v1.2.4 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
@@ -102,7 +101,6 @@ require (
 	github.com/docker/go-connections v0.8.2 // indirect
 	github.com/docker/secrets-engine/client v1.0.0 // indirect
 	github.com/docker/secrets-engine/secrets v1.0.0 // indirect
-	github.com/docker/secrets-engine/x v0.8.5 // indirect
 	github.com/dunglas/httpsfv v1.1.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
@@ -204,7 +202,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/image v0.45.0 // indirect
-	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect

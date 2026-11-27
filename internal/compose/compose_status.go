@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/GhostWriters/semstyle"
+	"github.com/distribution/reference"
 	"github.com/docker/compose/v5/pkg/api"
 	dockerclient "github.com/moby/moby/client"
 
@@ -183,7 +184,7 @@ func (p *consoleEventProcessor) statusModelWord(name string) string {
 	switch {
 	case p.modelsUnknown:
 		return unknownText
-	case p.modelsOnDisk[p.models[name]]:
+	case p.modelsOnDisk[normalizeModelReference(p.models[name])]:
 		return existingText
 	}
 	return notPulledText
@@ -221,7 +222,7 @@ func (p *consoleEventProcessor) statusKindState(k rowKind, names []string) secti
 
 // readModelsOnDisk asks the model runner, through its plugin at pluginPath, which
 // models it has pulled, as compose does before deciding to pull one: each pulled
-// model's tags.
+// model's tags, normalized (normalizeModelReference).
 func readModelsOnDisk(ctx context.Context, pluginPath string) (map[string]bool, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -240,10 +241,33 @@ func readModelsOnDisk(ctx context.Context, pluginPath string) (map[string]bool, 
 	onDisk := map[string]bool{}
 	for _, m := range models {
 		for _, tag := range m.Tags {
-			onDisk[tag] = true
+			onDisk[normalizeModelReference(tag)] = true
 		}
 	}
 	return onDisk, nil
+}
+
+// normalizeModelReference gives a model reference the form the model runner lists it
+// under, as compose matches them before pulling (its normalizeModelReference, which
+// isn't exported): docker.io/ai/smollm2:latest for ai/smollm2, and for a Hugging Face
+// model huggingface.co/org/model-gguf:latest for hf.co/Org/Model-GGUF, its path in
+// lower case and its tag as written. A reference that can't be parsed is left as is.
+func normalizeModelReference(model string) string {
+	if host, path, ok := strings.Cut(model, "/"); ok && (strings.EqualFold(host, "hf.co") || strings.EqualFold(host, "huggingface.co")) {
+		var tag string
+		if i := strings.LastIndex(path, ":"); i > strings.LastIndex(path, "/") {
+			path, tag = path[:i], path[i+1:]
+		}
+		if tag == "" {
+			tag = "latest"
+		}
+		return "huggingface.co/" + strings.ToLower(path) + ":" + tag
+	}
+	ref, err := reference.ParseNormalizedNamed(model)
+	if err != nil {
+		return model
+	}
+	return reference.TagNameOnly(ref).String()
 }
 
 // updateCheckTimeout caps each image's registry query; updateWaitMax caps how long the
