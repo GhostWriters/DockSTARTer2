@@ -539,8 +539,11 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 
 	if t == nil || allLayersCached {
 		statusText, statusTag, icon := p.cachedStatus(t != nil && isPullingText(t.text), imageFinalTag)
-		if p.hasUpdate(imgName) { // status found a newer image for its tag: information
-			statusText, statusTag, icon = "Update", "{{|DockerInfo|}}Update{{[-]}}", "{{|DockerInfo|}}i{{[-]}}"
+		if _, onDisk := p.imageMetaBefore[imgName]; t == nil && !onDisk && p.command == statusCommand {
+			// Status pulls nothing: the line says whether the image is on disk (an update
+			// it found goes on its update line).
+			statusText = notPulledText
+			statusTag, icon = "{{|DockerStatusPending|}}"+statusText+"{{[-]}}", "{{|DockerStatusPending|}}"+p.icons().pending+"{{[-]}}"
 		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-len(statusText))
 		return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar

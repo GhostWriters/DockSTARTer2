@@ -124,10 +124,10 @@ func TestStatusListsDeclaredJobs(t *testing.T) {
 }
 
 // An image whose tag the registry now points at another digest has an update: its
-// service shows its block, its image line Update and an update line naming the new
-// version when a tag gives it, else the digest cut short. It is information, so a stack
-// that is otherwise fine stays complete, and the header, which counts what the display
-// covers, leaves it out (the recap after the display lists it).
+// service shows its block, its image line still Cached (the image on disk) and an update
+// line naming the new version when a tag gives it, else the digest cut short. It is
+// information, so a stack that is otherwise fine stays complete, and the header, which
+// counts what the display covers, leaves it out (the recap after the display lists it).
 func TestStatusShowsImageUpdates(t *testing.T) {
 	p := newStatusTestProcessor()
 	p.imageMetaBefore[webImg] = imageMeta{digest: "sha256:" + strings.Repeat("a", 64)}
@@ -136,9 +136,9 @@ func TestStatusShowsImageUpdates(t *testing.T) {
 	p.finished, p.succeeded = true, true
 	got := renderPlain(p, 0)
 	if !strings.Contains(got, "✓ status: 2 services (2 images) ") || !strings.Contains(got, "✓ Running     ─ unchanged") ||
-		!strings.Contains(got, "Running         web:") || !strings.Contains(got, "i Update            image: example/web:1") ||
+		!strings.Contains(got, "Running         web:") || !strings.Contains(got, "✓ Cached            image: example/web:1") ||
 		!strings.Contains(got, "update: sha256:bbbbbbbbbbbb (not pulled)") || !strings.Contains(got, "Running         1 service: db") {
-		t.Errorf("display =\n%s\nwant web's block with its update, db folded, 1 update counted, still complete", got)
+		t.Errorf("display =\n%s\nwant web's block, its image Cached with its update line, db folded, still complete", got)
 	}
 	p.digestVersions[remote] = "1.2.3"
 	if got := renderPlain(p, 0); !strings.Contains(got, "update: 1.2.3 (not pulled)") {
@@ -147,6 +147,19 @@ func TestStatusShowsImageUpdates(t *testing.T) {
 	p.updateMeta = map[string]imageMeta{webImg: {built: "2026-11-26 18:02:11"}}
 	if got := renderPlain(p, 0); !strings.Contains(got, "update: 1.2.3 (2026-11-26 18:02:11, not pulled)") {
 		t.Errorf("display =\n%s\nwant the update's date with it", got)
+	}
+}
+
+// An image that isn't on disk says so on its image line under status, which pulls
+// nothing, instead of Cached.
+func TestStatusImageNotPulled(t *testing.T) {
+	p := newStatusTestProcessor()
+	delete(p.imageMetaBefore, webImg)
+	delete(p.preRun, "web")
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, dockerlayout.VerboseDetails)
+	if !strings.Contains(got, "· Not Pulled        image: example/web:1") || strings.Contains(got, "Cached            image: example/web:1") {
+		t.Errorf("-v display =\n%s\nwant web's image Not Pulled", got)
 	}
 }
 
