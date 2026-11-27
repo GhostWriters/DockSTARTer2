@@ -123,6 +123,7 @@ type AppColors struct {
 	DockerGroupHeading  string // the changed and unchanged headings and their timers
 	DockerGroupStatus   string // the final status word on those headings' lines (Complete, or the word their rows share)
 	DockerSeparator     string // the rule of the changed and unchanged headings, in the group's hue
+	DockerBorder        string // the borders of the compose and docker output's table
 	DockerInfo          string // an image's info lines: their marker, Info status and label
 	DockerStatusSuccess string
 	DockerStatusFail    string
@@ -266,6 +267,7 @@ var Colors = AppColors{
 	DockerGroupHeading: hueStyle("bright-"+groupHue, "B"),
 	DockerGroupStatus:  hueStyle(groupHue, "B"),
 	DockerSeparator:    hueStyle(groupHue, ""),
+	DockerBorder:       "{{[-]}}{{[white]}}",
 	DockerInfo:         "{{[-]}}{{[bright-blue::B]}}",
 	// Docker Compose progress colors — status text
 	DockerStatusSuccess: hueStyle(itemHue, ""),

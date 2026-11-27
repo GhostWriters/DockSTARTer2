@@ -78,7 +78,7 @@ func TestJobRowsOnUp(t *testing.T) {
 	// repair nested under it, the heading Complete.
 	lines = jobLines(p, dockerlayout.VerboseDetails)
 	joined := strings.Join(lines, "\n")
-	if !strings.Contains(joined, "Complete      2 jobs:") || strings.Contains(joined, " changed ─") ||
+	if !strings.Contains(joined, "Complete       2 jobs:") || strings.Contains(joined, " changed ─") ||
 		!strings.Contains(joined, "    backup:") || !strings.Contains(joined, "    repair:") || !strings.Contains(joined, "schedule:") {
 		t.Errorf("-v lines = %q, want backup and repair nested under one Complete 2 jobs: heading, no changed", lines)
 	}
@@ -171,7 +171,7 @@ func TestOtherErrorsLeaveJobsInterrupted(t *testing.T) {
 	if p.refused {
 		t.Fatal("a non-jobs error marked the run refused")
 	}
-	if lines := jobLines(p, 0); !strings.Contains(strings.Join(lines, "\n"), interruptedText+"   1 job: backup") {
+	if lines := jobLines(p, 0); !strings.Contains(strings.Join(lines, "\n"), interruptedText+"    1 job: backup") {
 		t.Errorf("lines = %q, want backup folded Interrupted", lines)
 	}
 }

@@ -158,29 +158,7 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		}
 		p.maxLineWidth = max(p.maxLineWidth, w)
 	}
-	timerStrs := make([]string, len(timers))
-	maxTimerW := 0
-	for i, e := range timers {
-		if e.task == nil {
-			continue
-		}
-		s := elapsedStr(e.task)
-		timerStrs[i] = s
-		if w := len(s); w > maxTimerW {
-			maxTimerW = w
-		}
-	}
-	if !p.startTime.IsZero() {
-		if w := len(elapsedFromTime(p.startTime)); w > maxTimerW {
-			maxTimerW = w
-		}
-	}
-	// Timer width can grow as durations tick up; keep it monotonic so the column doesn't
-	// jitter narrower mid-run (a 9.9s→10.1s transition shouldn't shift everything).
-	if maxTimerW > p.maxTimerWidth {
-		p.maxTimerWidth = maxTimerW
-	}
-	maxTimerW = p.maxTimerWidth
+	timerStrs, maxTimerW := p.timerStrings(timers)
 	col := p.maxLineWidth + timerGutterW
 	out := make([]string, len(lines))
 	for i, line := range lines {
@@ -194,28 +172,55 @@ func (p *consoleEventProcessor) attachTimers(lines []string, timers []timerEntry
 		}
 		visible := utf8.RuneCountInString(semstyle.ToPlain(line))
 		pad := strutil.Repeat(" ", col-visible)
-		var styleTag string
-		switch e.style {
-		case timerSection:
-			styleTag = "{{|DockerTitle|}}"
-		case timerGroup:
-			styleTag = "{{|DockerGroupHeading|}}"
-		case timerService:
-			styleTag = "{{|App|}}"
-		case timerImage:
-			styleTag = "{{|DockerTitleImage|}}"
-		default:
-			styleTag = "{{[::D]}}"
-		}
 		s := timerStrs[i]
 		s = strutil.Repeat(" ", maxTimerW-len(s)) + s
-		out[i] = line + pad + styleTag + s + "{{[-]}}"
+		out[i] = line + pad + timerStyleTag(e.style) + s + "{{[-]}}"
 	}
 	return out
 }
 
+// timerStrings returns each line's elapsed timer ("" for a line with none) and the
+// timer column's width: the widest timer or overall elapsed, never narrower than in an
+// earlier render.
+func (p *consoleEventProcessor) timerStrings(timers []timerEntry) ([]string, int) {
+	strs := make([]string, len(timers))
+	maxW := 0
+	for i, e := range timers {
+		if e.task == nil {
+			continue
+		}
+		strs[i] = elapsedStr(e.task)
+		maxW = max(maxW, len(strs[i]))
+	}
+	if !p.startTime.IsZero() {
+		maxW = max(maxW, len(elapsedFromTime(p.startTime)))
+	}
+	// Timer width can grow as durations tick up; keep it monotonic so the column doesn't
+	// jitter narrower mid-run (a 9.9s→10.1s transition shouldn't shift everything).
+	p.maxTimerWidth = max(p.maxTimerWidth, maxW)
+	return strs, p.maxTimerWidth
+}
+
+// timerStyleTag returns the style tag of a timer in style.
+func timerStyleTag(style timerStyle) string {
+	switch style {
+	case timerSection:
+		return "{{|DockerTitle|}}"
+	case timerGroup:
+		return "{{|DockerGroupHeading|}}"
+	case timerService:
+		return "{{|App|}}"
+	case timerImage:
+		return "{{|DockerTitleImage|}}"
+	}
+	return "{{[::D]}}"
+}
+
 func (p *consoleEventProcessor) prependSummary(lines []string, timers []timerEntry) []string {
 	summary := p.buildSummaryLine()
+	if p.table {
+		return p.tableLines(summary, lines, timers)
+	}
 	// Indent all content lines under the summary header (which carries the overall
 	// icon + the docker command) so the block nests beneath it. The header itself is not
 	// indented. Done before attachTimers so the timer column accounts for the shift.
@@ -248,11 +253,16 @@ func (p *consoleEventProcessor) withSummaryTimer(summary string) string {
 		padW = timerGutterW // always keep at least the gutter so the timer never glues to text
 	}
 	pad := strutil.Repeat(" ", padW)
+	return summary + pad + p.summaryTimer()
+}
+
+// summaryTimer returns the overall elapsed timer, right-aligned in the timer column.
+func (p *consoleEventProcessor) summaryTimer() string {
 	elapsed := elapsedFromTime(p.startTime)
 	if w := len(elapsed); w < p.maxTimerWidth {
 		elapsed = strutil.Repeat(" ", p.maxTimerWidth-w) + elapsed
 	}
-	return summary + pad + "{{[yellow::B]}}" + elapsed + "{{[-]}}"
+	return "{{[yellow::B]}}" + elapsed + "{{[-]}}"
 }
 
 // rowFailure is a failure's name (a service, an image no service uses, a network
@@ -392,6 +402,23 @@ func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []row
 	return out
 }
 
+// logWidth is the log's fixed width, not the live terminal's, so the persisted output
+// (including proportional bar sizes) is the same whatever the terminal's size.
+const logWidth = 120
+
+// logLines returns the log's lines: every layer row, regardless of -v, logWidth wide.
+// The widths the live render accumulates, which only grow, are set aside for it, so
+// the log's columns fit its own lines, not the console's. Callers hold p.mtx.
+func (p *consoleEventProcessor) logLines() []string {
+	savedLineW, savedTimerW, savedTableW := p.maxLineWidth, p.maxTimerWidth, p.tableLineW
+	p.maxLineWidth, p.maxTimerWidth, p.tableLineW = 0, 0, 0
+	p.forLog = true
+	lines := p.buildLines(logWidth, dockerlayout.VerboseLayers)
+	p.forLog = false
+	p.maxLineWidth, p.maxTimerWidth, p.tableLineW = savedLineW, savedTimerW, savedTableW
+	return lines
+}
+
 // logSummary writes a structured summary to the log file only.
 func (p *consoleEventProcessor) logSummary() {
 	if p.logCtx == nil {
@@ -406,22 +433,9 @@ func (p *consoleEventProcessor) logSummary() {
 
 	const pfx = "\t{{|RunningCommand|}}compose:{{[-]}} "
 
-	// Log uses a fixed width, not the live terminal width, so the persisted output
-	// (including proportional bar sizes) is deterministic regardless of terminal size.
-	const logWidth = 120
-
-	// maxLineWidth/maxTimerWidth accumulate from the live console render (wider terminal)
-	// and only grow. Reset them so the log's timer column aligns to the fixed log width
-	// rather than inheriting the console's, which would pad every line out far too wide.
-	// Final log always includes layer rows, regardless of the -v console flag. The
-	// lines are built under p.mtx, as every render is, and written after it's released.
+	// The lines are built under p.mtx, as every render is, and written after it's released.
 	p.mtx.Lock()
-	savedLineW, savedTimerW := p.maxLineWidth, p.maxTimerWidth
-	p.maxLineWidth, p.maxTimerWidth = 0, 0
-	p.forLog = true
-	lines := p.buildLines(logWidth, dockerlayout.VerboseLayers)
-	p.forLog = false
-	p.maxLineWidth, p.maxTimerWidth = savedLineW, savedTimerW
+	lines := p.logLines()
 	p.mtx.Unlock()
 
 	// Passes the raw tag string, not pre-rendered ANSI -- logger.Notice defers

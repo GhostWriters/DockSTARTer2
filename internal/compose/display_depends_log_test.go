@@ -245,7 +245,7 @@ func TestServiceLogLinesShowStateAndLog(t *testing.T) {
 
 		lines := p.serviceLogLines("db", 160)
 		plain := plainLines(lines)
-		if len(lines) != 3 || !strings.HasSuffix(plain[0], "Crashed         state: Restarting, exit code 1") {
+		if len(lines) != 3 || !strings.HasSuffix(plain[0], "Crashed          state: Restarting, exit code 1") {
 			t.Fatalf("%s: lines = %q, want the state, with its Crashed status, and two log lines", tc.name, plain)
 		}
 		if plain[1] != "log:   Error: password: [redacted] missing" || plain[2] != "see docs" {
@@ -531,7 +531,7 @@ func TestUnchangedServicesCheckingADependencyShowTheirLinesUntilItPasses(t *test
 	got := renderPlain(p, 0)
 
 	for _, want := range []string{
-		"Pending         nginx:",
+		"Pending          nginx:",
 		"needs started by: organizr, seerr",
 		"2 services: organizr, seerr",
 		"needs started: nginx",

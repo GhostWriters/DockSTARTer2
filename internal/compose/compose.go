@@ -562,6 +562,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 		}
 		bus = NewConsoleEventProcessor(ctx, outStream, command, imageServices, imageOrder, containerToService, project.Name, !conf.Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters, console.GlobalVerbose, staticOut, updateFn, dockerCLI.Client())
 		if p, ok := bus.(*consoleEventProcessor); ok {
+			p.table = true
 			p.dependsOn = dependencies
 			p.servicePorts = make(map[string][]types.ServicePortConfig, len(fullProject.Services))
 			for name, svc := range fullProject.Services {

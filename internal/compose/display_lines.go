@@ -29,7 +29,10 @@ func (p *consoleEventProcessor) isTeardownCommand() bool {
 // VerboseDetails, all of them; at VerboseLayers, the layers too. The console passes
 // p.verbosity, the final log VerboseLayers, so the log has everything regardless of -v.
 func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
-	p.buildLevel = level
+	p.buildLevel, p.buildW = level, termW
+	if p.table {
+		termW -= tableExtraW
+	}
 	if p.isTeardownCommand() {
 		return p.buildTeardownLines(termW, level)
 	}

@@ -68,7 +68,7 @@ const (
 	GlobalIndentW        = 1  // left margin for all lines
 	IconW                = 1  // width of a spinner/status icon character
 	SpaceW               = 1  // single separator space between icon and status
-	SectionStatusTextW   = 11 // max status text width ("Downloading")
+	SectionStatusTextW   = 12 // max status text width ("Start Failed")
 	SectionStatusGutterW = 1  // spaces after status text before next column
 	SectionStatusW       = SectionStatusTextW + SectionStatusGutterW
 	SectionChildIndentW  = 2 // extra indent per nesting level (matches YAML convention)

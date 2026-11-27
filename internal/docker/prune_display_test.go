@@ -28,8 +28,8 @@ func TestPruneUnusedImagesListAsImages(t *testing.T) {
 		{Untagged: "sha256:cf4fe1"}, {Deleted: "sha256:l3"},
 	}, SpaceReclaimed: 1 << 20}
 	got := prunePlain(r, nil, false)
-	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Removed     ─ changed ─", "✓ Removed       <no service>:", "✓ Removed         image: sha256:067bd9 [2]",
-		"✓ Removed         image: sha256:cf4fe1 [1]", "Total reclaimed space:"} {
+	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers", "✓ Removed      ─ changed ─", "✓ Removed        <no service>:", "✓ Removed          image: sha256:067bd9 [2]",
+		"✓ Removed          image: sha256:cf4fe1 [1]", "Total reclaimed space:"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
@@ -49,15 +49,15 @@ func TestPruneServicesNetworksAndVolumes(t *testing.T) {
 	}
 	svcs := map[string][]string{"example/web:1": {"web"}}
 	got := prunePlain(r, svcs, false)
-	for _, want := range []string{"1 service:", "Removed         web:", "Removed           container_name: web-1",
-		"Removed           image: example/web:1 [1]", "✓ Removed       2 networks: net_a, net_b",
-		"✓ Removed       1 volume: vol_a"} {
+	for _, want := range []string{"1 service:", "Removed          web:", "Removed            container_name: web-1",
+		"Removed            image: example/web:1 [1]", "✓ Removed        2 networks: net_a, net_b",
+		"✓ Removed        1 volume: vol_a"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
 	}
 	// -v: every row on its own.
-	if got := prunePlain(r, svcs, true); !strings.Contains(got, "Removed         net_a:") || !strings.Contains(got, "Removed         net_b:") {
+	if got := prunePlain(r, svcs, true); !strings.Contains(got, "Removed          net_a:") || !strings.Contains(got, "Removed          net_b:") {
 		t.Errorf("-v display =\n%s\nwant each network on its own row", got)
 	}
 }
@@ -74,9 +74,9 @@ func TestPruneOnlyExactImagesGoUnderTheirService(t *testing.T) {
 	svcs := map[string][]string{"ghcr.io/alexta69/metube:latest": {"metube"}, "docker.io/library/redis:7": {"redis"}}
 	got := prunePlain(r, svcs, true)
 	for _, want := range []string{"✓ docker system prune: 1 service, 3 images, 3 layers", "1 service:",
-		"Removed         redis:", "Removed           image: redis:7 [1]",
-		"✓ Removed       <no service>:", "✓ Removed         image: ghcr.io/alexta69/metube@sha256:7b34d43ba1b3 [1]",
-		"✓ Removed         image: sha256:be802d [1]"} {
+		"Removed          redis:", "Removed            image: redis:7 [1]",
+		"✓ Removed        <no service>:", "✓ Removed          image: ghcr.io/alexta69/metube@sha256:7b34d43ba1b3 [1]",
+		"✓ Removed          image: sha256:be802d [1]"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
@@ -101,9 +101,9 @@ func TestPruneShowsInspectedLayers(t *testing.T) {
 	lines, _ := buildPruneLines(r, nil, true, true, 160)
 	got := ansi.Strip(strings.Join(lines, "\n"))
 	for _, want := range []string{"✓ docker system prune: 2 images, 3 layers",
-		"✓ Removed     ─ changed ─", "✓ Removed       <no service>:", // with layers too, Removed passes up
-		"image: example/web:1 [2]", "Removed           web1", "Removed           web2",
-		"image: sha256:img2 [1]", "Removed           old1"} {
+		"✓ Removed      ─ changed ─", "✓ Removed        <no service>:", // with layers too, Removed passes up
+		"image: example/web:1 [2]", "Removed            web1", "Removed            web2",
+		"image: sha256:img2 [1]", "Removed            old1"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
@@ -119,7 +119,7 @@ func TestPruneShowsInspectedLayers(t *testing.T) {
 	t.Cleanup(func() { showKeptLayers = false })
 	lines, _ = buildPruneLines(r, nil, true, true, 160)
 	got = ansi.Strip(strings.Join(lines, "\n"))
-	if strings.Count(got, "Kept              base") != 2 || !strings.Contains(got, "✓ Complete      <no service>:") ||
+	if strings.Count(got, "Kept               base") != 2 || !strings.Contains(got, "✓ Complete       <no service>:") ||
 		!strings.Contains(got, "2 images, 3 layers") || !strings.Contains(got, "image: example/web:1 [2]") {
 		t.Errorf("display =\n%s\nwant base Kept under both images, uncounted", got)
 	}
@@ -133,7 +133,7 @@ func TestPruneLayersFallBackToDeletions(t *testing.T) {
 	}
 	lines, _ := buildPruneLines(r, nil, true, true, 160)
 	got := ansi.Strip(strings.Join(lines, "\n"))
-	if !strings.Contains(got, "image: example/new:1 [2]") || !strings.Contains(got, "Removed           newid") {
+	if !strings.Contains(got, "image: example/new:1 [2]") || !strings.Contains(got, "Removed            newid") {
 		t.Errorf("display =\n%s\nwant the deletions as layers", got)
 	}
 }
@@ -173,7 +173,7 @@ func TestShortVolumeName(t *testing.T) {
 func TestPruneInstancesFold(t *testing.T) {
 	r := PruneReport{ImagesDeleted: []image.DeleteResponse{{Untagged: "example/sonarr:1"}, {Deleted: "sha256:l1"}}}
 	got := prunePlain(r, map[string][]string{"example/sonarr:1": {"sonarr", "sonarr__4k"}}, false)
-	if !strings.Contains(got, "Removed         2 services: sonarr, sonarr__4k") || strings.Count(got, "image: example/sonarr:1") != 1 {
+	if !strings.Contains(got, "Removed          2 services: sonarr, sonarr__4k") || strings.Count(got, "image: example/sonarr:1") != 1 {
 		t.Errorf("display =\n%s\nwant both instances on one line, the image once", got)
 	}
 }
@@ -182,8 +182,8 @@ func TestPruneErrorMarksItsHeading(t *testing.T) {
 	r := PruneReport{VolumesError: errors.New("permission denied"), NetworksDeleted: []string{"net_a"}}
 	lines, errs := buildPruneLines(r, nil, false, false, 160)
 	got := ansi.Strip(strings.Join(lines, "\n"))
-	if !strings.Contains(got, "× Error       ─ changed ─") || !strings.Contains(got, "× Error         volumes:") ||
-		!strings.Contains(got, "✓ Removed       1 network: net_a") || len(errs) != 1 {
+	if !strings.Contains(got, "× Error        ─ changed ─") || !strings.Contains(got, "× Error          volumes:") ||
+		!strings.Contains(got, "✓ Removed        1 network: net_a") || len(errs) != 1 {
 		t.Errorf("display =\n%s\nerrs = %q\nwant changed and volumes: failed, networks complete", got, errs)
 	}
 }
@@ -192,7 +192,7 @@ func TestPruneFoldsKindsOntoTheirHeadings(t *testing.T) {
 	// Only networks and volumes, all Removed: changed says Removed too.
 	r := PruneReport{NetworksDeleted: []string{"net_a", "net_b"}, VolumesDeleted: []string{"vol_a"}}
 	got := prunePlain(r, nil, false)
-	for _, want := range []string{"✓ Removed     ─ changed ─", "✓ Removed       2 networks: net_a, net_b", "✓ Removed       1 volume: vol_a"} {
+	for _, want := range []string{"✓ Removed      ─ changed ─", "✓ Removed        2 networks: net_a, net_b", "✓ Removed        1 volume: vol_a"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("display =\n%s\nwant %q", got, want)
 		}
@@ -202,7 +202,7 @@ func TestPruneFoldsKindsOntoTheirHeadings(t *testing.T) {
 	}
 	// -v: one heading, Removed, with each network its own row; a lone volume still folds.
 	got = prunePlain(r, nil, true)
-	for _, want := range []string{"✓ Removed       2 networks:\n", "Removed         net_a:", "Removed         net_b:", "✓ Removed       1 volume: vol_a"} {
+	for _, want := range []string{"✓ Removed        2 networks:\n", "Removed          net_a:", "Removed          net_b:", "✓ Removed        1 volume: vol_a"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("-v display =\n%s\nwant %q", got, want)
 		}
