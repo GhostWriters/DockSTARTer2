@@ -33,7 +33,6 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	timeLevel := fmt.Sprintf("{{|%s|}}%s{{[-]}} %s[%s]{{[-]}} ", timestampTagName, timeStr, levelTag, levelStr)
-	tuiMsg := timeLevel + r.Message
 
 	if h.global {
 		// Skip the broadcast when a panel writer is active — the panel already
@@ -43,11 +42,16 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 		if ctx.Value(console.PanelWriterKey) != nil {
 			return nil
 		}
-		publishLogLine(tuiMsg)
+		// Both versions, for each log panel to pick by its session's setting.
+		line := LogLine{Text: timeLevel + r.Message}
+		if ascii := recordMessage(r, false); ascii != r.Message {
+			line.ASCII = timeLevel + ascii
+		}
+		publishLogLine(line)
 	} else {
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 			if !isSuppressed(ctx, w) {
-				fmt.Fprintln(w, tuiMsg)
+				fmt.Fprintln(w, timeLevel+recordMessage(r, console.LineCharactersFor(console.ConnTypeFromContext(ctx))))
 			}
 		}
 	}
@@ -132,8 +136,9 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 
-	// Resolve message (it contains raw tags)
-	msg := r.Message
+	// Resolve message (it contains raw tags). The file takes a record's version
+	// without line characters, the console the one its line characters setting picks.
+	msg := recordMessage(r, h.mode != "strip" && console.LineCharactersFor(console.ConnTypeFromContext(ctx)))
 
 	// Process based on mode
 	switch h.mode {
@@ -148,7 +153,9 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Create new record with processed message
 	newR := slog.NewRecord(r.Time, r.Level, msg, r.PC)
 	r.Attrs(func(a slog.Attr) bool {
-		newR.AddAttrs(a)
+		if a.Key != asciiAttr {
+			newR.AddAttrs(a)
+		}
 		return true
 	})
 

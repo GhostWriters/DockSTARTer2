@@ -1043,7 +1043,7 @@ func HandleTintTable(ctx context.Context, group *CommandGroup) error {
 		}
 	}
 
-	console.PrintTableCtx(ctx, headers, data, true)
+	console.PrintTableCtx(ctx, headers, data, config.LoadAppConfig().Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters)
 	return nil
 }
 

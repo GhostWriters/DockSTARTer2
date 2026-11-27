@@ -129,9 +129,17 @@ func TestLogIsATable(t *testing.T) {
 	p.table = true
 	p.On(containerEvent("db", "Recreated", api.Done))
 	p.tableLineW = 2 * logWidth // a wide terminal's table
-	lines := plainLines(p.logLines())
+	p.asciiMode = true          // the session's setting doesn't choose the log's copies
+	built, builtASCII := p.logLines()
+	lines, ascii := plainLines(built), plainLines(builtASCII)
 	if !strings.HasPrefix(lines[0], "┌") {
-		t.Fatalf("log starts %q, want a table", lines[0])
+		t.Fatalf("log starts %q, want a table with line characters", lines[0])
+	}
+	if !strings.HasPrefix(ascii[0], "+-") || len(ascii) != len(lines) || strings.ContainsAny(strings.Join(ascii, ""), "─│┌✓") {
+		t.Errorf("ASCII copy =\n%s\nwant the same %d lines without line characters", strings.Join(ascii, "\n"), len(lines))
+	}
+	if !p.asciiMode {
+		t.Error("asciiMode not restored after the log")
 	}
 	for i, l := range lines {
 		if w := utf8.RuneCountInString(l); w > logWidth || w != utf8.RuneCountInString(lines[0]) {

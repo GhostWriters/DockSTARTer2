@@ -141,14 +141,24 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	if tuiW := console.GetTUIWriter(ctx); tuiW != nil {
 		logCtx = logger.WithSuppressWriter(logCtx, tuiW)
 	}
-	var logLines []string
+	// The log's lines with line characters, and their versions without, whatever the
+	// session's setting, for logger.Lines to route.
+	var logLines, asciiLines []string
 	console.RenderWithSessionContext(ctx, func() {
-		logLines, _ = buildPruneLines(r, imageServices, true, true, pruneTermWidth())
+		withLines, without := r, r
+		withLines.AsciiMode, without.AsciiMode = false, true
+		logLines, _ = buildPruneLines(withLines, imageServices, true, true, pruneTermWidth())
+		asciiLines, _ = buildPruneLines(without, imageServices, true, true, pruneTermWidth())
 	})
 	const pfx = "\t{{|RunningCommand|}}docker:{{[-]}} "
-	for _, line := range logLines {
-		logger.Notice(logCtx, pfx+"%s", semstyle.ToPlain(line))
+	prefix := func(lines []string) []string {
+		out := make([]string, len(lines))
+		for i, line := range lines {
+			out[i] = pfx + semstyle.ToPlain(line)
+		}
+		return out
 	}
+	logger.Lines(logCtx, logger.LevelNotice, prefix(logLines), prefix(asciiLines))
 	for _, e := range errs {
 		logger.Error(logCtx, "%s", e)
 	}

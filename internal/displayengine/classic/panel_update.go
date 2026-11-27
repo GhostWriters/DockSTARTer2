@@ -47,13 +47,13 @@ func preloadPanelLog() tea.Msg {
 	if len(all) == 0 {
 		return nil
 	}
-	return PanelLineMsg(strings.Join(all, "\n"))
+	return PanelLineMsg{Text: strings.Join(all, "\n")}
 }
 
 // waitForPanelLine blocks until the panel's own log subscription channel
 // (ch, from logger.SubscribeLogLines -- see PanelModel.logSub) sends a line,
 // then returns it as a message.
-func waitForPanelLine(ch <-chan string) tea.Cmd {
+func waitForPanelLine(ch <-chan logger.LogLine) tea.Cmd {
 	return func() tea.Msg {
 		line, ok := <-ch
 		if !ok {
@@ -579,7 +579,9 @@ func (m PanelModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.Expanded {
 			m.panelChanged = true
 		}
-		m.Sv.AppendLines(strings.Split(string(msg), "\n"), panelRenderFn())
+		// The line as this session's line characters setting shows it.
+		text := logger.LogLine(msg).For(GetActiveContext().LineCharacters)
+		m.Sv.AppendLines(strings.Split(text, "\n"), panelRenderFn())
 		return m, waitForPanelLine(m.logSub)
 
 	case ConsoleScannerReadyMsg:

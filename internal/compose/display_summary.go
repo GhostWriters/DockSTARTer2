@@ -406,17 +406,25 @@ func (p *consoleEventProcessor) rowMessages(match func(*consoleTask) bool) []row
 // (including proportional bar sizes) is the same whatever the terminal's size.
 const logWidth = 120
 
-// logLines returns the log's lines: every layer row, regardless of -v, logWidth wide.
-// The widths the live render accumulates, which only grow, are set aside for it, so
-// the log's columns fit its own lines, not the console's. Callers hold p.mtx.
-func (p *consoleEventProcessor) logLines() []string {
-	savedLineW, savedTimerW, savedTableW := p.maxLineWidth, p.maxTimerWidth, p.tableLineW
-	p.maxLineWidth, p.maxTimerWidth, p.tableLineW = 0, 0, 0
+// logLines returns the log's lines, every layer row regardless of -v, logWidth wide:
+// with line characters, and their versions without, whatever the session's setting,
+// for logger.Lines to route. The widths the live render accumulates, which only grow,
+// are set aside for it, so the log's columns fit its own lines, not the console's.
+// Callers hold p.mtx.
+func (p *consoleEventProcessor) logLines() (lines, ascii []string) {
+	savedLineW, savedTimerW, savedTableW, savedASCII := p.maxLineWidth, p.maxTimerWidth, p.tableLineW, p.asciiMode
 	p.forLog = true
-	lines := p.buildLines(logWidth, dockerlayout.VerboseLayers)
+	for _, a := range []bool{false, true} {
+		p.maxLineWidth, p.maxTimerWidth, p.tableLineW, p.asciiMode = 0, 0, 0, a
+		if built := p.buildLines(logWidth, dockerlayout.VerboseLayers); a {
+			ascii = built
+		} else {
+			lines = built
+		}
+	}
 	p.forLog = false
-	p.maxLineWidth, p.maxTimerWidth, p.tableLineW = savedLineW, savedTimerW, savedTableW
-	return lines
+	p.maxLineWidth, p.maxTimerWidth, p.tableLineW, p.asciiMode = savedLineW, savedTimerW, savedTableW, savedASCII
+	return lines, ascii
 }
 
 // logSummary writes a structured summary to the log file only.
@@ -435,20 +443,25 @@ func (p *consoleEventProcessor) logSummary() {
 
 	// The lines are built under p.mtx, as every render is, and written after it's released.
 	p.mtx.Lock()
-	lines := p.logLines()
+	lines, ascii := p.logLines()
 	p.mtx.Unlock()
 
-	// Passes the raw tag string, not pre-rendered ANSI -- logger.Notice defers
+	// Passes the raw tag strings, not pre-rendered ANSI -- logger.Lines defers
 	// rendering to its own writer handlers, each scoped to the right session's
 	// tint/profile; pre-rendering here would read semstyle's global profile
 	// unscoped to any session, racing against every other concurrently
 	// rendering one.
-	for _, line := range lines {
-		// A blank display line is the prefix alone, with no trailing space.
-		if line == "" {
-			logger.Notice(ctx, strings.TrimRight(pfx, " "))
-			continue
+	prefix := func(lines []string) []string {
+		out := make([]string, len(lines))
+		for i, line := range lines {
+			// A blank display line is the prefix alone, with no trailing space.
+			if line == "" {
+				out[i] = strings.TrimRight(pfx, " ")
+				continue
+			}
+			out[i] = pfx + line
 		}
-		logger.Notice(ctx, pfx+line)
+		return out
 	}
+	logger.Lines(ctx, logger.LevelNotice, prefix(lines), prefix(ascii))
 }
