@@ -189,3 +189,43 @@ func TestHubTagsForDigestStaysOnTheHubHost(t *testing.T) {
 		t.Error("sameHost wrong: want the same scheme and host only")
 	}
 }
+
+// A ghcr image's version and build date come from its config, through the manifest for
+// the local image's platform when the digest names a multi-platform index, with the
+// anonymous token on every request.
+func TestGHCRImageMeta(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			_, _ = w.Write([]byte(`{"token":"anon"}`))
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer anon" {
+			http.Error(w, "no token", http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/v2/acme/app/manifests/sha256:index":
+			_, _ = w.Write([]byte(`{"manifests":[
+				{"digest":"sha256:arm","platform":{"os":"linux","architecture":"arm64"}},
+				{"digest":"sha256:amd","platform":{"os":"linux","architecture":"amd64"}}]}`))
+		case "/v2/acme/app/manifests/sha256:amd":
+			_, _ = w.Write([]byte(`{"config":{"digest":"sha256:cfg"}}`))
+		case "/v2/acme/app/blobs/sha256:cfg":
+			_, _ = w.Write([]byte(`{"created":"2026-11-26T18:02:11Z","config":{"Labels":{"org.opencontainers.image.version":"2.4.0"}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	old := ghcrBaseURL
+	ghcrBaseURL = srv.URL
+	t.Cleanup(func() { ghcrBaseURL = old })
+
+	meta, ok := ghcrImageMeta(context.Background(), "acme/app", "sha256:index", imageMeta{os: "linux", arch: "amd64"})
+	if !ok || meta.version != "2.4.0" || meta.built != localTime("2026-11-26T18:02:11Z") {
+		t.Errorf("ghcrImageMeta = %+v, %v; want amd64's version 2.4.0 and its build date", meta, ok)
+	}
+	if _, ok := ghcrImageMeta(context.Background(), "acme/app", "sha256:index", imageMeta{os: "linux", arch: "riscv64"}); ok {
+		t.Error("ghcrImageMeta for a platform the index lacks = ok, want false")
+	}
+}

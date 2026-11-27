@@ -79,9 +79,6 @@ func (p *consoleEventProcessor) buildSummaryLine() string {
 	if orphanCount := len(p.orphanIDs); orphanCount > 0 {
 		parts = append(parts, countLabel(orphanCount, "orphan", "orphans"))
 	}
-	if n := p.updateCount(); n > 0 && p.command == statusCommand {
-		parts = append(parts, fmt.Sprintf("{{|DockerInfo|}}%d %s{{[-]}}", n, plural(n, "update", "updates")))
-	}
 	// The docker command is bold yellow (matching the summary line's overall duration);
 	// the colon uses DockerColon (matching the colons on the section/name lines below).
 	summaryFmt := fmt.Sprintf("{{[yellow::B]}}%s{{[-]}}{{|DockerColon|}}:{{[-]}} %s", composeHeading(p.command), strings.Join(parts, ", "))

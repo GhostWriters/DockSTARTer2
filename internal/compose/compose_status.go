@@ -12,8 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhostWriters/semstyle"
 	"github.com/docker/compose/v5/pkg/api"
 	dockerclient "github.com/moby/moby/client"
+
+	"DockSTARTer2/internal/dockerlayout"
+	"DockSTARTer2/internal/strutil"
 )
 
 // statusCommand is -c status: the display's opening frame with no compose operation,
@@ -241,16 +245,17 @@ const (
 
 // checkImageUpdates asks the registry of each image on disk, without pulling, for the
 // digest its tag points at now, as docker buildx imagetools inspect does: one that
-// differs from the digest pulled is an update (imageUpdates). The new version, when
-// Docker Hub has a tag for that digest, names it (digestVersions); a LinuxServer image
-// from lscr.io is looked up under linuxserver/ there. Runs in the background
-// (waitUpdateChecks); writes under p.mtx, so it starts after the unlocked first render.
+// differs from the digest pulled is an update (imageUpdates). Its version and date
+// (updateMeta) come from its config on ghcr.io, lscr.io's images included (the build
+// date its labels give), or from the Docker Hub tags for that digest (the version a tag
+// names, and when it was pushed). Runs in the background (waitUpdateChecks); writes
+// under p.mtx, so it starts after the unlocked first render.
 func (p *consoleEventProcessor) checkImageUpdates() {
 	if p.dockerClient == nil {
 		return
 	}
 	p.mtx.Lock()
-	p.imageUpdates, p.updateErrs = map[string]string{}, map[string]string{}
+	p.imageUpdates, p.updateErrs, p.updateMeta = map[string]string{}, map[string]string{}, map[string]imageMeta{}
 	var imgs []string
 	for _, img := range p.imageOrder {
 		if m, ok := p.imageMetaBefore[img]; ok && m.digest != "" { // pulled from a registry
@@ -280,24 +285,18 @@ func (p *consoleEventProcessor) checkImageUpdates() {
 			case remote != "" && remote != local:
 				p.imageUpdates[img] = remote
 			}
-			remote := p.imageUpdates[img]
+			remote, platform := p.imageUpdates[img], p.imageMetaBefore[img]
 			p.mtx.Unlock()
 			if remote == "" {
 				return
 			}
-			name := imageName(img)
-			repo := dockerHubRepo(strings.TrimPrefix(name, "lscr.io/"))
-			if repo == "" {
-				return
+			meta := updateMeta(img, remote, platform)
+			p.mtx.Lock()
+			p.updateMeta[img] = meta
+			if meta.version != "" {
+				p.digestVersions[remote] = meta.version
 			}
-			ctx, cancel = context.WithTimeout(context.Background(), digestLookupTimeout)
-			version := versionFromTags(hubTagsForDigest(ctx, repo, remote))
-			cancel()
-			if version != "" {
-				p.mtx.Lock()
-				p.digestVersions[remote] = version
-				p.mtx.Unlock()
-			}
+			p.mtx.Unlock()
 		}()
 	}
 }
@@ -329,6 +328,29 @@ func (p *consoleEventProcessor) distributionInspect(ctx context.Context, img, au
 	}
 }
 
+// updateMeta returns what can be told without pulling of the image digest names for
+// img's tag: from ghcr.io (lscr.io serves the same images), its version and build date
+// from its config, through the manifest for platform's OS and architecture; from Docker
+// Hub, the version a tag for it names and when that tag was pushed. Empty when neither
+// says.
+func updateMeta(img, digest string, platform imageMeta) imageMeta {
+	ctx, cancel := context.WithTimeout(context.Background(), digestLookupTimeout)
+	defer cancel()
+	name := imageName(img)
+	for _, host := range []string{"ghcr.io/", "lscr.io/"} {
+		if repo, ok := strings.CutPrefix(name, host); ok {
+			meta, _ := ghcrImageMeta(ctx, repo, digest, platform)
+			return meta
+		}
+	}
+	repo := dockerHubRepo(name)
+	if repo == "" {
+		return imageMeta{}
+	}
+	tags, pushed := hubTagsAndPushed(ctx, repo, digest)
+	return imageMeta{version: versionFromTags(tags), built: localTime(pushed)}
+}
+
 // waitUpdateChecks waits for status's update checks, at most updateWaitMax, so the final
 // render can show what they found.
 func (p *consoleEventProcessor) waitUpdateChecks() {
@@ -347,22 +369,42 @@ func (p *consoleEventProcessor) waitUpdateChecks() {
 }
 
 // statusUpdateValue returns the update info line's value for imgName under status: the
-// new version a Docker Hub tag gives the registry's digest, linked as a version is, or
-// that digest cut short, then "(not pulled)"; nil when it has no update. Callers hold
-// p.mtx.
+// new image's version, linked as a version is, or its digest cut short, then its date
+// and "not pulled" in brackets, as a version line shows its build date; nil when it has
+// no update. Callers hold p.mtx.
 func (p *consoleEventProcessor) statusUpdateValue(imgName string) []infoPart {
 	remote := p.imageUpdates[imgName]
 	if p.command != statusCommand || remote == "" {
 		return nil
 	}
+	return []infoPart{p.updateName(imgName), {" (" + p.updateDate(imgName) + "not pulled)", ""}}
+}
+
+// updateName returns how imgName's update is named: its version, linked when there's a
+// page for it, else its digest cut short. Callers hold p.mtx.
+func (p *consoleEventProcessor) updateName(imgName string) infoPart {
+	remote := p.imageUpdates[imgName]
 	if v := p.digestVersions[remote]; v != "" {
-		return []infoPart{{v, p.versionURL(imgName, imageMeta{version: v, source: p.imageMetaBefore[imgName].source})}, {" (not pulled)", ""}}
+		source := p.updateMeta[imgName].source
+		if source == "" {
+			source = p.imageMetaBefore[imgName].source
+		}
+		return infoPart{v, p.versionURL(imgName, imageMeta{version: v, source: source})}
 	}
-	short := remote
 	if _, hex, ok := strings.Cut(remote, ":"); ok && len(hex) > 12 {
-		short = "sha256:" + hex[:12]
+		return infoPart{"sha256:" + hex[:12], ""}
 	}
-	return []infoPart{{short, ""}, {" (not pulled)", ""}}
+	return infoPart{remote, ""}
+}
+
+// updateDate returns imgName's update's date followed by ", " (its build date from
+// ghcr.io, or when its Docker Hub tag was pushed), or "" when it isn't known. Callers
+// hold p.mtx.
+func (p *consoleEventProcessor) updateDate(imgName string) string {
+	if built := p.updateMeta[imgName].built; built != "" {
+		return built + ", "
+	}
+	return ""
 }
 
 // hasUpdate reports whether status found an update for image imgName. Callers hold p.mtx.
@@ -370,32 +412,57 @@ func (p *consoleEventProcessor) hasUpdate(imgName string) bool {
 	return p.command == statusCommand && p.imageUpdates[imgName] != ""
 }
 
-// updateCount returns how many of status's images have an update. Callers hold p.mtx.
-func (p *consoleEventProcessor) updateCount() int {
-	return len(p.imageUpdates)
-}
-
-// updateSummaryLines returns the recaps after status's display: the images with an
-// update, each with its new version or digest as its update line shows it, under a
-// heading that says they aren't pulled, as information; and the images whose registry
-// couldn't be asked, with why, as a warning. Nil for any other command.
+// updateSummaryLines returns the recaps after status's display, laid out as the down
+// list is: the services with an update, each line of services sharing an image followed
+// by its image and its update's version or digest and date, under a heading that says
+// they aren't pulled, as information; and the services whose image's registry couldn't
+// be asked, with their image and why, as a warning. Nil for any other command.
 func (p *consoleEventProcessor) updateSummaryLines() (updates, failed []string) {
 	if p.command != statusCommand {
 		return nil, nil
 	}
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	if n := len(p.imageUpdates); n > 0 {
-		updates = append(updates, fmt.Sprintf("Found %d image %s (not pulled):", n, plural(n, "update", "updates")))
-		for _, img := range slices.Sorted(maps.Keys(p.imageUpdates)) {
-			value := p.statusUpdateValue(img)
-			updates = append(updates, "  "+styleImage(img)+"{{|DockerColon|}}:{{[-]}} "+value[0].text) // the heading says it isn't pulled
+	const labelW = len("update")
+	label := func(name string) string {
+		return "    {{|DockerDetailLabel|}}" + name + "{{[-]}}{{|DockerColon|}}:{{[-]}} " + strutil.Repeat(" ", labelW-len(name))
+	}
+	// entries returns each image's services' line and the services they count, in order
+	// of their first service.
+	entries := func(imgs []string) (lines map[string]string, order []string, n int) {
+		lines = map[string]string{}
+		for _, img := range imgs {
+			svcs := slices.Sorted(slices.Values(p.imageServices[img]))
+			if len(svcs) == 0 {
+				svcs = []string{img} // an image no service uses
+			}
+			n += len(svcs)
+			names := make([]string, len(svcs))
+			for i, svc := range svcs {
+				names[i] = dockerlayout.StyleServiceName(svc)
+			}
+			lines[img] = "  " + strings.Join(names, "{{|DockerColon|}},{{[-]}} ") + "{{|DockerColon|}}:{{[-]}}"
+			order = append(order, img)
+		}
+		slices.SortFunc(order, func(a, b string) int { return strings.Compare(semstyle.ToPlain(lines[a]), semstyle.ToPlain(lines[b])) })
+		return lines, order, n
+	}
+	if len(p.imageUpdates) > 0 {
+		lines, order, n := entries(slices.Collect(maps.Keys(p.imageUpdates)))
+		updates = append(updates, fmt.Sprintf("Found %d %s with updates (not pulled):", n, plural(n, "service", "services")))
+		for _, img := range order {
+			text := p.updateName(img).text
+			if date := strings.TrimSuffix(p.updateDate(img), ", "); date != "" {
+				text += " (" + date + ")"
+			}
+			updates = append(updates, lines[img], label("image")+styleImage(img), label("update")+text)
 		}
 	}
-	if n := len(p.updateErrs); n > 0 {
-		failed = append(failed, fmt.Sprintf("Couldn't check %d %s for updates:", n, plural(n, "image", "images")))
-		for _, img := range slices.Sorted(maps.Keys(p.updateErrs)) {
-			failed = append(failed, "  "+styleImage(img)+"{{|DockerColon|}}:{{[-]}} "+p.updateErrs[img])
+	if len(p.updateErrs) > 0 {
+		lines, order, n := entries(slices.Collect(maps.Keys(p.updateErrs)))
+		failed = append(failed, fmt.Sprintf("Couldn't check %d %s for updates:", n, plural(n, "service", "services")))
+		for _, img := range order {
+			failed = append(failed, lines[img], label("image")+styleImage(img), label("error")+p.updateErrs[img])
 		}
 	}
 	return updates, failed

@@ -25,6 +25,8 @@ type imageMeta struct {
 	built   string // when its publisher built it, in yyyy-mm-dd hh:mm:ss local time
 	digest  string // its repo digest (sha256:…)
 	source  string // its source repository URL
+	// Its platform, to pick its manifest from a registry's multi-platform image.
+	os, arch, variant string
 }
 
 // buildVersionRE finds the version in a LinuxServer build_version label, e.g.
@@ -34,11 +36,26 @@ var buildVersionRE = regexp.MustCompile(`version:-\s*(\S+)`)
 // metaFromInspect returns an image's details from its inspect, each left empty when
 // the image doesn't say.
 func metaFromInspect(r image.InspectResponse) imageMeta {
-	m := imageMeta{id: r.ID}
 	var labels map[string]string
 	if r.Config != nil {
 		labels = r.Config.Labels
 	}
+	m := metaFromLabels(labels, r.Created)
+	m.id = r.ID
+	m.os, m.arch, m.variant = r.Os, r.Architecture, r.Variant
+	if len(r.RepoDigests) > 0 {
+		if _, digest, ok := strings.Cut(r.RepoDigests[0], "@"); ok {
+			m.digest = digest
+		}
+	}
+	return m
+}
+
+// metaFromLabels returns the version, build date and source an image's labels and
+// creation time give, each left empty when they don't say: from a local image's
+// inspect, or from its config on a registry.
+func metaFromLabels(labels map[string]string, created string) imageMeta {
+	var m imageMeta
 	switch {
 	case labels["org.opencontainers.image.version"] != "":
 		m.version = labels["org.opencontainers.image.version"]
@@ -49,16 +66,19 @@ func metaFromInspect(r image.InspectResponse) imageMeta {
 	default:
 		m.version = labels["version"]
 	}
-	if t, err := time.Parse(time.RFC3339Nano, r.Created); err == nil {
-		m.built = t.Local().Format("2006-01-02 15:04:05")
-	}
-	if len(r.RepoDigests) > 0 {
-		if _, digest, ok := strings.Cut(r.RepoDigests[0], "@"); ok {
-			m.digest = digest
-		}
-	}
+	m.built = localTime(created)
 	m.source = labels["org.opencontainers.image.source"]
 	return m
+}
+
+// localTime returns an RFC 3339 timestamp in local time as the info lines show dates,
+// yyyy-mm-dd hh:mm:ss, or "" when it doesn't parse.
+func localTime(ts string) string {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return ""
+	}
+	return t.Local().Format("2006-01-02 15:04:05")
 }
 
 // inspectPreviousImages records, for each container running a different image than

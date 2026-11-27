@@ -3,6 +3,7 @@ package compose
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -134,48 +135,57 @@ func (p *consoleEventProcessor) checkVersionLink(imgRef string, m imageMeta) {
 }
 
 // hubTagsForDigest returns the tags of a Docker Hub repo (namespace/repo) that point
-// at digest, searching its tags newest first, at most digestLookupPages pages, and
-// stopping at the end of the first page that has any: tags pushed together sit
-// together. It returns nil when none match or the search fails.
+// at digest (hubTagsAndPushed).
 func hubTagsForDigest(ctx context.Context, repo, digest string) []string {
+	tags, _ := hubTagsAndPushed(ctx, repo, digest)
+	return tags
+}
+
+// hubTagsAndPushed returns the tags of a Docker Hub repo (namespace/repo) that point at
+// digest, and when the latest of them was pushed (RFC 3339, "" when Docker Hub doesn't
+// say), searching its tags newest first, at most digestLookupPages pages, and stopping
+// at the end of the first page that has any: tags pushed together sit together. It
+// returns nil when none match or the search fails.
+func hubTagsAndPushed(ctx context.Context, repo, digest string) (tags []string, pushed string) {
 	next := dockerHubBaseURL + "/v2/repositories/" + repo + "/tags?page_size=100&ordering=last_updated"
 	for range digestLookupPages {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, next, nil)
 		if err != nil {
-			return nil
+			return nil, ""
 		}
 		req.Header.Set("User-Agent", "DockSTARTer2")
 		resp, err := hubLookupClient.Do(req)
 		if err != nil {
-			return nil
+			return nil, ""
 		}
 		var page struct {
 			Next    string `json:"next"`
 			Results []struct {
 				Name   string `json:"name"`
 				Digest string `json:"digest"`
+				Pushed string `json:"tag_last_pushed"`
 			} `json:"results"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&page)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK || err != nil {
-			return nil
+			return nil, ""
 		}
-		var tags []string
 		for _, r := range page.Results {
 			if r.Digest == digest {
 				tags = append(tags, r.Name)
+				pushed = max(pushed, r.Pushed) // RFC 3339 in UTC sorts as text
 			}
 		}
 		if len(tags) > 0 || page.Next == "" {
-			return tags
+			return tags, pushed
 		}
 		if !sameHost(page.Next, dockerHubBaseURL) {
-			return nil // a response must not send the search to another host
+			return nil, "" // a response must not send the search to another host
 		}
 		next = page.Next
 	}
-	return nil
+	return nil, ""
 }
 
 // versionFromTags returns the most specific version among an image's tags: of those
@@ -300,33 +310,116 @@ func versionTags(version string) []string {
 	return []string{version, "v" + version}
 }
 
-// ghcrTagExists reports whether ghcr.io has tag for repo (owner/image), asking the
-// registry with the anonymous token public images allow.
-func ghcrTagExists(ctx context.Context, repo, tag string) bool {
+// manifestTypes are the manifest media types a registry query accepts: an image index
+// or manifest list (several platforms), or one platform's manifest.
+var manifestTypes = strings.Join([]string{
+	"application/vnd.oci.image.index.v1+json",
+	"application/vnd.oci.image.manifest.v1+json",
+	"application/vnd.docker.distribution.manifest.list.v2+json",
+	"application/vnd.docker.distribution.manifest.v2+json",
+}, ", ")
+
+// ghcrToken returns the anonymous token ghcr.io gives for pulling repo (owner/image), a
+// public image's, or "" when it gives none.
+func ghcrToken(ctx context.Context, repo string) string {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ghcrBaseURL+"/token?scope=repository:"+repo+":pull", nil)
 	if err != nil {
-		return false
+		return ""
 	}
 	resp, err := versionCheckClient.Do(req)
 	if err != nil {
-		return false
+		return ""
 	}
 	defer resp.Body.Close()
 	var tok struct {
 		Token string `json:"token"`
 	}
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&tok) != nil || tok.Token == "" {
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&tok) != nil {
+		return ""
+	}
+	return tok.Token
+}
+
+// ghcrTagExists reports whether ghcr.io has tag for repo (owner/image), asking the
+// registry with the anonymous token public images allow.
+func ghcrTagExists(ctx context.Context, repo, tag string) bool {
+	token := ghcrToken(ctx, repo)
+	if token == "" {
 		return false
 	}
 	return urlExists(ctx, ghcrBaseURL+"/v2/"+repo+"/manifests/"+url.PathEscape(tag), http.Header{
-		"Authorization": {"Bearer " + tok.Token},
-		"Accept": {strings.Join([]string{
-			"application/vnd.oci.image.index.v1+json",
-			"application/vnd.oci.image.manifest.v1+json",
-			"application/vnd.docker.distribution.manifest.list.v2+json",
-			"application/vnd.docker.distribution.manifest.v2+json",
-		}, ", ")},
+		"Authorization": {"Bearer " + token},
+		"Accept":        {manifestTypes},
 	})
+}
+
+// ghcrImageMeta returns the version, build date and source of the image digest names in
+// ghcr.io's repo (owner/image), from its config there, with the anonymous token public
+// images allow: from a multi-platform image, the manifest for platform's OS,
+// architecture and variant (each matched only when given). No layer is fetched. False
+// when it can't be read.
+func ghcrImageMeta(ctx context.Context, repo, digest string, platform imageMeta) (imageMeta, bool) {
+	token := ghcrToken(ctx, repo)
+	if token == "" {
+		return imageMeta{}, false
+	}
+	get := func(path string, into any) bool {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ghcrBaseURL+"/v2/"+repo+path, nil)
+		if err != nil {
+			return false
+		}
+		req.Header.Set("Authorization", "Bearer "+token) // not sent on to a blob's storage host
+		req.Header.Set("Accept", manifestTypes)
+		req.Header.Set("User-Agent", "DockSTARTer2")
+		resp, err := versionCheckClient.Do(req)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK && json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(into) == nil
+	}
+	type descriptor struct {
+		Digest   string `json:"digest"`
+		Platform struct {
+			OS           string `json:"os"`
+			Architecture string `json:"architecture"`
+			Variant      string `json:"variant"`
+		} `json:"platform"`
+	}
+	var manifest struct {
+		Manifests []descriptor `json:"manifests"`
+		Config    descriptor   `json:"config"`
+	}
+	if !get("/manifests/"+url.PathEscape(digest), &manifest) {
+		return imageMeta{}, false
+	}
+	if len(manifest.Manifests) > 0 { // an index: the platform's own manifest
+		chosen := ""
+		for _, m := range manifest.Manifests {
+			pl := m.Platform
+			if (platform.os == "" || pl.OS == platform.os) && (platform.arch == "" || pl.Architecture == platform.arch) &&
+				(platform.variant == "" || pl.Variant == platform.variant) {
+				chosen = m.Digest
+				break
+			}
+		}
+		if chosen == "" || !get("/manifests/"+url.PathEscape(chosen), &manifest) {
+			return imageMeta{}, false
+		}
+	}
+	if manifest.Config.Digest == "" {
+		return imageMeta{}, false
+	}
+	var config struct {
+		Created string `json:"created"`
+		Config  struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"config"`
+	}
+	if !get("/blobs/"+url.PathEscape(manifest.Config.Digest), &config) {
+		return imageMeta{}, false
+	}
+	return metaFromLabels(config.Config.Labels, config.Created), true
 }
 
 // urlExists reports whether a HEAD request for u answers 200.
