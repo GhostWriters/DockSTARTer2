@@ -122,6 +122,28 @@ func TestStatusListsDeclaredJobs(t *testing.T) {
 	}
 }
 
+// An image whose tag the registry now points at another digest has an update: its
+// service shows its block, its image line Update and an update line naming the new
+// version when a tag gives it, else the digest cut short; the heading counts it, as
+// information, so a stack that is otherwise fine stays complete.
+func TestStatusShowsImageUpdates(t *testing.T) {
+	p := newStatusTestProcessor()
+	p.imageMetaBefore[webImg] = imageMeta{digest: "sha256:" + strings.Repeat("a", 64)}
+	remote := "sha256:" + strings.Repeat("b", 64)
+	p.imageUpdates = map[string]string{webImg: remote}
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "✓ status: 2 services (2 images), 1 update") || !strings.Contains(got, "✓ Running     ─ unchanged") ||
+		!strings.Contains(got, "Running         web:") || !strings.Contains(got, "i Update            image: example/web:1") ||
+		!strings.Contains(got, "update: sha256:bbbbbbbbbbbb (not pulled)") || !strings.Contains(got, "Running         1 service: db") {
+		t.Errorf("display =\n%s\nwant web's block with its update, db folded, 1 update counted, still complete", got)
+	}
+	p.digestVersions[remote] = "1.2.3"
+	if got := renderPlain(p, 0); !strings.Contains(got, "update: 1.2.3 (not pulled)") {
+		t.Errorf("display =\n%s\nwant the update named by its version", got)
+	}
+}
+
 // While its checks run, status's headings are in progress, whatever its rows show.
 func TestStatusRollupWhileChecking(t *testing.T) {
 	p := newStatusTestProcessor()

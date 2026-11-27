@@ -256,9 +256,10 @@ func (p *consoleEventProcessor) buildLines(termW int, level int) []string {
 					slices.Sort(names)
 					if p.command == statusCommand {
 						// A service with lines to show (a crash's state and log, a failing
-						// health check) shows its block in the group's place.
+						// health check) or an update for its image shows its block in the
+						// group's place.
 						names = slices.DeleteFunc(names, func(svc string) bool {
-							if len(p.serviceDetailLines(svc, termW, level, true)) == 0 {
+							if len(p.serviceDetailLines(svc, termW, level, true)) == 0 && !p.hasUpdate(svcImageMap[svc]) {
 								return false
 							}
 							renderBlock(block{img: svcImageMap[svc], svcs: []string{svc}})
@@ -538,6 +539,9 @@ func (p *consoleEventProcessor) buildImageLine(imgName string, t *consoleTask, l
 
 	if t == nil || allLayersCached {
 		statusText, statusTag, icon := p.cachedStatus(t != nil && isPullingText(t.text), imageFinalTag)
+		if p.hasUpdate(imgName) { // status found a newer image for its tag: information
+			statusText, statusTag, icon = "Update", "{{|DockerInfo|}}Update{{[-]}}", "{{|DockerInfo|}}i{{[-]}}"
+		}
 		statusPad := strutil.Repeat(" ", sectionStatusW-len(statusText))
 		return globalIndent + icon + " " + statusTag + "{{[-]}}" + statusPad + imageLabel + urlWithCount + imgPad + sizes + bar
 	}

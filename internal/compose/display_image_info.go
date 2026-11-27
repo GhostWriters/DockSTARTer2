@@ -138,8 +138,10 @@ type infoPart struct{ text, url string }
 // "old → new", or once a first pull brought it, its version and build date as "→ new".
 // A container this run brought up shows the version it now runs, as "old → new" (and
 // its build date) when it ran a different image before, e.g. one pulled by an earlier
-// pull, with verbose too. A version links to its release or tag page when versionURL
-// has one; a version a Docker Hub tag gave its digest (tagVersions) replaces its labels'.
+// pull, with verbose too. Under status, an image with a newer image for its tag on its
+// registry shows the version it runs and an update line (statusUpdateValue). A version
+// links to its release or tag page when versionURL has one; a version a Docker Hub tag
+// gave its digest (tagVersions) replaces its labels'.
 func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbose bool) []string {
 	before, hadBefore := p.imageMetaBefore[imgName]
 	after, pulled := p.imageMetaAfter[imgName]
@@ -209,6 +211,7 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 		parts = append(append(parts, b...), infoPart{")", ""})
 		return []field{{"version", parts}}
 	}
+	update := p.statusUpdateValue(imgName) // status: a newer image for its tag, not pulled
 	switch {
 	case verbose:
 		fields = append(fields, field{"digest", []infoPart{{current.digest, ""}}}, field{"source", []infoPart{{current.source, current.source}}})
@@ -222,8 +225,13 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 		// A new version: version and build date each old → new, on two lines.
 	case brought:
 		fields = withBuilt(version, built) // the version it now runs
+	case update != nil:
+		fields = withBuilt(version, built) // the version it runs, above the update
 	default:
 		return nil
+	}
+	if update != nil {
+		fields = append(fields, field{"update", update})
 	}
 	labelW := 0 // the widest label shown, so the values line up
 	for _, f := range fields {
@@ -254,8 +262,8 @@ func safeURL(raw string) string {
 // infoLine returns one info line: an "i" marker and Info in the status column, then
 // label: value one step in under image:, all but the value in DockerInfo, the value
 // padded to start labelW past the label's start. Each part of the value is linked to its
-// url when it has one (the URL style), else dim, except a version, build date or digest,
-// which are in the Version style linked or not: the hyperlink code underlines a
+// url when it has one (the URL style), else dim, except a version, build date, digest
+// or update, which are in the Version style linked or not: the hyperlink code underlines a
 // clickable one. A value too long for termW is cut: still linked when it
 // is a single linked part (a source URL), else dim and unlinked.
 func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoPart, termW int) string {
@@ -268,7 +276,7 @@ func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoP
 	// A version, build date or digest is in the Version style, so the block reads as Info
 	// labels and cyan values; the separators between them stay dim, a source link is in
 	// the URL style.
-	valued := label == "version" || label == "built" || label == "digest"
+	valued := label == "version" || label == "built" || label == "digest" || label == "update"
 	var plain strings.Builder
 	for i := range value {
 		value[i].text = stripControl(value[i].text)

@@ -227,7 +227,8 @@ func GetUsage(target string, noHeading bool) string {
 			"{{|UsageCommand|}}-c --compose{{[-]}} {{|UsageOption|}}status{{[-]}} [{{|UsageApp|}}<app>{{[-]}} ...]{{[-]}}",
 			"	Show the state of the services, networks, models and jobs without changing anything: each in the group",
 			"	of its state, with the state and log of any service crashing, failed to start or exited with an error,",
-			"	watched for a few seconds to catch a crash loop, and what holds a port one couldn't bind",
+			"	watched for a few seconds to catch a crash loop, what holds a port one couldn't bind, and the images",
+			"	whose registry has a newer image for their tag, without pulling it",
 			"{{|UsageCommand|}}-c --compose{{[-]}} < {{|UsageOption|}}generate{{[-]}} | {{|UsageOption|}}merge{{[-]}} >{{[-]}}",
 			"	Generates the '{{|UsageFile|}}docker-compose.yml{{[-]}}' file",
 		)
