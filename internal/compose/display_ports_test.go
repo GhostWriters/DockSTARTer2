@@ -259,7 +259,7 @@ func TestPossibleConflictsFoldApart(t *testing.T) {
 	}
 	got := renderPlain(p, 0)
 	if !strings.Contains(got, "1 service: db") || !strings.Contains(got, "2 services: cache, web") ||
-		!strings.Contains(got, "? Conflict          ports: 80/tcp") || strings.Contains(got, "web:") {
+		!strings.Contains(got, "? Conflict           ports: 80/tcp") || strings.Contains(got, "web:") {
 		t.Errorf("display before compose reports =\n%s\nwant db folded alone, cache and web folded together with one unconfirmed line", got)
 	}
 	// All start fine: the unconfirmed line goes and they fold together.

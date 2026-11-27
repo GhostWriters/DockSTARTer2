@@ -51,6 +51,7 @@ func NewContainerVerbDisplay(ctx context.Context, verb string, names []string) *
 	project := ProjectName()
 	p := NewConsoleEventProcessor(ctx, out, verb, map[string][]string{}, nil, map[string]string{}, project, ascii,
 		console.GlobalVerbose, staticOut, updateFn, nil).(*consoleEventProcessor)
+	p.table = true
 	p.containerVerb = "docker " + verb
 	p.containers = slices.Clone(names)
 	slices.Sort(p.containers)

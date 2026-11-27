@@ -455,8 +455,8 @@ func TestUnmetConditionIsTheDependentsError(t *testing.T) {
 func TestErrorPlacement(t *testing.T) {
 	p := newHealthTestProcessor()
 	prefix := p.errorLinePrefixes()[0]
-	row := "   ✓ Started     web:"
-	wide := "   ✓ Cached        image: example/app:latest                                       [####]"
+	row := "   ✓ Started      web:"
+	wide := "   ✓ Cached         image: example/app:latest                                       [####]"
 	long := "failed to set up container networking: driver failed programming external connectivity on endpoint web: Bind for 0.0.0.0:8000 failed: port is already allocated"
 	lines, timers := p.placeErrorLines(
 		[]string{row, prefix + "Not Started{{[-]}}", wide, row, prefix + long + "{{[-]}}"},
@@ -464,7 +464,7 @@ func TestErrorPlacement(t *testing.T) {
 	if len(lines) != len(timers) {
 		t.Fatalf("%d lines but %d timers", len(lines), len(timers))
 	}
-	if plain := semstyle.ToPlain(lines[0]); plain != "   ✓ Started     web:  Not Started" {
+	if plain := semstyle.ToPlain(lines[0]); plain != "   ✓ Started      web:  Not Started" {
 		t.Errorf("row = %q, want the short message two spaces past the name", plain)
 	}
 	wrapped := lines[3:]
@@ -489,7 +489,7 @@ func TestErrorPlacement(t *testing.T) {
 func TestErrorWrapUsesTheTerminalsRoom(t *testing.T) {
 	p := newHealthTestProcessor()
 	prefix := p.errorLinePrefixes()[0]
-	row := "   × Error       web:"
+	row := "   × Error        web:"
 	long := strutil.Repeat("word ", 30) // 149 runes
 	lines, _ := p.placeErrorLines([]string{row, prefix + long + "{{[-]}}"}, make([]timerEntry, 2), 200)
 	if len(lines) != 3 {
@@ -532,10 +532,10 @@ func TestWrapStyledMeasuresWithoutTags(t *testing.T) {
 func TestInlineErrorsShareAColumn(t *testing.T) {
 	p := newHealthTestProcessor()
 	warn := p.errorLinePrefixes()[1]
-	wide := "   ✓ Cached        image: example/app:latest                                       [####]"
+	wide := "   ✓ Cached         image: example/app:latest                                       [####]"
 	lines, _ := p.placeErrorLines([]string{
-		"   ⚠ Interrupted   web:", warn + "interrupted by db{{[-]}}",
-		"   ⚠ Interrupted   calibreweb:", warn + "interrupted by db{{[-]}}",
+		"   ⚠ Interrupted    web:", warn + "interrupted by db{{[-]}}",
+		"   ⚠ Interrupted    calibreweb:", warn + "interrupted by db{{[-]}}",
 		wide, warn + "too wide to share{{[-]}}",
 	}, make([]timerEntry, 6), 200)
 	var cols []int

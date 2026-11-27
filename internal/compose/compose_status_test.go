@@ -52,15 +52,15 @@ func TestStatusShowsEverythingUnchanged(t *testing.T) {
 	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
 	if strings.Contains(got, " changed ") || !strings.Contains(got, "unchanged ─") ||
-		!strings.Contains(got, "✓ Running         1 service: db") || !strings.Contains(got, "· Not Running     1 service: web") ||
+		!strings.Contains(got, "✓ Running          1 service: db") || !strings.Contains(got, "· Not Running      1 service: web") ||
 		!strings.HasPrefix(strings.TrimSpace(got), "✓ status:") {
 		t.Errorf("display =\n%s\nwant a status heading, db Running and web Not Running under unchanged, nothing changed", got)
 	}
 
 	p.downLogs = map[string]*downLog{"web": {state: "Restarting, exit code 1", problem: restartingText, lines: []string{"boom"}}}
 	got = renderPlain(p, 0)
-	if !strings.Contains(got, "⚠ Restarting      web:") || !strings.Contains(got, "state: Restarting, exit code 1") ||
-		!strings.Contains(got, "⚠ Warning     ─ unchanged") || !strings.HasPrefix(strings.TrimSpace(got), "⚠ status:") ||
+	if !strings.Contains(got, "⚠ Restarting       web:") || !strings.Contains(got, "state: Restarting, exit code 1") ||
+		!strings.Contains(got, "⚠ Warning      ─ unchanged") || !strings.HasPrefix(strings.TrimSpace(got), "⚠ status:") ||
 		strings.Contains(got, "×") {
 		t.Errorf("display =\n%s\nwant web's own Restarting block, its state line, the headings as warnings, no error", got)
 	}
@@ -76,8 +76,8 @@ func TestStatusLeavesNetworksAndStoppedServicesQuiet(t *testing.T) {
 	p.networks = resourceDecl{names: []string{"proj_default"}, exists: map[string]bool{}}
 	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
-	if strings.Contains(got, " changed ") || !strings.Contains(got, "Not Created   1 network: proj_default") ||
-		strings.Contains(got, "needs") || !strings.Contains(got, "Not Created   2 services: db, web") {
+	if strings.Contains(got, " changed ") || !strings.Contains(got, "Not Created    1 network: proj_default") ||
+		strings.Contains(got, "needs") || !strings.Contains(got, "Not Created    2 services: db, web") {
 		t.Errorf("display =\n%s\nwant the network and both services Not Created under unchanged, no needs line", got)
 	}
 	if got := renderPlain(p, dockerlayout.VerboseDetails); !strings.Contains(got, "needs started: db") {
@@ -114,11 +114,11 @@ func TestStatusListsDeclaredJobs(t *testing.T) {
 	p.jobs = map[string]jobDecl{"tick": {schedule: "* * * * *", scheduled: true}, "hello": {}}
 	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "Scheduled     1 job: tick") || strings.Contains(got, "hello") || strings.Contains(got, " changed ") {
+	if !strings.Contains(got, "Scheduled      1 job: tick") || strings.Contains(got, "hello") || strings.Contains(got, " changed ") {
 		t.Errorf("display =\n%s\nwant tick Scheduled under unchanged, the manual job left out", got)
 	}
 	got = renderPlain(p, dockerlayout.VerboseDetails)
-	if !strings.Contains(got, "Manual          hello:") || !strings.Contains(got, "Scheduled       tick:") || !strings.Contains(got, "schedule: * * * * *") {
+	if !strings.Contains(got, "Manual           hello:") || !strings.Contains(got, "Scheduled        tick:") || !strings.Contains(got, "schedule: * * * * *") {
 		t.Errorf("-v display =\n%s\nwant both jobs' rows and tick's schedule", got)
 	}
 }
@@ -135,9 +135,9 @@ func TestStatusShowsImageUpdates(t *testing.T) {
 	p.imageUpdates = map[string]string{webImg: remote}
 	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
-	if !strings.Contains(got, "✓ status: 2 services (2 images) ") || !strings.Contains(got, "✓ Running     ─ unchanged") ||
-		!strings.Contains(got, "Running         web:") || !strings.Contains(got, "✓ Cached            image: example/web:1") ||
-		!strings.Contains(got, "update: sha256:bbbbbbbbbbbb (not pulled)") || !strings.Contains(got, "Running         1 service: db") {
+	if !strings.Contains(got, "✓ status: 2 services (2 images) ") || !strings.Contains(got, "✓ Running      ─ unchanged") ||
+		!strings.Contains(got, "Running          web:") || !strings.Contains(got, "✓ Cached             image: example/web:1") ||
+		!strings.Contains(got, "update: sha256:bbbbbbbbbbbb (not pulled)") || !strings.Contains(got, "Running          1 service: db") {
 		t.Errorf("display =\n%s\nwant web's block, its image Cached with its update line, db folded, still complete", got)
 	}
 	p.digestVersions[remote] = "1.2.3"
@@ -158,7 +158,7 @@ func TestStatusImageNotPulled(t *testing.T) {
 	delete(p.preRun, "web")
 	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, dockerlayout.VerboseDetails)
-	if !strings.Contains(got, "· Not Pulled        image: example/web:1") || strings.Contains(got, "Cached            image: example/web:1") {
+	if !strings.Contains(got, "· Not Pulled         image: example/web:1") || strings.Contains(got, "Cached             image: example/web:1") {
 		t.Errorf("-v display =\n%s\nwant web's image Not Pulled", got)
 	}
 }

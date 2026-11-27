@@ -266,6 +266,8 @@ type consoleEventProcessor struct {
 	asciiMode     bool           // when true, use ASCII spinners, icons, and progress bar chars
 	verbosity     int            // verbosity level (dockerlayout.VerboseDetails, VerboseLayers)
 	staticOut     bool           // when true (redirected stdout, no TTY/TUI), skip live rendering and emit final lines once in Done
+	table         bool           // draw the output and the log as a table (tableLines)
+	tableLineW    int            // the table's detail cell width so far, which only grows
 	forceSummary  bool           // when true, prependSummary includes the header even if GlobalViewport still reports active -- set around the final pre-Deactivate render, whose whole point is baking the summary into the scrollback dump
 
 	dockerClient daemonClient // Docker client for layer inspection and container health
@@ -306,8 +308,10 @@ type consoleEventProcessor struct {
 	portConflict *portConflict
 	predicted    map[string][]predictedConflict
 
-	// buildLevel is the verbosity level of the frame being built (buildLines).
+	// buildLevel and buildW are the verbosity level and width of the frame being built
+	// (buildLines).
 	buildLevel int
+	buildW     int
 
 	// Container mode, for docker start, stop or restart by container name
 	// (ContainerVerbDisplay): containerVerb is the docker command the heading names;
@@ -459,13 +463,11 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	}
 
 	// Summary line is built dynamically each render so network count updates as events arrive.
-	// Print a placeholder now for the CLI viewport header path.
-	if !p.noViewport {
-		summaryLine := p.buildSummaryLine()
+	// Set a placeholder now for the CLI viewport header path; elsewhere, and in a table,
+	// the rendered lines carry the summary.
+	if !p.noViewport && !p.table {
 		if vp := console.GlobalViewport; vp != nil && vp.IsActive() {
-			vp.SetHeader(p.withSummaryTimer(summaryLine))
-		} else {
-			fmt.Fprintln(p.out, summaryLine)
+			vp.SetHeader(p.withSummaryTimer(p.buildSummaryLine()))
 		}
 	}
 
@@ -933,7 +935,9 @@ func (p *consoleEventProcessor) render() {
 	if !p.noViewport {
 		if vp := console.GlobalViewport; vp != nil {
 			if vp.IsActive() {
-				vp.SetHeader(semstyle.ToANSI(p.withSummaryTimer(p.buildSummaryLine())))
+				if !p.table { // a table's lines carry its summary as their heading rows
+					vp.SetHeader(semstyle.ToANSI(p.withSummaryTimer(p.buildSummaryLine())))
+				}
 				ansiLines := make([]string, len(lines))
 				for i, l := range lines {
 					ansiLines[i] = semstyle.ToANSI(l)

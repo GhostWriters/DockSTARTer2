@@ -148,7 +148,7 @@ func TestDependsLinesGroupByCondition(t *testing.T) {
 	lines := p.dependsLines("web", 160, true)
 	got := plainLines(lines)
 	want := []string{
-		"✓ Ready                   needs started: cache",
+		"✓ Ready                    needs started: cache",
 		"× Unmet                   needs healthy: db (Unhealthy)",
 		"⚠ Unmet                   wants healthy: search (Unhealthy)", // a warning: optional
 	}
