@@ -85,14 +85,14 @@ func TestStatusLeavesNetworksAndStoppedServicesQuiet(t *testing.T) {
 	}
 }
 
-// A model is Existing when the runner has pulled its reference, Not Pulled when not,
-// and Unknown, a warning, when the runner couldn't be asked.
+// A model is Existing when the runner has pulled its reference, however it's written,
+// Not Pulled when not, and Unknown, a warning, when the runner couldn't be asked.
 func TestStatusModelWord(t *testing.T) {
 	p := newStatusTestProcessor()
-	p.models = map[string]string{"llm": "ai/smollm2:latest", "embed": "ai/embed:latest"}
-	p.modelsOnDisk = map[string]bool{"ai/smollm2:latest": true}
+	p.models = map[string]string{"llm": "ai/smollm2", "embed": "ai/embed:latest"}
+	p.modelsOnDisk = map[string]bool{"docker.io/ai/smollm2:latest": true} // as readModelsOnDisk stores it
 	if got := p.statusModelWord("llm"); got != existingText {
-		t.Errorf("pulled model = %q, want %q", got, existingText)
+		t.Errorf("pulled model written short = %q, want %q", got, existingText)
 	}
 	if got := p.statusModelWord("embed"); got != notPulledText {
 		t.Errorf("model not pulled = %q, want %q", got, notPulledText)
@@ -104,6 +104,23 @@ func TestStatusModelWord(t *testing.T) {
 	}
 	if got := p.kindState(p.modelKind(), []string{"llm"}); got != rollupWarning {
 		t.Errorf("models' state with no runner = %v, want a warning", got)
+	}
+}
+
+func TestNormalizeModelReference(t *testing.T) {
+	for model, want := range map[string]string{
+		"ai/smollm2":                  "docker.io/ai/smollm2:latest",
+		"ai/smollm2:360M":             "docker.io/ai/smollm2:360M",
+		"docker.io/ai/smollm2:latest": "docker.io/ai/smollm2:latest",
+		"index.docker.io/ai/smollm2":  "docker.io/ai/smollm2:latest",
+		"hf.co/Org/Model-GGUF":        "huggingface.co/org/model-gguf:latest",
+		"HF.co/Org/Model-GGUF:Q4_K_M": "huggingface.co/org/model-gguf:Q4_K_M",
+		"huggingface.co/Org/Model":    "huggingface.co/org/model:latest",
+		"Not A Reference":             "Not A Reference",
+	} {
+		if got := normalizeModelReference(model); got != want {
+			t.Errorf("normalizeModelReference(%q) = %q, want %q", model, got, want)
+		}
 	}
 }
 
