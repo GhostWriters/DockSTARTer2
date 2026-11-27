@@ -648,11 +648,12 @@ func warnLegacyTemplatesInScriptFolder(ctx context.Context, printer console.Prin
 		logger.Display(ctx, "{{|ApplicationName|}}%s{{[-]}} did not finish running successfully.", version.ApplicationName)
 		logger.Display(ctx, "Check logs in '"+console.FormatFilePath(logger.GetLogFilePath())+"'.")
 		// Same exit hygiene as logger.Fatal*: give stdout/stderr a moment to
-		// flush and make sure the cursor isn't left hidden, without using
+		// flush, send the last log lines to other processes' panels and make
+		// sure the cursor isn't left hidden, without using
 		// Fatal itself, whose "let the dev know" footer is wrong for an
 		// expected, user-actionable stop (not a bug).
 		time.Sleep(100 * time.Millisecond)
-		console.RestoreCursor()
+		logger.ExitCleanup()
 		os.Exit(1)
 	}
 	logger.Warn(ctx, "Skipping legacy compose folder; using the new default location:\n   '"+console.FormatFolderPath(defaultPath)+"'")

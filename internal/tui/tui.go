@@ -498,6 +498,12 @@ func Start(ctx context.Context, startMenu string, opts ...ProgramOptions) error 
 	console.SetClientIP(clientIP)
 	isSSH := pOpts.Input != nil
 
+	// Show other processes' runs (e.g. a CLI run from a shell) in the log panel as
+	// they log. In the daemon, StartServer already listens.
+	listenCtx, stopListening := context.WithCancel(ctx)
+	defer stopListening()
+	logger.ListenForLogs(listenCtx)
+
 	// Register AND activate connType's tint before any of the startup
 	// construction below (Initialize's displayengine.InitStyles, screen
 	// construction, NewAppModel) -- AppModel.Init() also registers this same

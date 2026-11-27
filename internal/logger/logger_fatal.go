@@ -294,7 +294,7 @@ func FatalWithStackSkip(ctx context.Context, skip int, msg any, args ...any) {
 
 	// Brief sleep to allow stdout/stderr to flush before exit
 	time.Sleep(100 * time.Millisecond)
-	console.RestoreCursor()
+	exitCleanup()
 	os.Exit(1)
 }
 
@@ -313,9 +313,21 @@ func Fatal(ctx context.Context, msg any, args ...any) {
 
 	// Brief sleep to allow stdout/stderr to flush before exit
 	time.Sleep(100 * time.Millisecond)
-	console.RestoreCursor()
+	exitCleanup()
 	os.Exit(1)
 }
+
+// exitCleanup is what an exit that skips Cleanup still needs: the last log lines
+// sent to other processes' panels (the fatal message among them), this process's
+// log socket removed, and the cursor shown.
+func exitCleanup() {
+	FlushForwarding(time.Second)
+	stopListen()
+	console.RestoreCursor()
+}
+
+// ExitCleanup is exitCleanup for an exit outside the logger that skips Cleanup.
+func ExitCleanup() { exitCleanup() }
 
 // writeFatalLog writes the resolved message to a separate fatal log file
 func writeFatalLog(msg any, args ...any) {
@@ -349,8 +361,12 @@ func writeFatalLog(msg any, args ...any) {
 // This allows the main run loop to recover and perform cleanup before exiting
 type FatalError struct{}
 
-// Cleanup performs final logging tasks, such as truncating the log file.
+// Cleanup performs final logging tasks: sending the last log lines to other
+// processes' panels (FlushForwarding), removing this process's log socket
+// (ListenForLogs) and truncating the log file.
 func Cleanup() {
+	FlushForwarding(time.Second)
+	stopListen()
 	appName := strings.ToLower(version.ApplicationName)
 	logFilePath := filepath.Join(logDir, appName+".log")
 	truncateLogFile(logFilePath, 1000)
