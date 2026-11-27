@@ -282,6 +282,7 @@ type consoleEventProcessor struct {
 	healthOutput   map[string]string    // container → its last health check's output, shown while unhealthy
 	lastStart      time.Time            // when the run last started a container, for the wait before looking for crashes
 	statusRunning  map[string][]string  // -c status: service → its running containers, whose health it tracks (beginStatus)
+	statusChecked  bool                 // -c status: its checks are done (finishStatusChecks); finished is set before them
 	registryAuth   func(string) string  // -c status: an image's encoded registry auth, as a pull would send it ("" for none)
 	imageUpdates   map[string]string    // -c status: image → the registry's digest for its tag, when it differs from the one pulled
 	updateErrs     map[string]string    // -c status: image → why its registry couldn't be asked
@@ -574,6 +575,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 		p.waitForStartedToSettle()
 		p.checkServicesDown()
 		p.findStatusPortConflict()
+		p.finishStatusChecks()
 		p.settleDependencies()
 		p.stopHealthWatch()
 		p.mtx.Lock()
@@ -604,6 +606,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 	p.stopCrashWatch() // the final check below drops what is no longer down
 	p.checkServicesDown()
 	p.findStatusPortConflict()
+	p.finishStatusChecks()
 	p.settleDependencies()
 
 	// Stop the ticker goroutine.

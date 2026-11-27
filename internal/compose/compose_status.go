@@ -106,9 +106,10 @@ func (p *consoleEventProcessor) statusRowStatus(svc, imgName string) (text, tag,
 }
 
 // statusRollup returns the state of status's services: processing while the checks
-// run, then a warning when one has a problem, else complete. Callers hold p.mtx.
+// run (statusChecked), then a warning when one has a problem, else complete. Callers
+// hold p.mtx.
 func (p *consoleEventProcessor) statusRollup(svcs []string, imageOf func(string) string) sectionRollupState {
-	if !p.finished {
+	if !p.statusChecked {
 		return rollupProcessing
 	}
 	for _, svc := range svcs {
@@ -136,6 +137,15 @@ func (p *consoleEventProcessor) beginStatus() {
 	p.mtx.Unlock()
 	p.scanServicesDown(false)
 	p.findStatusPortConflict()
+}
+
+// finishStatusChecks marks status's checks done, once Done's waits and final crash
+// check have run: Done marks the run finished before them, status having no compose
+// operation to wait on, so its headings use this instead.
+func (p *consoleEventProcessor) finishStatusChecks() {
+	p.mtx.Lock()
+	p.statusChecked = true
+	p.mtx.Unlock()
 }
 
 // findStatusPortConflict looks, under status, for what holds the port a service's last
@@ -195,10 +205,10 @@ func (p *consoleEventProcessor) statusModelStatus(name string) (text, tag, icon 
 }
 
 // statusKindState returns the state of a kind's rows under status, which nothing
-// reports on: processing while the checks run, then a warning when one is a problem
-// or unknown, else complete. Callers hold p.mtx.
+// reports on: processing while the checks run (statusChecked), then a warning when one
+// is a problem or unknown, else complete. Callers hold p.mtx.
 func (p *consoleEventProcessor) statusKindState(k rowKind, names []string) sectionRollupState {
-	if !p.finished {
+	if !p.statusChecked {
 		return rollupProcessing
 	}
 	for _, name := range names {
