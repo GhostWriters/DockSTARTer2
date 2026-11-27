@@ -171,6 +171,8 @@ github.com/docker/cli v29.10.1+incompatible h1:0wlyVoe0snmKYUUjJuhoR0HiSqRHQonKV
 github.com/docker/cli v29.10.1+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/compose/v5 v5.8.0 h1:UA+EN1bHwms7LQHftNyQp0cNN+Jj1z0FBx0IyCSAHms=
 github.com/docker/compose/v5 v5.8.0/go.mod h1:r/gf0BwwKvvleAWTXbhAZJHQ+TRcFE/nSMXc15fcLgg=
+github.com/docker/compose/v5 v5.8.1 h1:b6Y695MqWVstDjC3QWbKq2N8Gd3Au8rt5+qMao00xD8=
+github.com/docker/compose/v5 v5.8.1/go.mod h1:zv68k6hLifgdbLY6nD1grn5S9/2VsGEzZAR9VPycgTI=
 github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBirtxJnzDrHLEKxTAYk=
 github.com/docker/distribution v2.8.3+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
 github.com/docker/docker-credential-helpers v0.9.9 h1:BkydjIgZ46JnDbqyM2p2fc63KMw6y+KHL3Em/2AGJ7w=
@@ -183,6 +185,10 @@ github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4
 github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/docker/secrets-engine/client v0.2.2 h1:aPvmlzsxNA+C+xgp2F+WiiDbCSAXHC591HscFFOvPOE=
 github.com/docker/secrets-engine/client v0.2.2/go.mod h1:c3l/N+fA0kiy9S8BE3kKrO5hOZu4+SLYZK9Jx+jc2cw=
+github.com/docker/secrets-engine/client v1.0.0 h1:/zMCWoch4OOoMQoCo257H6siYUuUcQiTZBcX081uQm0=
+github.com/docker/secrets-engine/client v1.0.0/go.mod h1:EGa8hWWhSWBQ4+Yn2BHO4xeXZ4wYCI9eAQ3U1Fy1sIA=
+github.com/docker/secrets-engine/secrets v1.0.0 h1:29fYA7dLYYN6dbyCoDUX7VVu0usZ8bKvpJolCbs8TAw=
+github.com/docker/secrets-engine/secrets v1.0.0/go.mod h1:xGWoZkaQpSd/PP5s8etspPkrs8Qa07jVblo2UEQZi5w=
 github.com/docker/secrets-engine/x v0.8.5 h1:P7D/YESMjpX18S4ratBgoeJkAFIxgsPxe093uFmgiGc=
 github.com/docker/secrets-engine/x v0.8.5/go.mod h1:jQ5CXCYCPn8Sw96TS8Ufq3oyIGH2GzUtVXIdwa2Q0VU=
 github.com/dunglas/httpsfv v1.1.1 h1:HoSs101zIE9I23DlqlmljJ/OIi7ILwrH347pXhRZdxI=
@@ -275,6 +281,8 @@ github.com/kevinburke/ssh_config v1.6.0 h1:J1FBfmuVosPHf5GRdltRLhPJtJpTlMdKTBjRg
 github.com/kevinburke/ssh_config v1.6.0/go.mod h1:q2RIzfka+BXARoNexmF9gkxEX7DmvbW9P4hIVx2Kg4M=
 github.com/klauspost/compress v1.20.0 h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA=
 github.com/klauspost/compress v1.20.0/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
+github.com/klauspost/compress v1.20.5 h1:rJj5VjH4xQxbnLphg6eqUcDxRFCw1jpMdDY9qXlrwSs=
+github.com/klauspost/compress v1.20.5/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
@@ -294,6 +302,8 @@ github.com/mattn/go-runewidth v0.0.31 h1:1oCV4ReTlosDBc6rYRw5cL8S/4y8iv5oRl4SJ5I
 github.com/mattn/go-runewidth v0.0.31/go.mod h1:3qAiGCV4Koz/yuveO58qUefmUTRm8r0IGEXZ9jeHp/8=
 github.com/mattn/go-shellwords v1.0.16 h1:RRxAaRzU1YbzOSCj9NJqg2/VIbSWv0dnPoD3EwE8kxI=
 github.com/mattn/go-shellwords v1.0.16/go.mod h1:EZzvwXDESEeg03EKmM+RmDnNOPKG4lLtQsUlTZDWQ8Y=
+github.com/mattn/go-shellwords v1.0.17 h1:aaZ6xZkEejIjJLRx2mo9CMpMas4Zz5u8I9Z57vC/rJY=
+github.com/mattn/go-shellwords v1.0.17/go.mod h1:EZzvwXDESEeg03EKmM+RmDnNOPKG4lLtQsUlTZDWQ8Y=
 github.com/microcosm-cc/bluemonday v1.0.27 h1:MpEUotklkwCSLeH+Qdx1VJgNqLlpY2KXwXFM08ygZfk=
 github.com/microcosm-cc/bluemonday v1.0.27/go.mod h1:jFi9vgW+H7c3V0lb6nR74Ib/DIB5OBs92Dimizgw2cA=
 github.com/moby/buildkit v0.33.1 h1:UUrdifmRdRadykO+f5l8BT1CseUXst2sJHV7AmkjjxE=
@@ -571,3 +581,5 @@ mvdan.cc/sh/v3 v3.14.1 h1:bXkhQWNHCs0KZEChF8hYS6FC+T2N9mUZLbQv9blditI=
 mvdan.cc/sh/v3 v3.14.1/go.mod h1:syYCoFET8w9tvevxiXUtY8/ICrU+l26jHmhJDra3Vwo=
 tags.cncf.io/container-device-interface v1.1.1 h1:YPwQz4xg8PlQ0yT/baR0BtLpTQROe4l6M1yuRgAu1vc=
 tags.cncf.io/container-device-interface v1.1.1/go.mod h1:S1PSJWYPD4Iom0/39mvr/VVFCfG0Yt14j20d0OYrY2M=
+tags.cncf.io/container-device-interface v1.1.2 h1:H4rcA/836s+J7JjTbwOj2khB4YP95HHaZrRThT+QAVg=
+tags.cncf.io/container-device-interface v1.1.2/go.mod h1:S1PSJWYPD4Iom0/39mvr/VVFCfG0Yt14j20d0OYrY2M=
