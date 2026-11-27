@@ -95,6 +95,8 @@ func HandleMan(ctx context.Context, group *CommandGroup, protocol graphics.Proto
 		glamour.WithStandardStyle(styleName),
 		glamour.WithWordWrap(width),
 		glamour.WithHyperlinkMode(hyperlinkMode),
+		// Inline covers tables too: no reference numbers and URL list under them.
+		glamour.WithInlineTableLinks(hyperlinkMode == glamouransi.HyperlinkModeInline),
 	}
 	// Kitty placeholders are plain text cells (the image data goes to the
 	// terminal separately), so they survive a TUI. A drawn image needs no

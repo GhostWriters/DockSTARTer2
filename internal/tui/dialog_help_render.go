@@ -46,6 +46,8 @@ func renderDocMarkdown(source, connType string, width int, images bool) (out str
 		glamour.WithStandardStyle(glamourstyles.DarkStyle),
 		glamour.WithWordWrap(width),
 		glamour.WithHyperlinkMode(hyperlinkMode),
+		// Inline covers tables too: no reference numbers and URL list under them.
+		glamour.WithInlineTableLinks(hyperlinkMode == glamouransi.HyperlinkModeInline),
 	}
 	if images {
 		// A drawn image needs no "Image: alt" caption, so the caption is
