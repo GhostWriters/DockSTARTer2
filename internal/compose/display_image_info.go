@@ -25,6 +25,8 @@ type imageMeta struct {
 	built   string // when its publisher built it, in yyyy-mm-dd hh:mm:ss local time
 	digest  string // its repo digest (sha256:…)
 	source  string // its source repository URL
+	// Its platform, to pick its manifest from a registry's multi-platform image.
+	os, arch, variant string
 }
 
 // buildVersionRE finds the version in a LinuxServer build_version label, e.g.
@@ -34,11 +36,26 @@ var buildVersionRE = regexp.MustCompile(`version:-\s*(\S+)`)
 // metaFromInspect returns an image's details from its inspect, each left empty when
 // the image doesn't say.
 func metaFromInspect(r image.InspectResponse) imageMeta {
-	m := imageMeta{id: r.ID}
 	var labels map[string]string
 	if r.Config != nil {
 		labels = r.Config.Labels
 	}
+	m := metaFromLabels(labels, r.Created)
+	m.id = r.ID
+	m.os, m.arch, m.variant = r.Os, r.Architecture, r.Variant
+	if len(r.RepoDigests) > 0 {
+		if _, digest, ok := strings.Cut(r.RepoDigests[0], "@"); ok {
+			m.digest = digest
+		}
+	}
+	return m
+}
+
+// metaFromLabels returns the version, build date and source an image's labels and
+// creation time give, each left empty when they don't say: from a local image's
+// inspect, or from its config on a registry.
+func metaFromLabels(labels map[string]string, created string) imageMeta {
+	var m imageMeta
 	switch {
 	case labels["org.opencontainers.image.version"] != "":
 		m.version = labels["org.opencontainers.image.version"]
@@ -49,16 +66,19 @@ func metaFromInspect(r image.InspectResponse) imageMeta {
 	default:
 		m.version = labels["version"]
 	}
-	if t, err := time.Parse(time.RFC3339Nano, r.Created); err == nil {
-		m.built = t.Local().Format("2006-01-02 15:04:05")
-	}
-	if len(r.RepoDigests) > 0 {
-		if _, digest, ok := strings.Cut(r.RepoDigests[0], "@"); ok {
-			m.digest = digest
-		}
-	}
+	m.built = localTime(created)
 	m.source = labels["org.opencontainers.image.source"]
 	return m
+}
+
+// localTime returns an RFC 3339 timestamp in local time as the info lines show dates,
+// yyyy-mm-dd hh:mm:ss, or "" when it doesn't parse.
+func localTime(ts string) string {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return ""
+	}
+	return t.Local().Format("2006-01-02 15:04:05")
 }
 
 // inspectPreviousImages records, for each container running a different image than
@@ -138,8 +158,10 @@ type infoPart struct{ text, url string }
 // "old → new", or once a first pull brought it, its version and build date as "→ new".
 // A container this run brought up shows the version it now runs, as "old → new" (and
 // its build date) when it ran a different image before, e.g. one pulled by an earlier
-// pull, with verbose too. A version links to its release or tag page when versionURL
-// has one; a version a Docker Hub tag gave its digest (tagVersions) replaces its labels'.
+// pull, with verbose too. Under status, an image with a newer image for its tag on its
+// registry shows the version it runs and an update line (statusUpdateValue). A version
+// links to its release or tag page when versionURL has one; a version a Docker Hub tag
+// gave its digest (tagVersions) replaces its labels'.
 func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbose bool) []string {
 	before, hadBefore := p.imageMetaBefore[imgName]
 	after, pulled := p.imageMetaAfter[imgName]
@@ -209,6 +231,7 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 		parts = append(append(parts, b...), infoPart{")", ""})
 		return []field{{"version", parts}}
 	}
+	update := p.statusUpdateValue(imgName) // status: a newer image for its tag, not pulled
 	switch {
 	case verbose:
 		fields = append(fields, field{"digest", []infoPart{{current.digest, ""}}}, field{"source", []infoPart{{current.source, current.source}}})
@@ -222,8 +245,13 @@ func (p *consoleEventProcessor) imageInfoLines(imgName string, termW int, verbos
 		// A new version: version and build date each old → new, on two lines.
 	case brought:
 		fields = withBuilt(version, built) // the version it now runs
+	case update != nil:
+		fields = withBuilt(version, built) // the version it runs, above the update
 	default:
 		return nil
+	}
+	if update != nil {
+		fields = append(fields, field{"update", update})
 	}
 	labelW := 0 // the widest label shown, so the values line up
 	for _, f := range fields {
@@ -254,8 +282,8 @@ func safeURL(raw string) string {
 // infoLine returns one info line: an "i" marker and Info in the status column, then
 // label: value one step in under image:, all but the value in DockerInfo, the value
 // padded to start labelW past the label's start. Each part of the value is linked to its
-// url when it has one (the URL style), else dim, except a version, build date or digest,
-// which are in the Version style linked or not: the hyperlink code underlines a
+// url when it has one (the URL style), else dim, except a version, build date, digest
+// or update, which are in the Version style linked or not: the hyperlink code underlines a
 // clickable one. A value too long for termW is cut: still linked when it
 // is a single linked part (a source URL), else dim and unlinked.
 func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoPart, termW int) string {
@@ -268,7 +296,7 @@ func (p *consoleEventProcessor) infoLine(label string, labelW int, value []infoP
 	// A version, build date or digest is in the Version style, so the block reads as Info
 	// labels and cyan values; the separators between them stay dim, a source link is in
 	// the URL style.
-	valued := label == "version" || label == "built" || label == "digest"
+	valued := label == "version" || label == "built" || label == "digest" || label == "update"
 	var plain strings.Builder
 	for i := range value {
 		value[i].text = stripControl(value[i].text)

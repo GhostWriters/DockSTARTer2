@@ -573,6 +573,10 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 			p.preRun = preRun
 			p.preRunImage = preRunImage
 			p.statusRunning = statusRunning
+			p.registryAuth = func(img string) string {
+				auth, _ := dockercommand.RetrieveAuthTokenFromImage(dockerCLI.ConfigFile(), img) // as a pull sends it
+				return auth
+			}
 			p.jobs = jobDecls(project)
 			p.models = modelDecls(project)
 			p.serviceModels = serviceModelDecls(project)
@@ -801,6 +805,7 @@ func ExecuteCompose(ctx context.Context, yes bool, force bool, deps DepsMode, co
 	held.release(err)
 	reportUnhealthy(ctx, bus)
 	reportDown(ctx, bus)
+	reportUpdates(ctx, bus)
 	// A job the engine has with a different spec: remove it and run again to register it.
 	if name, ok := changedJobName(err); ok && registersJobs(command) {
 		again, rerr := reregisterChangedJobs(ctx, yes, dockerCLI, project, name, command)
@@ -978,6 +983,22 @@ func reportDown(ctx context.Context, bus api.EventProcessor) {
 	}
 	const logPrefixW = len("2006-01-02 15:04:05 [WARN  ] ")
 	for _, line := range p.downSummaryLines(max(outputWidth()-logPrefixW-4, minDetailW)) {
+		logger.Warn(ctx, "%s", line)
+	}
+}
+
+// reportUpdates lists, after status's display, the images with an update found, as
+// information, and the images whose registry couldn't be asked, as a warning.
+func reportUpdates(ctx context.Context, bus api.EventProcessor) {
+	p, ok := bus.(*consoleEventProcessor)
+	if !ok {
+		return
+	}
+	updates, failed := p.updateSummaryLines()
+	for _, line := range updates {
+		logger.Notice(ctx, "%s", line)
+	}
+	for _, line := range failed {
 		logger.Warn(ctx, "%s", line)
 	}
 }

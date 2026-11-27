@@ -31,6 +31,7 @@ type daemonClient interface {
 	Events(ctx context.Context, options dockerclient.EventsListOptions) dockerclient.EventsResult
 	ContainerList(ctx context.Context, options dockerclient.ContainerListOptions) (dockerclient.ContainerListResult, error)
 	ContainerLogs(ctx context.Context, containerID string, options dockerclient.ContainerLogsOptions) (dockerclient.ContainerLogsResult, error)
+	DistributionInspect(ctx context.Context, imageRef string, options dockerclient.DistributionInspectOptions) (dockerclient.DistributionInspectResult, error)
 }
 
 // consoleEventProcessor implements api.EventProcessor with a themed live-updating
@@ -273,17 +274,22 @@ type consoleEventProcessor struct {
 	// Docker's state (starting/healthy/unhealthy), absent until known and for a container
 	// with no healthcheck; serviceHealth combines a service's containers.
 	health         map[string]map[string]string
-	healthChecked  map[string]string   // container → its service, for containers this run tracks
-	healthWG       sync.WaitGroup      // pending health inspects
-	healthStop     func()              // ends the health event watch; nil when none runs
-	healthWaitDone bool                // the end-of-run wait for first check results ran out
-	healthCmd      map[string]string   // svc → its healthcheck's command, shown on its healthcheck line
-	healthOutput   map[string]string   // container → its last health check's output, shown while unhealthy
-	lastStart      time.Time           // when the run last started a container, for the wait before looking for crashes
-	statusRunning  map[string][]string // -c status: service → its running containers, whose health it tracks (beginStatus)
-	crashStop      func()              // ends the watch for containers restarting; nil when none runs
-	depsSettled    bool                // the run and its end-of-run checks are over: the dependency lines collapse to the ones with a problem
-	downLogs       map[string]*downLog // service → state and log lines of a container that went down, or a dependency that failed its condition
+	healthChecked  map[string]string    // container → its service, for containers this run tracks
+	healthWG       sync.WaitGroup       // pending health inspects
+	healthStop     func()               // ends the health event watch; nil when none runs
+	healthWaitDone bool                 // the end-of-run wait for first check results ran out
+	healthCmd      map[string]string    // svc → its healthcheck's command, shown on its healthcheck line
+	healthOutput   map[string]string    // container → its last health check's output, shown while unhealthy
+	lastStart      time.Time            // when the run last started a container, for the wait before looking for crashes
+	statusRunning  map[string][]string  // -c status: service → its running containers, whose health it tracks (beginStatus)
+	registryAuth   func(string) string  // -c status: an image's encoded registry auth, as a pull would send it ("" for none)
+	imageUpdates   map[string]string    // -c status: image → the registry's digest for its tag, when it differs from the one pulled
+	updateErrs     map[string]string    // -c status: image → why its registry couldn't be asked
+	updateMeta     map[string]imageMeta // -c status: image → the version and date of its update (updateMeta)
+	updateWG       sync.WaitGroup       // -c status: the update checks still running (checkImageUpdates)
+	crashStop      func()               // ends the watch for containers restarting; nil when none runs
+	depsSettled    bool                 // the run and its end-of-run checks are over: the dependency lines collapse to the ones with a problem
+	downLogs       map[string]*downLog  // service → state and log lines of a container that went down, or a dependency that failed its condition
 
 	// Dependencies, listed under each service row. dependsOn[svc] is its depends_on
 	// entries; containerStarted[svc] marks a container this run reported running; preRun
@@ -438,6 +444,9 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	// processed silently and the final lines are emitted once in Done.
 	if p.staticOut {
 		p.startHealthWatch(ctx)
+		if p.command == statusCommand {
+			p.checkImageUpdates()
+		}
 		return
 	}
 
@@ -482,6 +491,9 @@ func (p *consoleEventProcessor) Start(ctx context.Context, operation string) {
 	// The health watch writes under p.mtx, so it starts after the unlocked first render.
 	p.startHealthWatch(ctx)
 	p.startCrashWatch(ctx)
+	if p.command == statusCommand {
+		p.checkImageUpdates()
+	}
 
 	tickInterval := time.Duration(console.SpinnerSpeedFor(console.ConnTypeFromContext(ctx))) * time.Millisecond
 	if tickInterval <= 0 {
@@ -557,6 +569,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 	if p.staticOut {
 		p.inspectWG.Wait()
 		p.waitVersionLinks()
+		p.waitUpdateChecks()
 		p.waitForHealth()
 		p.waitForStartedToSettle()
 		p.checkServicesDown()
@@ -586,6 +599,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 	// clock runs from the last start, so the two overlap.
 	p.inspectWG.Wait()
 	p.waitVersionLinks()
+	p.waitUpdateChecks()
 	p.waitForStartedToSettle()
 	p.stopCrashWatch() // the final check below drops what is no longer down
 	p.checkServicesDown()

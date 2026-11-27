@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -119,6 +120,56 @@ func TestStatusListsDeclaredJobs(t *testing.T) {
 	got = renderPlain(p, dockerlayout.VerboseDetails)
 	if !strings.Contains(got, "Manual          hello:") || !strings.Contains(got, "Scheduled       tick:") || !strings.Contains(got, "schedule: * * * * *") {
 		t.Errorf("-v display =\n%s\nwant both jobs' rows and tick's schedule", got)
+	}
+}
+
+// An image whose tag the registry now points at another digest has an update: its
+// service shows its block, its image line Update and an update line naming the new
+// version when a tag gives it, else the digest cut short. It is information, so a stack
+// that is otherwise fine stays complete, and the header, which counts what the display
+// covers, leaves it out (the recap after the display lists it).
+func TestStatusShowsImageUpdates(t *testing.T) {
+	p := newStatusTestProcessor()
+	p.imageMetaBefore[webImg] = imageMeta{digest: "sha256:" + strings.Repeat("a", 64)}
+	remote := "sha256:" + strings.Repeat("b", 64)
+	p.imageUpdates = map[string]string{webImg: remote}
+	p.finished, p.succeeded = true, true
+	got := renderPlain(p, 0)
+	if !strings.Contains(got, "✓ status: 2 services (2 images) ") || !strings.Contains(got, "✓ Running     ─ unchanged") ||
+		!strings.Contains(got, "Running         web:") || !strings.Contains(got, "i Update            image: example/web:1") ||
+		!strings.Contains(got, "update: sha256:bbbbbbbbbbbb (not pulled)") || !strings.Contains(got, "Running         1 service: db") {
+		t.Errorf("display =\n%s\nwant web's block with its update, db folded, 1 update counted, still complete", got)
+	}
+	p.digestVersions[remote] = "1.2.3"
+	if got := renderPlain(p, 0); !strings.Contains(got, "update: 1.2.3 (not pulled)") {
+		t.Errorf("display =\n%s\nwant the update named by its version", got)
+	}
+	p.updateMeta = map[string]imageMeta{webImg: {built: "2026-11-26 18:02:11"}}
+	if got := renderPlain(p, 0); !strings.Contains(got, "update: 1.2.3 (2026-11-26 18:02:11, not pulled)") {
+		t.Errorf("display =\n%s\nwant the update's date with it", got)
+	}
+}
+
+// The update recap lists services: those sharing an image on one line, then the image
+// and the update under them; one whose registry couldn't be asked goes in the warning
+// with its image and why.
+func TestStatusUpdateRecapListsServices(t *testing.T) {
+	p := NewConsoleEventProcessor(context.Background(), nil, statusCommand,
+		map[string][]string{"lscr.io/x/radarr:latest": {"radarr__4k", "radarr"}, "docker.io/library/redis:8": {"redis"}},
+		[]string{"docker.io/library/redis:8", "lscr.io/x/radarr:latest"}, map[string]string{}, "proj", false, 0, true, nil, nil).(*consoleEventProcessor)
+	p.imageUpdates = map[string]string{"lscr.io/x/radarr:latest": "sha256:" + strings.Repeat("c", 64)}
+	p.updateMeta = map[string]imageMeta{"lscr.io/x/radarr:latest": {version: "6.0.1", built: "2026-11-26 10:00:00"}}
+	p.digestVersions["sha256:"+strings.Repeat("c", 64)] = "6.0.1"
+	p.updateErrs = map[string]string{"docker.io/library/redis:8": "registry down"}
+	updates, failed := p.updateSummaryLines()
+	got, gotFailed := plainLines(updates), plainLines(failed)
+	want := []string{"Found 2 services with updates (not pulled):", "radarr, radarr__4k:", "image:  lscr.io/x/radarr:latest", "update: 6.0.1 (2026-11-26 10:00:00)"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("updates = %q, want %q", got, want)
+	}
+	wantFailed := []string{"Couldn't check 1 service for updates:", "redis:", "image:  docker.io/library/redis:8", "error:  registry down"}
+	if strings.Join(gotFailed, "|") != strings.Join(wantFailed, "|") {
+		t.Errorf("failed = %q, want %q", gotFailed, wantFailed)
 	}
 }
 
