@@ -368,7 +368,7 @@ func (p *consoleEventProcessor) jobGroups(termW, level int) kindGroups {
 		}
 		s.state = p.rollupState(ids, nil)
 		switch {
-		case p.command == statusCommand && !p.finished:
+		case p.command == statusCommand && !p.statusChecked:
 			s.state = rollupProcessing // status's jobs have no events: in progress until status is done, as its services
 		case p.command == statusCommand, len(ids) == 0:
 			s.state = rollupComplete // only manual jobs, which nothing happens to

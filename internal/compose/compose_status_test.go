@@ -49,7 +49,7 @@ func TestStatusGroupWord(t *testing.T) {
 func TestStatusShowsEverythingUnchanged(t *testing.T) {
 	p := newStatusTestProcessor()
 	p.preRun["web"] = "stopped"
-	p.finished, p.succeeded = true, true
+	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
 	if strings.Contains(got, " changed ") || !strings.Contains(got, "unchanged ─") ||
 		!strings.Contains(got, "✓ Running         1 service: db") || !strings.Contains(got, "· Not Running     1 service: web") ||
@@ -74,7 +74,7 @@ func TestStatusLeavesNetworksAndStoppedServicesQuiet(t *testing.T) {
 	p.preRun = map[string]string{}
 	p.dependsOn = map[string][]serviceDep{"web": {{name: "db", condition: "service_started", required: true}}}
 	p.networks = resourceDecl{names: []string{"proj_default"}, exists: map[string]bool{}}
-	p.finished, p.succeeded = true, true
+	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
 	if strings.Contains(got, " changed ") || !strings.Contains(got, "Not Created   1 network: proj_default") ||
 		strings.Contains(got, "needs") || !strings.Contains(got, "Not Created   2 services: db, web") {
@@ -98,7 +98,7 @@ func TestStatusModelWord(t *testing.T) {
 		t.Errorf("model not pulled = %q, want %q", got, notPulledText)
 	}
 	p.modelsUnknown = true
-	p.finished = true
+	p.finished, p.statusChecked = true, true
 	if got := p.statusModelWord("llm"); got != unknownText {
 		t.Errorf("model with no runner = %q, want %q", got, unknownText)
 	}
@@ -112,7 +112,7 @@ func TestStatusModelWord(t *testing.T) {
 func TestStatusListsDeclaredJobs(t *testing.T) {
 	p := newStatusTestProcessor()
 	p.jobs = map[string]jobDecl{"tick": {schedule: "* * * * *", scheduled: true}, "hello": {}}
-	p.finished, p.succeeded = true, true
+	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
 	if !strings.Contains(got, "Scheduled     1 job: tick") || strings.Contains(got, "hello") || strings.Contains(got, " changed ") {
 		t.Errorf("display =\n%s\nwant tick Scheduled under unchanged, the manual job left out", got)
@@ -133,7 +133,7 @@ func TestStatusShowsImageUpdates(t *testing.T) {
 	p.imageMetaBefore[webImg] = imageMeta{digest: "sha256:" + strings.Repeat("a", 64)}
 	remote := "sha256:" + strings.Repeat("b", 64)
 	p.imageUpdates = map[string]string{webImg: remote}
-	p.finished, p.succeeded = true, true
+	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, 0)
 	if !strings.Contains(got, "✓ status: 2 services (2 images) ") || !strings.Contains(got, "✓ Running     ─ unchanged") ||
 		!strings.Contains(got, "Running         web:") || !strings.Contains(got, "✓ Cached            image: example/web:1") ||
@@ -156,7 +156,7 @@ func TestStatusImageNotPulled(t *testing.T) {
 	p := newStatusTestProcessor()
 	delete(p.imageMetaBefore, webImg)
 	delete(p.preRun, "web")
-	p.finished, p.succeeded = true, true
+	p.finished, p.succeeded, p.statusChecked = true, true, true
 	got := renderPlain(p, dockerlayout.VerboseDetails)
 	if !strings.Contains(got, "· Not Pulled        image: example/web:1") || strings.Contains(got, "Cached            image: example/web:1") {
 		t.Errorf("-v display =\n%s\nwant web's image Not Pulled", got)
@@ -186,15 +186,22 @@ func TestStatusUpdateRecapListsServices(t *testing.T) {
 	}
 }
 
-// While its checks run, status's headings are in progress, whatever its rows show.
+// While its checks run, status's headings are in progress, whatever its rows show: also
+// once Done has marked the run finished, which it does before its waits and final crash
+// check, until those are done (statusChecked).
 func TestStatusRollupWhileChecking(t *testing.T) {
 	p := newStatusTestProcessor()
-	if got := p.statusRollup([]string{"db", "web"}, func(string) string { return "" }); got != rollupProcessing {
+	none := func(string) string { return "" }
+	if got := p.statusRollup([]string{"db", "web"}, none); got != rollupProcessing {
 		t.Errorf("statusRollup before Done = %v, want processing", got)
 	}
 	p.finished = true
-	if got := p.statusRollup([]string{"db", "web"}, func(string) string { return "" }); got != rollupComplete {
-		t.Errorf("statusRollup after Done = %v, want complete", got)
+	if got := p.statusRollup([]string{"db", "web"}, none); got != rollupProcessing {
+		t.Errorf("statusRollup during Done's checks = %v, want processing", got)
+	}
+	p.finishStatusChecks()
+	if got := p.statusRollup([]string{"db", "web"}, none); got != rollupComplete {
+		t.Errorf("statusRollup after the checks = %v, want complete", got)
 	}
 }
 
