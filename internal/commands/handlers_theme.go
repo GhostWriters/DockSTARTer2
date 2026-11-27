@@ -557,7 +557,8 @@ func HandleThemeExtract(ctx context.Context, group *CommandGroup) error {
 
 func HandleThemeTable(ctx context.Context) error {
 	headers := []string{"Theme", "Description", "Author"}
-	themes, err := theme.List(config.LoadAppConfig().Appearance.Local.Theme)
+	conf := config.LoadAppConfig()
+	themes, err := theme.List(conf.Appearance.Local.Theme)
 	if err != nil {
 		logger.Error(ctx, "Failed to list themes: %v", err)
 		return err
@@ -568,6 +569,6 @@ func HandleThemeTable(ctx context.Context) error {
 		data = append(data, t.ConfigValue, t.Description, t.Author)
 	}
 
-	console.PrintTableCtx(ctx, headers, data, true)
+	console.PrintTableCtx(ctx, headers, data, conf.Appearance.ForConnType(console.ConnTypeFromContext(ctx)).LineCharacters)
 	return nil
 }

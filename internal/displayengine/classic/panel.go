@@ -23,8 +23,9 @@ const (
 
 // ─── Message types ────────────────────────────────────────────────────────────
 
-// PanelLineMsg carries a new log line from the subscription channel.
-type PanelLineMsg string
+// PanelLineMsg carries new log lines: from the subscription channel, with any
+// version without line characters, or the log file's last lines when the panel opens.
+type PanelLineMsg logger.LogLine
 
 // TogglePanelMsg requests the log panel to expand or collapse.
 type TogglePanelMsg struct{}
@@ -110,7 +111,7 @@ type PanelModel struct {
 	graphicsSupported  bool                                                                                 // whether the terminal shows Kitty placeholder images -- see AppModel.kittyImages; kept in sync via SetGraphicsSupported
 	clientIP           string                                                                               // the owning session's real client IP/address, for edit-lock terminal attribution (see sessionlocks.SessionManager.AcquireEditLock)
 	sessionKey         string                                                                               // identifies the owning TUI session for edit-lock re-entry (see sessionlocks.SessionManager.localSessionKey)
-	logSub             <-chan string                                                                        // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
+	logSub             <-chan logger.LogLine                                                                // this panel's own subscription to logger.SubscribeLogLines -- see UnsubscribeLog
 	logUnsub           func()                                                                               // releases logSub; call once when this panel's session ends (see UnsubscribeLog)
 	confirmFunc        func(title, question string, defaultYes bool) bool                                   // this session's own confirm callback, set via SetConfirmFunc; attached to console commands' ctx so their prompts reach this session, not whichever session's Program is currently the global tui.program
 	promptFunc         func(title, question string, sensitive bool, initialValue ...string) (string, error) // this session's own text-prompt callback, set via SetPromptFunc; same purpose as confirmFunc but for TextPrompt (e.g. the sudo password prompt)

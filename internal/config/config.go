@@ -1311,9 +1311,7 @@ func MigrateFromLegacy(ctx context.Context) (conf AppConfig, foundLegacy bool, f
 			}
 
 			logNotice(ctx, heading)
-			var sb strings.Builder
-			console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, tableData, false) // Force ASCII borders
-			logNotice(ctx, strings.TrimSuffix(sb.String(), "\n"))
+			logTable(ctx, headers, tableData)
 
 			logNotice(ctx, " ")
 			logNotice(ctx, "Migrating '"+console.FormatFilePath(path)+"' to '"+console.FormatFilePath(paths.GetConfigFilePath())+"'.")
@@ -1525,7 +1523,7 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 				logNotice(ctx, " ")
 			}
 			logNotice(ctx, sec.title)
-			logNotice(ctx, strings.TrimSuffix(renderTable(sec.headers, sec.data), "\n"))
+			logTable(ctx, sec.headers, sec.data)
 		} else if w := console.GetTUIWriter(ctx); w != nil {
 			// Route through the caller's writer (e.g. the console panel's pipe)
 			// instead of stdout -- fmt.Println would write straight to the real
@@ -1578,6 +1576,17 @@ func overrideSummary(e AnsiElementColors) string {
 		v += " (off)"
 	}
 	return "{{|Var|}}" + v + "{{[-]}}"
+}
+
+// logTable logs a table drawn with line characters and without, for logger.Lines to
+// route: the log file gets it without.
+func logTable(ctx context.Context, headers, data []string) {
+	render := func(lineChars bool) []string {
+		var sb strings.Builder
+		console.PrintTableCtx(console.WithTUIWriter(ctx, &sb), headers, data, lineChars)
+		return strings.Split(strings.TrimSuffix(sb.String(), "\n"), "\n")
+	}
+	logger.Lines(ctx, logger.LevelNotice, render(true), render(false))
 }
 
 // logNotice logs a notice message, splitting multi-line messages and logging each separately.

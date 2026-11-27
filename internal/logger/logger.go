@@ -56,8 +56,24 @@ func isSuppressed(ctx context.Context, w io.Writer) bool {
 // across unrelated sessions instead of delivering it to all of them.
 var (
 	logSubMu sync.Mutex
-	logSubs  = make(map[chan string]struct{})
+	logSubs  = make(map[chan LogLine]struct{})
 )
+
+// LogLine is a TUI-formatted log line as subscribers receive it: Text, and ASCII
+// when its producer built a version without line characters (Lines), "" when not.
+// Each log panel shows the one its session's line characters setting picks.
+type LogLine struct {
+	Text  string
+	ASCII string
+}
+
+// For returns the version of the line to show with line characters on or off.
+func (l LogLine) For(lineChars bool) string {
+	if !lineChars && l.ASCII != "" {
+		return l.ASCII
+	}
+	return l.Text
+}
 
 // LevelStyleFunc is a function that returns a styled string for a log level tag.
 // This is set by main.go to avoid import cycles.
@@ -65,12 +81,12 @@ var LevelStyleFunc func(tag string, label string) lipgloss.Style
 
 // SubscribeLogLines registers a new subscriber and returns a channel that
 // receives its own copy of every TUI-formatted log line (same format written
-// to TUI writer), plus an unsubscribe function the caller must invoke when
-// done (e.g. when its session/panel ends) to stop receiving lines and free
-// the subscription slot. Call once per subscriber lifetime -- not once per
+// to TUI writer, with any version without line characters -- see LogLine), plus
+// an unsubscribe function the caller must invoke when done (e.g. when its
+// session/panel ends) to stop receiving lines and free the subscription slot. Call once per subscriber lifetime -- not once per
 // line -- and read repeatedly from the returned channel.
-func SubscribeLogLines() (ch <-chan string, unsubscribe func()) {
-	c := make(chan string, 200)
+func SubscribeLogLines() (ch <-chan LogLine, unsubscribe func()) {
+	c := make(chan LogLine, 200)
 	logSubMu.Lock()
 	logSubs[c] = struct{}{}
 	logSubMu.Unlock()
@@ -84,7 +100,7 @@ func SubscribeLogLines() (ch <-chan string, unsubscribe func()) {
 // publishLogLine delivers line to every current subscriber's channel. A
 // subscriber whose buffer is full is skipped for this line (rather than
 // blocking every other subscriber on one slow reader).
-func publishLogLine(line string) {
+func publishLogLine(line LogLine) {
 	logSubMu.Lock()
 	defer logSubMu.Unlock()
 	for c := range logSubs {
@@ -158,6 +174,49 @@ func logAt(ctx context.Context, t time.Time, level slog.Level, msg any, args ...
 		}
 		_ = h.Handle(ctx, r)
 	}
+}
+
+// asciiAttr is the key of the attribute that carries a record's version without line
+// characters (Lines). The handlers take it off before a record is written.
+const asciiAttr = "ds2.ascii"
+
+// Lines logs each of lines as its own record at level. ascii, when not nil, holds
+// their versions without line characters, line for line: the log file gets those,
+// the console, a program box and each log panel whichever their line characters
+// setting picks. When ascii's length differs from lines', it's ignored. The lines
+// are written as they are: no format arguments, and none is split.
+func Lines(ctx context.Context, level slog.Level, lines, ascii []string) {
+	h := slog.Default().Handler()
+	if !h.Enabled(ctx, level) {
+		return
+	}
+	if len(ascii) != len(lines) {
+		ascii = nil
+	}
+	t := time.Now()
+	for i, line := range lines {
+		r := slog.NewRecord(t, level, line, 0)
+		if ascii != nil && ascii[i] != line {
+			r.AddAttrs(slog.String(asciiAttr, ascii[i]))
+		}
+		_ = h.Handle(ctx, r)
+	}
+}
+
+// recordMessage returns r's message as shown with line characters on or off: off,
+// its version without them when it has one.
+func recordMessage(r slog.Record, lineChars bool) string {
+	msg := r.Message
+	if !lineChars {
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == asciiAttr {
+				msg = a.Value.String()
+				return false
+			}
+			return true
+		})
+	}
+	return msg
 }
 
 // FormatLevel returns a consistent 6-character string for log levels.

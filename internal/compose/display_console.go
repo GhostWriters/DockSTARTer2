@@ -79,7 +79,7 @@ var (
 )
 
 var brailleChars = strings.Split("⠀⡀⣀⣄⣤⣦⣶⣷⣿", "")
-var asciiProgressChars = []string{" ", ".", ",", ":", ";", "+", "%", "#", "█"}
+var asciiProgressChars = []string{" ", ".", ",", ":", ";", "+", "%", "#", "@"}
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 var asciiSpinnerFrames = []string{"|", "/", "-", "\\"}
 
