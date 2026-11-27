@@ -47,16 +47,16 @@ func isSuppressed(ctx context.Context, w io.Writer) bool {
 	return ok
 }
 
-// logSubs holds one delivery channel per active subscriber (one per
-// concurrent session's log/console panel). A single shared channel would
-// mean every session's panel goroutine competes to read the SAME line --
-// in a server-daemon process serving multiple concurrent SSH/web sessions,
-// each log line would go to whichever session's goroutine happened to win
-// that particular read, silently splitting one line's worth of output
-// across unrelated sessions instead of delivering it to all of them.
+// logSubs holds one queue per active subscriber (one per concurrent session's
+// log/console panel). A single shared channel would mean every session's panel
+// goroutine competes to read the SAME line -- in a server-daemon process serving
+// multiple concurrent SSH/web sessions, each log line would go to whichever
+// session's goroutine happened to win that particular read, silently splitting
+// one line's worth of output across unrelated sessions instead of delivering it
+// to all of them.
 var (
 	logSubMu sync.Mutex
-	logSubs  = make(map[chan LogLine]struct{})
+	logSubs  = make(map[*lineQueue]struct{})
 )
 
 // LogLine is a TUI-formatted log line as subscribers receive it: Text, and ASCII
@@ -81,33 +81,62 @@ var LevelStyleFunc func(tag string, label string) lipgloss.Style
 
 // SubscribeLogLines registers a new subscriber and returns a channel that
 // receives its own copy of every TUI-formatted log line (same format written
-// to TUI writer, with any version without line characters -- see LogLine), plus
-// an unsubscribe function the caller must invoke when done (e.g. when its
-// session/panel ends) to stop receiving lines and free the subscription slot. Call once per subscriber lifetime -- not once per
-// line -- and read repeatedly from the returned channel.
+// to TUI writer, with any version without line characters -- see LogLine), this
+// process's own and those other processes send it (ListenForLogs), plus an
+// unsubscribe function the caller must invoke when done (e.g. when its
+// session/panel ends) to stop receiving lines and free the subscription slot.
+// Call once per subscriber lifetime -- not once per line -- and read repeatedly
+// from the returned channel, which unsubscribing closes. Lines wait in the
+// subscriber's own queue (lineQueue) until read, so a burst is never cut short
+// and a slow reader never holds up the others.
 func SubscribeLogLines() (ch <-chan LogLine, unsubscribe func()) {
-	c := make(chan LogLine, 200)
+	q := newLineQueue()
+	c := make(chan LogLine)
+	done := make(chan struct{})
 	logSubMu.Lock()
-	logSubs[c] = struct{}{}
+	logSubs[q] = struct{}{}
 	logSubMu.Unlock()
+	go func() {
+		defer close(c)
+		for {
+			lines, finished := q.take()
+			for _, line := range lines {
+				select {
+				case c <- line:
+				case <-done:
+					return
+				}
+			}
+			if finished {
+				return
+			}
+			if len(lines) == 0 {
+				select {
+				case <-q.ready:
+				case <-done:
+					return
+				}
+			}
+		}
+	}()
+	var once sync.Once
 	return c, func() {
-		logSubMu.Lock()
-		delete(logSubs, c)
-		logSubMu.Unlock()
+		once.Do(func() {
+			logSubMu.Lock()
+			delete(logSubs, q)
+			logSubMu.Unlock()
+			q.close()
+			close(done)
+		})
 	}
 }
 
-// publishLogLine delivers line to every current subscriber's channel. A
-// subscriber whose buffer is full is skipped for this line (rather than
-// blocking every other subscriber on one slow reader).
+// publishLogLine queues line for every current subscriber. It never blocks.
 func publishLogLine(line LogLine) {
 	logSubMu.Lock()
 	defer logSubMu.Unlock()
-	for c := range logSubs {
-		select {
-		case c <- line:
-		default:
-		}
+	for q := range logSubs {
+		q.push(line)
 	}
 }
 
@@ -405,6 +434,7 @@ func NewLogger() *slog.Logger {
 		consoleHandler,
 		&TUIHandler{level: LevelDebug, global: true},
 		&TUIHandler{level: LevelVar, global: false},
+		&forwardHandler{level: LevelDebug}, // sends only once StartForwarding has run
 	}
 
 	if wFile != nil {

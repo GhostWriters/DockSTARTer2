@@ -21,19 +21,29 @@ func (h *TUIHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= h.level.Level()
 }
 
-func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
-	// Format line consistently (TIME [LEVEL] \t MESSAGE). Tag names come from
-	// timestampTagName/levelTagName (logger.go), also used by buildConsoleStyles.
-	timeStr := r.Time.Format("2006-01-02 15:04:05")
-	levelStr := FormatLevel(r.Level)
-
+// tuiTimeLevel returns r's time and level in the TUI's format (TIME [LEVEL] ).
+// Tag names come from timestampTagName/levelTagName (logger.go), also used by
+// buildConsoleStyles.
+func tuiTimeLevel(r slog.Record) string {
 	levelTag := "{{[-]}}"
 	if name := levelTagName(r.Level); name != "" {
 		levelTag = "{{|" + name + "|}}"
 	}
+	return fmt.Sprintf("{{|%s|}}%s{{[-]}} %s[%s]{{[-]}} ", timestampTagName, r.Time.Format("2006-01-02 15:04:05"), levelTag, FormatLevel(r.Level))
+}
 
-	timeLevel := fmt.Sprintf("{{|%s|}}%s{{[-]}} %s[%s]{{[-]}} ", timestampTagName, timeStr, levelTag, levelStr)
+// tuiLogLine returns r as a log panel line: both versions, for each panel to pick
+// by its session's setting.
+func tuiLogLine(r slog.Record) LogLine {
+	timeLevel := tuiTimeLevel(r)
+	line := LogLine{Text: timeLevel + r.Message}
+	if ascii := recordMessage(r, false); ascii != r.Message {
+		line.ASCII = timeLevel + ascii
+	}
+	return line
+}
 
+func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 	if h.global {
 		// Skip the broadcast when a panel writer is active — the panel already
 		// receives lines via its pipe scanner, so publishLogLine would double-log.
@@ -42,16 +52,11 @@ func (h *TUIHandler) Handle(ctx context.Context, r slog.Record) error {
 		if ctx.Value(console.PanelWriterKey) != nil {
 			return nil
 		}
-		// Both versions, for each log panel to pick by its session's setting.
-		line := LogLine{Text: timeLevel + r.Message}
-		if ascii := recordMessage(r, false); ascii != r.Message {
-			line.ASCII = timeLevel + ascii
-		}
-		publishLogLine(line)
+		publishLogLine(tuiLogLine(r))
 	} else {
 		if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
 			if !isSuppressed(ctx, w) {
-				fmt.Fprintln(w, timeLevel+recordMessage(r, console.LineCharactersFor(console.ConnTypeFromContext(ctx))))
+				fmt.Fprintln(w, tuiTimeLevel(r)+recordMessage(r, console.LineCharactersFor(console.ConnTypeFromContext(ctx))))
 			}
 		}
 	}

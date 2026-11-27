@@ -139,6 +139,9 @@ func run() (exitCode int) {
 	}
 
 	slog.SetDefault(logger.NewLogger())
+	// Send log lines to the panels of other running processes (the daemon, a local
+	// TUI), so they show this run live.
+	logger.StartForwarding()
 
 	// TERM/COLORTERM often understate a terminal reached over SSH; ask the
 	// terminal itself. Skipped when output isn't a terminal, so a query never

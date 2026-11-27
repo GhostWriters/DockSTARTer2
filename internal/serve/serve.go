@@ -136,6 +136,10 @@ func StartServer(ctx context.Context, cfg config.ServerConfig, startMenu string)
 	}
 	defer sessionlocks.Sessions.ReleaseServer()
 
+	// Show other processes' runs (e.g. a CLI run from a shell) in the sessions'
+	// log panels as they log.
+	logger.ListenForLogs(ctx)
+
 	// Update proc registration with server port info so other instances
 	// can display it in startup warnings. Only meaningful in the daemon process.
 	if console.IsDaemon {
