@@ -128,11 +128,15 @@ func LogPruneReport(ctx context.Context, r PruneReport, imageServices map[string
 	}
 
 	var out io.Writer = os.Stdout
+	toTerminal := true
 	if w, ok := ctx.Value(console.TUIWriterKey).(io.Writer); ok {
-		out = w
+		out, toTerminal = w, false
 	}
 	console.PauseSpinner()
 	for _, line := range dispLines {
+		if toTerminal {
+			line = console.ToProfile(line)
+		}
 		fmt.Fprintln(out, line)
 	}
 	console.ResumeSpinner()
