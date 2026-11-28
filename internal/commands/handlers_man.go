@@ -141,6 +141,11 @@ func HandleMan(ctx context.Context, group *CommandGroup, protocol graphics.Proto
 				return err
 			}
 		}
+		// Kitty placeholders carry their image's ID in their foreground
+		// color, which a conversion would change.
+		if protocol != graphics.ProtocolKitty {
+			rendered = console.ToProfile(rendered)
+		}
 		_, err = io.WriteString(w, rendered)
 		return err
 	}

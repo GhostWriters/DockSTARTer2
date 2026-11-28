@@ -1532,8 +1532,8 @@ func ShowAppConfigWithTitleAndPresent(ctx context.Context, conf *AppConfig, titl
 			fmt.Fprintln(w, semstyle.ToANSI(sec.title))
 			fmt.Fprintln(w, semstyle.ToANSI(renderTable(sec.headers, sec.data)))
 		} else {
-			fmt.Println(semstyle.ToANSI(sec.title))
-			fmt.Println(semstyle.ToANSI(renderTable(sec.headers, sec.data)))
+			fmt.Println(console.ToProfile(semstyle.ToANSI(sec.title)))
+			fmt.Println(console.ToProfile(semstyle.ToANSI(renderTable(sec.headers, sec.data))))
 		}
 	}
 }

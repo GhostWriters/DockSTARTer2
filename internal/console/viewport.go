@@ -124,9 +124,12 @@ func (vp *Viewport) Activate() {
 	// Pass history into the model before Run() so the very first frame
 	// already has content — no blank-screen flash on alt screen entry.
 	model := newCLIViewportModel(snap)
+	// The profile DS2 detected, not Bubble Tea's own guess from TERM/COLORTERM,
+	// so the live view's colors match the direct output's (see ToProfile).
 	prog := tea.NewProgram(model,
 		tea.WithOutput(os.Stderr),
 		tea.WithoutCatchPanics(),
+		tea.WithColorProfile(GetPreferredProfile()),
 	)
 
 	vp.mu.Lock()
@@ -165,12 +168,7 @@ func (vp *Viewport) Deactivate() {
 		prog.Wait()
 		termMu.Lock()
 		fmt.Fprint(os.Stderr, "\033[?47l") // exit alt screen, main screen is blank
-		for _, line := range history[dumpFrom:] {
-			fmt.Fprint(os.Stderr, line+"\r\n")
-		}
-		for _, line := range composeLines {
-			fmt.Fprint(os.Stderr, line+"\r\n")
-		}
+		dumpLines(history[dumpFrom:], composeLines)
 		termMu.Unlock()
 
 		// Append the final compose lines to history so the next Activate() pre-fills
@@ -203,13 +201,19 @@ func (vp *Viewport) stop() {
 		prog.Wait()
 		termMu.Lock()
 		fmt.Fprint(os.Stderr, "\033[?47l")
-		for _, line := range history[dumpFrom:] {
-			fmt.Fprint(os.Stderr, line+"\r\n")
-		}
-		for _, line := range composeLines {
-			fmt.Fprint(os.Stderr, line+"\r\n")
-		}
+		dumpLines(history[dumpFrom:], composeLines)
 		termMu.Unlock()
+	}
+}
+
+// dumpLines writes the viewport's history and compose lines to the main
+// screen, their colors converted as the live view showed them. Caller holds
+// termMu.
+func dumpLines(history, composeLines []string) {
+	for _, lines := range [][]string{history, composeLines} {
+		for _, line := range lines {
+			fmt.Fprint(os.Stderr, ToProfile(line)+"\r\n")
+		}
 	}
 }
 
@@ -227,7 +231,7 @@ func (vp *Viewport) Append(line string) {
 		prog.Send(cliAppendMsg{lines: lines})
 	} else {
 		termMu.Lock()
-		fmt.Fprintln(os.Stderr, line)
+		fmt.Fprintln(os.Stderr, ToProfile(line))
 		termMu.Unlock()
 	}
 }

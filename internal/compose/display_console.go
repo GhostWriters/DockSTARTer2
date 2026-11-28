@@ -588,7 +588,7 @@ func (p *consoleEventProcessor) Done(_ string, success bool) {
 		lines := p.buildLines(termW, p.verbosity)
 		p.mtx.Unlock()
 		for _, line := range lines {
-			fmt.Fprintln(p.out, semstyle.ToANSI(line))
+			fmt.Fprintln(p.out, console.ToProfile(semstyle.ToANSI(line)))
 		}
 		p.logSummary()
 		return

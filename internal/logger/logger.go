@@ -499,7 +499,7 @@ func Display(ctx context.Context, msg any, args ...any) {
 		// Output directly to terminal.
 		// Suppress in TUI mode (Bubble Tea owns the terminal).
 		if !TUIMode {
-			rendered := semstyle.ToANSI(line) + semstyle.CodeReset
+			rendered := console.ToProfile(semstyle.ToANSI(line)) + semstyle.CodeReset
 			if console.GlobalViewport != nil && console.GlobalViewport.IsActive() {
 				console.GlobalViewport.Append(rendered)
 			} else {

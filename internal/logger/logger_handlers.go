@@ -150,7 +150,8 @@ func (h *TagProcessorHandler) Handle(ctx context.Context, r slog.Record) error {
 	case "ansi":
 		// A message that reaches the terminal while the TUI runs (a fatal
 		// error) has its tint placeholders filled in with the CLI's tint.
-		msg = console.ResolveTerminalTints(semstyle.ToANSI(msg))
+		// Its colors follow the detected profile.
+		msg = console.ForTerminal(semstyle.ToANSI(msg))
 	case "strip":
 		msg = semstyle.ToPlain(msg)
 	}

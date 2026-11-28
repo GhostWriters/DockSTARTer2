@@ -118,7 +118,7 @@ func printTableTo(w io.Writer, headers []string, data []string, useLineChars boo
 		} else {
 			LockTerminal()
 			ClearSpinnerLine()
-			fmt.Println(ResolveTerminalTints(line))
+			fmt.Println(ForTerminal(line))
 			ShowSpinnerFrame()
 			UnlockTerminal()
 		}
